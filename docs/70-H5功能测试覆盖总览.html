@@ -1,0 +1,72 @@
+<html style="margin:0;padding:0;">
+<title>H5 移动报工端 · 全功能测试覆盖总览</title>
+<div style="width:100%;box-sizing:border-box;background:#f6f8fb;color:#1f2937;font-family:'PingFang SC','Microsoft YaHei',system-ui,sans-serif;padding:24px;line-height:1.5;">
+  <div style="max-width:1080px;margin:0 auto;">
+    <div style="background:#fff;border:1px solid #e5e9f0;border-radius:14px;padding:20px 24px;margin-bottom:18px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+        <div>
+          <div style="font-size:20px;font-weight:700;">H5 移动报工端 · 全功能测试覆盖总览</div>
+          <div style="font-size:13px;color:#6b7280;margin-top:4px;">依据 31-使用手册（手机端）+ frontend/src/views/h5 源码核对 · 2026-09-27 · docs/70</div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <span style="background:#eef4ff;color:#2563eb;border:1px solid #c7d7fe;border-radius:20px;padding:4px 12px;font-size:13px;font-weight:600;">9 大模块</span>
+          <span style="background:#fff7ed;color:#ea580c;border:1px solid #fed7aa;border-radius:20px;padding:4px 12px;font-size:13px;font-weight:600;">≈55 条用例</span>
+          <span style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:20px;padding:4px 12px;font-size:13px;font-weight:600;">全测一遍</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:14px;">
+      <!-- 模块卡片 -->
+      <div style="flex:1 1 300px;min-width:280px;background:#fff;border:1px solid #e5e9f0;border-radius:12px;overflow:hidden;">
+        <div style="background:#2563eb;color:#fff;padding:10px 14px;font-weight:700;display:flex;justify-content:space-between;align-items:center;">登录 <span style="background:#ffffff33;border-radius:12px;padding:1px 9px;font-size:12px;">6 用例</span></div>
+        <div style="padding:12px 14px;font-size:13px;color:#374151;">账号密码 · 账套选择/锁定 · 登录图 · 登录后回跳<br><span style="color:#2563eb;">校验：</span>单/多账套隔离 · 未登录回跳 /h5/*</div>
+      </div>
+
+      <div style="flex:1 1 300px;min-width:280px;background:#fff;border:1px solid #e5e9f0;border-radius:12px;overflow:hidden;">
+        <div style="background:#0ea5e9;color:#fff;padding:10px 14px;font-weight:700;display:flex;justify-content:space-between;align-items:center;">工单 <span style="background:#ffffff33;border-radius:12px;padding:1px 9px;font-size:12px;">6 用例</span></div>
+        <div style="padding:12px 14px;font-size:13px;color:#374151;">搜索防抖 · 状态 Tab · 进度/交期/工序 · 进报工<br><span style="color:#0ea5e9;">校验：</span>排除已取消 · 逾期/临期预警 · 同名不同编号</div>
+      </div>
+
+      <div style="flex:1 1 300px;min-width:280px;background:#fff;border:1px solid #e5e9f0;border-radius:12px;overflow:hidden;">
+        <div style="background:#0891b2;color:#fff;padding:10px 14px;font-weight:700;display:flex;justify-content:space-between;align-items:center;">我的任务 <span style="background:#ffffff33;border-radius:12px;padding:1px 9px;font-size:12px;">4 用例</span></div>
+        <div style="padding:12px 14px;font-size:13px;color:#374151;">派工列表 · 剩余/交期 · 点卡进报工<br><span style="color:#0891b2;">校验：</span>未派工不影响自行找单报工</div>
+      </div>
+
+      <div style="flex:1 1 300px;min-width:280px;background:#fff;border:1px solid #e5e9f0;border-radius:12px;overflow:hidden;">
+        <div style="background:#ea580c;color:#fff;padding:10px 14px;font-weight:700;display:flex;justify-content:space-between;align-items:center;">扫码 <span style="background:#ffffff33;border-radius:12px;padding:1px 9px;font-size:12px;">10 用例</span></div>
+        <div style="padding:12px 14px;font-size:13px;color:#374151;">摄像头 · PDA 扫码枪 · 手动输入 · 诊断<br><span style="color:#ea580c;">校验：</span>HTTPS · 15s 超时 · 权限拒绝 · 载荷解析 · 模式记忆</div>
+      </div>
+
+      <div style="flex:1 1 300px;min-width:280px;background:#fff;border:1px solid #e5e9f0;border-radius:12px;overflow:hidden;">
+        <div style="background:#16a34a;color:#fff;padding:10px 14px;font-weight:700;display:flex;justify-content:space-between;align-items:center;">报工 <span style="background:#ffffff33;border-radius:12px;padding:1px 9px;font-size:12px;">12 用例</span></div>
+        <div style="padding:12px 14px;font-size:13px;color:#374151;">工序/良品/不良/时长 · 报全部剩余 · 提交/继续 · 指导书预览<br><span style="color:#16a34a;">校验：</span>不良必选原因 · 时长≤24h · 报满锁定 · 步进/非负</div>
+      </div>
+
+      <div style="flex:1 1 300px;min-width:280px;background:#fff;border:1px solid #e5e9f0;border-radius:12px;overflow:hidden;">
+        <div style="background:#dc2626;color:#fff;padding:10px 14px;font-weight:700;display:flex;justify-content:space-between;align-items:center;">异常上报 <span style="background:#ffffff33;border-radius:12px;padding:1px 9px;font-size:12px;">6 用例</span></div>
+        <div style="padding:12px 14px;font-size:13px;color:#374151;">三类异常 · 描述必填 · 关联工单 · 拍照<br><span style="color:#dc2626;">校验：</span>工单存在校验 · 上报进电脑端/看板</div>
+      </div>
+
+      <div style="flex:1 1 300px;min-width:280px;background:#fff;border:1px solid #e5e9f0;border-radius:12px;overflow:hidden;">
+        <div style="background:#7c3aed;color:#fff;padding:10px 14px;font-weight:700;display:flex;justify-content:space-between;align-items:center;">导航 / 帮助 / PWA <span style="background:#ffffff33;border-radius:12px;padding:1px 9px;font-size:12px;">6 用例</span></div>
+        <div style="padding:12px 14px;font-size:13px;color:#374151;">底部五栏 · 帮助入口 · safe-area · 安卓/iOS 加桌面<br><span style="color:#7c3aed;">校验：</span>全屏落扫码页 · 证书/HTTPS</div>
+      </div>
+
+      <div style="flex:1 1 300px;min-width:280px;background:#fff;border:1px solid #fecdd3;border-radius:12px;overflow:hidden;border-left:4px solid #dc2626;">
+        <div style="background:#fff;color:#dc2626;padding:10px 14px;font-weight:700;display:flex;justify-content:space-between;align-items:center;">业务硬规则（必测） <span style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:1px 9px;font-size:12px;">5 用例</span></div>
+        <div style="padding:12px 14px;font-size:13px;color:#374151;">① 报工权限=部门<br>② 产品编号唯一，不凭名称<br>③ 报满锁定，禁止凑数换工序<br>④ 多人同报进度正确<br>⑤ 多账套数据隔离</div>
+      </div>
+
+      <div style="flex:1 1 300px;min-width:280px;background:#fff;border:1px solid #fde68a;border-radius:12px;overflow:hidden;border-left:4px solid #d97706;">
+        <div style="background:#fff;color:#d97706;padding:10px 14px;font-weight:700;display:flex;justify-content:space-between;align-items:center;">边界 / 异常（每页坏情况） <span style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:1px 9px;font-size:12px;">5 用例</span></div>
+        <div style="padding:12px 14px;font-size:13px;color:#374151;">断网提交 · 结果不确定查记录 · 已结束/已取消 · 无权限 · 被退回<br><span style="color:#d97706;">原则：</span>异常不吞、必须提示，改数走电脑端</div>
+      </div>
+    </div>
+
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:12px 16px;margin-top:16px;font-size:14px;color:#1e40af;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <span style="font-weight:700;">→ 一句话结论：</span>全测一遍的核心 = 三条业务红线（权限=部门 / 产品编号 / 报满锁定）+ 三处易错交互（扫码三模式、不良必选原因、时长≤24h）；每用例实测标 ✅/❌，❌ 记现象+复现+期望报 Cursor。
+    </div>
+  </div>
+</div>
+</html>

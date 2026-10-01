@@ -1,0 +1,47 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>ahu.MicrosoftMes</RootNamespace>
+    <!-- 版本唯一来源：version.txt；每次真实编译 patch +1（BumpPatchVersion） -->
+    <Version>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)\version.txt').Trim())</Version>
+  </PropertyGroup>
+
+  <Target Name="BumpPatchVersion"
+          BeforeTargets="GenerateAssemblyInfo"
+          Condition="'$(DesignTimeBuild)' != 'true' AND '$(SkipVersionBump)' != 'true'">
+    <PropertyGroup>
+      <_BumpVersionFile>$(IntermediateOutputPath)bumped-version.txt</_BumpVersionFile>
+    </PropertyGroup>
+    <MakeDir Directories="$(IntermediateOutputPath)" Condition="!Exists('$(IntermediateOutputPath)')" />
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\bump-version.ps1&quot; -OutFile &quot;$(_BumpVersionFile)&quot;" />
+    <ReadLinesFromFile File="$(_BumpVersionFile)">
+      <Output TaskParameter="Lines" PropertyName="_BumpedVersion" />
+    </ReadLinesFromFile>
+    <PropertyGroup Condition="'$(_BumpedVersion)' != ''">
+      <Version>$(_BumpedVersion)</Version>
+      <AssemblyVersion>$(_BumpedVersion).0</AssemblyVersion>
+      <FileVersion>$(_BumpedVersion).0</FileVersion>
+      <InformationalVersion>$(_BumpedVersion)</InformationalVersion>
+    </PropertyGroup>
+    <Message Importance="High" Text="App version -&gt; $(Version)" Condition="'$(_BumpedVersion)' != ''" />
+  </Target>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.*" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.*">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.*" />
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+    <PackageReference Include="ClosedXML" Version="0.102.3" />
+    <PackageReference Include="DocumentFormat.OpenXml" Version="2.20.0" />
+    <PackageReference Include="UglyToad.PdfPig" Version="1.7.0-custom-5" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.6" />
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />
+    <PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+    <PackageReference Include="Serilog.Formatting.Compact" Version="3.0.0" />
+  </ItemGroup>
+</Project>

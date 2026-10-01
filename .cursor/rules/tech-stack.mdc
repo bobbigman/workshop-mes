@@ -1,0 +1,25 @@
+---
+description: 车间管理系统技术栈、目录结构与运行环境约定
+alwaysApply: true
+---
+
+# 技术栈与目录
+
+## 技术栈（固定，勿改）
+
+- 后端 .NET 8 Web API + EF Core；数据库 SQL Server；鉴权 JWT + BCrypt
+- PC 前端 Vue3 + Element Plus；移动报工端 Vue3 + Vant（H5）；大屏 ECharts
+- 部署：内网固定 IP，前后端分离，PDA/手机浏览器访问
+
+## 目录结构
+
+- `backend/`：Controllers / Models / Data / Services
+- `frontend/`：src/views（页面）、src/api（接口封装）、src/router（路由）
+- `docs/`：唯一事实来源（01 需求 / 02 数据字典 / 03 技术方案 / 04 计划 / 05 部署 / 06 规约）
+
+## 强制规则
+
+- 数据库一律 **SQL Server** 语法：`IDENTITY(1,1)`、`NVARCHAR`、`DATETIME2 DEFAULT SYSDATETIME()`，禁止出现 MySQL 语法。
+- 表结构以 `docs/02-数据字典.md` 为准，不得凭记忆另写。
+- 修改任何表结构前，先读 `docs/02-数据字典.md` 并同步更新该文档。
+- **交付节奏：** 先 PC（管理动作），后 H5/PDA（现场动作）；首版不做两端齐全。管理侧能力先只做电脑端，现场真有需求再开移动端（范例 `docs/17`）。

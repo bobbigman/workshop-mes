@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>报工页 - 说明示例</title>
+<style>
+  body {
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    background: #f5f7fa;
+    padding: 32px;
+    margin: 0;
+  }
+  .page-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #303133;
+    margin-bottom: 16px;
+  }
+  .tip-box {
+    background: #ecf5ff;
+    border: 1px solid #d9ecff;
+    border-radius: 4px;
+    padding: 16px 20px;
+    max-width: 640px;
+    line-height: 1.7;
+    color: #606266;
+    font-size: 14px;
+  }
+  .hook {
+    font-size: 16px;
+    font-weight: 700;
+    color: #303133;
+    display: block;
+    margin-bottom: 6px;
+  }
+  .hook::before {
+    content: "▸ ";
+    color: #409eff;
+  }
+  .slogan {
+    color: #606266;
+    font-style: italic;
+    font-size: 13px;
+    margin: 0 0 12px 0;
+  }
+  .main {
+    color: #303133;
+    margin: 0 0 8px 0;
+  }
+  .sub {
+    color: #909399;
+    font-size: 13px;
+    margin: 0 0 4px 0;
+  }
+  .op {
+    color: #409eff;
+    font-weight: 600;
+  }
+  /* 下面8条说明 */
+  .rules {
+    margin: 16px 0 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .rules li {
+    padding: 6px 0 6px 18px;
+    position: relative;
+    color: #303133;
+    font-size: 14px;
+    line-height: 1.7;
+  }
+  .rules li::before {
+    content: "•";
+    position: absolute;
+    left: 4px;
+    color: #909399;
+  }
+  .perm {
+    color: #909399;
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+  <div class="page-title">报工页</div>
+
+  <div class="tip-box">
+    <span class="hook">客户问进度，张口就答</span>
+    <p class="slogan">车间不再是黑箱：每张单干到哪、差几件、会不会延期，一眼看清。</p>
+
+    <p class="main">
+      报工 = 记数 + 看进度：还能<span class="op">补报</span>、<span class="op">代报</span>。
+    </p>
+
+    <p class="sub">
+      提醒：状态「待复核」的在这只看得见，要处理得去左侧「生产管理 → 报工复核」。
+    </p>
+  </div>
+
+  <ul class="rules">
+    <li><span class="op">【查询】</span>：输入工单或产品编号/名称后点它，筛出你要的报工。</li>
+    <li><span class="op">【+ 报工】</span>：新增一条报工（补报漏记的产量）。<span class="perm">（需有该工序的部门报工权限；管理员不受限）</span></li>
+    <li><span class="op">【代报工】</span>：替工人代填报工，适合班组长帮人补数。<span class="perm">（管理员或班组长可见）</span></li>
+    <li><span class="op">【一键补报未完工序】</span>：按一张工单把还没报满的工序一次补齐。<span class="perm">（仅管理员）</span></li>
+    <li><span class="op">【待复核】</span>：这条还没被班组长确认，暂时不算进生产报表和工资。要处理：去左侧「生产管理 → 报工复核」，由班组长或管理员点<span class="op">【通过】</span>才入账；点<span class="op">【退回】</span>要填原因，工人改数后再走复核。<span class="perm">（复核只有班组长/管理员能做）</span></li>
+    <li><span class="op">【已通过】</span>：已入账，改不了数量；若要改，得先在报工复核页<span class="op">【退回】</span>。</li>
+    <li><span class="op">【已退回】</span>：班组长退回来了，看退回原因后在本页<span class="op">【修改】</span>再提交，会重新进待复核。</li>
+    <li><span class="op">【修改】</span>：改这条报工的数量或时长。「已通过」的改不了，要先退回。<span class="perm">（报工人本人或管理员）</span></li>
+  </ul>
+</body>
+</html>

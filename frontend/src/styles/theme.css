@@ -1,0 +1,386 @@
+/* ============================================================
+ * 小蜜蜂报工 · 全局主题令牌（浅色极简 / SaaS 风）
+ * 参照飞书 / 钉钉：白灰去边框、克制的蓝色主色、轻阴影代替边框
+ * 所有页面颜色统一走这里的 CSS 变量，换主题只改这一个文件
+ * ============================================================ */
+
+:root {
+  /* ---- 品牌主色（飞书蓝） ---- */
+  --app-primary: #3370ff;
+  --app-primary-hover: #245bdb;
+  --app-primary-light: #e8eeff;   /* 选中/悬浮的浅蓝底 */
+  --app-primary-border: #adc3ff;
+
+  /* ---- 成功 / 警告 / 危险（Arco 色系，更现代） ---- */
+  --app-success: #00b42a;
+  --app-warning: #ff7d00;
+  --app-danger: #f53f3f;
+
+  /* ---- 中性色 ---- */
+  --app-text-1: #1d2129;          /* 标题 / 主要文字 */
+  --app-text-2: #4e5969;          /* 正文 */
+  --app-text-3: #86909c;          /* 次要 / 辅助 */
+  --app-text-4: #c9cdd4;          /* 占位 / 禁用 */
+  --app-border: #e5e6eb;          /* 分割线 */
+  --app-border-light: #f2f3f5;    /* 更浅的分割线 */
+
+  /* ---- 背景 ---- */
+  --app-bg: #f5f6f8;              /* 页面浅灰底 */
+  --app-card: #ffffff;            /* 卡片 / 容器白 */
+
+  /* ---- 圆角 / 阴影（容器 12，控件 6；阴影极轻，不和边框叠用） ---- */
+  --app-radius: 12px;
+  --app-radius-sm: 6px;
+  --app-shadow: 0 1px 2px rgba(29, 33, 41, 0.04);
+  --app-shadow-lg: 0 8px 24px rgba(29, 33, 41, 0.08);
+
+  /* ---- PC 空间尺度（纯尺寸，不涉及业务） ---- */
+  --app-page-padding-x: 24px;
+  --app-page-padding-y: 20px;
+  --app-section-gap: 16px;
+  --app-card-padding: 20px;
+  --app-control-height: 36px;
+
+  /* ---- H5 空间尺度（手机报工端专用；不改上面的 PC 变量） ---- */
+  --h5-page-padding: 12px;
+  --h5-card-radius: 12px;
+  --h5-card-padding: 14px;
+  --h5-control-height: 48px;
+  --h5-qty-height: 56px;
+  --h5-qty-font: 28px;
+  --h5-action-height: 52px;
+  --h5-tabbar-height: 56px;
+
+  /* ---- 字体 ---- */
+  --app-font: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --app-font-mono: 'SF Mono', 'Roboto Mono', Consolas, 'Courier New', monospace;
+
+  /* ---- 布局尺度（简约；经典版在 theme-legacy 回退） ---- */
+  --app-aside-width: 232px;
+  --app-header-height: 60px;
+  --app-header-shadow: none;
+  --app-menu-item-height: 46px;
+  --app-menu-group-letter-spacing: 0.08em;
+
+  /* ---- 布局 / 侧边栏（供 layout/login 使用，主题切换只动这些） ---- */
+  --app-aside-bg: #ffffff;
+  --app-aside-border: #e5e6eb;
+  --app-aside-text: #4e5969;
+  --app-aside-text-active: #3370ff;
+  --app-aside-active-bg: #e8eeff;
+  --app-aside-hover-bg: #f5f6f8;
+  --app-aside-group-text: #86909c;
+  --app-brand-gradient: linear-gradient(135deg, #3370ff 0%, #1a4db8 100%);
+  /* 默认简约主题：Logo 跟侧栏同色，不铺品牌渐变。经典版在 theme-legacy 里单独覆盖。 */
+  --app-logo-bg: var(--app-aside-bg);
+  --app-logo-color: var(--app-text-1);
+  --app-logo-sub-color: var(--app-text-3);
+  --app-logo-sub-display: block;
+  --app-logo-min-height: 76px;
+  --app-logo-padding: 0 20px;
+  --app-logo-title-size: 18px;
+  --app-logo-border: var(--app-border);
+  --app-header-bg: #ffffff;
+  --app-login-bg: linear-gradient(180deg, #ffffff 0%, #eef3ff 100%);
+}
+
+/* ============================================================
+ * Element Plus 主题变量覆盖（电脑端全站生效）
+ * ============================================================ */
+:root {
+  --el-color-primary: #3370ff;
+  --el-color-primary-light-3: #5e8cff;
+  --el-color-primary-light-5: #85a7ff;
+  --el-color-primary-light-7: #adc3ff;
+  --el-color-primary-light-8: #c2d1ff;
+  --el-color-primary-light-9: #e8eeff;
+  --el-color-primary-dark-2: #245bdb;
+
+  --el-color-success: #00b42a;
+  --el-color-success-light-3: #33c64d;
+  --el-color-success-light-5: #66d67f;
+  --el-color-success-light-7: #99e5aa;
+  --el-color-success-light-8: #b3ecc0;
+  --el-color-success-light-9: #e0f7e5;
+  --el-color-success-dark-2: #009a29;
+
+  --el-color-warning: #ff7d00;
+  --el-color-warning-light-3: #ff9833;
+  --el-color-warning-light-5: #ffb266;
+  --el-color-warning-light-7: #ffcc99;
+  --el-color-warning-light-8: #ffd9b3;
+  --el-color-warning-light-9: #fff0e0;
+  --el-color-warning-dark-2: #e66d00;
+
+  --el-color-danger: #f53f3f;
+  --el-color-danger-light-3: #f76560;
+  --el-color-danger-light-5: #f98d8d;
+  --el-color-danger-light-7: #fcbcbc;
+  --el-color-danger-light-8: #fdd0d0;
+  --el-color-danger-light-9: #feecec;
+  --el-color-danger-dark-2: #dc2f2f;
+
+  --el-color-error: #f53f3f;
+  --el-color-error-light-3: #f76560;
+  --el-color-error-light-5: #f98d8d;
+  --el-color-error-light-7: #fcbcbc;
+  --el-color-error-light-8: #fdd0d0;
+  --el-color-error-light-9: #feecec;
+  --el-color-error-dark-2: #dc2f2f;
+
+  --el-color-info: #86909c;
+
+  /* ---- 文字 ---- */
+  --el-text-color-primary: #1d2129;
+  --el-text-color-regular: #4e5969;
+  --el-text-color-secondary: #86909c;
+  --el-text-color-placeholder: #c9cdd4;
+  --el-text-color-disabled: #c9cdd4;
+
+  /* ---- 边框 ---- */
+  --el-border-color: #e5e6eb;
+  --el-border-color-light: #f2f3f5;
+  --el-border-color-lighter: #f7f8fa;
+  --el-border-color-extra-light: #f2f3f5;
+  --el-border-color-hover: #c9cdd4;
+
+  /* ---- 背景 / 填充 ---- */
+  --el-bg-color: #ffffff;
+  --el-bg-color-page: #f5f6f8;
+  --el-fill-color-blank: #ffffff;
+  --el-fill-color-light: #f7f8fa;
+  --el-fill-color-lighter: #fafafa;
+  --el-fill-color-extra-light: #fcfcfd;
+
+  /* ---- 圆角（输入/按钮 6；Tag 用 small，保持小圆角） ---- */
+  --el-border-radius-base: 6px;
+  --el-border-radius-small: 4px;
+  --el-border-radius-round: 20px;
+
+  /* ---- 字体 ---- */
+  --el-font-family: var(--app-font);
+}
+
+/* 电脑端默认控件高度接到 Element Plus；768 以下不改，避免带动手机后台 */
+@media (min-width: 769px) {
+  :root {
+    --el-component-size: var(--app-control-height);
+  }
+}
+
+/* ============================================================
+ * 全局基础
+ * ============================================================ */
+html, body, #app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--app-font);
+  background: var(--app-bg);
+  color: var(--app-text-1);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ============================================================
+ * Element Plus 组件微调
+ * 表格是工作区：平、白、只有横线，不要悬浮卡片。
+ * ============================================================ */
+.el-main {
+  padding: var(--app-page-padding-y) var(--app-page-padding-x);
+  background: var(--app-bg);
+}
+
+.el-table {
+  --el-table-border-color: var(--app-border-light);
+  --el-table-header-bg-color: var(--app-border-light);
+  --el-table-header-text-color: var(--app-text-2);
+  --el-table-row-hover-bg-color: var(--app-aside-hover-bg);
+  background: var(--app-card);
+  border-radius: 0;
+  overflow: hidden;
+  box-shadow: none;
+  font-size: 14px;
+}
+
+.el-table th.el-table__cell {
+  padding: 11px 0;
+  font-size: 14px;
+  font-weight: 600;
+  background: var(--app-border-light);
+  color: var(--app-text-2);
+  border-right: none;
+  border-bottom: 1px solid var(--app-border);
+}
+
+.el-table td.el-table__cell {
+  padding: 12px 0;
+  font-size: 14px;
+  border-right: none;
+  border-bottom: 1px solid var(--app-border-light);
+}
+.el-table .cell {
+  padding: 0 16px;
+  line-height: 22px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.el-table .el-table__row:last-child td.el-table__cell {
+  border-bottom: none;
+}
+
+.el-table::before,
+.el-table::after {
+  display: none;
+}
+.el-table__inner-wrapper::before {
+  display: none;
+}
+
+.el-button {
+  border-radius: var(--app-radius-sm);
+}
+
+/* 卡片只留浅边界，不再叠阴影 */
+.el-card {
+  border-radius: var(--app-radius);
+  border-color: var(--app-border);
+  box-shadow: none;
+}
+
+.el-dialog {
+  --el-dialog-border-radius: var(--app-radius);
+  --el-dialog-padding-primary: 24px;
+  border-radius: var(--app-radius);
+}
+.el-dialog .el-form-item {
+  margin-bottom: 16px;
+}
+
+.el-overlay {
+  background-color: rgba(29, 33, 41, 0.4);
+}
+
+.mono,
+.el-table .el-table__cell {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+ * 窄屏适配（手机打开 PC 后台时：全宽内容、表格可横滑、弹窗近全宽）
+ * ============================================================ */
+@media (max-width: 768px) {
+  .el-main {
+    padding: 12px !important;
+  }
+
+  /* 工具栏：输入框占满一行，按钮可换行 */
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .toolbar > .el-input,
+  .toolbar > .el-select,
+  .toolbar > .el-date-editor {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  .toolbar .el-button {
+    flex: 1 1 auto;
+    min-height: 36px;
+  }
+
+  /* 表格横向滚动，避免列被挤成碎字 */
+  .el-table {
+    width: 100%;
+  }
+  .el-table .el-table__body-wrapper,
+  .el-table .el-scrollbar__wrap {
+    overflow-x: auto !important;
+  }
+
+  /* 弹窗接近全宽，便于填表 */
+  .el-dialog {
+    width: calc(100vw - 24px) !important;
+    max-width: 560px;
+    margin: 8vh auto !important;
+  }
+  .el-dialog__body {
+    padding: 12px 16px;
+  }
+
+  /* Tabs 可横滑 */
+  .el-tabs__nav-wrap {
+    overflow-x: auto;
+  }
+}
+
+/* ============================================================
+ * 旧主题（legacy）—— 深色侧边栏 + Element 默认蓝，一键回退用
+ * 通过 <body class="theme-legacy"> 切换（见 main.js / layout 的切换开关）
+ * ============================================================ */
+body.theme-legacy {
+  /* 主色回退到 Element Plus 默认蓝 */
+  --app-primary: #409eff;
+  --app-primary-hover: #337ecc;
+  --app-primary-light: #ecf5ff;
+  --app-primary-border: #b1d8ff;
+
+  /* 尺度 / 圆角 / 阴影回退到改版前 */
+  --app-aside-width: 200px;
+  --app-header-height: 52px;
+  --app-header-shadow: none;
+  --app-menu-item-height: 42px;
+  --app-menu-group-letter-spacing: normal;
+  --app-radius: 10px;
+  --app-radius-sm: 6px;
+  --app-shadow: 0 1px 4px rgba(29, 33, 41, 0.06);
+  --app-shadow-lg: 0 4px 16px rgba(29, 33, 41, 0.10);
+  --el-border-radius-base: 6px;
+  --el-border-radius-small: 4px;
+  --el-component-size: 32px;
+
+  /* 深色侧边栏；logo 无品牌渐变条 */
+  --app-aside-bg: #0e1b33;
+  --app-aside-border: #1c2c4a;
+  --app-aside-text: #cfd8e8;
+  --app-aside-text-active: #ffffff;
+  --app-aside-active-bg: #1c2c4a;
+  --app-aside-hover-bg: #1c2c4a;
+  --app-aside-group-text: #6b7c99;
+  --app-brand-gradient: none;
+  --app-logo-bg: transparent;
+  --app-logo-color: #ffffff;
+  --app-logo-sub-color: transparent;
+  --app-logo-sub-display: none;
+  --app-logo-min-height: 0;
+  --app-logo-padding: 18px 16px;
+  --app-logo-title-size: 16px;
+  --app-logo-border: #1c2c4a;
+  --app-header-bg: #ffffff;
+  --app-login-bg: linear-gradient(135deg, #409eff, #66b1ff);
+
+  /* Element Plus 主色整套回退到默认蓝 */
+  --el-color-primary: #409eff;
+  --el-color-primary-light-3: #66b1ff;
+  --el-color-primary-light-5: #95c8ff;
+  --el-color-primary-light-7: #b1d8ff;
+  --el-color-primary-light-8: #c6e2ff;
+  --el-color-primary-light-9: #ecf5ff;
+  --el-color-primary-dark-2: #337ecc;
+}
+
+/* 技术错误详情弹窗：长 SQL/报文可换行选中复制 */
+.mes-error-detail .el-message-box__message {
+  max-height: 60vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.45;
+}

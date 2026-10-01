@@ -1,0 +1,42 @@
+---
+description: C# 后端编码规范（.NET 8 + EF Core）
+globs: backend/**/*.cs
+alwaysApply: false
+---
+
+# C# 后端规范
+
+## 命名
+
+- 实体/类/方法：PascalCase（`WorkOrder`、`CreateOrder()`）
+- 属性：PascalCase；私有字段：`_camelCase`
+- 控制器：`XxxController`；服务：`IXxxService` / `XxxService`
+- 数据库表/列沿用 `docs/02-数据字典.md` 的前缀约定（`sys_/base_/prod_`）
+
+## EF Core
+
+- 实体类放 `Models/`，`DbContext` 放 `Data/`，业务逻辑放 `Services/`。
+- 实体字段与数据字典列一一对应；关联关系用导航属性表达。
+- 迁移用 EF Core Migrations，禁止手改已上线的表。
+
+## 分层
+
+- Controller 只做参数接收与返回，业务校验放 Service。
+- 删除操作统一走删除顺序校验（见 business-rules）。
+- 报工操作在 Service 内校验部门权限。
+
+## 示例
+
+```csharp
+// ❌ 控制器里堆业务逻辑
+[HttpPost]
+public IActionResult Report(ReportDto dto) {
+    if (db.Reports.Count(r => r.OrderId == dto.OrderId) >= ...) { ... } // 不该在这
+    return Ok();
+}
+
+// ✅ 业务下沉到 Service
+[HttpPost]
+public async Task<IActionResult> Report(ReportDto dto) =>
+    Ok(await _reportService.SubmitAsync(dto));
+```

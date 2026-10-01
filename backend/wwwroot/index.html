@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>小蜜蜂报工</title>
+  <!-- PWA：桌面图标 / 添加到主屏幕 -->
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" href="/icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <meta name="theme-color" content="#3370ff" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="小工单" />
+  <script type="module" crossorigin src="/assets/index-BDTvlLz8.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-hYyTGLnZ.css">
+</head>
+<body>
+  <div id="startup-status" role="status" style="padding:48px 24px;text-align:center;font:16px/1.8 sans-serif;color:#303133">
+    <p id="startup-message">正在打开小蜜蜂报工…</p>
+    <p id="startup-detail" style="font-size:13px;word-break:break-word"></p>
+    <button id="startup-retry" hidden type="button" style="padding:10px 20px">重新加载</button>
+    <noscript>浏览器未启用 JavaScript，无法打开系统。</noscript>
+  </div>
+  <script src="/startup.js"></script>
+  <div id="app"></div>
+</body>
+</html>

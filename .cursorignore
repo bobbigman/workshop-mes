@@ -1,0 +1,56 @@
+# ============================================================
+# .cursorignore —— Cursor 提速忽略清单（黑湖小工单：Vue 前端 + .NET 后端）
+# 用途：只让 Cursor 索引源码 + 文档，跳过依赖/构建产物/日志/备份，
+#       加快索引与上下文加载，并防止 AI 误读大文件。
+# 生效：保存后重启 Cursor 或重新索引。
+# 注意：若某目录你想让 Cursor 能看到，删掉对应行即可。
+# ============================================================
+
+# ---- 前端依赖 ----
+node_modules/
+
+# ---- 构建产物 ----
+dist/
+bin/
+obj/
+Debug/
+Release/
+wwwroot/assets/
+artifacts/
+publish/
+publish-win64/
+publish-update/
+
+# ---- 日志 ----
+logs/
+*.log
+_*.log
+_*.err
+
+# ---- IDE / 本地环境 ----
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.sln.cache
+
+# ---- 数据库备份 / 数据文件 ----
+databaseBack/
+*.bak
+*.mdf
+*.ldf
+*.ndf
+
+# ---- AI 临时任务 / 诊断输出 ----
+kb-task/excel-*/
+_diag_test_out/
+_upload_check/
+_verify_out/
+_cleanup.txt
+__pycache__/
+*.pyc
+_test_out/
+
+# ---- 大体积媒体（截图目录；如需给 AI 看，删掉这一行）----
+截图/
