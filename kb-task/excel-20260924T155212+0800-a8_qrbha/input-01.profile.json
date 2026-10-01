@@ -1,0 +1,857 @@
+{
+ "file": "D:\\workspace\\pkub\\裁切分析\\MP42Txt\\黑湖小工单_分析\\docs\\AI知识库检索命中基准表.xlsx",
+ "source_sha256": "3c202c94d224333f6d8fbb23f055a6372866a98bfe897155bc135d072184a762",
+ "read_path": "D:\\workspace\\pkub\\裁切分析\\MP42Txt\\黑湖小工单_分析\\docs\\AI知识库检索命中基准表.xlsx",
+ "sheet_names": [
+  "命中基准",
+  "验收汇总"
+ ],
+ "formula_summary": {
+  "status": "ok",
+  "count": 7,
+  "cache": "incomplete",
+  "formula_cache_missing": 7,
+  "formula_cache_errors": 0
+ },
+ "sheets": [
+  {
+   "sheet": "命中基准",
+   "max_row": 42,
+   "max_col": 8,
+   "preview_rows": {
+    "1": {
+     "values": [
+      "AI 知识库（SupportDocs）检索命中基准表 —— 现有六篇 + 61 补全七项",
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+     ],
+     "types": [
+      "string",
+      "empty",
+      "empty",
+      "empty",
+      "empty",
+      "empty",
+      "empty",
+      "empty"
+     ]
+    },
+    "2": {
+     "values": [
+      "序号",
+      "知识域",
+      "问法（用户怎么说）",
+      "预期命中（文档/章节）",
+      "覆盖状态",
+      "验收状态",
+      "依据/来源",
+      "备注"
+     ],
+     "types": [
+      "string",
+      "string",
+      "string",
+      "string",
+      "string",
+      "string",
+      "string",
+      "string"
+     ]
+    },
+    "3": {
+     "values": [
+      1,
+      "01-操作入门",
+      "怎么登录系统？都有哪些角色？",
+      "01-操作入门.md #登录/角色",
+      "现有",
+      "待验收",
+      "SupportDocs/README 测试问法 #4",
+      null
+     ],
+     "types": [
+      "numeric",
+      "string",
+      "string",
+      "string",
+      "string",
+      "string",
+      "string",
+      "empty"
+     ]
+    },
+    "4": {
+     "values": [
+      2,
+      "01-操作入门",
+      "第一次使用先配置什么？顺序是什么？",
+      "01-操作入门.md #第一次配置",
+      "现有",
+      "待验收",
+      "01-操作入门.md",
+      null
+     ],
+     "types": [
+      "numeric",
+      "string",
+      "string",
+      "string",
+      "string",
+      "string",
+      "string",
+      "empty"
+     ]
+    },
+    "5": {
+     "values": [
+      3,
+      "01-操作入门",
+      "怎么给工人建账号？怎么改密码？",
+      "01-操作入门.md #建账号/改密码",
+      "现有",
+      "待验收",
+      "SupportDocs/README 测试问法 #4",
+      null
+     ],
+     "types": [
+      "numeric",
+      "string",
+      "string",
+      "string",
+      "string",
+      "string",
+      "string",
+      "empty"
+     ]
+    },
+    "6": {
+     "values": [
+      4,
+      "01-操作入门",
+      "怎么建部门、把人加进部门？",
+      "01-操作入门.md #建部门",
+      "现有",
+      "待验收",
+      "01-操作入门.md",
+      null
+     ]
+    },
+    "7": {
+     "values": [
+      5,
+      "02-基础资料",
+      "怎么配单位/不良品项/工序？",
+      "02-基础资料.md #单位/不良品项/工序",
+      "现有",
+      "待验收",
+      "02-基础资料.md",
+      null
+     ]
+    },
+    "8": {
+     "values": [
+      6,
+      "02-基础资料",
+      "工序报工权限怎么配？",
+      "02-基础资料.md #工序（报工权限）",
+      "现有",
+      "待验收",
+      "SupportDocs/README 测试问法 #5",
+      "三条硬规则之一"
+     ]
+    },
+    "9": {
+     "values": [
+      7,
+      "02-基础资料",
+      "怎么配工艺路线和产品？",
+      "02-基础资料.md #工艺路线/产品",
+      "现有",
+      "待验收",
+      "02-基础资料.md",
+      null
+     ]
+    },
+    "10": {
+     "values": [
+      8,
+      "02-基础资料",
+      "产品编号可以重复吗？",
+      "02-基础资料.md #产品编号唯一",
+      "现有",
+      "待验收",
+      "02-基础资料.md",
+      "三条硬规则之一"
+     ]
+    },
+    "11": {
+     "values": [
+      9,
+      "03-工单",
+      "怎么下工单？",
+      "03-工单.md #创建工单",
+      "现有",
+      "待验收",
+      "SupportDocs/README 测试问法 #3",
+      null
+     ]
+    },
+    "12": {
+     "values": [
+      10,
+      "03-工单",
+      "怎么打印二维码流转卡？",
+      "03-工单.md #打印",
+      "现有",
+      "待验收",
+      "SupportDocs/README 测试问法 #12",
+      null
+     ]
+    },
+    "13": {
+     "values": [
+      11,
+      "03-工单",
+      "工单有哪些状态？怎么结束/撤回/取消？",
+      "03-工单.md #状态流转",
+      "现有",
+      "待验收",
+      "SupportDocs/README 测试问法 #11",
+      null
+     ]
+    },
+    "14": {
+     "values": [
+      12,
+      "03-工单",
+      "怎么查进度、报表、看板？",
+      "03-工单.md #查进度/报表/看板",
+      "现有",
+      "待验收",
+      "03-工单.md",
+      null
+     ]
+    },
+    "15": {
+     "values": [
+      13,
+      "04-报工与复核",
+      "怎么电脑报工？",
+      "04-报工与复核.md #电脑报工",
+      "现有",
+      "待验收",
+      "04-报工与复核.md",
+      null
+     ]
+    }
+   },
+   "merged_cells": [
+    "A1:H1"
+   ],
+   "empty_header_columns": [
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "H"
+   ],
+   "special_rows": [],
+   "header_row_detection": {
+    "candidates": [
+     {
+      "row_index": 1,
+      "score": 2,
+      "summary": {
+       "empty": 7,
+       "string": 1,
+       "numeric": 0,
+       "datetime": 0,
+       "other": 0,
+       "non_empty_string": 1
+      }
+     },
+     {
+      "row_index": 2,
+      "score": 16,
+      "summary": {
+       "empty": 0,
+       "string": 8,
+       "numeric": 0,
+       "datetime": 0,
+       "other": 0,
+       "non_empty_string": 8
+      }
+     },
+     {
+      "row_index": 3,
+      "score": 11,
+      "summary": {
+       "empty": 1,
+       "string": 6,
+       "numeric": 1,
+       "datetime": 0,
+       "other": 0,
+       "non_empty_string": 6
+      }
+     },
+     {
+      "row_index": 4,
+      "score": 11,
+      "summary": {
+       "empty": 1,
+       "string": 6,
+       "numeric": 1,
+       "datetime": 0,
+       "other": 0,
+       "non_empty_string": 6
+      }
+     },
+     {
+      "row_index": 5,
+      "score": 11,
+      "summary": {
+       "empty": 1,
+       "string": 6,
+       "numeric": 1,
+       "datetime": 0,
+       "other": 0,
+       "non_empty_string": 6
+      }
+     }
+    ],
+    "suggested": 2
+   },
+   "column_analysis": {
+    "A": {
+     "header": "AI 知识库（SupportDocs）检索命中基准表 —— 现有六篇 + 61 补全七项",
+     "analysis": {
+      "type": "int",
+      "non_empty_count": 41,
+      "empty_count": 0,
+      "type_distribution": {
+       "str": 1,
+       "int": 40
+      }
+     }
+    },
+    "B": {
+     "header": null,
+     "analysis": {
+      "type": "str",
+      "non_empty_count": 41,
+      "empty_count": 0,
+      "type_distribution": {
+       "str": 41
+      }
+     }
+    },
+    "C": {
+     "header": null,
+     "analysis": {
+      "type": "str",
+      "non_empty_count": 41,
+      "empty_count": 0,
+      "type_distribution": {
+       "str": 41
+      }
+     }
+    },
+    "D": {
+     "header": null,
+     "analysis": {
+      "type": "str",
+      "non_empty_count": 41,
+      "empty_count": 0,
+      "type_distribution": {
+       "str": 41
+      }
+     }
+    },
+    "E": {
+     "header": null,
+     "analysis": {
+      "type": "str",
+      "non_empty_count": 41,
+      "empty_count": 0,
+      "type_distribution": {
+       "str": 41
+      }
+     }
+    },
+    "F": {
+     "header": null,
+     "analysis": {
+      "type": "str",
+      "non_empty_count": 41,
+      "empty_count": 0,
+      "type_distribution": {
+       "str": 41
+      }
+     }
+    },
+    "G": {
+     "header": null,
+     "analysis": {
+      "type": "str",
+      "non_empty_count": 41,
+      "empty_count": 0,
+      "type_distribution": {
+       "str": 41
+      }
+     }
+    },
+    "H": {
+     "header": null,
+     "analysis": {
+      "type": "str",
+      "non_empty_count": 6,
+      "empty_count": 35,
+      "type_distribution": {
+       "str": 6
+      }
+     }
+    }
+   },
+   "table_region_probe": {
+    "summary": "",
+    "note": "通用表区域检测（纯结构信号聚类，不含针对特定文件的阈值）。summary 是人类可读的切分结论概述，candidate_blocks 是对应的结构化细节。切分是客观聚类结果，最终请结合列名语义确认；多个独立表时不要仅按物理同行对齐。",
+    "candidate_blocks": [
+     {
+      "range": "A1:H42",
+      "bounds": [
+       1,
+       1,
+       42,
+       8
+      ],
+      "n_rows": 42,
+      "n_cols": 8,
+      "fill_rate": 0.875,
+      "per_col": {
+       "A": {
+        "dom_kind": "number",
+        "dom_nf": "General",
+        "filled": 41,
+        "row_span": [
+         2,
+         42
+        ]
+       },
+       "B": {
+        "dom_kind": "text",
+        "dom_nf": "General",
+        "filled": 41,
+        "row_span": [
+         2,
+         42
+        ]
+       },
+       "C": {
+        "dom_kind": "text",
+        "dom_nf": "General",
+        "filled": 41,
+        "row_span": [
+         2,
+         42
+        ]
+       },
+       "D": {
+        "dom_kind": "text",
+        "dom_nf": "General",
+        "filled": 41,
+        "row_span": [
+         2,
+         42
+        ]
+       },
+       "E": {
+        "dom_kind": "text",
+        "dom_nf": "General",
+        "filled": 41,
+        "row_span": [
+         2,
+         42
+        ]
+       },
+       "F": {
+        "dom_kind": "text",
+        "dom_nf": "General",
+        "filled": 41,
+        "row_span": [
+         2,
+         42
+        ]
+       },
+       "G": {
+        "dom_kind": "text",
+        "dom_nf": "General",
+        "filled": 41,
+        "row_span": [
+         2,
+         42
+        ]
+       },
+       "H": {
+        "dom_kind": "text",
+        "dom_nf": "General",
+        "filled": 6,
+        "row_span": [
+         2,
+         42
+        ]
+       }
+      }
+     }
+    ],
+    "n_blocks": 1,
+    "col_boundary_lines": [
+     1,
+     8
+    ],
+    "empty_rows": [],
+    "empty_cols": []
+   },
+   "column_widths": {
+    "A": 5.0,
+    "B": 24.0,
+    "C": 42.0,
+    "D": 37.0,
+    "E": 33.0,
+    "F": 29.0,
+    "G": 37.0,
+    "H": 35.0
+   },
+   "row_heights": {
+    "1": 26.0
+   },
+   "dimension_defaults": {
+    "column_width": null,
+    "row_height": 15.0,
+    "note": "宽/高字典只含显式记录；列组使用A:C范围键，缺省宽度可能未指定。"
+   }
+  },
+  {
+   "sheet": "验收汇总",
+   "max_row": 16,
+   "max_col": 3,
+   "preview_rows": {
+    "1": {
+     "values": [
+      "验收汇总（自动统计）",
+      null,
+      null
+     ],
+     "types": [
+      "string",
+      "empty",
+      "empty"
+     ]
+    },
+    "2": {
+     "values": [
+      null,
+      null,
+      null
+     ],
+     "types": [
+      "empty",
+      "empty",
+      "empty"
+     ]
+    },
+    "3": {
+     "values": [
+      "总问法数",
+      null,
+      null
+     ],
+     "types": [
+      "string",
+      "empty",
+      "empty"
+     ]
+    },
+    "4": {
+     "values": [
+      "现有六篇覆盖条数",
+      null,
+      null
+     ],
+     "types": [
+      "string",
+      "empty",
+      "empty"
+     ]
+    },
+    "5": {
+     "values": [
+      "新增功能补全条数",
+      null,
+      null
+     ],
+     "types": [
+      "string",
+      "empty",
+      "empty"
+     ]
+    },
+    "6": {
+     "values": [
+      "已命中",
+      null,
+      null
+     ]
+    },
+    "7": {
+     "values": [
+      "未命中",
+      null,
+      null
+     ]
+    },
+    "8": {
+     "values": [
+      "待验收",
+      null,
+      null
+     ]
+    },
+    "9": {
+     "values": [
+      "通过率（已命中/总）",
+      null,
+      null
+     ]
+    },
+    "10": {
+     "values": [
+      null,
+      null,
+      null
+     ]
+    },
+    "11": {
+     "values": [
+      null,
+      null,
+      null
+     ]
+    },
+    "12": {
+     "values": [
+      "使用说明：",
+      null,
+      null
+     ]
+    },
+    "13": {
+     "values": [
+      "1. 逐条用问法向检索接口 / 扣子 MCP 实测，命中预期章节则把验收状态改为『已命中』，未命中改『未命中』，未测保持『待验收』。",
+      null,
+      null
+     ]
+    },
+    "14": {
+     "values": [
+      "2. 通过率自动按验收状态统计，随勾选实时更新。",
+      null,
+      null
+     ]
+    },
+    "15": {
+     "values": [
+      "3. 『现有』= 当前 SupportDocs 01-06 应能命中的问法；『新增』= docs/61 补全后应新增命中的问法。",
+      null,
+      null
+     ]
+    }
+   },
+   "merged_cells": [
+    "A1:C1"
+   ],
+   "empty_header_columns": [],
+   "special_rows": [],
+   "header_row_detection": {
+    "candidates": [
+     {
+      "row_index": 1,
+      "score": 2,
+      "summary": {
+       "empty": 2,
+       "string": 1,
+       "numeric": 0,
+       "datetime": 0,
+       "other": 0,
+       "non_empty_string": 1
+      }
+     },
+     {
+      "row_index": 2,
+      "score": 0,
+      "summary": {
+       "empty": 3,
+       "string": 0,
+       "numeric": 0,
+       "datetime": 0,
+       "other": 0,
+       "non_empty_string": 0
+      }
+     },
+     {
+      "row_index": 3,
+      "score": 2,
+      "summary": {
+       "empty": 2,
+       "string": 1,
+       "numeric": 0,
+       "datetime": 0,
+       "other": 0,
+       "non_empty_string": 1
+      }
+     },
+     {
+      "row_index": 4,
+      "score": 2,
+      "summary": {
+       "empty": 2,
+       "string": 1,
+       "numeric": 0,
+       "datetime": 0,
+       "other": 0,
+       "non_empty_string": 1
+      }
+     },
+     {
+      "row_index": 5,
+      "score": 2,
+      "summary": {
+       "empty": 2,
+       "string": 1,
+       "numeric": 0,
+       "datetime": 0,
+       "other": 0,
+       "non_empty_string": 1
+      }
+     }
+    ],
+    "suggested": 1
+   },
+   "column_analysis": {
+    "A": {
+     "header": "验收汇总（自动统计）",
+     "analysis": {
+      "type": "str",
+      "non_empty_count": 12,
+      "empty_count": 3,
+      "type_distribution": {
+       "str": 12
+      }
+     }
+    },
+    "B": {
+     "header": null,
+     "analysis": {
+      "type": "empty",
+      "non_empty_count": 0
+     }
+    },
+    "C": {
+     "header": null,
+     "analysis": {
+      "type": "empty",
+      "non_empty_count": 0
+     }
+    }
+   },
+   "table_region_probe": {
+    "summary": "注意：检测到本 sheet 可能含 2 个列范围不同的独立数据区块：\n  区块1 = A-A 列（总问法数），约 12 条数据\n  区块2 = A-A 列（使用说明：），约 12 条数据\n请结合列名语义判断它们是否为各自独立的表，以及表与表之间该如何关联。",
+    "note": "通用表区域检测（纯结构信号聚类，不含针对特定文件的阈值）。summary 是人类可读的切分结论概述，candidate_blocks 是对应的结构化细节。切分是客观聚类结果，最终请结合列名语义确认；多个独立表时不要仅按物理同行对齐。",
+    "candidate_blocks": [
+     {
+      "range": "A3:A9",
+      "bounds": [
+       3,
+       1,
+       9,
+       1
+      ],
+      "n_rows": 7,
+      "n_cols": 1,
+      "fill_rate": 1.0,
+      "per_col": {
+       "A": {
+        "dom_kind": "text",
+        "dom_nf": "General",
+        "filled": 12,
+        "row_span": [
+         3,
+         16
+        ]
+       }
+      }
+     },
+     {
+      "range": "A12:A16",
+      "bounds": [
+       12,
+       1,
+       16,
+       1
+      ],
+      "n_rows": 5,
+      "n_cols": 1,
+      "fill_rate": 1.0,
+      "per_col": {
+       "A": {
+        "dom_kind": "text",
+        "dom_nf": "General",
+        "filled": 12,
+        "row_span": [
+         3,
+         16
+        ]
+       }
+      }
+     }
+    ],
+    "n_blocks": 2,
+    "col_boundary_lines": [
+     1,
+     2,
+     3
+    ],
+    "empty_rows": [
+     2,
+     10,
+     11
+    ],
+    "empty_cols": [
+     2,
+     3
+    ]
+   },
+   "column_widths": {
+    "A": 22.0,
+    "B": 18.0,
+    "C": 60.0
+   },
+   "row_heights": {},
+   "dimension_defaults": {
+    "column_width": null,
+    "row_height": 15.0,
+    "note": "宽/高字典只含显式记录；列组使用A:C范围键，缺省宽度可能未指定。"
+   },
+   "formula_regions": [
+    "B3:B9"
+   ]
+  }
+ ],
+ "read_sha256": "3c202c94d224333f6d8fbb23f055a6372866a98bfe897155bc135d072184a762"
+}

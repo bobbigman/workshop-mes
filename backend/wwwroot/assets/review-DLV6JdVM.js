@@ -1,0 +1,1 @@
+import{h as t}from"./http-DsDvkG_F.js";const s=e=>t.get("/Review/pending",{params:e}),i=()=>t.get("/Review/order-options"),r=e=>t.post(`/Review/${e}/approve`),v=(e,o)=>t.post(`/Review/${e}/reject`,o),a=e=>t.post("/Review/batch-approve",e);export{s as a,a as b,r as c,i as g,v as r};

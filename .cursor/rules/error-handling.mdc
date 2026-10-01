@@ -1,0 +1,39 @@
+---
+description: 异常处理原则（不吞异常，抛出时带可定位的上下文）
+alwaysApply: true
+---
+
+# 异常处理原则
+
+## 总则：绝不吞异常
+
+- 禁止空 `catch`、禁止 `catch` 后静默忽略继续跑。
+- 捕获异常后必须：要么重新抛出（带上下文），要么记录日志并返回明确失败，不得用默认值假装成功。
+- 业务校验失败用 `throw BusinessException`，不得返回 `Fail` 后继续执行后续逻辑。
+- `ThrowHelper.Biz` 与 `BizUser` 的 Message 只放业务提示，不自动拼接方法名；Biz 保留 where 参数兼容调用点。定位依靠服务器日志 TraceId 和异常堆栈，源码行号依赖发布调试符号。
+
+## 各场景抛错要求
+
+1. **扫描失败**：立即抛错并提示，不得生成默认数据继续往后跑。
+2. **执行 SQL 出错**：抛异常并带 **SQL 原文**；参数快照由拦截器写入**服务器日志**（脱敏），禁止全局 `EnableSensitiveDataLogging`。
+3. **调用外部 API 出错**：异常信息必须带三要素——**请求网址 + 请求报文 + API 返回失败信息**（落盘前脱敏；AI 正文省略）。
+4. **其它错误**：异常信息尽量带 **「出错位置 + 正在做什么失败」**。
+
+## 统一出口
+
+- 用 `Common/ThrowHelper.cs` 统一抛错（见该文件），不要各处散写 `new Exception(...)`。
+- 全局异常中间件把异常转成 `{code,msg}`：**不吞异常**；完整堆栈仍写服务器错误日志 + `X-Trace-Id`。
+- **前端呈现**：技术异常 `msg` 回传 SQL/报文等异常链 Message（密码/Token 脱敏，不含堆栈），PC/H5 可直接查看；业务异常保持业务含义。
+
+## 反例 / 正例
+
+```csharp
+// ❌ 吞异常
+try { db.SaveChanges(); } catch { }
+
+// ❌ 兜底造假数据继续跑
+var qr = Scan(); if (qr == null) { qr = "默认值"; } // 扫描失败应抛错
+
+// ✅ 抛出带上下文
+catch (Exception ex) { throw ThrowHelper.Sql(sql, ex); }
+```

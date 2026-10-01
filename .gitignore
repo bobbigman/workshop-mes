@@ -1,0 +1,52 @@
+# .NET
+**/bin/
+**/obj/
+**/*.user
+**/*.suo
+**/appsettings.Development.json
+**/publish/
+
+# Node / Vue
+**/node_modules/
+**/dist/
+**/.vite/
+**/*.local
+
+# IDE
+.vs/
+.idea/
+*.swp
+.DS_Store
+
+# 本地敏感
+*.pfx
+*.key
+.env
+.env.*
+deploy/instance/.secrets/
+
+# 日志与临时
+*.log
+**/__smoke.js
+
+# 编译/测试/构建产物（新增，避免把 dll 等垃圾推上远程）
+**/*.dll
+**/*.pdb
+backend/logs/
+backend/publish-update/
+backend/_verify_build_81/
+backend.Tests/_test_out/
+
+# 根目录临时测试目录
+_build_check_80/
+_diag_test_out/
+_selfcheck_out/
+_testfiles/
+_upload_check/
+_verify_out/
+
+# artifacts 下的编译产物目录（保留 promo-video 等媒体交付物）
+artifacts/custom-field-check/
+artifacts/review111-backend/
+artifacts/throwhelper-build/
+artifacts/throwhelper-tests/

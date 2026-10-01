@@ -1,0 +1,153 @@
+# 车间小工单 MCP 对接扣子 Agent · 完整实操记录（最终版）
+
+> **本文是扣子对接的唯一事实来源**（2026-09-18 实测通）。`docs/40`、`docs/45`、`docs/46` 以本文为准纠偏。
+> 环境：.NET 8 本地 MCP 后端 + cpolar 内网穿透；扣子新版 Agent。
+> 对外渠道：**微信机器人**（新版 Agent **没有**公开 H5 / 网页分享链接渠道）。
+
+---
+
+## 核心踩坑（先看，少走弯路）
+
+1. 新版 Streamable-HTTP MCP **禁止把 token 拼在 URL 后面**（`?token=xxx` 会握手失败、读不到工具列表）。Token 必须放 Header：`Authorization: Bearer laohu-demo-2026`。
+2. 旧 MCP 会**缓存失败状态**，单纯编辑 URL 往往不重新握手。看不到工具 → **删掉重建**，别死磕编辑。
+3. MCP 协议只接受 POST；浏览器直接打开地址返回 **405 是正常现象**，别用浏览器测连通性，以扣子 MCP 页能否读到 7 个工具为准。
+4. 新版 Agent 渠道目前只有飞书、微信等；**没有网页 H5 / 分享链接**。陌拜对外走「微信机器人扫码绑定」。
+
+---
+
+## 一、本地后端前置（每次演示前确认）
+
+1. 本机启动 .NET 8 MCP 后端，演示模式 `DemoSkipAuth=true`
+   - 查工单、查报工：免授权直接调
+   - 查工资：须先 `start_auth` 授权
+2. cpolar 隧道状态必须为 `online`（窗口别关）
+3. MCP 基础地址：`https://789105f9.r16.cpolar.top/mcp`（域名以 `backend/appsettings.json` 的 `Mcp:AuthBaseUrl` 为准，变了就整串换）
+4. Token：`laohu-demo-2026`
+5. 对外 7 个工具：`start_auth`、`query_work_order`、`query_report`、`calc_schedule_priority`、`query_salary`、`query_production_guide`、`search_support_docs`（操作手册，与 PC 客服共用 `Ai:SupportDocs:RootPath`）
+
+> 后端本身仍支持 Header 或 `?token=` 两种鉴权；**扣子新版只认 Header**。
+> 人设全文以 `docs/45` 第 1 节为准（含「问怎么用」与 search_support_docs）。
+
+---
+
+## 二、扣子分步操作（照着顺序）
+
+### 步骤 1：新建 Agent（普通 Agent）
+
+1. 扣子空间首页 → 新建 Agent，命名：**车间小工单助手v2**
+2. **不要**选低代码 / 对话流 / OAuth
+3. 进入 Agent 编辑页，人设整段粘贴 `docs/45` 第 1 节那段（含「工具怎么调——省时间」约束；勿用旧短人设）
+
+### 步骤 2：新建自定义 MCP（复制下面完整 JSON）
+
+```json
+{
+  "mcpServers": {
+    "laohu-workshop": {
+      "type": "streamable-http",
+      "url": "https://789105f9.r16.cpolar.top/mcp",
+      "headers": {
+        "Authorization": "Bearer laohu-demo-2026"
+      }
+    }
+  }
+}
+```
+
+> ❌ 禁止旧写法：不要写成 `url?token=laohu-demo-2026`，会握手失败。
+
+1. 扣子 MCP 页 → 自定义 MCP → 粘贴上面 JSON。
+2. 创建完成后，进 MCP 详情页，确认能读到**全部 7 个工具**。
+3. 看不到工具列表：删除当前 MCP，重新新建（旧 MCP 缓存失败状态，单纯编辑往往不重新探测）。
+
+### 步骤 3：【极易遗漏】把 MCP 挂到 Agent
+
+1. Agent 设置 → MCP → 添加 MCP → 勾选刚建的 `laohu-workshop`。
+2. ✅ 校验：Agent 工具列表完整显示 7 个工具名，才算挂上。
+3. 没挂上时的典型现象：只回文字、说「工作目录下无工单文件」、从不出现「调用工具 query_work_order」。
+
+### 步骤 4：扣子内调试（必须先过，再配微信）
+
+1. Agent 调试对话输入：`查工单`
+2. 观察链路，必须看到 **调用工具 → query_work_order**，并返回真实工单数据。
+3. 再问：`想试一下扫码报工，如何开始？` → 必须调用 **search_support_docs**，按手册步骤答（勿建议小程序）。
+4. 通了再配微信渠道。
+
+### 步骤 5：配置微信渠道（陌拜对外入口）
+
+1. Agent 设置 →【渠道】→ 添加渠道 →【微信】。
+2. 点「去授权」，用微信扫码完成绑定。
+3. 微信会话出现机器人聊天窗口。
+4. 微信发：`查工单` → 应远程调本地 MCP，返回工单数据。
+
+> ⚠️ 硬性前提：本机 MCP 程序 + cpolar 必须一直开着。电脑关机 / 隧道断开，微信端全部失败。
+
+---
+
+## 三、判定标准（两套都过才算通）
+
+1. Agent 编辑页 MCP 工具列表：能看到完整 5 个工具名。
+2. 调试或微信发「查工单」：出现调用 `query_work_order`，返回真实工单。
+
+---
+
+## 四、故障排查速查
+
+| 故障现象 | 原因 | 解决办法 |
+|---|---|---|
+| MCP 页空白 / 读不到工具 | token 拼在 URL 后面 | 删旧 MCP，重建，Token 放 Header Bearer |
+| cpolar online 仍拉不出工具 | 后端没开；或旧 MCP 缓存失败 | 启动后端；删 MCP 重建触发握手 |
+| 聊天只回文字、不调工具 | MCP 没挂到 Agent | Agent 设置 → MCP，确认已勾选且 5 工具可见 |
+| 浏览器开 MCP 地址返回 405 | MCP 只支持 POST | 正常；别用浏览器测，以扣子读工具为准 |
+| 扣子调试通、微信调失败 | 本机关机 / cpolar 掉线 | 确认后端 + cpolar online |
+| Bot 说「工作目录无工单文件」 | 根本没调 MCP，在瞎找本地文件 | 回步骤 2～3，确认工具列表再挂载 |
+
+---
+
+## 五、重要限制
+
+1. 新版 Agent **没有公开 H5 / 网页分享链接**；对外只能用微信机器人（或飞书等已开通渠道）。
+2. MCP 跑在个人电脑 + 内网穿透；电脑关机，外部就查不了。
+3. 微信渠道是机器人会话：客户扫码绑定即可对话，**客户不用登录扣子账号**。
+4. 工具只能「查」、不能「写」：`query_report` 是查报工，没有提交报工。陌拜别承诺「当场报一单」。
+
+---
+
+## 六、给 AI 陪练用的提示（卡住时整段复制）
+
+```text
+请你当我的技术陪练，一步步教我在「扣子 Coze」平台上完成一件事。我每点完一步，会把屏幕上看到的按钮名/报错念给你，你再告诉我下一步点哪。请用大白话，别堆术语，每步只讲一个动作，等我回复再继续。
+
+【我是谁、要干嘛】
+我做一个「车间小工单」管理系统，后端是 .NET 8，跑在我自己电脑上，通过 cpolar 内网穿透暴露到公网，对外使用扣子 Agent 的微信机器人渠道。
+
+【已经做好的（这些不用你管，也别让我重做）】
+1. MCP 公网基础地址：https://789105f9.r16.cpolar.top/mcp
+2. token：laohu-demo-2026；⚠️ 新版扣子不要把 token 拼在 url 后面，token 放在 Header Authorization: Bearer。
+3. 传输：Streamable-HTTP；6 个工具：start_auth、query_work_order、query_report、query_salary、calc_schedule_priority、query_production_guide
+4. DemoSkipAuth=true，查工单、查报工免授权；查工资需要授权。
+
+【目标任务】
+A. 新建普通 Agent，名字车间小工单助手v2，不搞低代码、对话流、OAuth。
+B. 新建自定义 MCP，使用 Header Bearer 鉴权（下面 JSON）。
+C. 将 MCP 挂载绑定到 Agent，确认 Agent 能看到全部 5 个工具。
+D. 扣子调试输入「查工单」，确认调用 query_work_order 返回数据。
+E. 添加微信渠道，扫码授权，微信测试查询工单。
+注意：新版 Agent 没有网页 H5 / 分享链接渠道，只用微信机器人，不要提网页应用，也不要帮我「做看板页面」。
+
+MCP 配置 JSON：
+{
+  "mcpServers": {
+    "laohu-workshop": {
+      "type": "streamable-http",
+      "url": "https://789105f9.r16.cpolar.top/mcp",
+      "headers": {
+        "Authorization": "Bearer laohu-demo-2026"
+      }
+    }
+  }
+}
+
+校验规则：Agent 页面能看到全部 5 个工具 = 挂载成功；调试出现调用工具 query_work_order 代表链路通。
+我报屏幕按钮和报错，以我屏幕实际为准，一步一步操作。
+```

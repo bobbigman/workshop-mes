@@ -1,0 +1,3 @@
+# 远程双端口敏感配置与打包产物（含密码）——禁止提交仓库
+deploy/instance/remote/secrets/
+deploy/instance/remote/out/

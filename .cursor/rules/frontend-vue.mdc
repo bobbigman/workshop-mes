@@ -1,0 +1,47 @@
+---
+description: Vue3 前端编码规范（PC 后台 + H5 报工）
+globs: frontend/**
+alwaysApply: false
+---
+
+# Vue3 前端规范
+
+## 组件库分工
+
+- PC 后台：Element Plus（`el-table`、`el-dialog`、`el-form`、`el-select`）
+- 移动报工：Vant（轻量、触屏友好）
+- 大屏看板：ECharts
+
+## 目录约定
+
+- 页面放 `src/views/`，命名 kebab-case（如 `work-order/index.vue`）
+- 接口封装放 `src/api/`（一个模块一个文件，如 `user.js`）
+- 路由放 `src/router/`
+
+## 编码
+
+- 统一 `<script setup>` 语法。
+- 数据绑定用 `v-model`；列表用 `v-for` 加 `:key`。
+- 调后端统一走 `src/api/` 封装，不在组件里散写 `fetch`。
+- 表单提交前做前端校验 + 处理后端 `code !== 0` 的错误提示。
+
+## 扫码报工页（H5）
+
+- 默认摄像头待启动；用户点击后再开摄像头（需 HTTPS）。设备可记住「摄像头 / 扫码枪」模式（`h5.scan.mode`）。
+- **仅扫码枪模式**：隐藏输入框自动聚焦，`@keyup.enter` 触发；扫码后清空，形成连续扫码节奏。摄像头/手动模式不抢焦点。
+- 解析规则见 `src/utils/scanPayload.js`（摄像头与 PDA 共用）。
+
+## 示例
+
+```vue
+<script setup>
+import { ref, onMounted } from 'vue'
+import { getUserList } from '@/api/user'
+
+const list = ref([])
+onMounted(async () => {
+  const { code, data } = await getUserList()
+  if (code === 0) list.value = data.list
+})
+</script>
+```

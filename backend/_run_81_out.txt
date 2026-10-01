@@ -1,0 +1,9 @@
+正在连接数据库并初始化…
+已启动 · 实例 local · 监听 http://localhost:8080
+本机打开 http://localhost:8080/  · 错误日志 D:\workspace\pkub\裁切分析\MP42Txt\黑湖小工单_分析\backend\logs
+本窗口不要关；关掉即停程序。
+[10:50:15 WRN] WorkshopMes 已启动 Instance=local ErrorLogDir=D:\workspace\pkub\裁切分析\MP42Txt\黑湖小工单_分析\backend\logs Urls=http://localhost:8080
+[10:50:15 INF] Now listening on: http://localhost:5000
+[10:50:15 INF] Application started. Press Ctrl+C to shut down.
+[10:50:15 INF] Hosting environment: Production
+[10:50:15 INF] Content root path: D:\workspace\pkub\裁切分析\MP42Txt\黑湖小工单_分析\backend

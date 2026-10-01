@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 168" role="img" aria-label="小蜜蜂 轻MES">
+  <title>小蜜蜂 · 轻MES</title>
+  <defs>
+    <style type="text/css"><![CDATA[
+      .brand {
+        font-family: "Microsoft YaHei", "PingFang SC", "Source Han Sans SC", "Noto Sans SC", sans-serif;
+        fill: #222831;
+      }
+    ]]></style>
+  </defs>
+
+  <g transform="translate(12,6)">
+    <g stroke="#222831" stroke-width="3.5" stroke-linecap="round" fill="none">
+      <path d="M68 30 L55 8"/>
+      <path d="M92 30 L105 8"/>
+    </g>
+    <circle cx="53" cy="6" r="3.2" fill="#222831"/>
+    <circle cx="107" cy="6" r="3.2" fill="#222831"/>
+
+    <path fill="none" stroke="#222831" stroke-width="5.5" stroke-linejoin="round"
+          d="M80 20 L103 33.5 L103 60.5 L80 74 L57 60.5 L57 33.5 Z"/>
+    <path fill="none" stroke="#222831" stroke-width="5.5" stroke-linejoin="round"
+          d="M62 82 L98 82 L110 102 L98 122 L62 122 L50 102 Z"/>
+    <path fill="none" stroke="#222831" stroke-width="5" stroke-linejoin="round"
+          d="M70 128 L90 128 L97 142 L90 156 L70 156 L63 142 Z"/>
+
+    <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <polyline stroke="#F2B705" stroke-width="4.5" points="46,88 16,72 16,112 46,96"/>
+      <polyline stroke="#222831" stroke-width="3.5" points="44,90 24,78 24,106 44,94"/>
+      <polyline stroke="#222831" stroke-width="3" points="42,91.5 30,84 30,100 42,92.5"/>
+    </g>
+    <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <polyline stroke="#F2B705" stroke-width="4.5" points="114,88 144,72 144,112 114,96"/>
+      <polyline stroke="#222831" stroke-width="3.5" points="116,90 136,78 136,106 116,94"/>
+      <polyline stroke="#222831" stroke-width="3" points="118,91.5 130,84 130,100 118,92.5"/>
+    </g>
+  </g>
+
+  <text class="brand" x="178" y="94" font-size="58" font-weight="700" letter-spacing="4">小蜜蜂</text>
+  <text class="brand" x="182" y="130" font-size="22" font-weight="500" letter-spacing="4" opacity="0.88">轻MES</text>
+</svg>

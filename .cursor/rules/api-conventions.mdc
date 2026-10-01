@@ -1,0 +1,38 @@
+---
+description: 后端与前端接口的 API 约定、统一返回格式与鉴权
+alwaysApply: true
+---
+
+# API 约定
+
+## 统一返回格式
+
+所有接口返回 JSON，结构固定：
+
+```json
+{ "code": 0, "msg": "ok", "data": {} }
+```
+
+- `code`：0 成功，非 0 失败（错误码在 `msg` 中说明）
+- 分页返回：`data` 内含 `{ list: [], total: 0 }`
+- API 查询必须实时：前端 GET 带 `Cache-Control: no-cache` / `Pragma: no-cache`；后端 `/api` 响应统一 `Cache-Control: no-store`（包括鉴权失败和静态兜底），防止旧 HTML 响应污染接口缓存。见 docs/111。
+
+## 路由规范
+
+- 统一前缀 `/api`，RESTful 风格：
+  - `GET /api/user`（列表，带分页）
+  - `POST /api/user`（新增）
+  - `PUT /api/user/{id}`（修改）
+  - `DELETE /api/user/{id}`（删除）
+- 控制器命名 `XxxController`，路径用复数名词。
+
+## 鉴权
+
+- 登录返回 JWT，前端放 `Authorization: Bearer <token>` 头。
+- 生产人员（role=2）可 GET 查询工单、报工列表、报表/看板、自定义字段，以及登录、实例信息。报工提交仍校验部门。改基础数据、工资、用户等接口 403。
+
+## 错误处理
+
+- 业务校验失败抛业务异常，统一拦截器返回 `{ code: 非0, msg: 提示语 }`。
+- 技术故障：`msg` 回传 SQL/报文等异常详情（密码/Token 脱敏，不含堆栈）；完整堆栈仍在服务器 `ErrorLogging` 日志；响应头 `X-Trace-Id`（CORS 已暴露）。
+- 后端字段命名与前端、数据库列名保持一致（camelCase JSON ↔ PascalCase 实体由框架映射）。

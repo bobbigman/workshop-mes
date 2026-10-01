@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>车间小工单 · 系统架构 / 业务流程 / 表关系 三合一地图</title>
+<style>
+  :root{
+    --bg:#f5f7fa; --card:#ffffff; --ink:#1f2937; --muted:#6b7280;
+    --line:#e5e7eb; --blue:#2563eb; --blueBg:#eff6ff; --blueLine:#bfdbfe;
+    --cyan:#0e7490; --cyanBg:#ecfeff; --cyanLine:#a5f3fc;
+    --amber:#b45309; --amberBg:#fffbeb; --amberLine:#fde68a;
+    --green:#15803d; --greenBg:#f0fdf4; --greenLine:#bbf7d0;
+    --slate:#475569; --slateBg:#f8fafc; --slateLine:#cbd5e1;
+    --red:#b91c1c; --redBg:#fef2f2; --redLine:#fecaca;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;line-height:1.5;}
+  .wrap{max-width:1180px;margin:0 auto;padding:18px 16px 40px;}
+  header{background:linear-gradient(135deg,#1e3a8a,#0e7490);color:#fff;
+    border-radius:14px;padding:22px 26px;margin-bottom:18px;}
+  header h1{margin:0 0 6px;font-size:22px;}
+  header p{margin:0;font-size:13px;opacity:.92;}
+  .badge{display:inline-block;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.4);
+    padding:2px 10px;border-radius:20px;font-size:12px;margin:10px 6px 0 0;}
+  section{background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:18px 20px;margin-bottom:18px;box-shadow:0 1px 2px rgba(0,0,0,.04);}
+  section h2{font-size:16px;margin:0 0 4px;display:flex;align-items:center;gap:8px;}
+  section h2 .n{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;
+    border-radius:6px;background:var(--blue);color:#fff;font-size:13px;}
+  .sub{font-size:12.5px;color:var(--muted);margin:0 0 14px;}
+  /* 分层架构 */
+  .layers{display:flex;flex-direction:column;gap:8px;}
+  .layer{border-radius:10px;padding:10px 14px;border:1px solid;}
+  .layer .lab{font-weight:700;font-size:13px;margin-bottom:6px;}
+  .layer .items{display:flex;flex-wrap:wrap;gap:6px;}
+  .chip{background:#fff;border:1px solid;border-radius:7px;padding:3px 9px;font-size:12px;}
+  .L1{border-color:var(--blueLine);background:var(--blueBg);}
+  .L1 .lab{color:var(--blue);}
+  .L1 .chip{border-color:var(--blueLine);}
+  .L2{border-color:var(--slateLine);background:var(--slateBg);}
+  .L2 .lab{color:var(--slate);}
+  .L2 .chip{border-color:var(--slateLine);}
+  .L3{border-color:var(--cyanLine);background:var(--cyanBg);}
+  .L3 .lab{color:var(--cyan);}
+  .L3 .chip{border-color:var(--cyanLine);}
+  .L4{border-color:var(--amberLine);background:var(--amberBg);}
+  .L4 .lab{color:var(--amber);}
+  .L4 .chip{border-color:var(--amberLine);}
+  .arrow{text-align:center;color:var(--muted);font-size:16px;line-height:1;}
+  /* 流程 */
+  .flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px;}
+  .step{flex:1 1 150px;border-radius:10px;padding:10px 12px;border:1px solid var(--amberLine);
+    background:var(--amberBg);min-width:140px;}
+  .step .t{font-weight:700;font-size:13px;color:var(--amber);margin-bottom:4px;}
+  .step .d{font-size:12px;color:#7c5a12;}
+  .flowArrow{display:flex;align-items:center;color:var(--amber);font-size:18px;font-weight:700;}
+  .note{font-size:12px;color:var(--muted);margin-top:10px;padding-left:2px;}
+  /* AI 数据流 */
+  .ai{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;}
+  .aiBox{border-radius:10px;padding:10px 12px;border:1px solid var(--greenLine);background:var(--greenBg);
+    flex:1 1 150px;min-width:140px;}
+  .aiBox .t{font-weight:700;font-size:12.5px;color:var(--green);margin-bottom:4px;}
+  .aiBox .d{font-size:12px;color:#2f6b3f;}
+  .aiCall{flex:1 1 150px;border-radius:10px;padding:10px 12px;border:1px dashed var(--blueLine);
+    background:var(--blueBg);min-width:140px;}
+  .aiCall .t{font-weight:700;font-size:12.5px;color:var(--blue);margin-bottom:4px;}
+  .aiCall .d{font-size:12px;color:#334;font-family:Consolas,monospace;word-break:break-all;}
+  .aiTag{display:inline-block;font-size:11px;background:#fff;border:1px solid var(--greenLine);
+    color:var(--green);border-radius:5px;padding:1px 6px;margin:2px 4px 2px 0;}
+  .warn{font-size:12px;color:var(--red);margin-top:10px;}
+  /* 表关系 */
+  .modGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:10px;}
+  .mod{border-radius:10px;padding:10px 12px;border:1px solid;}
+  .mod h3{font-size:13px;margin:0 0 8px;display:flex;align-items:center;gap:6px;}
+  .mod .dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
+  .mod .tbl{font-size:11.5px;border:1px solid;background:#fff;border-radius:6px;
+    padding:3px 8px;margin:3px 0;line-height:1.5;}
+  .mod .k{color:var(--muted);font-size:11px;font-family:Consolas,monospace;}
+  .er-chain{margin-top:14px;border-top:1px dashed var(--line);padding-top:12px;}
+  .er-chain h4{font-size:13px;margin:0 0 8px;color:var(--ink);}
+  .chain{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12px;}
+  .chain .node{border:1px solid var(--blueLine);background:var(--blueBg);border-radius:7px;
+    padding:3px 9px;font-family:Consolas,monospace;}
+  .chain .ln{color:var(--blue);font-weight:700;}
+  .chain .rl{font-size:11px;color:var(--muted);}
+  .rules{margin-top:14px;border:1px solid var(--redLine);background:var(--redBg);
+    border-radius:10px;padding:10px 14px;}
+  .rules b{color:var(--red);}
+  .rules li{font-size:12.5px;margin:3px 0;}
+  .foot{font-size:11.5px;color:var(--muted);text-align:center;margin-top:6px;}
+  @media (max-width:560px){
+    .flowArrow{transform:rotate(90deg);}
+    .wrap{padding:10px 8px;}
+    header h1{font-size:18px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>车间小工单 · 系统架构 / 业务流程 / 表关系 三合一地图</h1>
+  <p>一图看懂「这套系统长什么样、报工怎么走、数据怎么存」——供 AI 助手定位与问答，也可给新人快速上手。</p>
+  <span class="badge">数据来源：docs/01-PRD · 02-数据字典 · 03-技术方案</span>
+  <span class="badge">对照：黑湖小工单 · 轻量 MES</span>
+</header>
+
+<!-- 1 架构 -->
+<section>
+  <h2><span class="n">1</span>系统分层架构（前后端分离，局域网 H5）</h2>
+  <p class="sub">自上而下 4 层；技术栈：.NET 8 Web API + EF Core + SQL Server，前端 Vue3。</p>
+  <div class="layers">
+    <div class="layer L1">
+      <div class="lab">表现层 · 三个入口</div>
+      <div class="items">
+        <span class="chip">PC 后台（Vue3 + Element Plus）</span>
+        <span class="chip">H5 手机 / PDA 报工（Vue3 + Vant）</span>
+        <span class="chip">大屏看板（ECharts）</span>
+        <span class="chip">工单二维码 / 打印标签（80×60）</span>
+      </div>
+    </div>
+    <div class="arrow">▲ ▼</div>
+    <div class="layer L2">
+      <div class="lab">接口层 · HTTP API（RESTful JSON）+ JWT 鉴权</div>
+      <div class="items">
+        <span class="chip">登录鉴权 JWT + BCrypt</span>
+        <span class="chip">REST 接口按模块分组</span>
+        <span class="chip">列表统一分页</span>
+      </div>
+    </div>
+    <div class="arrow">▲ ▼</div>
+    <div class="layer L3">
+      <div class="lab">应用层 · .NET 8 Web API（Controllers / Services）</div>
+      <div class="items">
+        <span class="chip">系统配置</span>
+        <span class="chip">基础数据（产品/工序/工艺/工价）</span>
+        <span class="chip">制造知识库（作业指导书/图纸/图片上传）</span>
+        <span class="chip">生产管理（工单/报工/异常）</span>
+        <span class="chip">报表 / 工资（计件 + 手工列凑应发）</span>
+        <span class="chip">建议报价（金蝶材料 + 车间实绩）</span>
+        <span class="chip">产品优势速览（演示页）</span>
+        <span class="chip">大屏看板</span>
+        <span class="chip">自定义字段 / 导入</span>
+        <span class="chip" style="border-color:var(--greenLine);background:var(--greenBg);color:var(--green);font-weight:700;">AI 助手（可选·默认关）</span>
+      </div>
+    </div>
+    <div class="arrow">▲ ▼</div>
+    <div class="layer L4">
+      <div class="lab">数据层 · EF Core → SQL Server</div>
+      <div class="items">
+        <span class="chip">业务表（sys_ / base_ / prod_ / salary_）</span>
+        <span class="chip">自定义字段键值表 sys_custom_field*</span>
+        <span class="chip">AI 会话：进程内存，无新业务表</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 2 流程 -->
+<section>
+  <h2><span class="n">2</span>核心业务流程 · 一单到底</h2>
+  <p class="sub">电脑下单出二维码 → 工人扫码报工 → 复核 → 老板大屏看进度。</p>
+  <div class="flow">
+    <div class="step"><div class="t">① 电脑下单出码</div><div class="d">创建工单（引用产品+工艺路线），生成工单号二维码 / 流转卡</div></div>
+    <div class="flowArrow">→</div>
+    <div class="step"><div class="t">② 扫码报工</div><div class="d">PDA 扫码头 / 手机摄像头 / 手动输工单号 / 电脑「+报工」；选工序填良品、不良数提交</div></div>
+    <div class="flowArrow">→</div>
+    <div class="step"><div class="t">③ 部门权限校验</div><div class="d">当前用户所在部门 ∈ 该工序的报权部门，否则拒绝（管理员不受限）</div></div>
+    <div class="flowArrow">→</div>
+    <div class="step"><div class="t">④ 复核（双轨）</div><div class="d">班组长 / 管理员复核；复核通过才入生产报表 / 工资口径</div></div>
+    <div class="flowArrow">→</div>
+    <div class="step"><div class="t">⑤ 进度实时更新</div><div class="d">大屏 / 工单列表按工序实时累计进度；异常走 prod_abnormal</div></div>
+  </div>
+  <p class="note">* 报工提交后进度即实时更新；复核是「入账/工资」关口，两条轨分开。三条硬规则见文末。</p>
+</section>
+
+<!-- 3 AI 助手 -->
+<section>
+  <h2><span class="n">3</span>AI 助手数据流（本机白名单，不绕公网）</h2>
+  <p class="sub">PC 页面提问 → 本机后端 → DeepSeek 工具调用 → 本机白名单业务工具 → 答案 + 来源卡片。</p>
+  <div class="ai">
+    <div class="aiBox"><div class="t">PC 页面</div><div class="d">仅管理员；默认关闭（配置 Ai__Enabled）</div></div>
+    <div class="flowArrow">→</div>
+    <div class="aiCall"><div class="t">后端入口</div><div class="d">POST /api/ai-assistant/messages</div></div>
+    <div class="flowArrow">→</div>
+    <div class="aiBox"><div class="t">DeepSeek 工具调用</div><div class="d">模型决定调哪个本机工具，不直接触库</div></div>
+    <div class="flowArrow">→</div>
+    <div class="aiBox"><div class="t">本机白名单业务工具</div><div class="d"><span class="aiTag">查进度</span><span class="aiTag">问工艺</span><span class="aiTag">智能客服</span><br>search_support_docs（客服文档）<br>get_work_order_report_evidence（报工证据）<br>制造知识库文件（产品/工序挂的指导书/图纸/图片）</div></div>
+    <div class="flowArrow">→</div>
+    <div class="aiBox"><div class="t">答案 + 来源卡片</div><div class="d">只读；客服文档是证据、不改权限</div></div>
+  </div>
+  <p class="warn">⚠ 密钥放环境变量 Ai__ApiKey，不进仓库/浏览器；报工证据只投影白名单字段，不读工资/单价。</p>
+</section>
+
+<!-- 4 表关系 -->
+<section>
+  <h2><span class="n">4</span>核心表关系（ER 主链 + 模块分组）</h2>
+  <p class="sub">表名全部来自数据字典 docs/02；主链用「→」表示引用方向。</p>
+  <div class="modGrid">
+    <div class="mod" style="border-color:var(--slateLine);background:var(--slateBg);">
+      <h3><span class="dot" style="background:var(--slate);"></span>系统 sys_</h3>
+      <div class="tbl">sys_factory（多租户）</div>
+      <div class="tbl">sys_user / sys_department / sys_department_user</div>
+      <div class="tbl">sys_print_setting · sys_mcp_auth</div>
+    </div>
+    <div class="mod" style="border-color:var(--cyanLine);background:var(--cyanBg);">
+      <h3><span class="dot" style="background:var(--cyan);"></span>基础数据 base_</h3>
+      <div class="tbl">base_product（产品定义·编号唯一）</div>
+      <div class="tbl">base_operation + 报权部门/不良品关联</div>
+      <div class="tbl">base_routing → base_routing_step</div>
+      <div class="tbl">base_price_rule · base_unit · base_defect_item · base_knowledge_file</div>
+    </div>
+    <div class="mod" style="border-color:var(--blueLine);background:var(--blueBg);">
+      <h3><span class="dot" style="background:var(--blue);"></span>生产 prod_</h3>
+      <div class="tbl">prod_work_order（工单）</div>
+      <div class="tbl">prod_work_order_operation（工序计划数）</div>
+      <div class="tbl">prod_report（报工记录·良品/不良）</div>
+      <div class="tbl">prod_abnormal（异常上报）</div>
+    </div>
+    <div class="mod" style="border-color:var(--amberLine);background:var(--amberBg);">
+      <h3><span class="dot" style="background:var(--amber);"></span>工资 salary_</h3>
+      <div class="tbl">salary_statement（工资单·按人/周期；含底薪等手工列）</div>
+      <div class="tbl">salary_statement_item（工资明细·逐条对应报工）</div>
+    </div>
+    <div class="mod" style="border-color:var(--greenLine);background:var(--greenBg);">
+      <h3><span class="dot" style="background:var(--green);"></span>扩展</h3>
+      <div class="tbl">sys_custom_field / _option / _value（自定义字段键值）</div>
+    </div>
+  </div>
+
+  <div class="er-chain">
+    <h4>① 主业务链（产品 → 工单 → 报工 → 工资）</h4>
+    <div class="chain">
+      <span class="node">base_product</span><span class="ln">→</span>
+      <span class="node">prod_work_order</span><span class="ln">→</span>
+      <span class="node">prod_work_order_operation</span><span class="ln">→</span>
+      <span class="node">prod_report</span><span class="ln">→</span>
+      <span class="node">salary_statement_item</span><span class="ln">→</span>
+      <span class="node">salary_statement</span>
+    </div>
+    <h4>② 报工权限链（工序 ← 报权部门 ← 用户部门）</h4>
+    <div class="chain">
+      <span class="node">base_operation</span><span class="rl">（工序·多选报权部门）</span><span class="ln">→</span>
+      <span class="node">base_operation_department</span><span class="ln">→</span>
+      <span class="node">sys_department</span><span class="ln">→</span>
+      <span class="node">sys_department_user</span><span class="ln">→</span>
+      <span class="node">sys_user</span>
+    </div>
+    <h4>③ 工艺路线 & 不良品项关联</h4>
+    <div class="chain">
+      <span class="node">base_routing</span><span class="ln">→</span>
+      <span class="node">base_routing_step</span><span class="ln">→</span>
+      <span class="node">base_operation</span>
+      <span class="rl">　·　</span>
+      <span class="node">base_operation</span><span class="ln">→</span>
+      <span class="node">base_operation_defect</span><span class="ln">→</span>
+      <span class="node">base_defect_item</span>
+    </div>
+  </div>
+
+  <div class="rules">
+    <b>三条业务硬规则（红线）</b>
+    <ul>
+      <li><b>① 产品编号唯一</b>（相当于身份证），名称可重复。</li>
+      <li><b>② 工序报工权限 = 部门</b>（不是人）：报工前校验当前用户部门是否属于该工序报权部门。</li>
+      <li><b>③ 删除依赖倒序</b>：工单 → 产品 → 工艺路线 → 工序 → 不良品项 → 单位 → 部门；有下级禁止直接删。</li>
+    </ul>
+  </div>
+</section>
+
+<div class="foot">车间小工单 · 三合一地图（示意图，非精确测量）｜随源码改动需同步更新，喂给 AI 助手请与 docs/02、docs/33 接口说明配套使用</div>
+</div>
+</body>
+</html>

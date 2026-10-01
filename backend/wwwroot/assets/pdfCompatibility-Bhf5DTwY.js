@@ -1,0 +1,1 @@
+typeof Promise.withResolvers!="function"&&Object.defineProperty(Promise,"withResolvers",{configurable:!0,writable:!0,value:function(){let e,r;return{promise:new this((t,i)=>{e=t,r=i}),resolve:e,reject:r}}});

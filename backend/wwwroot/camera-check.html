@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>独立摄像头检查</title>
+  <style>
+    body { margin: 20px auto; padding: 0 16px; max-width: 600px; font: 16px/1.6 sans-serif; color: #182230; background: #f5f7fa; }
+    button, label { display: block; box-sizing: border-box; width: 100%; padding: 14px; margin: 12px 0; border: 0; border-radius: 8px; background: #326af5; color: white; font: inherit; text-align: center; }
+    button:disabled { opacity: .6; }
+    video { width: 100%; max-height: 250px; background: #111; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px; background: white; border: 1px solid #ccd4df; font-size: 12px; }
+    #status { font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h2>独立摄像头检查 0922-5</h2>
+  <p>本页不加载扫码库，也不连接业务接口。画面和照片不会上传。</p>
+  <p>先点“打开实时摄像头”。若页面闪退或返回，请重新打开本页，再试“打开系统拍照”。</p>
+  <button id="start" type="button">打开实时摄像头</button>
+  <button id="stop" type="button">停止摄像头</button>
+  <label for="photo">打开系统拍照</label>
+  <input id="photo" type="file" accept="image/*" capture="environment" hidden>
+  <p id="status" role="status">等待点击</p>
+  <video id="video" muted playsinline autoplay></video>
+  <pre id="log"></pre>
+  <script>
+    const logEl = document.getElementById('log')
+    const statusEl = document.getElementById('status')
+    const video = document.getElementById('video')
+    const start = document.getElementById('start')
+    const key = 'mes.camera-check.0922-5'
+    let lines = [], session = 0, timeout
+    try {
+      const saved = JSON.parse(localStorage.getItem(key) || '[]')
+      if (Array.isArray(saved)) lines = saved.filter(line => typeof line === 'string').slice(-20)
+    } catch (error) {
+      console.error('[camera-check] 读取检查记录失败', error)
+      lines = ['无法读取历史记录']
+    }
+    function log(text) {
+      lines = [...lines.slice(-19), new Date().toLocaleTimeString() + ' ' + text]
+      logEl.textContent = lines.join('\n')
+      try { localStorage.setItem(key, JSON.stringify(lines)) }
+      catch (error) { console.error('[camera-check] 保存检查记录失败', error) }
+    }
+    function stop() {
+      session++
+      clearTimeout(timeout)
+      start.disabled = false
+      if (video.srcObject) video.srcObject.getTracks().forEach(track => track.stop())
+      video.srcObject = null
+    }
+    start.addEventListener('click', async () => {
+      stop()
+      const attempt = session
+      start.disabled = true
+      statusEl.textContent = '正在请求摄像头，请留意系统权限提示'
+      log('点击实时摄像头，即将直接调用浏览器接口')
+      timeout = setTimeout(() => {
+        if (attempt !== session) return
+        stop()
+        statusEl.textContent = '15 秒没有返回，请尝试系统拍照或更换浏览器'
+        log('摄像头请求超时')
+      }, 15000)
+      let stream
+      try {
+        if (!window.isSecureContext) throw new Error('浏览器未信任当前安全连接')
+        if (!navigator.mediaDevices?.getUserMedia) throw new Error('浏览器没有摄像头接口')
+        // 使用最小约束，排除扫码库、后置选择和分辨率条件的影响。
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+        if (attempt !== session || document.hidden) {
+          stream.getTracks().forEach(track => track.stop())
+          if (attempt === session) { stop(); statusEl.textContent = '页面已在后台，摄像头已关闭' }
+          log('请求返回时页面已离开或取消，关闭视频')
+          return
+        }
+        log('浏览器已返回摄像头视频')
+        video.srcObject = stream
+        await video.play()
+        if (attempt !== session) return
+        clearTimeout(timeout)
+        statusEl.textContent = '实时摄像头已打开'
+        log('视频播放成功')
+      } catch (error) {
+        if (stream) stream.getTracks().forEach(track => track.stop())
+        if (attempt !== session) return
+        stop()
+        statusEl.textContent = '启动失败：' + (error.name || 'Error') + '；' + error.message
+        log(statusEl.textContent)
+        console.error('[camera-check] 打开摄像头失败', error)
+      }
+    })
+    document.getElementById('stop').addEventListener('click', () => {
+      stop(); statusEl.textContent = '已停止'; log('点击停止')
+    })
+    document.getElementById('photo').addEventListener('click', () => { stop(); log('请求打开系统拍照') })
+    document.getElementById('photo').addEventListener('change', event => {
+      const selected = event.target.files.length > 0
+      statusEl.textContent = selected ? '已收到照片，仅保留在本机，不上传' : '没有选择照片'
+      log(selected ? '系统拍照或图片选择已返回照片' : '图片选择已取消')
+      event.target.value = ''
+    })
+    window.addEventListener('pagehide', () => { log('页面离开'); stop() })
+    document.addEventListener('visibilitychange', () => {
+      log(document.hidden ? '页面进入后台' : '页面返回前台')
+      if (document.hidden && video.srcObject) { stop(); statusEl.textContent = '页面已暂停，摄像头已关闭' }
+    })
+    log('独立页面加载；进入方式：' + (performance.getEntriesByType('navigation')[0]?.type || '未知'))
+    log('安全环境：' + window.isSecureContext + '；摄像头接口：' + Boolean(navigator.mediaDevices?.getUserMedia))
+    log('浏览器：' + navigator.userAgent)
+  </script>
+</body>
+</html>

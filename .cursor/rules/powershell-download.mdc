@@ -1,0 +1,33 @@
+---
+description: Windows PowerShell 测下载时避免 IE 安全弹窗
+alwaysApply: true
+---
+
+# PowerShell 测下载 / 调 API
+
+本机是 Windows PowerShell 5.1。`Invoke-WebRequest` 默认走 IE 解析引擎，会弹出「安全提醒」（可能运行网页脚本），与业务代码无关。
+
+## 强制约定
+
+测 HTTP 下载（xlsx / csv / blob）或只要原始响应时：
+
+1. **优先**用 `curl.exe`（带 `.exe`，避免 PowerShell 别名），`-o` 写文件，`-w` 看状态码。
+2. **或**用 `Invoke-WebRequest` / `Invoke-RestMethod` 时**必须加** `-UseBasicParsing`；写文件用 `-OutFile`，不要用 `$r.Content` 再二次处理二进制（易空、易弹框）。
+
+```powershell
+# ✅ curl
+curl.exe -s -X POST "http://localhost:8080/api/Schedule/export" `
+  -H "Authorization: Bearer $token" -H "Content-Type: application/json" `
+  -d "@body.json" -o "_out.xlsx" -w "HTTP:%{http_code}`n"
+
+# ✅ IWR + UseBasicParsing + OutFile
+Invoke-WebRequest -Uri $url -Method Post -Headers $h -ContentType "application/json" `
+  -Body $body -OutFile "_out.xlsx" -UseBasicParsing
+```
+
+```powershell
+# ❌ 裸 Invoke-WebRequest 解析响应（易弹安全提醒）
+Invoke-WebRequest -Uri $url ...
+```
+
+JSON API（非下载）可用 `Invoke-RestMethod`；下载场景仍优先 `curl.exe` / `-UseBasicParsing -OutFile`。

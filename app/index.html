@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>车间管理系统 · MVP 原型</title>
+<style>
+:root{--blue:#1f6feb;--bg:#f5f7fa;--line:#e5e8ef;--text:#222;--muted:#889;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Microsoft YaHei',system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+/* 登录 */
+.login-wrap{position:fixed;inset:0;background:linear-gradient(135deg,#1f6feb,#3f8cff);display:flex;align-items:center;justify-content:center}
+.login-box{background:#fff;width:360px;border-radius:10px;padding:32px;box-shadow:0 10px 40px rgba(0,0,0,.2)}
+.login-box h1{font-size:20px;text-align:center;margin-bottom:4px}
+.login-box p.sub{text-align:center;color:var(--muted);font-size:12px;margin-bottom:24px}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:13px;margin-bottom:6px;color:#555}
+.field input,.field select{width:100%;height:38px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font-size:14px;outline:none}
+.field input:focus,.field select:focus{border-color:var(--blue)}
+.btn{display:inline-block;border:none;border-radius:6px;cursor:pointer;font-size:14px;padding:9px 18px;background:#fff;color:#333;border:1px solid var(--line)}
+.btn.primary{background:var(--blue);color:#fff;border:none}
+.btn.danger{color:#e5484d;border-color:#f0b4b6}
+.btn.sm{padding:4px 10px;font-size:12px}
+.btn.block{width:100%}
+/* 布局 */
+.app{display:none;height:100vh}
+.sidebar{position:fixed;left:0;top:0;bottom:0;width:200px;background:#0e1b33;color:#cfd8e8;overflow-y:auto}
+.sidebar .logo{color:#fff;font-size:16px;font-weight:bold;padding:20px 16px;border-bottom:1px solid #1c2c4a}
+.sidebar .grp{font-size:11px;color:#6b7c99;padding:14px 16px 4px}
+.sidebar .item{padding:11px 16px;cursor:pointer;display:flex;align-items:center;gap:8px}
+.sidebar .item:hover{background:#16263f}
+.sidebar .item.on{background:var(--blue);color:#fff}
+.main{margin-left:200px;padding:16px 20px}
+.topbar{display:flex;justify-content:space-between;align-items:center;background:#fff;border-radius:8px;padding:12px 16px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.topbar .title{font-size:16px;font-weight:bold}
+.card{background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.06);padding:16px}
+.toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;flex-wrap:wrap}
+.toolbar .right{display:flex;gap:8px;align-items:center}
+.search{height:34px;border:1px solid var(--line);border-radius:6px;padding:0 10px;width:220px}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:13px}
+th{color:#666;font-weight:600;background:#fafbfc}
+tr:hover td{background:#f7faff}
+.tag{display:inline-block;padding:2px 8px;border-radius:10px;font-size:12px}
+.tag.blue{background:#e8f0fe;color:var(--blue)}
+.tag.green{background:#e6f6ec;color:#1a9b4e}
+.tag.orange{background:#fff3e0;color:#e07a00}
+.tag.gray{background:#f0f1f3;color:#666}
+.empty{color:#999;text-align:center;padding:30px 0}
+/* 弹窗 */
+.mask{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:center;justify-content:center;z-index:99}
+.mask.show{display:flex}
+.modal{background:#fff;width:480px;max-width:92vw;max-height:88vh;overflow:auto;border-radius:10px;padding:20px}
+.modal h3{margin-bottom:16px;font-size:16px}
+.modal .foot{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+.chk-list{display:flex;flex-wrap:wrap;gap:8px}
+.chk{padding:5px 12px;border:1px solid var(--line);border-radius:16px;cursor:pointer;font-size:13px;user-select:none}
+.chk.on{background:var(--blue);color:#fff;border-color:var(--blue)}
+.row-add{display:flex;gap:8px;margin-bottom:8px;align-items:center}
+/* 看板 */
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+.stat{background:#fff;border-radius:8px;padding:18px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.stat .n{font-size:28px;font-weight:bold;color:var(--blue)}
+.stat .l{color:var(--muted);font-size:12px;margin-top:4px}
+.progress{height:8px;background:#eef1f5;border-radius:4px;overflow:hidden;margin:8px 0}
+.progress i{display:block;height:100%;background:var(--blue)}
+/* 二维码 */
+.qr{width:110px;height:110px;image-rendering:pixelated;border:1px solid #ddd;border-radius:4px}
+.hint{color:var(--muted);font-size:12px}
+@media(max-width:720px){.grid{grid-template-columns:repeat(2,1fr)}.sidebar{width:150px}.main{margin-left:150px}}
+</style>
+</head>
+<body>
+
+<!-- ============ 登录 ============ -->
+<div class="login-wrap" id="loginPage">
+  <div class="login-box">
+    <h1>车间管理系统</h1>
+    <p class="sub">工厂代码 + 账号 + 密码登录（演示）</p>
+    <div class="field"><label>工厂代码</label><input id="lgFactory" value="F001"></div>
+    <div class="field"><label>账号</label><input id="lgAccount" value="admin"></div>
+    <div class="field"><label>密码</label><input id="lgPassword" type="password" value="Admin123"></div>
+    <button class="btn primary block" onclick="doLogin()">登录</button>
+    <p class="hint" style="margin-top:10px;text-align:center">默认账号 admin / Admin123（大写+小写+数字）</p>
+  </div>
+</div>
+
+<!-- ============ 主界面 ============ -->
+<div class="app" id="app">
+  <div class="sidebar">
+    <div class="logo">车间管理系统</div>
+    <div class="grp">生产管理</div>
+    <div class="item on" data-page="order" onclick="nav('order',this)">📋 工单</div>
+    <div class="item" data-page="report" onclick="nav('report',this)">✍️ 报工</div>
+    <div class="item" data-page="board" onclick="nav('board',this)">📺 车间看板</div>
+    <div class="grp">基础数据</div>
+    <div class="item" data-page="product" onclick="nav('product',this)">📦 产品定义</div>
+    <div class="item" data-page="routing" onclick="nav('routing',this)">🔀 工艺路线</div>
+    <div class="item" data-page="operation" onclick="nav('operation',this)">⚙️ 工序</div>
+    <div class="item" data-page="defect" onclick="nav('defect',this)">⚠️ 不良品项</div>
+    <div class="item" data-page="unit" onclick="nav('unit',this)">📐 单位</div>
+    <div class="grp">系统配置</div>
+    <div class="item" data-page="user" onclick="nav('user',this)">👤 用户</div>
+    <div class="item" data-page="dept" onclick="nav('dept',this)">🏢 部门</div>
+    <div class="grp">报表</div>
+    <div class="item" data-page="rpt" onclick="nav('rpt',this)">📊 生产报表</div>
+  </div>
+  <div class="main">
+    <div class="topbar">
+      <div class="title" id="pageTitle">工单</div>
+      <div><span class="hint" id="curUser"></span> <button class="btn sm" onclick="logout()">退出</button></div>
+    </div>
+    <div id="content"></div>
+  </div>
+</div>
+
+<!-- 弹窗容器 -->
+<div class="mask" id="mask"><div class="modal" id="modalBody"></div></div>
+
+<script>
+/* ================= 存储层 ================= */
+const KEY='mes_';
+function ls(k){return JSON.parse(localStorage.getItem(KEY+k)||'null')}
+function lsSet(k,v){localStorage.setItem(KEY+k,JSON.stringify(v))}
+let DB={};
+function init(){
+  DB={users:[],depts:[],units:[],defects:[],ops:[],routings:[],products:[],orders:[],reports:[],fields:[]};
+  const keys=['users','depts','units','defects','ops','routings','products','orders','reports','fields'];
+  keys.forEach(k=>{const v=ls(k); if(v)DB[k]=v});
+  if(!DB.users.length){
+    DB.users=[{id:1,account:'admin',name:'总管理员',phone:'13800000000',role:1,password:'Admin123'}];
+  }
+  if(!DB.depts.length) DB.depts=[{id:1,code:'D001',name:'炒锅组',members:[1]}];
+  if(!DB.units.length) DB.units=[{id:1,name:'只'}];
+  if(!DB.defects.length) DB.defects=[{id:1,name:'粘锅'}];
+  if(!DB.ops.length) DB.ops=[{id:1,code:'OP01',name:'炒制',depts:[1],defects:[1]}];
+  if(!DB.routings.length) DB.routings=[{id:1,code:'R001',name:'川菜标准路线',steps:[{op:1,seq:1}]}];
+  if(!DB.products.length) DB.products=[{id:1,code:'P001',name:'回锅肉',unit:1,routing:1}];
+  if(!DB.fields.length) DB.fields=[
+    {id:1,target:'order',name:'桌号',type:'single',options:['一号桌','二号桌','三号桌']},
+    {id:2,target:'order',name:'辣度',type:'single',options:['微辣','中辣','特辣']}
+  ];
+  if(!DB.orders.length){
+    DB.orders=[{id:1,no:'GD20260912001',product:1,qty:10,status:1,ext:{1:'一号桌',2:'中辣'},createdAt:Date.now()}];
+    DB.reports=[{id:1,order:1,op:1,user:1,good:6,defect:1,defectItem:1,time:Date.now()}];
+  }
+  save();
+}
+function save(){Object.keys(DB).forEach(k=>lsSet(k,DB[k]))}
+function uid(){let s=ls('seq')||100;s++;lsSet('seq',s);return s}
+function now(){return new Date().toLocaleString('zh-CN')}
+function fmtDate(t){return new Date(t).toLocaleString('zh-CN')}
+
+/* ================= 登录 ================= */
+let CUR={};
+function doLogin(){
+  const acc=document.getElementById('lgAccount').value.trim();
+  const pwd=document.getElementById('lgPassword').value;
+  const u=DB.users.find(x=>x.account===acc&&x.password===pwd);
+  if(!u){alert('账号或密码错误');return}
+  CUR=u;
+  document.getElementById('loginPage').style.display='none';
+  document.getElementById('app').style.display='block';
+  document.getElementById('curUser').textContent=u.name+(u.role===1?' (管理员)':' (生产人员)');
+  nav('order');
+}
+function logout(){CUR={};location.reload()}
+
+/* ================= 导航 ================= */
+const TITLES={order:'工单',report:'报工',board:'车间看板',product:'产品定义',routing:'工艺路线',operation:'工序',defect:'不良品项',unit:'单位',user:'用户',dept:'部门',rpt:'生产报表'};
+function nav(p,el){
+  document.querySelectorAll('.sidebar .item').forEach(i=>i.classList.remove('on'));
+  if(el)el.classList.add('on');else document.querySelector(`.item[data-page="${p}"]`).classList.add('on');
+  document.getElementById('pageTitle').textContent=TITLES[p];
+  const f={order:pageOrder,report:pageReport,board:pageBoard,product:pageProduct,routing:pageRouting,operation:pageOperation,defect:pageDefect,unit:pageUnit,user:pageUser,dept:pageDept,rpt:pageRpt}[p];
+  document.getElementById('content').innerHTML=f?f():'';
+}
+
+/* ================= 弹窗 ================= */
+function openModal(html){document.getElementById('modalBody').innerHTML=html;document.getElementById('mask').classList.add('show')}
+function closeModal(){document.getElementById('mask').classList.remove('show')}
+document.getElementById('mask').addEventListener('click',e=>{if(e.target.id==='mask')closeModal()});
+
+/* ================= 通用列表页 ================= */
+function listPage(title,headers,rows,addLabel,addFn){
+  let h=headers.map(x=>`<th>${x}</th>`).join('');
+  let r=rows.length?rows.map(x=>`<tr>${x}</tr>`).join(''):`<tr><td colspan="${headers.length}" class="empty">暂无数据，点击右上角创建</td></tr>`;
+  return `<div class="card">
+    <div class="toolbar"><div class="title" style="font-size:15px">${title}</div>
+    <div class="right">${addFn?`<button class="btn primary sm" onclick="${addFn}">+ 创建</button>`:''}</div></div>
+    <table><thead><tr>${h}</tr></thead><tbody>${r}</tbody></table>
+  </div>`;
+}
+function delBtn(kind,id){
+  return `<button class="btn sm danger" onclick="del('${kind}',${id})">删除</button>`;
+}
+
+/* 删除顺序校验：返回阻断信息或空 */
+function delCheck(kind,id){
+  if(kind==='units'&&DB.products.some(x=>x.unit===id))return '该单位已被产品引用，请先删除相关产品';
+  if(kind==='defects'&&DB.ops.some(x=>(x.defects||[]).includes(id)))return '该不良品项已被工序引用，请先删除相关工序';
+  if(kind==='ops'&&DB.routings.some(x=>(x.steps||[]).some(s=>s.op===id)))return '该工序已被工艺路线引用，请先删除相关工艺路线';
+  if(kind==='ops'&&DB.reports.some(x=>x.op===id))return '该工序已有报工记录，不可删除';
+  if(kind==='routings'&&DB.products.some(x=>x.routing===id))return '该工艺路线已被产品引用，请先删除相关产品';
+  if(kind==='products'&&DB.orders.some(x=>x.product===id))return '该产品已被工单引用，请先删除相关工单';
+  if(kind==='depts'&&DB.ops.some(x=>(x.depts||[]).includes(id)))return '该部门被工序设为报工权限，请先调整工序';
+  if(kind==='users'&&DB.depts.some(x=>(x.members||[]).includes(id)))return '该用户属于部门，请先从部门移除';
+  return '';
+}
+function del(kind,id){
+  const msg=delCheck(kind,id);if(msg){alert(msg);return}
+  DB[kind]=DB[kind].filter(x=>x.id!==id);save();nav(document.querySelector('.sidebar .item.on').dataset.page);
+}
+
+/* ================= 用户 ================= */
+function pageUser(){
+  const rows=DB.users.map(u=>`<td>${u.account}</td><td>${u.name}</td><td>${u.phone||'-'}</td>
+    <td>${u.role===1?'<span class="tag blue">轻量管理员</span>':'<span class="tag gray">轻量生产人员</span>'}</td>
+    <td>${u.id!==1?delBtn('users',u.id):''}</td>`);
+  return listPage('用户管理',['账号','姓名','手机号','角色','操作'],rows,'addUser()');
+}
+function addUser(){
+  openModal(`<h3>创建用户</h3>
+  <div class="field"><label>账号（可填手机号）</label><input id="u_acc"></div>
+  <div class="field"><label>手机号</label><input id="u_phone"></div>
+  <div class="field"><label>姓名</label><input id="u_name"></div>
+  <div class="field"><label>角色</label><select id="u_role"><option value="1">轻量管理员（登录电脑）</option><option value="2">轻量生产人员（仅手机）</option></select></div>
+  <div class="field"><label>初始密码</label><input id="u_pwd" placeholder="须大写+小写+数字"></div>
+  <div class="foot"><button class="btn" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveUser()">确定</button></div>`);
+}
+function saveUser(){
+  const pwd=document.getElementById('u_pwd').value;
+  if(!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/.test(pwd)){alert('密码必须包含大写、小写、数字');return}
+  const acc=document.getElementById('u_acc').value.trim();
+  if(DB.users.some(x=>x.account===acc)){alert('账号已存在');return}
+  DB.users.push({id:uid(),account:acc,name:document.getElementById('u_name').value,phone:document.getElementById('u_phone').value,role:+document.getElementById('u_role').value,password:pwd});
+  save();closeModal();nav('user');
+}
+
+/* ================= 部门 ================= */
+function pageDept(){
+  const rows=DB.depts.map(d=>`<td>${d.code}</td><td>${d.name}</td>
+    <td>${(d.members||[]).map(m=>nameOf(DB.users,m)).join('、')||'-'}</td>
+    <td>${delBtn('depts',d.id)}</td>`);
+  return listPage('部门管理',['部门编码','部门名称','成员','操作'],rows,'addDept()');
+}
+function nameOf(arr,id){const x=arr.find(a=>a.id===id);return x?x.name:''}
+function addDept(){
+  const users=DB.users.map(u=>`<span class="chk" data-v="${u.id}" onclick="this.classList.toggle('on')">${u.name}</span>`).join('');
+  openModal(`<h3>创建部门</h3>
+  <div class="field"><label>部门编码</label><input id="d_code"></div>
+  <div class="field"><label>部门名称</label><input id="d_name"></div>
+  <div class="field"><label>成员（多选）</label><div class="chk-list">${users}</div></div>
+  <div class="foot"><button class="btn" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveDept()">确定</button></div>`);
+}
+function saveDept(){
+  const members=[...document.querySelectorAll('.chk.on')].map(x=>+x.dataset.v);
+  DB.depts.push({id:uid(),code:document.getElementById('d_code').value,name:document.getElementById('d_name').value,members});
+  save();closeModal();nav('dept');
+}
+
+/* ================= 单位 ================= */
+function pageUnit(){
+  const rows=DB.units.map(u=>`<td>${u.name}</td><td>${delBtn('units',u.id)}</td>`);
+  return listPage('单位',['单位名称','操作'],rows,'addUnit()');
+}
+function addUnit(){openModal(`<h3>创建单位</h3><div class="field"><label>单位名称</label><input id="un_name" placeholder="如：只"></div>
+  <div class="foot"><button class="btn" onclick="closeModal()">取消</button><button class="btn primary" onclick="DB.units.push({id:uid(),name:document.getElementById('un_name').value});save();closeModal();nav('unit')">确定</button></div>`);}
+
+/* ================= 不良品项 ================= */
+function pageDefect(){
+  const rows=DB.defects.map(d=>`<td>${d.name}</td><td>${delBtn('defects',d.id)}</td>`);
+  return listPage('不良品项',['名称','操作'],rows,'addDefect()');
+}
+function addDefect(){openModal(`<h3>创建不良品项</h3><div class="field"><label>名称</label><input id="df_name" placeholder="如：粘锅"></div>
+  <div class="foot"><button class="btn" onclick="closeModal()">取消</button><button class="btn primary" onclick="DB.defects.push({id:uid(),name:document.getElementById('df_name').value});save();closeModal();nav('defect')">确定</button></div>`);}
+
+/* ================= 工序 ================= */
+function pageOperation(){
+  const rows=DB.ops.map(o=>`<td>${o.code}</td><td>${o.name}</td>
+    <td>${(o.depts||[]).map(m=>nameOf(DB.depts,m)).join('、')||'-'}</td>
+    <td>${(o.defects||[]).map(m=>nameOf(DB.defects,m)).join('、')||'-'}</td>
+    <td>${delBtn('ops',o.id)}</td>`);
+  return listPage('工序',['编号','名称','报工权限(部门)','不良品项','操作'],rows,'addOp()');
+}
+function addOp(){
+  const depts=DB.depts.map(d=>`<span class="chk" data-v="${d.id}" onclick="this.classList.toggle('on')">${d.name}</span>`).join('');
+  const defects=DB.defects.map(d=>`<span class="chk" data-v="${d.id}" onclick="this.classList.toggle('on')">${d.name}</span>`).join('');
+  openModal(`<h3>创建工序</h3>
+  <div class="field"><label>工序编号</label><input id="o_code"></div>
+  <div class="field"><label>工序名称</label><input id="o_name"></div>
+  <div class="field"><label>报工权限（部门，多选）</label><div class="chk-list" id="o_depts">${depts}</div></div>
+  <div class="field"><label>不良品项（多选）</label><div class="chk-list" id="o_defects">${defects}</div></div>
+  <div class="foot"><button class="btn" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveOp()">保存</button></div>`);
+}
+function saveOp(){
+  const depts=[...document.querySelectorAll('#o_depts .chk.on')].map(x=>+x.dataset.v);
+  const defects=[...document.querySelectorAll('#o_defects .chk.on')].map(x=>+x.dataset.v);
+  DB.ops.push({id:uid(),code:document.getElementById('o_code').value,name:document.getElementById('o_name').value,depts,defects});
+  save();closeModal();nav('operation');
+}
+
+/* ================= 工艺路线 ================= */
+function pageRouting(){
+  const rows=DB.routings.map(r=>`<td>${r.code}</td><td>${r.name}</td>
+    <td>${(r.steps||[]).slice().sort((a,b)=>a.seq-b.seq).map(s=>nameOf(DB.ops,s.op)).join(' → ')}</td>
+    <td>${delBtn('routings',r.id)}</td>`);
+  return listPage('工艺路线',['编号','名称','工序顺序','操作'],rows,'addRouting()');
+}
+function addRouting(){
+  openModal(`<h3>创建工艺路线</h3>
+  <div class="field"><label>路线编号</label><input id="r_code"></div>
+  <div class="field"><label>路线名称</label><input id="r_name"></div>
+  <div class="field"><label>工序明细（按生产顺序）</label><div id="r_steps"></div>
+  <button class="btn sm" onclick="addStepRow()">+ 添加一行</button></div>
+  <div class="foot"><button class="btn" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveRouting()">保存</button></div>`);
+  addStepRow();
+}
+function addStepRow(){
+  const ops=DB.ops.map(o=>`<option value="${o.id}">${o.code} ${o.name}</option>`).join('');
+  const d=document.createElement('div');d.className='row-add';
+  d.innerHTML=`<span>☰</span><select>${ops}</select><button class="btn sm" onclick="this.parentElement.remove()">×</button>`;
+  document.getElementById('r_steps').appendChild(d);
+}
+function saveRouting(){
+  const rows=[...document.querySelectorAll('#r_steps .row-add')].map((d,i)=>({op:+d.querySelector('select').value,seq:i+1}));
+  DB.routings.push({id:uid(),code:document.getElementById('r_code').value,name:document.getElementById('r_name').value,steps:rows});
+  save();closeModal();nav('routing');
+}
+
+/* ================= 产品 ================= */
+function pageProduct(){
+  const rows=DB.products.map(p=>`<td>${p.code}</td><td>${p.name}</td><td>${nameOf(DB.units,p.unit)||'-'}</td>
+    <td>${nameOf(DB.routings,p.routing)||'-'}</td><td>${delBtn('products',p.id)}</td>`);
+  return listPage('产品定义',['产品编号','产品名称','单位','工艺路线','操作'],rows,'addProduct()');
+}
+function addProduct(){
+  const units=DB.units.map(u=>`<option value="${u.id}">${u.name}</option>`).join('');
+  const routings=DB.routings.map(r=>`<option value="${r.id}">${r.name}</option>`).join('');
+  openModal(`<h3>创建产品</h3>
+  <div class="field"><label>产品编号（唯一，相当于身份证）</label><input id="p_code"></div>
+  <div class="field"><label>产品名称</label><input id="p_name"></div>
+  <div class="field"><label>单位</label><select id="p_unit">${units}</select></div>
+  <div class="field"><label>工艺路线</label><select id="p_routing">${routings}</select></div>
+  <div class="foot"><button class="btn" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveProduct()">保存</button></div>`);
+}
+function saveProduct(){
+  const code=document.getElementById('p_code').value.trim();
+  if(!code){alert('请填写产品编号');return}
+  if(DB.products.some(x=>x.code===code)){alert('产品编号不可重复（相当于身份证号）');return}
+  DB.products.push({id:uid(),code,name:document.getElementById('p_name').value,unit:+document.getElementById('p_unit').value,routing:+document.getElementById('p_routing').value});
+  save();closeModal();nav('product');
+}
+
+/* ================= 工单 ================= */
+const orderStatus={0:'待生产',1:'生产中',2:'完成'};
+const statusCls={0:'gray',1:'orange',2:'green'};
+function pageOrder(){
+  const rows=DB.orders.map(o=>{
+    const p=DB.products.find(x=>x.id===o.product);
+    return `<td>${o.no}</td><td>${p?p.name:''}</td><td>${o.qty}</td>
+    <td>${(o.ext&&o.ext[1])?o.ext[1]+' / '+(o.ext[2]||''):'-'}</td>
+    <td><span class="tag ${statusCls[o.status]}">${orderStatus[o.status]}</span></td>
+    <td><button class="btn sm" onclick="printCard(${o.id})">打印流转卡</button>
+    <button class="btn sm" onclick="del('orders',${o.id})">删除</button></td>`;
+  });
+  return `<div class="card">
+    <div class="toolbar"><div class="title" style="font-size:15px">工单列表</div>
+    <div class="right"><button class="btn primary sm" onclick="addOrder()">+ 创建工单</button></div></div>
+    <table><thead><tr><th>工单编号</th><th>产品</th><th>数量</th><th>桌号/辣度</th><th>状态</th><th>操作</th></tr></thead>
+    <tbody>${rows.length?rows.join(''):'<tr><td colspan="6" class="empty">暂无工单</td></tr>'}</tbody></table>
+  </div>`;
+}
+function addOrder(){
+  const products=DB.products.map(p=>`<option value="${p.id}">${p.code} ${p.name}</option>`).join('');
+  const exts=DB.fields.map(f=>`<div class="field"><label>${f.name}</label><select id="ext_${f.id}">${(f.options||[]).map(o=>`<option>${o}</option>`).join('')}</select></div>`).join('');
+  openModal(`<h3>创建工单（下单）</h3>
+  <div class="field"><label>产品</label><select id="o_product">${products}</select></div>
+  <div class="field"><label>数量</label><input id="o_qty" type="number" value="1"></div>
+  ${exts}
+  <div class="foot"><button class="btn" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveOrder()">创建</button></div>`);
+}
+function saveOrder(){
+  const ext={};DB.fields.forEach(f=>ext[f.id]=document.getElementById('ext_'+f.id).value);
+  const no='GD'+new Date().toISOString().slice(0,10).replace(/-/g,'')+String(DB.orders.length+1).padStart(3,'0');
+  DB.orders.push({id:uid(),no,product:+document.getElementById('o_product').value,qty:+document.getElementById('o_qty').value,status:1,ext,createdAt:Date.now()});
+  save();closeModal();nav('order');
+}
+function printCard(id){
+  const o=DB.orders.find(x=>x.id===id);const p=DB.products.find(x=>x.id===o.product);
+  const qr=drawQr('ORDER:'+o.no);
+  openModal(`<h3>工单流转卡</h3>
+  <div style="text-align:center">
+    <img class="qr" src="${qr}">
+    <p style="margin:8px 0;font-size:16px;font-weight:bold">${o.no}</p>
+    <p>产品：${p?p.name:''}　数量：${o.qty}</p>
+    ${(o.ext&&o.ext[1])?`<p>桌号：${o.ext[1]}　辣度：${o.ext[2]||''}</p>`:''}
+    <p class="hint">工人用手机扫此二维码即可报工</p>
+  </div>
+  <div class="foot"><button class="btn" onclick="closeModal()">关闭</button><button class="btn primary" onclick="window.print()">打印</button></div>`);
+}
+/* 伪二维码（确定性格子，示意用） */
+function drawQr(text){
+  const n=21,cell=5;const c=document.createElement('canvas');c.width=c.height=n*cell;const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.fillStyle='#000';
+  let h=0;for(const ch of text)h=(h*31+ch.charCodeAt(0))>>>0;
+  const rnd=x=>{x^=x<<13;x^=x>>>17;x^=x<<5;return(x>>>0)/4294967296};
+  for(let y=0;y<n;y++)for(let x=0;x<n;x++){const seed=(h^(x*7+y*13))>>>0;if(rnd(seed)>0.5)g.fillRect(x*cell,y*cell,cell,cell)}
+  return c.toDataURL();
+}
+
+/* ================= 报工 ================= */
+function pageReport(){
+  const rows=DB.orders.filter(o=>o.status!==2).map(o=>{
+    const p=DB.products.find(x=>x.id===o.product);
+    return `<td>${o.no}</td><td>${p?p.name:''}</td><td>${o.qty}</td><td><span class="tag ${statusCls[o.status]}">${orderStatus[o.status]}</span></td>
+    <td><button class="btn primary sm" onclick="doReport(${o.id})">报工</button></td>`;
+  });
+  return `<div class="card">
+    <div class="toolbar"><div class="title" style="font-size:15px">报工（选择工单）</div>
+    <div class="right"><input class="search" placeholder="搜索产品/工单" oninput="filterReport(this.value)"></div></div>
+    <table id="reportTable"><thead><tr><th>工单编号</th><th>产品</th><th>下单数</th><th>状态</th><th>操作</th></tr></thead>
+    <tbody>${rows.length?rows.join(''):'<tr><td colspan="5" class="empty">暂无待报工工单</td></tr>'}</tbody></table>
+    <p class="hint" style="margin-top:10px">报工方式：扫码报工 / 手机搜索报工 / 电脑报工 / 扫码枪报工（本原型演示电脑报工）</p>
+  </div>`;
+}
+function filterReport(v){
+  v=v.toLowerCase();
+  document.querySelectorAll('#reportTable tbody tr').forEach(tr=>{tr.style.display=tr.textContent.toLowerCase().includes(v)?'':'none'});
+}
+function doReport(orderId){
+  const o=DB.orders.find(x=>x.id===orderId);
+  const p=DB.products.find(x=>x.id===o.product);
+  const routing=DB.routings.find(x=>x.id===p.routing);
+  const steps=(routing&&routing.steps||[]).slice().sort((a,b)=>a.seq-b.seq);
+  const ops=steps.map(s=>{const op=DB.ops.find(x=>x.id===s.op);return op?`<option value="${op.id}">${op.name}</option>`:''}).join('');
+  openModal(`<h3>报工 · ${o.no}（${p?p.name:''}）</h3>
+  <div class="field"><label>工序</label><select id="r_op">${ops}</select></div>
+  <div class="field"><label>良品数</label><input id="r_good" type="number" value="1"></div>
+  <div class="field"><label>不良品数</label><input id="r_def" type="number" value="0"></div>
+  <div class="field"><label>不良品原因</label><select id="r_di">${DB.defects.map(d=>`<option value="${d.id}">${d.name}</option>`).join('')}</select></div>
+  <div class="foot"><button class="btn" onclick="closeModal()">取消</button><button class="btn primary" onclick="submitReport(${orderId})">提交</button></div>`);
+}
+function submitReport(orderId){
+  const o=DB.orders.find(x=>x.id===orderId);
+  const opId=+document.getElementById('r_op').value;
+  const op=DB.ops.find(x=>x.id===opId);
+  // 报工权限校验：当前用户须属于该工序的报工权限部门
+  if(op&&op.depts&&op.depts.length){
+    const inDept=DB.depts.some(d=>(d.members||[]).includes(CUR.id)&&(op.depts||[]).includes(d.id));
+    if(CUR.role!==1&&!inDept){alert('无报工权限：您不在该工序的报工权限部门内');return}
+  }
+  DB.reports.push({id:uid(),order:orderId,op:opId,user:CUR.id,good:+document.getElementById('r_good').value,defect:+document.getElementById('r_def').value,defectItem:+document.getElementById('r_di').value,time:Date.now()});
+  const total=DB.reports.filter(r=>r.order===orderId).reduce((s,r)=>s+r.good,0);
+  if(total>=o.qty)o.status=2;
+  save();closeModal();alert('报工成功');nav('report');
+}
+
+/* ================= 看板 ================= */
+function pageBoard(){
+  const total=DB.orders.length,doing=DB.orders.filter(o=>o.status===1).length,done=DB.orders.filter(o=>o.status===2).length;
+  const good=DB.reports.reduce((s,r)=>s+r.good,0),defect=DB.reports.reduce((s,r)=>s+r.defect,0);
+  const rate=good+defect?Math.round(defect/(good+defect)*100):0;
+  const rows=DB.orders.map(o=>{const p=DB.products.find(x=>x.id===o.product);const doneQ=DB.reports.filter(r=>r.order===o.id).reduce((s,r)=>s+r.good,0);
+    return `<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:13px"><span>${o.no} · ${p?p.name:''}</span><span>${doneQ}/${o.qty}</span></div>
+    <div class="progress"><i style="width:${Math.min(100,doneQ/o.qty*100)}%"></i></div></div>`;}).join('');
+  return `<div class="grid">
+    <div class="stat"><div class="n">${total}</div><div class="l">工单总数</div></div>
+    <div class="stat"><div class="n">${doing}</div><div class="l">生产中</div></div>
+    <div class="stat"><div class="n">${done}</div><div class="l">已完成</div></div>
+    <div class="stat"><div class="n" style="color:#e5484d">${rate}%</div><div class="l">不良率</div></div>
+  </div>
+  <div class="card"><div class="title" style="font-size:15px;margin-bottom:14px">工单生产进度</div>${rows||'<p class="empty">暂无工单</p>'}</div>`;
+}
+
+/* ================= 生产报表 ================= */
+function pageRpt(){
+  const rows=DB.reports.slice().sort((a,b)=>b.time-a.time).map(r=>{
+    const o=DB.orders.find(x=>x.id===r.order);const p=o?DB.products.find(x=>x.id===o.product):null;
+    const op=DB.ops.find(x=>x.id===r.op);const u=DB.users.find(x=>x.id===r.user);
+    const di=DB.defects.find(x=>x.id===r.defectItem);
+    return `<td>${o?o.no:''}</td><td>${p?p.name:''}</td><td>${op?op.name:''}</td><td>${u?u.name:''}</td>
+    <td>${r.good}</td><td>${r.defect||'-'}</td><td>${r.defect?di?di.name:'-':'-'}</td><td>${fmtDate(r.time)}</td>`;
+  });
+  return listPage('生产报表（报工明细）',['工单编号','产品','工序','报工人','良品','不良品','不良原因','时间'],rows);
+}
+
+/* ================= 启动 ================= */
+init();
+</script>
+</body>
+</html>

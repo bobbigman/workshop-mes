@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>报工复核页 - 说明示例</title>
+<style>
+  body {
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    background: #f5f7fa;
+    padding: 32px;
+    margin: 0;
+  }
+  .page-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #303133;
+    margin-bottom: 16px;
+  }
+  /* 说明框：贴近 Element Plus el-alert 浅蓝风 */
+  .tip-box {
+    background: #ecf5ff;
+    border: 1px solid #d9ecff;
+    border-radius: 4px;
+    padding: 16px 20px;
+    max-width: 640px;
+    line-height: 1.7;
+    color: #606266;
+    font-size: 14px;
+  }
+  /* 价值钩子：加粗、深色、独占视觉权重 */
+  .hook {
+    font-size: 16px;
+    font-weight: 700;
+    color: #303133;
+    display: block;
+    margin-bottom: 10px;
+  }
+  .hook::before {
+    content: "▸ ";
+    color: #409eff;
+  }
+  .main {
+    color: #303133;
+    margin: 0 0 8px 0;
+  }
+  /* 副注：灰字、小一号，做补充说明 */
+  .sub {
+    color: #909399;
+    font-size: 13px;
+    margin: 0 0 8px 0;
+  }
+  /* 钩子副标：稍深一点、斜体，跟正文副注区分开 */
+  .slogan {
+    color: #606266;
+    font-style: italic;
+    margin: -4px 0 12px 0;
+  }
+  /* 操作标签高亮 */
+  .op {
+    color: #409eff;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+  <div class="page-title">报工复核页</div>
+
+  <div class="tip-box">
+    <span class="hook">月底对账不扯皮</span>
+
+    <p class="sub slogan">工钱算在明处，工人干得踏实。</p>
+
+    <p class="main">
+      班组长在这确认工人报的数：点<span class="op">【通过】</span>才进生产报表和工资，点<span class="op">【退回】</span>让工人改完再来。
+    </p>
+
+    <p class="sub">
+      已经"通过"的报工数错了也能退——把状态切到"已通过"就能找到它。
+    </p>
+
+    <p class="main">
+      先看<span class="op">【通过】</span>、<span class="op">【退回】</span>、<span class="op">【退回后改数】</span>这 3 条就能干活；其余是避坑提醒，点开看。
+    </p>
+  </div>
+</body>
+</html>
