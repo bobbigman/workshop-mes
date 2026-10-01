@@ -45,8 +45,14 @@ _testfiles/
 _upload_check/
 _verify_out/
 
-# artifacts 下的编译产物目录（保留 promo-video 等媒体交付物）
+# artifacts 下的编译产物目录
 artifacts/custom-field-check/
 artifacts/review111-backend/
 artifacts/throwhelper-build/
 artifacts/throwhelper-tests/
+
+# 媒体文件（用户要求不上传，体积大且属交付物）
+**/*.mp4
+**/*.wav
+**/*.mp3
+**/*.mov
