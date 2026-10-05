@@ -1,7 +1,7 @@
 /** 登录/侧栏用的实例显示名清洗：去掉英文开发占位，统一产品中文名。 */
 import { computed, ref } from 'vue'
 
-export const PRODUCT_TITLE = '小蜜蜂报工'
+export const PRODUCT_TITLE = '微聚'
 
 /** 胡工锚点：代码常量，任何 Instance:CreditPartner 配置都改不了（docs/213） */
 export const CREDIT_ANCHOR = '胡工'
@@ -10,7 +10,7 @@ export const CREDIT_ANCHOR = '胡工'
 export const CREDIT_RIGHTS = '保留所有权利。'
 
 // 历史产品名：出现时归一化到当前 PRODUCT_TITLE（兼容旧 localStorage 缓存）
-const LEGACY_TITLES = ['车间管理系统', '车间小工单系统', '车间小工单']
+const LEGACY_TITLES = ['车间管理系统', '车间小工单系统', '车间小工单', '\u5c0f\u871c\u8702\u62a5\u5de5', '\u5c0f\u871c\u8702']
 
 const PLACEHOLDER_RE = /^(workshop|workshopb)$/i
 

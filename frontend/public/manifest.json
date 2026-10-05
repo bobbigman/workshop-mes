@@ -1,7 +1,7 @@
 {
-  "name": "小蜜蜂报工",
-  "short_name": "小蜜蜂",
-  "description": "小蜜蜂报工：扫码报工、看板进度",
+  "name": "微聚",
+  "short_name": "微聚",
+  "description": "微聚：扫码报工、看板进度",
   "lang": "zh-CN",
   "start_url": "/#/h5/scan",
   "scope": "/",

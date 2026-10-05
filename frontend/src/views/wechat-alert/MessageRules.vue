@@ -111,10 +111,10 @@ const legacyRule = computed(() => !!ruleId.value && form.value.targetChannel !==
 const events = { report_created: '报工成功', order_started: '工单开始', order_completed: '工单结束', abnormal_reported: '异常上报' }
 const statuses = { pending: '待发', processing: '处理中', success: '已接受', retry: '待重试', failed: '失败', partial: '部分成功', unknown: '结果未知', cancelled: '已取消', confirmed: '人工确认已发送', requeued: '管理员重新排队' }
 const templates = {
-  report_created: '【小蜜蜂报工】报工成功\n工单：{工单号} 产品：{产品编号} {产品名称}\n工序：{工序} 良品：{良品数} 不良：{不良数} 不良率：{不良率}\n时间：{事件时间}',
-  order_started: '【小蜜蜂报工】工单开始\n工单：{工单号} 产品：{产品编号} {产品名称}\n时间：{事件时间}',
-  order_completed: '【小蜜蜂报工】工单结束\n工单：{工单号} 产品：{产品编号} {产品名称}\n时间：{事件时间}',
-  abnormal_reported: '【小蜜蜂报工】异常上报\n类型：{异常类型}\n描述：{问题描述}\n工单：{工单号} 产品：{产品编号} {产品名称}\n上报人：{上报人}\n时间：{事件时间}'
+  report_created: '【微聚】报工成功\n工单：{工单号} 产品：{产品编号} {产品名称}\n工序：{工序} 良品：{良品数} 不良：{不良数} 不良率：{不良率}\n时间：{事件时间}',
+  order_started: '【微聚】工单开始\n工单：{工单号} 产品：{产品编号} {产品名称}\n时间：{事件时间}',
+  order_completed: '【微聚】工单结束\n工单：{工单号} 产品：{产品编号} {产品名称}\n时间：{事件时间}',
+  abnormal_reported: '【微聚】异常上报\n类型：{异常类型}\n描述：{问题描述}\n工单：{工单号} 产品：{产品编号} {产品名称}\n上报人：{上报人}\n时间：{事件时间}'
 }
 const kinds = { abnormal_device: '仅设备故障', abnormal_material: '仅物料短缺', abnormal_quality: '仅质量异常' }
 const conditionText = row => row.conditionType === 'defect_rate' ? `本次不良率 > ${row.threshold}%` : (kinds[row.conditionType] || '每次提醒')

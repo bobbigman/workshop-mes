@@ -14,7 +14,7 @@ public class InstanceOptions
     public string DisplayName { get; set; } = "";
 
     /// <summary>
-    /// 联合出品伙伴名（可选）。空 → 署名仅「小蜜蜂报工 · 胡工」；有值 → 「胡工、{伙伴} 联合出品」+ 角色行。
+    /// 联合出品伙伴名（可选）。空 → 署名仅「微聚 · 胡工」；有值 → 「胡工、{伙伴} 联合出品」+ 角色行。
     /// 胡工锚点在代码常量，不入配置。docs/213。
     /// </summary>
     public string CreditPartner { get; set; } = "";

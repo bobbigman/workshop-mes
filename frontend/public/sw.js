@@ -1,4 +1,4 @@
-// 小蜜蜂报工 Service Worker（PWA）
+// 微聚 Service Worker（PWA）
 // 目的：满足"添加到主屏幕/桌面图标"的可安装要求，并让已打开的静态资源离线可用。
 // 缓存策略刻意保守，避免内网频繁迭代时手机卡旧版：
 //   - HTML 导航：network-first，网络失败才回退缓存（保证永远拉到最新 index.html）

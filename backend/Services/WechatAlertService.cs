@@ -133,7 +133,7 @@ public class WechatAlertService : IWechatAlertService
     public async Task<ApiResult<object?>> TestSendAsync(long factoryId)
     {
         var row = await RequireConfiguredAsync(factoryId, mustEnabled: true);
-        var result = await _sender.SendAsync(factoryId, "test", "【小蜜蜂报工】测试推送成功。收到这条说明微信预警配置正确。",
+        var result = await _sender.SendAsync(factoryId, "test", "【微聚】测试推送成功。收到这条说明微信预警配置正确。",
             recipients: row.ToUser, test: true, channel: "group");
         if (result.Outcome != "success")
             throw ThrowHelper.Biz(nameof(TestSendAsync), result.Error ?? "测试推送未成功");
@@ -302,7 +302,7 @@ public class WechatAlertService : IWechatAlertService
         var overdueCount = dueRows.Count(x => x.state == DueState.Overdue);
         var warningCount = dueRows.Count(x => x.state == DueState.Warning);
         var content =
-            $"【小蜜蜂报工】交期预警（超期 {overdueCount} / 临期 {warningCount}，共 {dueRows.Count} 张）\n"
+            $"【微聚】交期预警（超期 {overdueCount} / 临期 {warningCount}，共 {dueRows.Count} 张）\n"
             + string.Join("\n", lines);
 
         var sendResult = await _sender.SendAsync(factoryId, alertKey, content, recipients: setting.ToUser, channel: "group");

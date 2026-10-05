@@ -2,7 +2,7 @@
   <div class="adv-page">
     <header class="adv-header">
       <div>
-        <span class="eyebrow">小蜜蜂报工 · 产品优势速览</span>
+        <span class="eyebrow">微聚 · 产品优势速览</span>
         <h1>三个麻烦，一次说清</h1>
         <p class="header-desc">先看三个麻烦怎么解，再看和别人差在哪——本地部署、断外网也能用。</p>
       </div>

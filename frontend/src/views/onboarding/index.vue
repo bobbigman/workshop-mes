@@ -2,7 +2,7 @@
   <div class="onboard-page">
     <header class="onboard-header">
       <div>
-        <span class="eyebrow">小蜜蜂报工 · 上手引导</span>
+        <span class="eyebrow">微聚 · 上手引导</span>
         <h1>新手入门</h1>
         <p class="header-desc">照着下面的步骤走一遍，管理员能把厂子配起来，工人能上机报工。</p>
       </div>

@@ -18,10 +18,10 @@ alwaysApply: true
 ## 不进仓
 
 - `appsettings*.json`、密码、连接串、Token（本机留或另备，不进远程）
-- `backend/_*.json`、`_tok.txt`、`.tmp/` 等调试垃圾
+- `appsettings*.json`、密码、连接串、Token（本机留或另备，不进远程）
+- `backend/_*.json`、`_tok.txt`、`.tmp/` 等调试垃圾（已写入 `.gitignore`）
+- `backend/wwwroot/assets/` 哈希 js/css（构建产物，已 ignore；以 `frontend/src` 为准）
 - 不要以整份拷贝文件夹当备份（例如「分析_废弃了」），以远程 `master` 上的提交为准
-
-`backend/wwwroot/assets` 哈希产物不是备份主体；能编的以 `frontend/src` 为准。
 
 ## 找回
 
