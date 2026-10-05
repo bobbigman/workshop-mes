@@ -56,3 +56,12 @@ artifacts/throwhelper-tests/
 **/*.wav
 **/*.mp3
 **/*.mov
+
+# 前端构建产物（源码在 frontend/src，部署时再编进 wwwroot）
+backend/wwwroot/assets/
+
+# 本地调试垃圾
+.tmp/
+backend/_*.json
+backend/_*.csv
+backend/_tok.txt

@@ -4,9 +4,17 @@
       <img :src="bannerUrl || DEFAULT_BANNER" class="banner" alt="" @error="onBannerError" />
     </div>
     <div class="login-right">
-      <div class="login-box">
-        <div class="brand-row">
-          <img class="brand-logo" src="/brand/xiaomifeng-logo.svg" alt="小蜜蜂报工 · 轻MES" />
+      <div class="login-col">
+        <div class="brand-lock">
+          <img
+            v-if="logoOk"
+            class="brand-mark"
+            src="/brand/weiju-logo.png"
+            alt=""
+            @error="onLogoError"
+          />
+          <span class="brand-name">{{ PRODUCT_TITLE }}</span>
+          <span class="brand-tag">轻MES</span>
         </div>
         <el-form ref="formRef" :model="form" :rules="formRules" label-position="top" @submit.prevent="onLogin">
           <el-form-item v-if="showFactorySelect" label="账套 / 工厂" prop="factoryCode">
@@ -76,27 +84,27 @@
         </p>
       </div>
       <footer class="login-footer">
-        <p class="footer-links">
-          <button type="button" class="footer-link" @click="onCopyright">版权</button>
-          <span class="footer-sep">|</span>
-          <button type="button" class="footer-link" @click="onLegalInfo">用户协议</button>
-          <span class="footer-sep">|</span>
-          <button type="button" class="footer-link" @click="onLegalInfo">隐私政策</button>
-          <span class="footer-sep">|</span>
-          <button type="button" class="footer-link" @click="goHelp">帮助</button>
-        </p>
-        <p class="footer-meta">
-          <span>小蜜蜂报工 {{ appVersionLabel }}</span>
-          <span class="footer-sep">|</span>
-          <span>建议浏览器 Chrome</span>
-          <span class="footer-sep">|</span>
-          <button
-            type="button"
-            class="footer-link"
-            :disabled="loading || clearing"
-            @click="onClearCache"
-          >{{ clearing ? '正在清理…' : '清除本地缓存' }}</button>
-        </p>
+      <p class="footer-links">
+        <button type="button" class="footer-link" @click="onLegalInfo">用户协议</button>
+        <span class="footer-sep">|</span>
+        <button type="button" class="footer-link" @click="onLegalInfo">隐私政策</button>
+        <span class="footer-sep">|</span>
+        <button type="button" class="footer-link" @click="onCopyright">版权</button>
+        <span class="footer-sep">|</span>
+        <button type="button" class="footer-link" @click="goHelp">帮助</button>
+      </p>
+      <p class="footer-meta">
+        <span>{{ PRODUCT_TITLE }} {{ appVersionLabel }}</span>
+        <span class="footer-sep">|</span>
+        <span>建议浏览器 Chrome</span>
+        <span class="footer-sep">|</span>
+        <button
+          type="button"
+          class="footer-link"
+          :disabled="loading || clearing"
+          @click="onClearCache"
+        >{{ clearing ? '正在清理…' : '清除本地缓存' }}</button>
+      </p>
       </footer>
     </div>
   </div>
@@ -110,6 +118,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, User, Lock } from '@element-plus/icons-vue'
 import {
   CREDIT_RIGHTS,
+  PRODUCT_TITLE,
   creditLine,
   creditRoles,
   isCreditHydrated,
@@ -131,6 +140,7 @@ const loading = ref(false)
 const clearing = ref(false)
 const cacheLimitedMsg = ref('')
 const displayName = ref('')
+const logoOk = ref(true)
 /** 角落版本号：只认 package.json → vite define 注入的 __APP_VERSION__，不被后端实例信息覆盖 */
 const appVersionLabel = (() => {
   const raw = typeof __APP_VERSION__ !== 'undefined' ? String(__APP_VERSION__ || '').trim() : ''
@@ -149,11 +159,13 @@ const formRules = computed(() => ({
     : []
 }))
 
-// 未配置登录图时用 public 默认图（部署后进 wwwroot，由 .NET UseStaticFiles 提供）
-const DEFAULT_BANNER = '/login-banner-default.jpg'
+function onLogoError() {
+  logoOk.value = false
+}
+
+const DEFAULT_BANNER = '/login-banner-default.svg'
 const bannerUrl = ref(DEFAULT_BANNER)
 const instanceFactoryCode = ref('')
-/** 防止默认图也失败时 @error 死循环 */
 let bannerFallbackUsed = false
 
 function normalizeBannerUrl(raw) {
@@ -220,7 +232,7 @@ async function loadFactories() {
           form.value.factoryCode = list[0].factoryCode
           await loadBanner(list[0].factoryCode)
         } else {
-          await loadBanner(instanceFactoryCode.value)
+          await loadBanner(form.value.factoryCode || instanceFactoryCode.value)
         }
         return
       } catch (e) {
@@ -251,12 +263,14 @@ onMounted(async () => {
   await loadFactories()
   if (pendingFactory) {
     const stillValid = factories.value.some((f) => f.factoryCode === pendingFactory)
-    if (stillValid) form.value.factoryCode = pendingFactory
+    if (stillValid) {
+      form.value.factoryCode = pendingFactory
+      await loadBanner(pendingFactory)
+    }
     // 账套已不存在：不造数据，沿用 loadFactories 原选择规则
   }
 })
 
-// 多账套切换时重新拉对应账套的登录图
 watch(() => form.value.factoryCode, (code) => {
   if (factories.value.length >= 2) loadBanner(code || instanceFactoryCode.value)
 })
@@ -393,14 +407,14 @@ async function onLogin() {
 .login-shell {
   min-height: 100vh;
   display: flex;
-  background: var(--app-login-bg);
+  background: #fff;
   box-sizing: border-box;
 }
 
 .login-left {
-  flex: 0 0 58%;
-  display: flex;
+  flex: 1 1 72%;
   min-width: 0;
+  display: flex;
 }
 
 .login-left .banner {
@@ -412,44 +426,63 @@ async function onLogin() {
 
 .login-right {
   position: relative;
-  flex: 1;
-  min-width: 0;
+  flex: 0 0 28%;
+  min-width: 380px;
+  max-width: 480px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 24px 16px 48px;
+  padding: 24px 40px 56px;
+  box-sizing: border-box;
+  background: #fff;
+}
+
+.login-col {
+  width: 100%;
+  max-width: 360px;
+  background: transparent;
+  box-shadow: none;
   box-sizing: border-box;
 }
 
-.login-box {
-  background: var(--app-card);
-  width: 400px;
-  max-width: 100%;
-  padding: 40px 36px 28px;
-  border-radius: var(--app-radius);
-  box-shadow: var(--app-shadow-lg);
-  box-sizing: border-box;
+.brand-lock {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+  gap: 10px;
+  margin: 0 0 36px;
+  white-space: nowrap;
 }
 
-.brand-row {
-  position: relative;
-  margin: 0 0 28px;
+.brand-mark {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
-.brand-logo {
-  display: block;
-  width: 260px;
-  max-width: 100%;
-  height: auto;
-  margin: 0 auto;
+.brand-name {
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1;
+  color: #1f2329;
 }
 
-.login-box :deep(.el-form-item) {
+.brand-tag {
+  font-size: 12px;
+  line-height: 1;
+  color: #8f959e;
+  align-self: flex-end;
+  padding-bottom: 2px;
+}
+
+.login-col :deep(.el-form-item) {
   margin-bottom: 18px;
 }
 
-.login-box :deep(.el-form-item__label) {
+.login-col :deep(.el-form-item__label) {
   font-size: 16px;
   font-weight: 500;
   color: var(--app-text-1);
@@ -458,12 +491,12 @@ async function onLogin() {
   padding: 0;
 }
 
-.login-box :deep(.el-input__wrapper) {
+.login-col :deep(.el-input__wrapper) {
   min-height: 48px;
   padding: 4px 14px;
 }
 
-.login-box :deep(.el-input__inner) {
+.login-col :deep(.el-input__inner) {
   font-size: 16px;
   height: 40px;
 }
@@ -570,16 +603,17 @@ async function onLogin() {
   .login-shell { flex-direction: column; }
   .login-left { flex: none; width: 100%; }
   .login-left .banner { height: 200px; }
-  .login-right { flex: 1; }
+  .login-right {
+    flex: 1;
+    min-width: 0;
+    max-width: none;
+    width: 100%;
+    padding: 24px 16px 56px;
+  }
 }
 
 @media (max-width: 480px) {
-  .login-right {
-    padding: 16px 12px 56px;
-  }
-  .login-box {
-    width: 100%;
-    padding: 32px 20px 24px;
-  }
+  .login-right { padding: 16px 12px 56px; }
+  .login-col { max-width: none; }
 }
 </style>

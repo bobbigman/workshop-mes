@@ -92,7 +92,7 @@ try
     {
         builder.Services.AddSwaggerGen(c =>
         {
-            c.SwaggerDoc("v1", new OpenApiInfo { Title = "小蜜蜂报工 API", Version = "v1" });
+            c.SwaggerDoc("v1", new OpenApiInfo { Title = "微聚 API", Version = "v1" });
             c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
             {
                 Name = "Authorization",
@@ -274,7 +274,7 @@ try
     if (instanceOpt.EnableSwagger)
     {
         app.UseSwagger();
-        app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "小蜜蜂报工 API v1"));
+        app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "微聚 API v1"));
     }
     app.UseAuthentication();
     app.UseAuthorization();

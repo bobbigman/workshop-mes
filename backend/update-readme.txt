@@ -4,7 +4,7 @@
 不要用本包做首次安装。
 已上线机禁止用整包 publish-win64 覆盖安装目录（会冲掉 HTTPS/连接串）。
 
-本包只含：wwwroot、*.dll（及明确需要的 web.config）。
+本包更新内容：wwwroot、*.dll（及明确需要的web.config）；另附apply-update、说明和scripts供部署使用。
 本包不含且 apply-update 绝不覆盖：
 - appsettings*.json
 - start.bat / stop.bat
@@ -13,12 +13,12 @@
 
 （exe / runtimeconfig / deps 若被覆盖，会提示 You must install .NET）
 
-【本包功能 · 2026-09-27】
-- 帮助 → 关于：版本、版权署名、使用说明、免责与责任限制（赔偿上限=该客户已付软件费）
-- 登录页 / 帮助 / 优势速览：联合出品署名（胡忠谦、沈域诚；产品研发 / 客户成功经理）
-- P0：报工提交拦截良品/不良负数，避免列表「报工汇总数量非法」
-- P1：自动工单号改「当天最大尾号+1」，删单后再建不再撞号 500
-- 无新表，可不改库
+【本包功能 · 2026-10-05】
+- 工作区当前代码整体构建（含未提交改动）；没有部署到客户服务器。
+- 出品署名：服务器 appsettings 可加可选键 Instance:CreditPartner（伙伴名）。缺该键或为空，署名仍是「小蜜蜂报工・胡工」，不必改也能启动。
+- 微信预警（141）：正常推送仅群机器人 Webhook；交期临期+超期每天汇总一条；启动幂等升级 129→131→141。库账号须有 ALTER/CREATE INDEX/UPDATE。保留原 CronToken；服务器需能出站访问 qyapi.weixin.qq.com。
+- scripts 目录不由 apply-update 复制；任务脚本/SQL 按需单独复制。
+- 无强制新配置项。勿整文件覆盖 appsettings。
 
 【更新步骤】（一键）
 1. 把本文件夹拷到服务器任意位置（如 D:\WorkShop\publish-update）

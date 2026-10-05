@@ -8,9 +8,9 @@
       <div class="dlg-body">
         <!-- 品牌区：仿 WPS 的居中 Logo + 产品名 -->
         <div class="brand">
-          <img class="brand-mark" src="/brand/xiaomifeng-mark.svg" alt="小蜜蜂" />
+          <img class="brand-mark" src="/brand/weiju-logo.png" alt="微聚" />
           <div class="brand-name">{{ PRODUCT_TITLE }}</div>
-          <div class="brand-sub">小蜜蜂 · 轻MES</div>
+          <div class="brand-sub">微聚 · 轻MES</div>
           <div class="brand-ver">{{ PRODUCT_TITLE }}({{ version || '—' }})</div>
         </div>
 

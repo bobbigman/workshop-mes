@@ -1,14 +1,12 @@
 ---
 title: 角色与权限
 role: 全员
-version: 1.7
-systemVersion: 2026-09-30
-updatedAt: 2026-09-30
+version: 1.8
+systemVersion: 2026-10-03
+updatedAt: 2026-10-03
 ---
 
 # 角色与权限
-
-> 与操作手册同源生成；维护 docs/30、31 和 docs/manual 正文后运行 npm run manual:sync。
 
 ## 先看懂每天要做什么
 
