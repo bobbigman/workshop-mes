@@ -1,0 +1,33 @@
+---
+description: 用 git 做便宜备份：代码和指令增量提交并 push；密钥与调试垃圾不进仓
+alwaysApply: true
+---
+
+# Git 备份（电脑坏了能找回来）
+
+远程是备份，不是档案馆。**只有 commit 并且 push 的东西**，换电脑才能从 GitHub 找回来。工作区改了没提交的，远程没有。
+
+## 该进仓
+
+- **代码**（`backend/` 源码、`frontend/src/`、相关测试）
+- **指令不论已做未做**：文本、增量小、不花钱；有事能翻，没事躺着。未做指令在变成代码之前是唯一出处。
+- **数据字典 / PRD**（`docs/02`、`docs/01`）：能从代码重建，但贵且易偏；改表仍以 `02` 为准。
+
+做完一块就 **commit + push**，不必攒包。说明写「为什么」，方便 `git log` 搜。
+
+## 不进仓
+
+- `appsettings*.json`、密码、连接串、Token（本机留或另备，不进远程）
+- `backend/_*.json`、`_tok.txt`、`.tmp/` 等调试垃圾
+- 不要以整份拷贝文件夹当备份（例如「分析_废弃了」），以远程 `master` 上的提交为准
+
+`backend/wwwroot/assets` 哈希产物不是备份主体；能编的以 `frontend/src` 为准。
+
+## 找回
+
+`git clone https://github.com/bobbigman/workshop-mes.git` → `git log --oneline` → `git checkout <提交号>`（先建分支再 checkout，避免改坏 master）。
+
+```text
+# ❌ 做了一周才提交；指令只放本机；把密钥和 _login.json 推进远程
+# ✅ 改完代码/指令就 commit + push；密钥留本机
+```
