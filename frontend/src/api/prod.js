@@ -17,11 +17,14 @@ export const batchReport = (data) => http.post('/Report/batch', data)
 export const updateReport = (id, data) => http.put(`/Report/${id}`, data)
 export const getReportList = (params) => http.get('/Report', { params })
 export const getMyReports = (params) => http.get('/Report/mine', { params })
+export const getTodayPieceSummary = () => http.get('/Report/mine/today-summary')
+export const getReportChangeLogs = (id) => http.get(`/Report/${id}/changes`)
 export const getReportCandidates = (operationId) => http.get(`/Report/candidates/${operationId}`)
 export const getDefectsByOp = (operationId) => http.get(`/Report/defects/${operationId}`)
 
 export const getProductionStat = (params) => http.get('/ReportStat/production', { params })
 export const getSkuSummary = (params) => http.get('/ReportStat/sku-summary', { params })
+export const getDefectStat = (params) => http.get('/ReportStat/defect', { params })
 export const getBoard = () => http.get('/ReportStat/board')
 
 export const getAbnormalList = (params) => http.get('/Abnormal', { params })
@@ -41,6 +44,9 @@ export const saveWechatAlertSetting = (data) => http.put('/WechatAlert/setting',
 export const markWechatNoticeSeen = () => http.post('/WechatAlert/notice-seen')
 export const testWechatAlert = () => http.post('/WechatAlert/test')
 export const pushWechatOverdue = () => http.post('/WechatAlert/push-overdue')
+
+export const getWorkerView = () => http.get('/WorkerView')
+export const saveWorkerView = (data) => http.put('/WorkerView', data)
 
 export const downloadTemplate = (entityType) => http.get('/Import/template', { params: { entityType }, responseType: 'blob' })
 export const uploadImport = (entityType, formData) => http.post(`/Import/upload?entityType=${entityType}`, formData)

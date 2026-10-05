@@ -162,10 +162,16 @@ public class TrialAccountCleanupService : BackgroundService
                   (SELECT id FROM salary_statement WHERE factory_id = @fid)", fid, ct);
             await DelAsync(db, counts, "salary_statement",
                 "DELETE FROM salary_statement WHERE factory_id = @fid", fid, ct);
+            await DelAsync(db, counts, "prod_report_change_log",
+                "DELETE FROM prod_report_change_log WHERE factory_id = @fid", fid, ct);
             await DelAsync(db, counts, "prod_report",
                 "DELETE FROM prod_report WHERE factory_id = @fid", fid, ct);
             await DelAsync(db, counts, "prod_abnormal",
                 "DELETE FROM prod_abnormal WHERE factory_id = @fid", fid, ct);
+            await DelAsync(db, counts, "prod_work_order_operation_assignee",
+                @"DELETE FROM prod_work_order_operation_assignee WHERE work_order_operation_id IN
+                  (SELECT t.id FROM prod_work_order_operation t
+                   INNER JOIN prod_work_order o ON o.id = t.work_order_id WHERE o.factory_id = @fid)", fid, ct);
             await DelAsync(db, counts, "prod_work_order_operation",
                 @"DELETE FROM prod_work_order_operation WHERE work_order_id IN
                   (SELECT id FROM prod_work_order WHERE factory_id = @fid)", fid, ct);
@@ -183,12 +189,17 @@ public class TrialAccountCleanupService : BackgroundService
                   (SELECT id FROM sys_custom_field WHERE factory_id = @fid)", fid, ct);
             await DelAsync(db, counts, "sys_custom_field",
                 "DELETE FROM sys_custom_field WHERE factory_id = @fid", fid, ct);
+            await DelAsync(db, counts, "sys_wechat_send_attempt", "DELETE FROM sys_wechat_send_attempt WHERE factory_id = @fid", fid, ct);
+            await DelAsync(db, counts, "sys_wechat_alert_delivery", "DELETE FROM sys_wechat_alert_delivery WHERE factory_id = @fid", fid, ct);
+            await DelAsync(db, counts, "sys_wechat_alert_rule", "DELETE FROM sys_wechat_alert_rule WHERE factory_id = @fid", fid, ct);
             await DelAsync(db, counts, "sys_wechat_alert_log",
                 "DELETE FROM sys_wechat_alert_log WHERE factory_id = @fid", fid, ct);
             await DelAsync(db, counts, "sys_wechat_alert_setting",
                 "DELETE FROM sys_wechat_alert_setting WHERE factory_id = @fid", fid, ct);
             await DelAsync(db, counts, "sys_print_setting",
                 "DELETE FROM sys_print_setting WHERE factory_id = @fid", fid, ct);
+            await DelAsync(db, counts, "sys_worker_view_setting",
+                "DELETE FROM sys_worker_view_setting WHERE factory_id = @fid", fid, ct);
             await DelAsync(db, counts, "base_product",
                 "DELETE FROM base_product WHERE factory_id = @fid", fid, ct);
             await DelAsync(db, counts, "base_routing_step",

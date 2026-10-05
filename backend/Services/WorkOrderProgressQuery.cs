@@ -122,8 +122,18 @@ public static class WorkOrderProgressQuery
             x => (x.OrderId, x.OperationId),
             x => (x.Done, x.Defect));
 
-        var assigneeIds = taskRows.Where(t => t.AssigneeUserId != null)
-            .Select(t => t.AssigneeUserId!.Value).Distinct().ToList();
+        var taskIds = taskRows.Select(t => t.Id).ToList();
+        var multiAssignees = taskIds.Count == 0
+            ? new List<(long TaskId, long UserId)>()
+            : (await db.WorkOrderOperationAssignees.AsNoTracking()
+                .Where(a => taskIds.Contains(a.WorkOrderOperationId))
+                .Select(a => new { a.WorkOrderOperationId, a.UserId })
+                .ToListAsync())
+                .Select(a => (a.WorkOrderOperationId, a.UserId))
+                .ToList();
+        var assigneeIds = multiAssignees.Select(a => a.Item2)
+            .Concat(taskRows.Where(t => t.AssigneeUserId != null).Select(t => t.AssigneeUserId!.Value))
+            .Distinct().ToList();
         var assigneeNames = assigneeIds.Count == 0
             ? new Dictionary<long, string>()
             : await db.Users.AsNoTracking()
@@ -138,6 +148,10 @@ public static class WorkOrderProgressQuery
                 foreach (var t in tasks)
                 {
                     reportMap.TryGetValue((order.Id, t.OperationId), out var rd);
+                    var ids = multiAssignees.Where(a => a.Item1 == t.Id).Select(a => a.Item2).ToList();
+                    if (ids.Count == 0 && t.AssigneeUserId.HasValue)
+                        ids.Add(t.AssigneeUserId.Value);
+                    var nameStr = string.Join("、", ids.Select(id => assigneeNames.GetValueOrDefault(id, "")).Where(n => n != ""));
                     var row = new OpRow
                     {
                         TaskId = t.Id,
@@ -147,10 +161,8 @@ public static class WorkOrderProgressQuery
                         PlanQty = t.PlanQty,
                         DoneQty = rd.Done,
                         DefectQty = rd.Defect,
-                        AssigneeUserId = t.AssigneeUserId,
-                        AssigneeName = t.AssigneeUserId.HasValue
-                            ? assigneeNames.GetValueOrDefault(t.AssigneeUserId.Value, "")
-                            : "",
+                        AssigneeUserId = ids.Count > 0 ? ids[0] : t.AssigneeUserId,
+                        AssigneeName = nameStr,
                         IsVirtual = false
                     };
                     row.Status = WorkOrderProgressCalculator.OpStatus(row.PlanQty, row.DoneQty, row.DefectQty, where);

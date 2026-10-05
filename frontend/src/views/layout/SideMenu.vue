@@ -30,6 +30,7 @@
       <el-menu-item index="/dept">部门</el-menu-item>
       <el-menu-item index="/custom-field">自定义字段</el-menu-item>
       <el-menu-item v-if="canWechat" index="/wechat-alert">微信预警</el-menu-item>
+      <el-menu-item index="/worker-view">工人手机视角</el-menu-item>
       <el-menu-item index="/ai-assistant">AI 助手</el-menu-item>
       <el-menu-item index="/login-setting">登录页图片</el-menu-item>
       <el-menu-item index="/mcp-key">MCP 钥匙</el-menu-item>
@@ -37,6 +38,7 @@
     <el-sub-menu index="report">
       <template #title>报表</template>
       <el-menu-item index="/stat">生产报表</el-menu-item>
+      <el-menu-item index="/defect-stat">不良品报表</el-menu-item>
       <el-menu-item index="/sku-stat">色码汇总</el-menu-item>
       <el-menu-item v-if="role === 1 && canWage" index="/salary">工资报表</el-menu-item>
       <el-menu-item v-if="role === 1 && canWage" index="/salary-sku">工资色码汇总</el-menu-item>
@@ -48,6 +50,7 @@
       <template #title>帮助</template>
       <el-menu-item index="/help">操作手册</el-menu-item>
       <el-menu-item index="/onboarding">新手入门</el-menu-item>
+      <el-menu-item index="/faq">常见问题（系统能力50问）</el-menu-item>
       <el-menu-item index="/advantages">
         <el-icon><Trophy /></el-icon>产品优势速览
       </el-menu-item>

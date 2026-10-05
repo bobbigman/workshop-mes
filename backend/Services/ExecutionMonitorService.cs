@@ -298,10 +298,14 @@ public class ExecutionMonitorService : IExecutionMonitorService
 
         if (canAssign)
         {
-            // 未派工工序：未开始/执行中、真实任务行、执行人空、正计划且尚未报满
+            // 未派工工序：未开始/执行中、真实任务行、无派工明细且冗余列空、正计划且尚未报满
+            var assignedTaskIds = await _db.WorkOrderOperationAssignees.AsNoTracking()
+                .Select(a => a.WorkOrderOperationId).Distinct().ToListAsync();
             var candidates = await (
                 from t in _db.WorkOrderOperations.AsNoTracking()
-                where t.AssigneeUserId == null && t.PlanQty > 0
+                where t.PlanQty > 0
+                      && t.AssigneeUserId == null
+                      && !assignedTaskIds.Contains(t.Id)
                 join o in _db.WorkOrders.AsNoTracking() on t.WorkOrderId equals o.Id
                 where o.FactoryId == factoryId && (o.Status == 0 || o.Status == 1)
                 select new { t.WorkOrderId, t.OperationId, t.PlanQty }

@@ -5,16 +5,11 @@
     </div>
     <div class="login-right">
       <div class="login-box">
-        <img class="brand-logo" src="/brand/xiaomifeng-logo.svg" alt="小蜜蜂 · 轻MES" />
-        <p v-if="factoryLabel" class="factory">{{ factoryLabel }}</p>
-        <p v-else-if="instanceInfoError" class="factory factory-err">
-          实例信息加载失败
-          <el-button link type="primary" :loading="instanceInfoLoading" @click="loadInstanceInfo">重试</el-button>
-        </p>
-        <h1>{{ productTitle }}</h1>
-        <p class="sub">{{ subtitle }}</p>
-        <el-form :model="form" label-position="top" @submit.prevent="onLogin">
-          <el-form-item v-if="showFactorySelect" label="账套 / 工厂">
+        <div class="brand-row">
+          <img class="brand-logo" src="/brand/xiaomifeng-logo.svg" alt="小蜜蜂报工 · 轻MES" />
+        </div>
+        <el-form ref="formRef" :model="form" :rules="formRules" label-position="top" @submit.prevent="onLogin">
+          <el-form-item v-if="showFactorySelect" label="账套 / 工厂" prop="factoryCode">
             <el-select v-model="form.factoryCode" size="large" placeholder="请选择账套" style="width: 100%">
               <el-option
                 v-for="f in factories"
@@ -28,13 +23,26 @@
             <div class="factory-hint">正在加载账套列表…</div>
           </el-form-item>
           <el-form-item v-else-if="factoriesLoadError" label="账套 / 工厂">
-            <div class="factory-hint err">
-              账套列表加载失败（后端可能还在启动）
-              <el-button link type="primary" :loading="factoriesLoading" @click="loadFactories">重试</el-button>
+            <div class="factory-inline-err">
+              <span>账套列表加载失败</span>
+              <el-button
+                class="factory-refresh"
+                link
+                type="primary"
+                :loading="factoriesLoading"
+                :icon="Refresh"
+                title="重新加载"
+                aria-label="重新加载账套列表"
+                @click="loadFactories"
+              />
             </div>
           </el-form-item>
           <el-form-item label="账号">
-            <el-input v-model="form.account" size="large" placeholder="请输入账号" autocomplete="username" />
+            <el-input v-model="form.account" size="large" placeholder="请输入账号" autocomplete="username">
+              <template #prefix>
+                <el-icon><User /></el-icon>
+              </template>
+            </el-input>
           </el-form-item>
           <el-form-item label="密码">
             <el-input
@@ -44,7 +52,11 @@
               show-password
               placeholder="请输入密码"
               autocomplete="current-password"
-            />
+            >
+              <template #prefix>
+                <el-icon><Lock /></el-icon>
+              </template>
+            </el-input>
           </el-form-item>
           <el-button
             class="login-btn"
@@ -54,47 +66,53 @@
             :disabled="clearing"
             @click="onLogin"
           >登录</el-button>
+          <div class="forgot-row">
+            <button type="button" class="ghost-link" :disabled="loading || clearing" @click="onForgotPassword">忘记密码</button>
+          </div>
         </el-form>
-        <p class="hint">账号或密码有问题，请联系管理员</p>
-        <div class="cache-tools">
-          <el-button
-            class="cache-btn"
-            size="default"
-            :loading="clearing"
+        <p v-if="cacheLimitedMsg" class="cache-limited">
+          {{ cacheLimitedMsg }}
+          <button type="button" class="ghost-link" @click="doRefreshAfterClear">刷新页面</button>
+        </p>
+      </div>
+      <footer class="login-footer">
+        <p class="footer-links">
+          <button type="button" class="footer-link" @click="onCopyright">版权</button>
+          <span class="footer-sep">|</span>
+          <button type="button" class="footer-link" @click="onLegalInfo">用户协议</button>
+          <span class="footer-sep">|</span>
+          <button type="button" class="footer-link" @click="onLegalInfo">隐私政策</button>
+          <span class="footer-sep">|</span>
+          <button type="button" class="footer-link" @click="goHelp">帮助</button>
+        </p>
+        <p class="footer-meta">
+          <span>小蜜蜂报工 {{ appVersionLabel }}</span>
+          <span class="footer-sep">|</span>
+          <span>建议浏览器 Chrome</span>
+          <span class="footer-sep">|</span>
+          <button
+            type="button"
+            class="footer-link"
             :disabled="loading || clearing"
             @click="onClearCache"
-          >{{ clearing ? '正在清理…' : '清缓存并刷新' }}</el-button>
-          <p class="cache-hint">页面显示异常或更新未生效时可使用，保留登录信息。</p>
-          <p v-if="form.password" class="cache-hint cache-hint-warn">刷新后需重新输入未提交的密码。</p>
-          <p v-if="cacheLimitedMsg" class="cache-hint cache-hint-warn">{{ cacheLimitedMsg }}</p>
-          <el-button
-            v-if="cacheLimitedMsg"
-            link
-            type="primary"
-            @click="doRefreshAfterClear"
-          >刷新页面</el-button>
-        </div>
-        <p class="manual-entry"><router-link to="/help">操作手册</router-link></p>
-      </div>
-      <div class="credit">
-        <p class="credit-line">{{ CREDIT_LINE }}</p>
-        <p class="credit-roles">{{ CREDIT_ROLES }}</p>
-        <p class="version">版本 {{ version || '—' }}</p>
-      </div>
+          >{{ clearing ? '正在清理…' : '清除本地缓存' }}</button>
+        </p>
+      </footer>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { login, getInstanceInfo, getFactories, getLoginSetting, requestClearBrowserCache } from '@/api/auth'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Refresh, User, Lock } from '@element-plus/icons-vue'
 import {
-  PRODUCT_TITLE,
-  CREDIT_LINE,
-  CREDIT_ROLES,
-  resolveFactoryLabel,
+  CREDIT_RIGHTS,
+  creditLine,
+  creditRoles,
+  isCreditHydrated,
   resolveInstanceLabel,
   resolveDocumentTitle
 } from '@/utils/instanceDisplay'
@@ -105,6 +123,7 @@ import {
   buildRefreshUrl,
   stripRefreshParam
 } from '@/utils/clearBrowserCache'
+import { setWorkerViewMode, workerHomePath } from '@/utils/workerView'
 
 const route = useRoute()
 const router = useRouter()
@@ -112,16 +131,23 @@ const loading = ref(false)
 const clearing = ref(false)
 const cacheLimitedMsg = ref('')
 const displayName = ref('')
-const version = ref(typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '')
+/** 角落版本号：只认 package.json → vite define 注入的 __APP_VERSION__，不被后端实例信息覆盖 */
+const appVersionLabel = (() => {
+  const raw = typeof __APP_VERSION__ !== 'undefined' ? String(__APP_VERSION__ || '').trim() : ''
+  if (!raw) throw new Error('[登录页] 未注入 __APP_VERSION__，请检查 vite.config.js define 与 package.json version')
+  return raw.startsWith('v') || raw.startsWith('V') ? raw : `v${raw}`
+})()
+const formRef = ref(null)
 const form = ref({ account: '', password: '', factoryCode: '' })
 const factories = ref([])
 const factoriesLoading = ref(false)
 const factoriesLoadError = ref(false)
-const instanceInfoLoading = ref(false)
-const instanceInfoError = ref(false)
 const showFactorySelect = computed(() => factories.value.length >= 2)
-const narrow = ref(false)
-let mql
+const formRules = computed(() => ({
+  factoryCode: showFactorySelect.value
+    ? [{ required: true, message: '请先选择账套/工厂', trigger: 'change' }]
+    : []
+}))
 
 // 未配置登录图时用 public 默认图（部署后进 wwwroot，由 .NET UseStaticFiles 提供）
 const DEFAULT_BANNER = '/login-banner-default.jpg'
@@ -129,16 +155,6 @@ const bannerUrl = ref(DEFAULT_BANNER)
 const instanceFactoryCode = ref('')
 /** 防止默认图也失败时 @error 死循环 */
 let bannerFallbackUsed = false
-
-const productTitle = PRODUCT_TITLE
-const factoryLabel = computed(() => resolveFactoryLabel(displayName.value))
-const subtitle = computed(() =>
-  narrow.value ? '扫码报工，查看生产任务' : '生产进度 · 工单管理 · 报工统计'
-)
-
-function checkNarrow() {
-  narrow.value = window.matchMedia('(max-width: 480px)').matches
-}
 
 function normalizeBannerUrl(raw) {
   if (raw == null) return ''
@@ -169,33 +185,25 @@ function sleep(ms) {
 }
 
 async function loadInstanceInfo() {
-  instanceInfoLoading.value = true
-  instanceInfoError.value = false
   const maxAttempts = 4
   let lastErr = null
-  try {
-    for (let i = 0; i < maxAttempts; i++) {
-      try {
-        const res = await getInstanceInfo()
-        displayName.value = res.data?.displayName || ''
-        if (res.data?.version) version.value = res.data.version
-        instanceFactoryCode.value = res.data?.factoryCode || ''
-        document.title = resolveDocumentTitle(displayName.value)
-        instanceInfoError.value = false
-        return
-      } catch (e) {
-        lastErr = e
-        if (i < maxAttempts - 1) await sleep(600 * (i + 1))
-      }
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const res = await getInstanceInfo()
+      displayName.value = res.data?.displayName || ''
+      instanceFactoryCode.value = res.data?.factoryCode || ''
+      document.title = resolveDocumentTitle(displayName.value)
+      return
+    } catch (e) {
+      lastErr = e
+      if (i < maxAttempts - 1) await sleep(600 * (i + 1))
     }
-    instanceInfoError.value = true
-    console.warn('[登录页] 实例信息加载失败', lastErr)
-  } finally {
-    instanceInfoLoading.value = false
   }
+  // 实例信息失败：主区不展示，工人靠账套区刷新即可
+  console.warn('[登录页] 实例信息加载失败', lastErr)
 }
 
-/** 重启后后端常晚于前端就绪：失败自动重试，仍失败则露出「重试」按钮。 */
+/** 重启后后端常晚于前端就绪：失败自动重试，仍失败则账套区露出内联刷新。 */
 async function loadFactories() {
   factoriesLoading.value = true
   factoriesLoadError.value = false
@@ -238,9 +246,6 @@ async function restoreFormAfterCacheRefresh() {
 }
 
 onMounted(async () => {
-  checkNarrow()
-  mql = window.matchMedia('(max-width: 480px)')
-  mql.addEventListener('change', checkNarrow)
   const pendingFactory = await restoreFormAfterCacheRefresh()
   await loadInstanceInfo()
   await loadFactories()
@@ -256,9 +261,43 @@ watch(() => form.value.factoryCode, (code) => {
   if (factories.value.length >= 2) loadBanner(code || instanceFactoryCode.value)
 })
 
-onUnmounted(() => {
-  mql?.removeEventListener('change', checkNarrow)
-})
+function goHelp() {
+  router.push('/help')
+}
+
+function onForgotPassword() {
+  ElMessageBox.alert(
+    '局域网系统暂不支持自助找回密码，请联系系统管理员重置。',
+    '重置密码',
+    { confirmButtonText: '知道了', type: 'info' }
+  )
+}
+
+function onLegalInfo() {
+  ElMessageBox.alert(
+    '本系统为内网使用，业务数据由本厂管理员管理，具体请联系管理员。',
+    '说明',
+    { confirmButtonText: '知道了', type: 'info' }
+  )
+}
+
+async function onCopyright() {
+  if (!isCreditHydrated()) {
+    try {
+      await getInstanceInfo()
+    } catch {
+      // 回退胡工单方版，不白屏
+    }
+  }
+  const parts = [creditLine.value, CREDIT_RIGHTS]
+  if (creditRoles.value) parts.push(creditRoles.value)
+  const body = parts.map((line) => `<div>${line}</div>`).join('')
+  ElMessageBox.alert(
+    `<div style="text-align:center;line-height:1.7">${body}</div>`,
+    '版权',
+    { confirmButtonText: '知道了', dangerouslyUseHTMLString: true }
+  )
+}
 
 function doRefreshAfterClear() {
   saveFormForRestore(form.value.account, form.value.factoryCode)
@@ -267,6 +306,15 @@ function doRefreshAfterClear() {
 
 async function onClearCache() {
   if (loading.value || clearing.value) return
+  try {
+    await ElMessageBox.confirm(
+      '将清除本站缓存并刷新页面，未提交的账号密码需重新输入，已登录状态保留。是否继续？',
+      '清除本地缓存',
+      { confirmButtonText: '继续', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return
+  }
   cacheLimitedMsg.value = ''
   clearing.value = true
   try {
@@ -291,6 +339,14 @@ async function onClearCache() {
 
 async function onLogin() {
   if (loading.value || clearing.value) return
+  if (showFactorySelect.value) {
+    try {
+      await formRef.value?.validateField('factoryCode')
+    } catch {
+      return
+    }
+    if (!String(form.value.factoryCode || '').trim()) return
+  }
   if (!form.value.account || !form.value.password) {
     ElMessage.error('请填写账号和密码')
     return
@@ -314,12 +370,13 @@ async function onLogin() {
     if (res.data.licenseStatus) localStorage.setItem('licenseStatus', res.data.licenseStatus)
     if (res.data.licenseMessage) localStorage.setItem('licenseMessage', res.data.licenseMessage)
     else localStorage.removeItem('licenseMessage')
+    setWorkerViewMode(res.data.workerViewMode)
     const redirect = route.query.redirect
     try {
       const role = Number(res.data.role || 0)
       const failure = typeof redirect === 'string' && redirect.startsWith('/h5/') && !redirect.startsWith('//')
         ? await router.replace(redirect)
-        : await router.push(role === 2 ? '/h5/home' : '/order')
+        : await router.push(role === 2 ? workerHomePath() : '/order')
       if (failure) throw failure
       ElMessage.success('登录成功')
     } catch (error) {
@@ -354,13 +411,14 @@ async function onLogin() {
 }
 
 .login-right {
+  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 24px 16px;
+  padding: 24px 16px 48px;
   box-sizing: border-box;
 }
 
@@ -374,47 +432,17 @@ async function onLogin() {
   box-sizing: border-box;
 }
 
+.brand-row {
+  position: relative;
+  margin: 0 0 28px;
+}
+
 .brand-logo {
   display: block;
   width: 260px;
   max-width: 100%;
   height: auto;
-  margin: 0 auto 20px;
-}
-
-.factory {
-  text-align: center;
-  margin: 0 0 8px;
-  font-size: 15px;
-  line-height: 1.4;
-  color: var(--app-text-2);
-  font-weight: 500;
-}
-.factory-err {
-  color: #cf1322;
-  font-weight: 400;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.login-box h1 {
-  text-align: center;
-  font-size: 26px;
-  line-height: 1.3;
-  margin: 0;
-  color: var(--app-text-1);
-  font-weight: 700;
-}
-
-.sub {
-  text-align: center;
-  color: var(--app-text-2);
-  font-size: 15px;
-  line-height: 1.5;
-  margin: 10px 0 28px;
+  margin: 0 auto;
 }
 
 .login-box :deep(.el-form-item) {
@@ -447,13 +475,24 @@ async function onLogin() {
   font-size: 16px;
 }
 
-.hint {
-  text-align: center;
-  margin: 18px 0 0;
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--app-text-2);
+.forgot-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
 }
+
+.ghost-link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--app-text-2);
+  font-size: 12px;
+  line-height: 1.4;
+  cursor: pointer;
+  opacity: 0.85;
+}
+.ghost-link:hover:not(:disabled) { color: var(--app-primary); opacity: 1; }
+.ghost-link:disabled { cursor: not-allowed; opacity: 0.5; }
 
 .factory-hint {
   font-size: 14px;
@@ -465,69 +504,67 @@ async function onLogin() {
   gap: 8px;
   flex-wrap: wrap;
 }
-.factory-hint.err { color: #cf1322; }
 
-.cache-tools {
-  margin: 14px 0 0;
-  text-align: center;
-}
-
-.cache-btn {
-  width: 100%;
-}
-
-.cache-hint {
-  margin: 8px 0 0;
+.factory-inline-err {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
   font-size: 13px;
+  line-height: 1.4;
+  color: #cf1322;
+}
+
+.factory-refresh {
+  padding: 0 4px !important;
+  height: 24px;
+}
+
+.cache-limited {
+  margin: 12px 0 0;
+  font-size: 12px;
   line-height: 1.5;
-  color: var(--app-text-2);
-}
-
-.cache-hint-warn {
   color: #b88230;
-}
-
-.manual-entry {
   text-align: center;
-  margin: 10px 0 0;
-  font-size: 14px;
 }
 
-.manual-entry a {
-  color: var(--app-primary);
-}
-
-.credit {
+.login-footer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 12px;
+  padding: 0 16px;
   text-align: center;
-  margin: 16px 0 0;
-  max-width: 400px;
-  padding: 0 8px;
   box-sizing: border-box;
 }
 
-.credit-line {
+.footer-links,
+.footer-meta {
   margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 11px;
+  line-height: 1.6;
   color: var(--app-text-2);
-  letter-spacing: 0.02em;
+  opacity: 0.7;
 }
 
-.credit-roles {
-  margin: 4px 0 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--app-text-2);
-  opacity: 0.9;
+.footer-meta { margin-top: 2px; }
+
+.footer-sep {
+  margin: 0 6px;
+  opacity: 0.6;
 }
 
-.version {
-  margin: 8px 0 0;
-  font-size: 12px;
-  color: var(--app-text-2);
-  letter-spacing: 0.02em;
-  opacity: 0.85;
+.footer-link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  cursor: pointer;
 }
+.footer-link:hover:not(:disabled) { color: var(--app-primary); opacity: 1; }
+.footer-link:disabled { cursor: not-allowed; opacity: 0.45; }
 
 @media (max-width: 768px) {
   .login-shell { flex-direction: column; }
@@ -538,7 +575,7 @@ async function onLogin() {
 
 @media (max-width: 480px) {
   .login-right {
-    padding: 16px 12px;
+    padding: 16px 12px 56px;
   }
   .login-box {
     width: 100%;

@@ -71,19 +71,20 @@
       </template>
     </main>
     <footer class="manual-footer">
-      <p class="credit-line">{{ CREDIT_LINE }}</p>
-      <p class="credit-roles">{{ CREDIT_ROLES }}</p>
+      <p class="credit-line">{{ creditLine }}</p>
+      <p v-if="creditRoles" class="credit-roles">{{ creditRoles }}</p>
       <p>手册随系统提供 · 阅读不依赖 AI 或公网 · 实际操作权限以个人账号为准</p>
     </footer>
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { chapters, groups, manualVersion, manualUpdatedAt } from '@/help/manual'
 import { searchChapters, searchExcerpt } from '@/help/parser'
-import { CREDIT_LINE, CREDIT_ROLES } from '@/utils/instanceDisplay'
+import { getInstanceInfo } from '@/api/auth'
+import { creditLine, creditRoles } from '@/utils/instanceDisplay'
 
 const route = useRoute()
 const router = useRouter()
@@ -120,6 +121,14 @@ watch(() => route.query.topic, () => {
   query.value = ''
   contentsOpen.value = false
   focusArticle()
+})
+
+onMounted(async () => {
+  try {
+    await getInstanceInfo()
+  } catch {
+    // 回退胡工单方版
+  }
 })
 </script>
 

@@ -61,7 +61,8 @@ public class ReviewOrderOptionDto
 public class ReviewService : IReviewService
 {
     private readonly AppDbContext _db;
-    public ReviewService(AppDbContext db) { _db = db; }
+    private readonly WechatEventService? _events;
+    public ReviewService(AppDbContext db, WechatEventService? events = null) { _db = db; _events = events; }
 
     public async Task<ApiResult<PageResult<ReviewListDto>>> PendingAsync(ReviewQueryDto query, long factoryId, long currentUserId)
     {
@@ -179,6 +180,7 @@ public class ReviewService : IReviewService
         if (reason.Length < 1 || reason.Length > 256)
             throw ThrowHelper.Biz(nameof(RejectAsync), "退回原因须 1～256 字");
 
+        await using var tx = await _db.Database.BeginTransactionAsync();
         var report = await LoadAndAuthorizeAsync(id, factoryId, currentUserId, nameof(RejectAsync));
         // 允许从待复核或已通过退回（纠错）；已退回重复退回无意义
         if (report.ReviewStatus == 2)
@@ -186,6 +188,8 @@ public class ReviewService : IReviewService
         if (report.SettledFlag)
             throw ThrowHelper.Biz(nameof(RejectAsync), "已结算报工不可退回");
 
+        var order = await _db.WorkOrders.FirstOrDefaultAsync(o => o.Id == report.OrderId);
+        if (order != null) await WechatEventService.LockOrderAsync(_db, order);
         report.ReviewStatus = 2;
         report.ReviewedBy = currentUserId;
         report.ReviewedAt = DateTime.Now;
@@ -193,12 +197,12 @@ public class ReviewService : IReviewService
         await _db.SaveChangesAsync();
 
         // 退回后进度回落，重算工单状态
-        var order = await _db.WorkOrders.FirstOrDefaultAsync(o => o.Id == report.OrderId);
         if (order != null)
         {
-            var wo = new WorkOrderService(_db);
+            var wo = new WorkOrderService(_db, _events);
             await wo.RecalcStatusAsync(order);
         }
+        await tx.CommitAsync();
         return ApiResult<object?>.OkMsg();
     }
 

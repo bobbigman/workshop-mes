@@ -66,8 +66,15 @@ public class RoleGuardMiddleware
         }
         if (path.StartsWith("/api/Report/defects", StringComparison.OrdinalIgnoreCase) && method == "GET")
             return true;
-        // 本人报工 / 工序可选人（docs/94）
+        // 本人报工 / 工序可选人（docs/94）；今日计件汇总（docs/206）
         if (path.Equals("/api/Report/mine", StringComparison.OrdinalIgnoreCase) && method == "GET")
+            return true;
+        if (path.Equals("/api/Report/mine/today-summary", StringComparison.OrdinalIgnoreCase) && method == "GET")
+            return true;
+        // 报工修改日志（docs/205）
+        if (method.Equals("GET", StringComparison.OrdinalIgnoreCase)
+            && path.StartsWith("/api/Report/", StringComparison.OrdinalIgnoreCase)
+            && path.EndsWith("/changes", StringComparison.OrdinalIgnoreCase))
             return true;
         // 本人工资预估（docs/103）；受 PieceWage 控制器特性约束
         if (path.Equals("/api/Salary/mine", StringComparison.OrdinalIgnoreCase) && method == "GET")
@@ -115,6 +122,14 @@ public class RoleGuardMiddleware
         if (path.Equals("/api/license/status", StringComparison.OrdinalIgnoreCase) && method == "GET")
             return true;
 
+        // 工人手机视角只读（docs/200）；PUT 仍仅管理员
+        if (path.Equals("/api/WorkerView", StringComparison.OrdinalIgnoreCase) && method == "GET")
+            return true;
+
+        // PC 常见问题（docs/113）：任意登录用户只读
+        if (path.Equals("/api/SupportDocs/faq", StringComparison.OrdinalIgnoreCase) && method == "GET")
+            return true;
+
         return false;
     }
 
@@ -147,7 +162,9 @@ public class RoleGuardMiddleware
             && path.EndsWith("/resolve", StringComparison.OrdinalIgnoreCase))
             return true;
 
-        // 派工（docs/29）：班组长把工序派给具体工人
+        // 派工（docs/29/201）：班组长/管理员把工序派给工人；GET workers 已在 worker 白名单
+        if (path.Equals("/api/Assign/workers", StringComparison.OrdinalIgnoreCase) && method == "GET")
+            return true;
         if (method.Equals("PUT", StringComparison.OrdinalIgnoreCase)
             && path.StartsWith("/api/Assign/", StringComparison.OrdinalIgnoreCase))
         {

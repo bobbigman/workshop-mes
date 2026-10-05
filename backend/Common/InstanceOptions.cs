@@ -13,6 +13,12 @@ public class InstanceOptions
     /// <summary>登录页与页头展示的客户名称。</summary>
     public string DisplayName { get; set; } = "";
 
+    /// <summary>
+    /// 联合出品伙伴名（可选）。空 → 署名仅「小蜜蜂报工 · 胡工」；有值 → 「胡工、{伙伴} 联合出品」+ 角色行。
+    /// 胡工锚点在代码常量，不入配置。docs/213。
+    /// </summary>
+    public string CreditPartner { get; set; } = "";
+
     /// <summary>本实例唯一服务的工厂代码。</summary>
     public string FactoryCode { get; set; } = "";
 

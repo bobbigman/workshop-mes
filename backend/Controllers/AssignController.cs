@@ -17,7 +17,12 @@ public class AssignController : ControllerBase
     public Task<ApiResult<List<AssignTaskDto>>> MyTasks() =>
         _svc.MyTasksAsync(JwtHelper.GetFactoryId(User), JwtHelper.GetUserId(User));
 
+    /// <summary>可派工人列表：管理员=全厂非管理员；班组长=本组（docs/201）。</summary>
+    [HttpGet("workers")]
+    public Task<ApiResult<List<AssignWorkerDto>>> Workers() =>
+        _svc.WorkersAsync(JwtHelper.GetFactoryId(User), JwtHelper.GetUserId(User));
+
     [HttpPut("{taskId:long}")]
     public Task<ApiResult<object?>> Assign(long taskId, [FromBody] AssignDto dto) =>
-        _svc.AssignAsync(taskId, dto.UserId, JwtHelper.GetFactoryId(User), JwtHelper.GetUserId(User));
+        _svc.AssignAsync(taskId, dto ?? new AssignDto(), JwtHelper.GetFactoryId(User), JwtHelper.GetUserId(User));
 }

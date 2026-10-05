@@ -26,7 +26,9 @@ public class AppDbContext : DbContext
 
     public DbSet<ProdWorkOrder> WorkOrders => Set<ProdWorkOrder>();
     public DbSet<ProdWorkOrderOperation> WorkOrderOperations => Set<ProdWorkOrderOperation>();
+    public DbSet<ProdWorkOrderOperationAssignee> WorkOrderOperationAssignees => Set<ProdWorkOrderOperationAssignee>();
     public DbSet<ProdReport> Reports => Set<ProdReport>();
+    public DbSet<ProdReportChangeLog> ReportChangeLogs => Set<ProdReportChangeLog>();
     public DbSet<ProdAbnormal> Abnormals => Set<ProdAbnormal>();
 
     public DbSet<SalaryStatement> SalaryStatements => Set<SalaryStatement>();
@@ -37,16 +39,55 @@ public class AppDbContext : DbContext
     public DbSet<SysCustomFieldValue> CustomFieldValues => Set<SysCustomFieldValue>();
     public DbSet<SysPrintSetting> PrintSettings => Set<SysPrintSetting>();
     public DbSet<LoginSetting> LoginSettings => Set<LoginSetting>();
+    public DbSet<SysWorkerViewSetting> WorkerViewSettings => Set<SysWorkerViewSetting>();
     public DbSet<SysWechatAlertSetting> WechatAlertSettings => Set<SysWechatAlertSetting>();
     public DbSet<SysWechatAlertLog> WechatAlertLogs => Set<SysWechatAlertLog>();
     public DbSet<SysMcpAuth> McpAuths => Set<SysMcpAuth>();
     public DbSet<SysMcpKey> McpKeys => Set<SysMcpKey>();
     public DbSet<SysWxBind> WxBinds => Set<SysWxBind>();
 
+    public DbSet<SysWechatAlertRule> WechatAlertRules => Set<SysWechatAlertRule>();
+    public DbSet<SysWechatAlertDelivery> WechatAlertDeliveries => Set<SysWechatAlertDelivery>();
+    public DbSet<SysWechatSendAttempt> WechatSendAttempts => Set<SysWechatSendAttempt>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
+        modelBuilder.Entity<SysWechatAlertRule>(e => {
+            e.HasIndex(x => new { x.FactoryId, x.Enabled }).HasDatabaseName("ix_wechat_rule_factory");
+            e.Property(x => x.Enabled).HasDefaultValue(false);
+            e.Property(x => x.ConditionType).HasDefaultValue("always");
+            e.Property(x => x.TargetChannel).HasColumnName("target_channel").HasMaxLength(16).HasDefaultValue("session");
+            e.Property(x => x.WebhookKey).HasColumnName("webhook_key").HasMaxLength(200);
+            e.Property(x => x.UpdatedAt).HasDefaultValueSql("SYSDATETIME()");
+            e.ToTable("sys_wechat_alert_rule", t => {
+                t.HasCheckConstraint("ck_wechat_rule_event", "event_type IN ('report_created','order_started','order_completed','abnormal_reported')");
+                t.HasCheckConstraint("ck_wechat_rule_channel", "target_channel IN ('session','group')");
+                t.HasCheckConstraint("ck_wechat_rule_condition", "(condition_type = 'always' AND threshold IS NULL) OR (event_type = 'report_created' AND condition_type = 'defect_rate' AND threshold BETWEEN 0 AND 100 AND threshold IS NOT NULL) OR (event_type = 'abnormal_reported' AND condition_type IN ('abnormal_device','abnormal_material','abnormal_quality') AND threshold IS NULL)");
+            });
+        });
+        modelBuilder.Entity<SysWechatAlertDelivery>(e => {
+            e.HasIndex(x => new { x.FactoryId, x.RuleId, x.EventType, x.EventId }).IsUnique().HasDatabaseName("uq_wechat_delivery_event");
+            e.HasIndex(x => new { x.Status, x.NextAttemptAt, x.LeaseUntil }).HasDatabaseName("ix_wechat_delivery_due");
+            e.HasIndex(x => new { x.FactoryId, x.OccurredAt }).HasDatabaseName("ix_wechat_delivery_factory");
+            e.Property(x => x.Attempts).HasDefaultValue(0);
+            e.Property(x => x.AutoAttempts).HasDefaultValue(0);
+            e.Property(x => x.SendingStarted).HasDefaultValue(false);
+            e.Property(x => x.Status).HasDefaultValue("pending");
+            e.ToTable(t => {
+                t.HasCheckConstraint("ck_wechat_delivery_status", "status IN ('pending','processing','success','retry','failed','unknown','partial','cancelled','confirmed')");
+                t.HasCheckConstraint("ck_wechat_delivery_attempts", "attempts >= 0");
+                t.HasCheckConstraint("ck_wechat_delivery_auto_attempts", "auto_attempts >= 0");
+            });
+        });
+        modelBuilder.Entity<SysWechatSendAttempt>(e => {
+            e.HasIndex(x => new { x.FactoryId, x.RequestKey }).IsUnique().HasDatabaseName("uq_wechat_attempt_request");
+            e.HasIndex(x => new { x.FactoryId, x.SendDate, x.Charged }).HasDatabaseName("ix_wechat_attempt_limit");
+            e.HasIndex(x => new { x.RobotKeyHash, x.CreatedAt }).HasDatabaseName("ix_wechat_attempt_robot_rate");
+            e.Property(x => x.Charged).HasDefaultValue(false);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("SYSDATETIME()");
+        });
         modelBuilder.Entity<SysFactory>(e =>
         {
             e.ToTable("sys_factory");
@@ -193,6 +234,14 @@ public class AppDbContext : DbContext
             e.Property(x => x.AssigneeUserId).HasColumnName("assignee_user_id");
         });
 
+        modelBuilder.Entity<ProdWorkOrderOperationAssignee>(e =>
+        {
+            e.ToTable("prod_work_order_operation_assignee");
+            e.HasIndex(x => new { x.WorkOrderOperationId, x.UserId }).IsUnique();
+            e.Property(x => x.WorkOrderOperationId).HasColumnName("work_order_operation_id");
+            e.Property(x => x.UserId).HasColumnName("user_id");
+        });
+
         modelBuilder.Entity<ProdReport>(e =>
         {
             e.ToTable("prod_report");
@@ -226,6 +275,26 @@ public class AppDbContext : DbContext
                 .HasFilter("[client_request_id] IS NOT NULL");
             e.HasIndex(x => x.ShareBatchNo)
                 .HasFilter("[share_batch_no] IS NOT NULL");
+        });
+
+        modelBuilder.Entity<ProdReportChangeLog>(e =>
+        {
+            e.ToTable("prod_report_change_log");
+            e.HasIndex(x => new { x.ReportId, x.ChangedAt });
+            e.HasIndex(x => new { x.FactoryId, x.ChangedAt });
+            e.Property(x => x.FactoryId).HasColumnName("factory_id");
+            e.Property(x => x.ReportId).HasColumnName("report_id");
+            e.Property(x => x.ChangedBy).HasColumnName("changed_by");
+            e.Property(x => x.OldGoodQty).HasColumnName("old_good_qty");
+            e.Property(x => x.OldDefectQty).HasColumnName("old_defect_qty");
+            e.Property(x => x.OldDefectId).HasColumnName("old_defect_id");
+            e.Property(x => x.OldDurationMinutes).HasColumnName("old_duration_minutes");
+            e.Property(x => x.NewGoodQty).HasColumnName("new_good_qty");
+            e.Property(x => x.NewDefectQty).HasColumnName("new_defect_qty");
+            e.Property(x => x.NewDefectId).HasColumnName("new_defect_id");
+            e.Property(x => x.NewDurationMinutes).HasColumnName("new_duration_minutes");
+            e.Property(x => x.Source).HasColumnName("source");
+            e.Property(x => x.ChangedAt).HasColumnName("changed_at");
         });
 
         modelBuilder.Entity<ProdAbnormal>(e =>
@@ -287,11 +356,6 @@ public class AppDbContext : DbContext
             e.Property(x => x.PeriodType).HasColumnName("period_type");
             e.Property(x => x.PeriodValue).HasColumnName("period_value").HasMaxLength(16);
             e.Property(x => x.TotalAmount).HasColumnName("total_amount").HasPrecision(12, 2);
-            e.Property(x => x.BaseSalary).HasColumnName("base_salary").HasPrecision(12, 2);
-            e.Property(x => x.MealAllowance).HasColumnName("meal_allowance").HasPrecision(12, 2);
-            e.Property(x => x.OtherAllowance).HasColumnName("other_allowance").HasPrecision(12, 2);
-            e.Property(x => x.SocialTax).HasColumnName("social_tax").HasPrecision(12, 2);
-            e.Property(x => x.OtherDeduction).HasColumnName("other_deduction").HasPrecision(12, 2);
             e.Property(x => x.Status).HasColumnName("status");
             e.Property(x => x.ConfirmedAt).HasColumnName("confirmed_at");
             e.Property(x => x.CreatedAt).HasColumnName("created_at");
@@ -365,6 +429,15 @@ public class AppDbContext : DbContext
             e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
         });
 
+        modelBuilder.Entity<SysWorkerViewSetting>(e =>
+        {
+            e.ToTable("sys_worker_view_setting");
+            e.HasIndex(x => x.FactoryId).IsUnique();
+            e.Property(x => x.FactoryId).HasColumnName("factory_id");
+            e.Property(x => x.WorkerViewMode).HasColumnName("worker_view_mode");
+            e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+        });
+
         modelBuilder.Entity<SysWechatAlertSetting>(e =>
         {
             e.ToTable("sys_wechat_alert_setting");
@@ -375,6 +448,7 @@ public class AppDbContext : DbContext
             e.Property(x => x.Secret).HasColumnName("secret").HasMaxLength(128);
             e.Property(x => x.AgentId).HasColumnName("agent_id").HasMaxLength(32);
             e.Property(x => x.ToUser).HasColumnName("to_user").HasMaxLength(512);
+            e.Property(x => x.WebhookKey).HasColumnName("webhook_key").HasMaxLength(200);
             e.Property(x => x.DailyLimit).HasColumnName("daily_limit");
             e.Property(x => x.NoticeSeen).HasColumnName("notice_seen");
             e.Property(x => x.UpdatedAt).HasColumnName("updated_at");

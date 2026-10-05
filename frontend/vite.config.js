@@ -4,13 +4,17 @@ import path from 'path'
 import { readFileSync } from 'fs'
 
 const pkg = JSON.parse(readFileSync(path.resolve(__dirname, 'package.json'), 'utf-8'))
+const appVersion = String(pkg.version || '').trim()
+if (!appVersion) {
+  throw new Error('[vite] package.json 的 version 不能为空（登录页角落要显示真实版本号）')
+}
 
 // 【业务背景】局域网部署：开发时代理到后端 API，生产构建出静态 dist/ 由 IIS/Nginx 托管。
 export default defineConfig(({ mode }) => ({
   plugins: [vue()],
   define: {
-    // 登录页版本号回退：即使后端旧包没返回 version，也能显示构建版本
-    __APP_VERSION__: JSON.stringify(pkg.version || '0.0.0')
+    // 登录页角落版本：读 package.json version，发版改 version 即自动变（禁止写死 / 禁止空串）
+    __APP_VERSION__: JSON.stringify(appVersion)
   },
   resolve: {
     alias: { '@': path.resolve(__dirname, 'src') }

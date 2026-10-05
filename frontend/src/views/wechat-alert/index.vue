@@ -3,33 +3,25 @@
     <ValueTip :text="VALUE_TIPS.wechatAlert" />
     <el-alert type="info" :closable="false" show-icon style="margin-bottom:16px">
       <template #title>这是可选功能，默认关闭</template>
-      现在不用开也能用系统：看板里已经能看到临期/超期（黄/红）。企业微信推送到手机，等工厂办好认证再开。
+      建一个告警群、加群机器人，把 Webhook 填到下面即可收提醒。看板里已经能看到临期/超期（黄/红），不配也能用系统。
     </el-alert>
 
     <el-card>
       <template #header>
         <div class="card-head">
-          <span>企业微信预警设置</span>
+          <span>微信预警设置</span>
           <el-tag :type="form.enabled ? 'success' : 'info'">{{ form.enabled ? '已开启' : '已关闭' }}</el-tag>
         </div>
       </template>
 
-      <el-form :model="form" label-width="140px" style="max-width:640px">
+      <el-form :model="form" label-width="150px" style="max-width:640px">
         <el-form-item label="启用推送">
           <el-switch v-model="form.enabled" />
-          <span class="hint">关闭时不会发任何企业微信消息</span>
+          <span class="hint">关闭时不会发任何提醒</span>
         </el-form-item>
-        <el-form-item label="CorpID" required>
-          <el-input v-model="form.corpId" placeholder="企业ID，在企业微信管理后台查看" clearable />
-        </el-form-item>
-        <el-form-item label="Secret" required>
-          <el-input v-model="form.secret" type="password" show-password placeholder="应用 Secret；留 ******** 表示不修改" clearable />
-        </el-form-item>
-        <el-form-item label="AgentId" required>
-          <el-input v-model="form.agentId" placeholder="自建应用的 AgentId（数字）" clearable />
-        </el-form-item>
-        <el-form-item label="接收人 UserId" required>
-          <el-input v-model="form.toUser" placeholder="企业微信成员账号，多人用 | 分隔，如 ZhangSan|LiSi" clearable />
+        <el-form-item label="群机器人 Webhook">
+          <el-input v-model="form.webhookKey" type="password" show-password placeholder="粘贴https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=…；******** 不修改" clearable />
+          <div class="hint block">企业微信纯内部群（勿混普通微信好友）→ 群设置 → 消息推送/群机器人 → 复制 Webhook（名称随版本不同）。无需备案或自建应用可信 IP；服务器须能联网访问企微接口。</div>
         </el-form-item>
         <el-form-item label="每日上限">
           <el-input-number v-model="form.dailyLimit" :min="1" :max="200" />
@@ -38,10 +30,14 @@
         <el-form-item label="交期推送规则">
           <div class="rule-box">
             交期预警：<strong>一天一批一条消息</strong>（临期+超期写在一起）；
-            <strong>当日批次不重推</strong>（同一天再点按钮或定时再跑也不会重复发）。
+            <strong>当日批次不重推</strong>。
           </div>
         </el-form-item>
-        <el-form-item>
+        <el-form-item label="默认 @成员">
+          <el-input v-model="form.toUser" maxlength="512" placeholder="选填企微 UserId，逗号分隔；@all 代表全体" clearable />
+          <div class="hint block">仅测试、交期消息使用；事件规则单独配置 @人，留空只发群。</div>
+        </el-form-item>
+        <el-form-item style="margin-top:16px">
           <el-button type="primary" :loading="saving" @click="onSave">保存</el-button>
           <el-button :loading="testing" @click="onTest">发送测试消息</el-button>
           <el-button :loading="pushing" @click="onPushOverdue">推送临期/超期工单</el-button>
@@ -49,10 +45,12 @@
       </el-form>
     </el-card>
 
-    <el-dialog v-model="noticeDlg" title="关于微信预警推送" width="520px" :close-on-click-modal="false">
-      <p>微信预警推送为<strong>可选功能</strong>。</p>
-      <p>正式启用需工厂注册<strong>企业微信</strong>并完成认证。认证按次收费（小型企业约 <strong>300 元/次</strong>，有效期一年，到期需重新认证），费用由腾讯收取、工厂承担。</p>
-      <p>建议：先让工人熟悉扫码报工，再用看板看临期/超期；确认需要推到手机后再开启本功能，避免消息过多。</p>
+    <MessageRules :default-webhook-configured="savedWebhookConfigured" />
+
+    <el-dialog v-model="noticeDlg" title="关于微信预警" width="520px" :close-on-click-modal="false">
+      <p>微信预警为<strong>可选功能</strong>。</p>
+      <p>推荐用<strong>告警群机器人</strong>：建纯内部群、加机器人、把 Webhook 贴进来即可收异常/报工/交期提醒。锁屏通知取决于手机通知权限、免打扰和系统设置。</p>
+      <p>建议：先让工人熟悉扫码报工，再用看板看临期/超期；确认需要推到手机后再开启。</p>
       <template #footer>
         <el-button type="primary" @click="onDismissNotice">知道了</el-button>
       </template>
@@ -64,6 +62,7 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import ValueTip from '@/components/ValueTip.vue'
+import MessageRules from './MessageRules.vue'
 import { VALUE_TIPS } from '@/constants/valueTips'
 import {
   getWechatAlertSetting,
@@ -75,13 +74,12 @@ import {
 
 const form = ref({
   enabled: false,
-  corpId: '',
-  secret: '',
-  agentId: '',
   toUser: '',
+  webhookKey: '',
   dailyLimit: 20,
   noticeSeen: false
 })
+const savedWebhookConfigured = ref(false)
 const noticeDlg = ref(false)
 const saving = ref(false)
 const testing = ref(false)
@@ -92,12 +90,11 @@ onMounted(load)
 async function load() {
   const res = await getWechatAlertSetting()
   const d = res.data || {}
+  savedWebhookConfigured.value = !!d.webhookKey
   form.value = {
     enabled: !!d.enabled,
-    corpId: d.corpId || '',
-    secret: d.secret || '',
-    agentId: d.agentId || '',
     toUser: d.toUser || '',
+    webhookKey: d.webhookKey || '',
     dailyLimit: d.dailyLimit || 20,
     noticeSeen: !!d.noticeSeen
   }
@@ -135,7 +132,8 @@ async function onPushOverdue() {
   pushing.value = true
   try {
     const res = await pushWechatOverdue()
-    ElMessage.success(res.msg || '已处理')
+    if (res.data?.status === 'sent') ElMessage.success(res.msg || '已发送')
+    else ElMessage.info(res.msg || '本次未发送')
   } finally {
     pushing.value = false
   }
@@ -143,9 +141,10 @@ async function onPushOverdue() {
 </script>
 
 <style scoped>
-.page { max-width: 800px; }
+.page { max-width: 1100px; }
 .card-head { display: flex; align-items: center; justify-content: space-between; }
 .hint { margin-left: 10px; color: #909399; font-size: 12px; }
+.hint.block { margin: 6px 0 0; line-height: 1.6; }
 .rule-box { color: #606266; font-size: 13px; line-height: 1.7; max-width: 480px; }
 p { line-height: 1.7; color: #606266; margin: 0 0 10px; }
 </style>

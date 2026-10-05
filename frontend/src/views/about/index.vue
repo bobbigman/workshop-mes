@@ -23,9 +23,9 @@
           <div class="row">
             <dt>版权</dt>
             <dd>
-              <div>{{ CREDIT_LINE }}</div>
-              <div class="rights">保留所有权利。</div>
-              <div class="roles">{{ CREDIT_ROLES }}</div>
+              <div>{{ creditLine }}</div>
+              <div class="rights">{{ CREDIT_RIGHTS }}</div>
+              <div v-if="creditRoles" class="roles">{{ creditRoles }}</div>
             </dd>
           </div>
         </dl>
@@ -87,8 +87,9 @@ import { getInstanceInfo } from '@/api/auth'
 import { ElMessage } from 'element-plus'
 import {
   PRODUCT_TITLE,
-  CREDIT_LINE,
-  CREDIT_ROLES,
+  CREDIT_RIGHTS,
+  creditLine,
+  creditRoles,
   resolveFactoryLabel,
   resolveInstanceLabel
 } from '@/utils/instanceDisplay'

@@ -8,12 +8,23 @@ namespace ahu.MicrosoftMes.Services;
 public interface IAssignService
 {
     Task<ApiResult<List<AssignTaskDto>>> MyTasksAsync(long factoryId, long currentUserId);
-    Task<ApiResult<object?>> AssignAsync(long taskId, long? userId, long factoryId, long currentUserId);
+    Task<ApiResult<object?>> AssignAsync(long taskId, AssignDto dto, long factoryId, long currentUserId);
+    Task<ApiResult<List<AssignWorkerDto>>> WorkersAsync(long factoryId, long currentUserId);
 }
 
 public class AssignDto
 {
-    public long? UserId { get; set; }   // 执行人；null=取消派工
+    /// <summary>单人派工（兼容旧端）；与 UserIds 二选一，UserIds 优先。</summary>
+    public long? UserId { get; set; }
+    /// <summary>多人派工（docs/202）；空数组=取消派工。</summary>
+    public List<long>? UserIds { get; set; }
+}
+
+public class AssignWorkerDto
+{
+    public long Id { get; set; }
+    public string Name { get; set; } = "";
+    public byte Role { get; set; }
 }
 
 public class AssignTaskDto
@@ -37,9 +48,25 @@ public class AssignService : IAssignService
 
     public async Task<ApiResult<List<AssignTaskDto>>> MyTasksAsync(long factoryId, long currentUserId)
     {
-        // 派给我的工序任务（prod_work_order_operation.assignee_user_id = 当前用户）
+        // 派给我的工序（关联表真源；兼容仅写了 assignee_user_id 的旧行）
+        var taskIds = await _db.WorkOrderOperationAssignees.AsNoTracking()
+            .Where(a => a.UserId == currentUserId)
+            .Select(a => a.WorkOrderOperationId)
+            .Distinct()
+            .ToListAsync();
+
+        var legacyIds = await _db.WorkOrderOperations.AsNoTracking()
+            .Where(t => t.AssigneeUserId == currentUserId && !taskIds.Contains(t.Id))
+            .Select(t => t.Id)
+            .ToListAsync();
+        if (legacyIds.Count > 0)
+            taskIds = taskIds.Concat(legacyIds).Distinct().ToList();
+
+        if (taskIds.Count == 0)
+            return ApiResult<List<AssignTaskDto>>.Ok(new List<AssignTaskDto>());
+
         var rows = await (from t in _db.WorkOrderOperations.AsNoTracking()
-                          where t.AssigneeUserId == currentUserId
+                          where taskIds.Contains(t.Id)
                           join o in _db.WorkOrders.AsNoTracking() on t.WorkOrderId equals o.Id
                           where o.FactoryId == factoryId
                           join p in _db.Products.AsNoTracking() on o.ProductId equals p.Id
@@ -53,21 +80,37 @@ public class AssignService : IAssignService
                               OperationName = op.Name,
                               t.PlanQty,
                               o.DueDate,
-                              o.Status
+                              o.Status,
+                              t.OperationId
                           }).ToListAsync();
 
         if (rows.Count == 0)
             return ApiResult<List<AssignTaskDto>>.Ok(new List<AssignTaskDto>());
 
-        // 该批任务的已报良品汇总（进度轨：排除退回 review_status=2）
-        var sums = await (from r in _db.Reports.AsNoTracking()
-                          where r.FactoryId == factoryId && r.ReviewStatus != 2
-                          join t in _db.WorkOrderOperations.AsNoTracking() on r.OrderId equals t.WorkOrderId
-                          where t.AssigneeUserId == currentUserId && t.OperationId == r.OperationId
-                          group r by t.Id into g
-                          select new { TaskId = g.Key, Done = g.Sum(x => x.GoodQty) })
-                    .ToListAsync();
-        var doneMap = sums.ToDictionary(x => x.TaskId, x => x.Done);
+        var opIds = rows.Select(r => r.OperationId).Distinct().ToList();
+        var orderIds = await _db.WorkOrderOperations.AsNoTracking()
+            .Where(t => taskIds.Contains(t.Id))
+            .Select(t => t.WorkOrderId)
+            .Distinct()
+            .ToListAsync();
+
+        var sums = await _db.Reports.AsNoTracking()
+            .Where(r => r.FactoryId == factoryId && r.ReviewStatus != 2
+                        && orderIds.Contains(r.OrderId) && opIds.Contains(r.OperationId))
+            .GroupBy(r => new { r.OrderId, r.OperationId })
+            .Select(g => new { g.Key.OrderId, g.Key.OperationId, Done = g.Sum(x => x.GoodQty) })
+            .ToListAsync();
+
+        var taskMeta = await _db.WorkOrderOperations.AsNoTracking()
+            .Where(t => taskIds.Contains(t.Id))
+            .Select(t => new { t.Id, t.WorkOrderId, t.OperationId })
+            .ToListAsync();
+        var doneMap = new Dictionary<long, int>();
+        foreach (var t in taskMeta)
+        {
+            var hit = sums.FirstOrDefault(s => s.OrderId == t.WorkOrderId && s.OperationId == t.OperationId);
+            doneMap[t.Id] = hit?.Done ?? 0;
+        }
 
         var now = DateTime.Now;
         var list = rows.Select(r => new AssignTaskDto
@@ -86,22 +129,97 @@ public class AssignService : IAssignService
         return ApiResult<List<AssignTaskDto>>.Ok(list);
     }
 
-    public async Task<ApiResult<object?>> AssignAsync(long taskId, long? userId, long factoryId, long currentUserId)
+    public async Task<ApiResult<List<AssignWorkerDto>>> WorkersAsync(long factoryId, long currentUserId)
     {
+        var me = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == currentUserId && u.FactoryId == factoryId)
+            ?? throw ThrowHelper.Biz(nameof(WorkersAsync), "当前用户不存在");
+        if (me.Role != 1 && me.Role != 3)
+            throw ThrowHelper.BizUser("无派工权限");
+
+        var q = _db.Users.AsNoTracking()
+            .Where(u => u.FactoryId == factoryId && u.Status == 1 && u.Role != 1);
+
+        if (me.Role == 3)
+        {
+            var groupIds = await GetGroupUserIdsAsync(currentUserId);
+            q = q.Where(u => groupIds.Contains(u.Id));
+        }
+
+        var list = await q.OrderBy(u => u.Name)
+            .Select(u => new AssignWorkerDto { Id = u.Id, Name = u.Name, Role = u.Role })
+            .ToListAsync();
+        return ApiResult<List<AssignWorkerDto>>.Ok(list);
+    }
+
+    public async Task<ApiResult<object?>> AssignAsync(long taskId, AssignDto dto, long factoryId, long currentUserId)
+    {
+        var me = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == currentUserId && u.FactoryId == factoryId)
+            ?? throw ThrowHelper.Biz(nameof(AssignAsync), "当前用户不存在");
+        if (me.Role != 1 && me.Role != 3)
+            throw ThrowHelper.BizUser("无派工权限");
+
         var task = await _db.WorkOrderOperations.FirstOrDefaultAsync(t => t.Id == taskId)
             ?? throw ThrowHelper.Biz(nameof(AssignAsync), "工序任务不存在");
 
         var order = await _db.WorkOrders.AsNoTracking().FirstOrDefaultAsync(o => o.Id == task.WorkOrderId && o.FactoryId == factoryId)
             ?? throw ThrowHelper.Biz(nameof(AssignAsync), "工单不存在或不属于本厂");
 
-        if (userId.HasValue)
+        var userIds = ResolveUserIds(dto);
+        HashSet<long>? groupUserIds = null;
+        if (me.Role == 3)
+            groupUserIds = await GetGroupUserIdsAsync(currentUserId);
+
+        foreach (var uid in userIds)
         {
-            var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId.Value && u.FactoryId == factoryId)
+            var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == uid && u.FactoryId == factoryId)
                 ?? throw ThrowHelper.Biz(nameof(AssignAsync), "执行人不存在或不属于本厂");
+            if (user.Status != 1)
+                throw ThrowHelper.BizUser($"执行人已停用：{user.Name}");
+            if (user.Role == 1)
+                throw ThrowHelper.BizUser("不能派给管理员");
+            if (groupUserIds != null && !groupUserIds.Contains(uid))
+                throw ThrowHelper.BizUser($"无权派给外部门工人：{user.Name}");
         }
 
-        task.AssigneeUserId = userId;
+        var old = await _db.WorkOrderOperationAssignees.Where(a => a.WorkOrderOperationId == taskId).ToListAsync();
+        if (old.Count > 0)
+            _db.WorkOrderOperationAssignees.RemoveRange(old);
+
+        foreach (var uid in userIds)
+        {
+            _db.WorkOrderOperationAssignees.Add(new ProdWorkOrderOperationAssignee
+            {
+                WorkOrderOperationId = taskId,
+                UserId = uid
+            });
+        }
+
+        // 冗余首个，兼容旧端只读 assignee_user_id
+        task.AssigneeUserId = userIds.Count > 0 ? userIds[0] : null;
         await _db.SaveChangesAsync();
         return ApiResult<object?>.OkMsg();
+    }
+
+    private static List<long> ResolveUserIds(AssignDto dto)
+    {
+        if (dto?.UserIds != null)
+            return dto.UserIds.Where(x => x > 0).Distinct().ToList();
+        if (dto?.UserId is long uid && uid > 0)
+            return new List<long> { uid };
+        return new List<long>();
+    }
+
+    private async Task<HashSet<long>> GetGroupUserIdsAsync(long userId)
+    {
+        var myDepts = await _db.DepartmentUsers.AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .Select(x => x.DepartmentId)
+            .ToListAsync();
+        var ids = await _db.DepartmentUsers.AsNoTracking()
+            .Where(x => myDepts.Contains(x.DepartmentId))
+            .Select(x => x.UserId)
+            .Distinct()
+            .ToListAsync();
+        return ids.ToHashSet();
     }
 }

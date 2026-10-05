@@ -40,6 +40,7 @@ public class WechatAlertSettingDto
     public string? Secret { get; set; }
     public string? AgentId { get; set; }
     public string? ToUser { get; set; }
+    public string? WebhookKey { get; set; }
     public int DailyLimit { get; set; } = 20;
     public bool NoticeSeen { get; set; }
 }
@@ -51,17 +52,20 @@ public class WechatAlertService : IWechatAlertService
     private readonly IHttpClientFactory _httpFactory;
     private readonly OutboundHttpErrorLogger _httpErrorLogger;
     private readonly ILicenseTierService _license;
+    private readonly WechatMessageSender _sender;
 
     public WechatAlertService(
         AppDbContext db,
         IHttpClientFactory httpFactory,
         OutboundHttpErrorLogger httpErrorLogger,
-        ILicenseTierService license)
+        ILicenseTierService license,
+        WechatMessageSender sender)
     {
         _db = db;
         _httpFactory = httpFactory;
         _httpErrorLogger = httpErrorLogger;
         _license = license;
+        _sender = sender;
     }
 
     public async Task<ApiResult<WechatAlertSettingDto>> GetSettingAsync(long factoryId)
@@ -78,32 +82,28 @@ public class WechatAlertService : IWechatAlertService
         if (dto.DailyLimit < 1 || dto.DailyLimit > 200)
             throw ThrowHelper.Biz(nameof(SaveSettingAsync), "每日推送上限须在 1～200");
 
-        var corpId = NullIfEmpty(dto.CorpId);
-        var secret = NullIfEmpty(dto.Secret);
-        var agentId = NullIfEmpty(dto.AgentId);
-        var toUser = NormalizeToUser(dto.ToUser);
-
-        if (dto.Enabled)
-        {
-            if (corpId == null || secret == null || agentId == null)
-                throw ThrowHelper.Biz(nameof(SaveSettingAsync), "开启推送前须填写 CorpID、Secret、AgentId");
-            if (toUser == null)
-                throw ThrowHelper.Biz(nameof(SaveSettingAsync), "开启推送前须填写接收人企业微信 UserId");
-        }
-
+        var toUser = NullIfEmpty(WechatMessageSender.NormalizeGroupUsers(dto.ToUser));
         var row = await _db.WechatAlertSettings.FirstOrDefaultAsync(x => x.FactoryId == factoryId);
         if (row == null)
         {
             row = new SysWechatAlertSetting { FactoryId = factoryId };
             _db.WechatAlertSettings.Add(row);
         }
+        row.WebhookKey = WechatMessageSender.ResolveWebhookKey(dto.WebhookKey, row.WebhookKey);
+
+        if (dto.Enabled)
+        {
+            var hasGroup = !string.IsNullOrWhiteSpace(row.WebhookKey);
+            var independentKeys = await _db.WechatAlertRules.AsNoTracking()
+                .Where(x => x.FactoryId == factoryId && x.Enabled && x.TargetChannel == "group" && x.WebhookKey != null)
+                .Select(x => x.WebhookKey).ToListAsync();
+            var hasIndependentGroup = independentKeys.Any(x => WechatMessageSender.NormalizeWebhookKey(x) != null);
+            if (!hasGroup && !hasIndependentGroup)
+                throw ThrowHelper.Biz(nameof(SaveSettingAsync), "开启前请填写默认Webhook，或先启用有独立Webhook的群规则");
+        }
 
         row.Enabled = dto.Enabled;
-        row.CorpId = corpId;
-        // 前端回显为 ******** 或空时不改写已有 Secret
-        if (!string.IsNullOrWhiteSpace(dto.Secret) && dto.Secret.Trim() != "********")
-            row.Secret = dto.Secret.Trim();
-        row.AgentId = agentId;
+        // 旧应用字段只保留，不允许本页面保存时覆盖或清空。
         row.ToUser = toUser;
         row.DailyLimit = dto.DailyLimit;
         row.NoticeSeen = dto.NoticeSeen || row.NoticeSeen;
@@ -133,7 +133,10 @@ public class WechatAlertService : IWechatAlertService
     public async Task<ApiResult<object?>> TestSendAsync(long factoryId)
     {
         var row = await RequireConfiguredAsync(factoryId, mustEnabled: true);
-        await SendWecomTextAsync(row, "【小蜜蜂报工】测试推送成功。收到这条说明企业微信配置正确。");
+        var result = await _sender.SendAsync(factoryId, "test", "【小蜜蜂报工】测试推送成功。收到这条说明微信预警配置正确。",
+            recipients: row.ToUser, test: true, channel: "group");
+        if (result.Outcome != "success")
+            throw ThrowHelper.Biz(nameof(TestSendAsync), result.Error ?? "测试推送未成功");
         return new ApiResult<object?> { Code = 0, Msg = "测试推送已发送" };
     }
 
@@ -142,7 +145,7 @@ public class WechatAlertService : IWechatAlertService
         var result = await PushDueAlertForFactoryAsync(factoryId);
         return new ApiResult<object?>
         {
-            Code = 0,
+            Code = result.Status is "skipped_failed" or "skipped_unknown" ? 1 : 0,
             Msg = result.Msg,
             Data = result
         };
@@ -164,11 +167,12 @@ public class WechatAlertService : IWechatAlertService
 
         var sent = list.Count(x => x.Status == "sent");
         var skipped = list.Count(x => x.Status.StartsWith("skipped", StringComparison.Ordinal));
+        var failed = list.Count(x => x.Status is "skipped_failed" or "skipped_unknown");
         return new ApiResult<object?>
         {
-            Code = 0,
-            Msg = $"定时交期预警完成：推送 {sent} 厂，跳过 {skipped} 厂",
-            Data = new { list, sent, skipped }
+            Code = failed == 0 ? 0 : 1,
+            Msg = $"定时交期预警完成：推送 {sent} 厂，跳过 {skipped} 厂，失败或待核实 {failed} 厂",
+            Data = new { list, sent, skipped, failed }
         };
     }
 
@@ -198,6 +202,10 @@ public class WechatAlertService : IWechatAlertService
                 Msg = "推送未开启，已跳过（看板仍可看临期/超期）"
             };
         }
+
+        if (WechatMessageSender.NormalizeWebhookKey(setting.WebhookKey) == null)
+            return new WechatDuePushResultDto { FactoryId = factoryId, Status = "skipped_unconfigured",
+                Msg = "交期推送须填写全局默认群机器人Webhook" };
 
         var now = DateTime.Now;
         var today = DateTime.Today;
@@ -297,7 +305,10 @@ public class WechatAlertService : IWechatAlertService
             $"【小蜜蜂报工】交期预警（超期 {overdueCount} / 临期 {warningCount}，共 {dueRows.Count} 张）\n"
             + string.Join("\n", lines);
 
-        await SendAsync(factoryId, alertKey, content, "warning");
+        var sendResult = await _sender.SendAsync(factoryId, alertKey, content, recipients: setting.ToUser, channel: "group");
+        if (sendResult.Outcome != "success")
+            return new WechatDuePushResultDto { FactoryId = factoryId, Status = "skipped_" + sendResult.Outcome,
+                Msg = sendResult.Error ?? "本次未发送（重复或通道暂不可用）" };
         return new WechatDuePushResultDto
         {
             FactoryId = factoryId,
@@ -313,38 +324,13 @@ public class WechatAlertService : IWechatAlertService
     {
         var row = await _db.WechatAlertSettings.AsNoTracking()
             .FirstOrDefaultAsync(x => x.FactoryId == factoryId);
-
-        // 默认关闭：静默跳过，不抛错（docs/1B 试用期）
         if (row == null || !row.Enabled)
             return;
-
-        if (string.IsNullOrWhiteSpace(row.CorpId) || string.IsNullOrWhiteSpace(row.Secret)
-            || string.IsNullOrWhiteSpace(row.AgentId) || string.IsNullOrWhiteSpace(row.ToUser))
-            throw ThrowHelper.Biz(nameof(SendAsync), "已开启推送但配置不完整，请先在「微信预警」页补全");
-
-        var today = DateTime.Today;
-        var already = await _db.WechatAlertLogs.AsNoTracking()
-            .AnyAsync(x => x.FactoryId == factoryId && x.AlertKey == alertKey && x.SendDate == today);
-        if (already)
-            return;
-
-        var sentToday = await _db.WechatAlertLogs.AsNoTracking()
-            .CountAsync(x => x.FactoryId == factoryId && x.SendDate == today);
-        if (sentToday >= row.DailyLimit)
-            throw ThrowHelper.Biz(nameof(SendAsync), $"今日推送已达上限 {row.DailyLimit} 条");
-
-        var text = content.Length > 900 ? content[..900] + "…" : content;
-        await SendWecomTextAsync(row, text);
-
-        _db.WechatAlertLogs.Add(new SysWechatAlertLog
-        {
-            FactoryId = factoryId,
-            AlertKey = alertKey,
-            SendDate = today,
-            Content = text,
-            CreatedAt = DateTime.Now
-        });
-        await _db.SaveChangesAsync();
+        var result = await _sender.SendAsync(factoryId, alertKey, WechatMessageSender.FitText(content),
+            recipients: row.ToUser, channel: "group");
+        if (result.Outcome is "paused" or "dedup") return;
+        if (result.Outcome != "success")
+            throw ThrowHelper.Biz(nameof(SendAsync), result.Error ?? "交期预警发送未成功");
     }
 
     private async Task<SysWechatAlertSetting> RequireConfiguredAsync(long factoryId, bool mustEnabled)
@@ -353,10 +339,9 @@ public class WechatAlertService : IWechatAlertService
             .FirstOrDefaultAsync(x => x.FactoryId == factoryId)
             ?? throw ThrowHelper.Biz(nameof(RequireConfiguredAsync), "请先保存企业微信配置");
         if (mustEnabled && !row.Enabled)
-            throw ThrowHelper.Biz(nameof(RequireConfiguredAsync), "推送未开启：请先打开「启用企业微信推送」开关并保存");
-        if (string.IsNullOrWhiteSpace(row.CorpId) || string.IsNullOrWhiteSpace(row.Secret)
-            || string.IsNullOrWhiteSpace(row.AgentId) || string.IsNullOrWhiteSpace(row.ToUser))
-            throw ThrowHelper.Biz(nameof(RequireConfiguredAsync), "请填写 CorpID、Secret、AgentId、接收人");
+            throw ThrowHelper.Biz(nameof(RequireConfiguredAsync), "推送未开启：请先打开启用开关并保存");
+        if (WechatMessageSender.NormalizeWebhookKey(row.WebhookKey) == null)
+            throw ThrowHelper.Biz(nameof(RequireConfiguredAsync), "测试和交期推送须填写全局默认群机器人Webhook");
         return row;
     }
 
@@ -498,6 +483,7 @@ public class WechatAlertService : IWechatAlertService
         Secret = string.IsNullOrEmpty(row.Secret) ? null : "********",
         AgentId = row.AgentId,
         ToUser = row.ToUser,
+        WebhookKey = string.IsNullOrEmpty(row.WebhookKey) ? null : "********",
         DailyLimit = row.DailyLimit,
         NoticeSeen = row.NoticeSeen
     };

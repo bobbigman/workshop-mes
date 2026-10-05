@@ -172,6 +172,9 @@ try
     builder.Services.AddScoped<IImportService, ImportService>();
     builder.Services.AddScoped<IPrintSettingService, PrintSettingService>();
     builder.Services.AddScoped<IWechatAlertService, WechatAlertService>();
+    builder.Services.AddScoped<WechatMessageSender>();
+    builder.Services.AddScoped<WechatEventService>();
+    builder.Services.AddScoped<IWorkerViewService, WorkerViewService>();
     builder.Services.AddScoped<IKingdeeAuthService, FakeKingdeeAuthService>();
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddScoped<IMcpRequestContext, McpRequestContext>();
@@ -223,6 +226,13 @@ try
             .WithHttpTransport(options => options.SessionMode = HttpServerSessionMode.Stateless)
             .WithToolsFromAssembly();
     }
+
+    // 群Webhook由发送器记录已知key脱敏后的上下文，避免通用传输日志先记录原始错误。
+    builder.Services.AddHttpClient(WechatMessageSender.GroupHttpClientName, c =>
+        {
+            c.Timeout = TimeSpan.FromSeconds(40);
+        })
+        .RemoveAllLoggers();
 
     builder.Services.AddHttpClient("wecom", c =>
         {

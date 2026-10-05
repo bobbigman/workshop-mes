@@ -45,6 +45,8 @@ public class LoginResultDto
     /// <summary>disabled / valid / grace / expired</summary>
     public string LicenseStatus { get; set; } = "disabled";
     public string? LicenseMessage { get; set; }
+    /// <summary>工人手机视角：1=全车间可见(默认) 2=只看我的任务（docs/200）</summary>
+    public byte WorkerViewMode { get; set; } = 1;
 }
 
 public class AuthService : IAuthService
@@ -103,6 +105,10 @@ public class AuthService : IAuthService
         var lic = await _licenseCloud.GetStatusAsync(factory.Id);
 
         var token = JwtHelper.CreateToken(_jwt, user.Id, user.FactoryId, user.Role, user.Name);
+        var viewMode = await _db.WorkerViewSettings.AsNoTracking()
+            .Where(x => x.FactoryId == factory.Id)
+            .Select(x => (byte?)x.WorkerViewMode)
+            .FirstOrDefaultAsync();
         return ApiResult<LoginResultDto>.Ok(new LoginResultDto
         {
             Token = token,
@@ -113,7 +119,8 @@ public class AuthService : IAuthService
             FactoryName = factory.FactoryName,
             LicenseTier = lic.EffectiveTier,
             LicenseStatus = lic.Status,
-            LicenseMessage = string.IsNullOrEmpty(lic.Message) ? null : lic.Message
+            LicenseMessage = string.IsNullOrEmpty(lic.Message) ? null : lic.Message,
+            WorkerViewMode = viewMode == 2 ? (byte)2 : (byte)1
         });
     }
 

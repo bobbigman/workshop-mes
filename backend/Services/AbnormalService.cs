@@ -70,11 +70,13 @@ public class AbnormalService : IAbnormalService
 
     private readonly AppDbContext _db;
     private readonly IWebHostEnvironment _env;
+    private readonly WechatEventService? _events;
 
-    public AbnormalService(AppDbContext db, IWebHostEnvironment env)
+    public AbnormalService(AppDbContext db, IWebHostEnvironment env, WechatEventService? events = null)
     {
         _db = db;
         _env = env;
+        _events = events;
     }
 
     public static string TypeLabel(byte type) => type switch
@@ -119,8 +121,16 @@ public class AbnormalService : IAbnormalService
             ReportedAt = DateTime.Now,
             Status = 0
         };
+        await using var tx = await _db.Database.BeginTransactionAsync();
         _db.Abnormals.Add(row);
         await _db.SaveChangesAsync();
+        if (_events != null)
+        {
+            var reporter = await _db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == userId && x.FactoryId == factoryId)
+                ?? throw ThrowHelper.Biz(nameof(CreateAsync), "上报人不存在");
+            await _events.EnqueueAbnormalAsync(row, reporter);
+        }
+        await tx.CommitAsync();
         return ApiResult<object?>.OkMsg();
     }
 

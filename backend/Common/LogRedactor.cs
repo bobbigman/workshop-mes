@@ -18,12 +18,12 @@ public static class LogRedactor
     {
         "password", "pwd", "secret", "client_secret", "corpsecret", "token",
         "access_token", "refresh_token", "authorization", "cookie", "set-cookie",
-        "api_key", "apikey", "api-key", "x-api-key"
+        "api_key", "apikey", "api-key", "x-api-key", "webhook_key", "webhookKey"
     };
 
     private static readonly HashSet<string> SensitiveSqlHints = new(StringComparer.OrdinalIgnoreCase)
     {
-        "sys_user", "password_hash", "password", "secret", "corp_secret", "api_key", "token"
+        "sys_user", "password_hash", "password", "secret", "corp_secret", "api_key", "token", "webhook_key"
     };
 
     private static readonly Regex ConnPwdRegex = new(
@@ -54,6 +54,8 @@ public static class LogRedactor
         if (message.Contains("Password=", StringComparison.OrdinalIgnoreCase)) return true;
         if (message.Contains("corpsecret=", StringComparison.OrdinalIgnoreCase)) return true;
         if (message.Contains("access_token=", StringComparison.OrdinalIgnoreCase)) return true;
+        if (message.Contains("webhook/send", StringComparison.OrdinalIgnoreCase) &&
+            message.Contains("key=", StringComparison.OrdinalIgnoreCase)) return true;
         if (message.Contains("Bearer ", StringComparison.OrdinalIgnoreCase)) return true;
         return false;
     }
@@ -83,7 +85,7 @@ public static class LogRedactor
                 {
                     var idx = part.IndexOf('=');
                     var key = idx >= 0 ? Uri.UnescapeDataString(part[..idx]) : Uri.UnescapeDataString(part);
-                    if (IsSensitiveKey(key))
+                    if (IsSensitiveKey(key) || key.Equals("key", StringComparison.OrdinalIgnoreCase))
                         kept.Add(Uri.EscapeDataString(key) + "=" + Redacted);
                     else
                         kept.Add(part);

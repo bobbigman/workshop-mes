@@ -1,15 +1,61 @@
 /** 登录/侧栏用的实例显示名清洗：去掉英文开发占位，统一产品中文名。 */
+import { computed, ref } from 'vue'
 
 export const PRODUCT_TITLE = '小蜜蜂报工'
 
-/** 登录/帮助等页脚署名（联合出品，非法律著作权共有声明） */
-export const CREDIT_LINE = '小蜜蜂报工 · 胡工、沈工 联合出品'
-export const CREDIT_ROLES = '产品研发：胡工｜客户成功经理：沈工'
+/** 胡工锚点：代码常量，任何 Instance:CreditPartner 配置都改不了（docs/213） */
+export const CREDIT_ANCHOR = '胡工'
+
+/** 版权弹窗独立常量，不与署名行拼接 */
+export const CREDIT_RIGHTS = '保留所有权利。'
 
 // 历史产品名：出现时归一化到当前 PRODUCT_TITLE（兼容旧 localStorage 缓存）
 const LEGACY_TITLES = ['车间管理系统', '车间小工单系统', '车间小工单']
 
 const PLACEHOLDER_RE = /^(workshop|workshopb)$/i
+
+/** 实例伙伴名；空 → 胡工单方版。由 getInstanceInfo 成功后写入 */
+const creditPartner = ref('')
+let creditHydrated = false
+
+/**
+ * @param {string | null | undefined} raw
+ */
+export function applyCreditPartner(raw) {
+  creditPartner.value = (raw || '').trim()
+  creditHydrated = true
+}
+
+/** 是否已成功拉过 instance-info（失败未调用则仍为 false，登录弹窗可再拉） */
+export function isCreditHydrated() {
+  return creditHydrated
+}
+
+/**
+ * @param {string} partner
+ * @returns {string}
+ */
+export function resolveCreditLine(partner) {
+  const p = (partner || '').trim()
+  if (!p) return `${PRODUCT_TITLE} · ${CREDIT_ANCHOR}`
+  return `${PRODUCT_TITLE} · ${CREDIT_ANCHOR}、${p} 联合出品`
+}
+
+/**
+ * @param {string} partner
+ * @returns {string} 空串表示不渲染角色行
+ */
+export function resolveCreditRoles(partner) {
+  const p = (partner || '').trim()
+  if (!p) return ''
+  return `产品研发：${CREDIT_ANCHOR}｜客户成功经理：${p}`
+}
+
+/** 响应式署名行（模板直接用） */
+export const creditLine = computed(() => resolveCreditLine(creditPartner.value))
+
+/** 响应式角色行；空则各页 v-if 隐藏，避免空行 */
+export const creditRoles = computed(() => resolveCreditRoles(creditPartner.value))
 
 function isProductName(name) {
   return !name || PLACEHOLDER_RE.test(name) || name === PRODUCT_TITLE || LEGACY_TITLES.includes(name)

@@ -86,6 +86,16 @@ public class LoginSetting
     public DateTime UpdatedAt { get; set; }
 }
 
+/// <summary>工人手机视角（每工厂一条；默认全车间可见，docs/200）</summary>
+public class SysWorkerViewSetting
+{
+    public long Id { get; set; }
+    public long FactoryId { get; set; }
+    /// <summary>1=全车间可见(默认) 2=只看我的任务</summary>
+    public byte WorkerViewMode { get; set; } = 1;
+    public DateTime UpdatedAt { get; set; }
+}
+
 /// <summary>企业微信预警设置（每工厂一条；默认关闭，docs/1B）</summary>
 public class SysWechatAlertSetting
 {
@@ -96,6 +106,7 @@ public class SysWechatAlertSetting
     public string? Secret { get; set; }
     public string? AgentId { get; set; }
     public string? ToUser { get; set; }               // 企业微信 UserId，| 分隔
+    public string? WebhookKey { get; set; }           // 默认群机器人 webhook key（docs/131）
     public int DailyLimit { get; set; } = 20;
     public bool NoticeSeen { get; set; }              // 首次说明已看过
     public DateTime UpdatedAt { get; set; }

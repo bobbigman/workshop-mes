@@ -39,6 +39,19 @@ public class SalaryController : ControllerBase
     public Task<ApiResult<PageResult<SalaryListDto>>> Query([FromQuery] SalaryQueryDto query) =>
         _svc.QueryAsync(query, JwtHelper.GetFactoryId(User));
 
+    /// <summary>工资明细多维度查询（docs/139）。</summary>
+    [HttpGet("items")]
+    public Task<ApiResult<PageResult<SalaryItemRowDto>>> QueryItems([FromQuery] SalaryItemsQueryDto query) =>
+        _svc.QueryItemsAsync(query, JwtHelper.GetFactoryId(User));
+
+    /// <summary>工资明细导出 CSV（docs/139/140）。</summary>
+    [HttpGet("items/export")]
+    public async Task<IActionResult> ExportItems([FromQuery] SalaryItemsQueryDto query)
+    {
+        var (content, fileName) = await _svc.ExportItemsCsvAsync(query, JwtHelper.GetFactoryId(User));
+        return File(content, "text/csv; charset=utf-8", fileName);
+    }
+
     [HttpGet("{id:long}")]
     public Task<ApiResult<SalaryDetailDto>> Get(long id) =>
         _svc.GetAsync(id, JwtHelper.GetFactoryId(User));
@@ -51,16 +64,21 @@ public class SalaryController : ControllerBase
     public Task<ApiResult<object?>> Confirm(long id) =>
         _svc.ConfirmAsync(id, JwtHelper.GetFactoryId(User));
 
-    /// <summary>草稿按当前工价原地重算计件（docs/133）；保留手工项。</summary>
+    /// <summary>草稿按当前工价原地重算计件（docs/133/136）。</summary>
     [HttpPost("{id:long}/recalc")]
     public Task<ApiResult<object?>> Recalc(long id) =>
         _svc.RecalcDraftAsync(id, JwtHelper.GetFactoryId(User), JwtHelper.GetUserId(User));
 
-    /// <summary>撤回已确认工资单（仅管理员；RoleGuard 亦拦 role=2/3）。</summary>
+    /// <summary>软撤回已确认工资单（仅管理员；回草稿、不删单，docs/136）。</summary>
     [HttpPost("{id:long}/revoke")]
     [Authorize(Roles = "1")]
     public Task<ApiResult<object?>> Revoke(long id) =>
         _svc.RevokeAsync(id, JwtHelper.GetFactoryId(User), JwtHelper.GetUserId(User));
+
+    /// <summary>批量重算：草稿直接算；已确认需管理员软撤回后再算（docs/134/136）。</summary>
+    [HttpPost("batch-recalc")]
+    public Task<ApiResult<object?>> BatchRecalc([FromBody] long[] ids) =>
+        _svc.BatchRecalcAsync(ids, JwtHelper.GetFactoryId(User), JwtHelper.GetUserId(User), JwtHelper.GetRole(User));
 
     [HttpDelete("{id:long}")]
     public Task<ApiResult<object?>> Delete(long id) =>

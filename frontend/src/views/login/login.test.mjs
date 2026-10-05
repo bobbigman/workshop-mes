@@ -17,6 +17,8 @@ function page(navigate, redirect) {
   const context = vm.createContext({
     loading: { value: false },
     clearing: { value: false },
+    showFactorySelect: { value: false },
+    formRef: { value: null },
     form: { value: { account: 'test', password: 'test', factoryCode: '' } },
     displayName: { value: '' }, resolveInstanceLabel: value => value,
     login: async () => { loginCount++; return { data: { token: 'test-token', name: 'test', role: 2 } } },
@@ -25,6 +27,15 @@ function page(navigate, redirect) {
       push: path => { paths.push(path); return navigate() },
       replace: path => { paths.push(path); return navigate() }
     },
+    setWorkerViewMode: (mode) => {
+      const n = Number(mode) === 2 ? 2 : 1
+      storageApi.setItem('workerViewMode', String(n))
+      return n
+    },
+    workerHomePath: () =>
+      Number(storageApi.getItem('role') || 0) === 2 && Number(storageApi.getItem('workerViewMode') || 1) === 2
+        ? '/h5/tasks'
+        : '/h5/home',
     ElMessage: { success: text => messages.push(['success', text]), error: text => messages.push(['error', text]) },
     console: { error() {} }
   })

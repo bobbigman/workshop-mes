@@ -26,7 +26,9 @@ const routes = [
       { path: 'dept', name: 'Dept', component: () => import('@/views/dept/index.vue'), meta: { title: '部门', adminOnly: true } },
       { path: 'custom-field', name: 'CustomField', component: () => import('@/views/custom-field/index.vue'), meta: { title: '自定义字段', adminOnly: true } },
       { path: 'wechat-alert', name: 'WechatAlert', component: () => import('@/views/wechat-alert/index.vue'), meta: { title: '微信预警', adminOnly: true, feature: FEATURE.WechatDueAlert } },
+      { path: 'worker-view', name: 'WorkerView', component: () => import('@/views/worker-view/index.vue'), meta: { title: '工人手机视角', adminOnly: true } },
       { path: 'stat', name: 'Stat', component: () => import('@/views/stat/index.vue'), meta: { title: '生产报表' } },
+      { path: 'defect-stat', name: 'DefectStat', component: () => import('@/views/defect-stat/index.vue'), meta: { title: '不良品报表' } },
       { path: 'sku-stat', name: 'SkuStat', component: () => import('@/views/sku-stat/index.vue'), meta: { title: '色码汇总' } },
       { path: 'salary', name: 'Salary', component: () => import('@/views/salary/index.vue'), meta: { title: '工资报表', adminOnly: true, feature: FEATURE.PieceWage } },
       { path: 'salary-sku', name: 'SalarySku', component: () => import('@/views/salary-sku/index.vue'), meta: { title: '工资色码汇总', adminOnly: true, feature: FEATURE.PieceWage } },
@@ -36,6 +38,7 @@ const routes = [
       { path: 'login-setting', name: 'LoginSetting', component: () => import('@/views/login-setting/index.vue'), meta: { title: '登录页图片', adminOnly: true } },
       { path: 'mcp-key', name: 'McpKey', component: () => import('@/views/mcp-key/index.vue'), meta: { title: 'MCP 钥匙', adminOnly: true } },
       { path: 'about', name: 'About', component: () => import('@/views/about/index.vue'), meta: { title: '关于' } },
+      { path: 'faq', name: 'Faq', component: () => import('@/views/faq/index.vue'), meta: { title: '常见问题（系统能力50问）' } },
     ]
   },
   { path: '/h5/home', name: 'H5Home', component: () => import('@/views/h5/home.vue'), meta: { title: '工作台' } },
@@ -82,7 +85,7 @@ router.beforeEach((to, from, next) => {
   }
   // 生产人员：电脑端仅工单、报工、生产报表、看板 + H5
   const h5Only = to.path.startsWith('/h5')
-  const workerQuery = to.path === '/order' || to.path === '/execution-monitor' || to.path === '/report' || to.path === '/stat' || to.path === '/sku-stat' || to.path === '/board' || to.path === '/about' || to.path === '/help' || to.path === '/advantages' || to.path === '/onboarding'
+  const workerQuery = to.path === '/order' || to.path === '/execution-monitor' || to.path === '/report' || to.path === '/stat' || to.path === '/defect-stat' || to.path === '/sku-stat' || to.path === '/board' || to.path === '/about' || to.path === '/faq' || to.path === '/help' || to.path === '/advantages' || to.path === '/onboarding'
   if (role === 2 && !h5Only && !workerQuery) {
     return next('/order')
   }
