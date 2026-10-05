@@ -9,6 +9,12 @@
       <template v-if="detail.productCode">{{ detail.productCode }} · </template>{{ detail.productName }}
     </p>
 
+    <div v-if="canWage" class="today-card">
+      <div class="today-label">今日计件</div>
+      <div class="today-val">今日 {{ todayGoodQty }} 件 / ￥{{ formatMoney(todayWage) }}</div>
+      <div class="today-tip">按已复核+待复核报工估算，以工资单为准</div>
+    </div>
+
     <div v-if="loadError" class="load-error">
       <p>无法打开该工单，请返回后重试</p>
       <button type="button" class="btn btn-primary" @click="router.replace(reportBackPath)">返回</button>
@@ -66,6 +72,29 @@
           {{ o.seq }} {{ o.operationName }}
         </option>
       </select>
+
+      <div v-if="canAssign && currentTask" class="assign-box">
+        <div class="assign-head">
+          <span>执行人：{{ assignLabel }}</span>
+          <button type="button" class="link-btn" @click="assignPanelOpen = !assignPanelOpen">
+            {{ assignPanelOpen ? '收起' : '派工' }}
+          </button>
+        </div>
+        <div v-if="assignPanelOpen" class="assign-panel">
+          <p class="share-hint">可多选；清空即取消派工。派工不拦报工。</p>
+          <label v-for="w in assignWorkersList" :key="w.id" class="share-person">
+            <input type="checkbox" :value="w.id" v-model="assignSelectedIds" />
+            {{ w.name }}
+          </label>
+          <p v-if="assignWorkersError" class="share-hint err">
+            工人列表加载失败
+            <button type="button" class="link-btn" @click="loadAssignWorkers">重试</button>
+          </p>
+          <button type="button" class="btn btn-primary assign-save" :disabled="assignSaving" @click="saveAssign">
+            保存派工
+          </button>
+        </div>
+      </div>
 
       <label>本次良品</label>
       <input
@@ -128,10 +157,25 @@
         多人共同报工
       </label>
       <div v-if="shareEnabled" class="share-box">
-        <p class="share-hint">勾选参与人（须含自己），良品/不良按人数平分，余数归你</p>
+        <p class="share-hint">勾选参与人（须含自己）；合计=总良品，尾差归你</p>
+        <div class="share-mode">
+          <label><input type="radio" :value="1" v-model.number="shareMode" /> 平均</label>
+          <label><input type="radio" :value="2" v-model.number="shareMode" /> 按工时</label>
+        </div>
         <label v-for="c in candidates" :key="c.id" class="share-person">
           <input type="checkbox" :value="c.id" v-model="participantIds" />
-          {{ c.name }}
+          <span class="share-name">{{ c.name }}</span>
+          <template v-if="shareMode === 2 && participantIds.map(Number).includes(c.id)">
+            <input
+              v-model.number="participantDurations[c.id]"
+              class="share-dur"
+              type="number"
+              min="0"
+              max="1440"
+              placeholder="分钟"
+            />
+            <span class="share-dur-unit">分</span>
+          </template>
         </label>
         <p v-if="candidatesLoadError" class="share-hint err">
           参与人列表加载失败
@@ -171,13 +215,15 @@ import { useRoute, useRouter } from 'vue-router'
 import { showToast, showSuccessToast, showImagePreview } from 'vant'
 import 'vant/es/toast/style'
 import 'vant/es/image-preview/style'
-import { getOrderByNo, submitReport, getDefectsByOp, getCustomFields, getReportCandidates } from '@/api/prod'
+import { getOrderByNo, submitReport, getDefectsByOp, getCustomFields, getReportCandidates, getTodayPieceSummary } from '@/api/prod'
+import { assign, assignWorkers } from '@/api/assign'
 import { getKnowledgeFileByOrder, getKnowledgeFileRaw } from '@/api/knowledge'
 import TabBar from './TabBar.vue'
 import FactoryBadge from '@/components/FactoryBadge.vue'
 import H5LogoutBtn from '@/components/H5LogoutBtn.vue'
 import DocPreview from '@/components/DocPreview.vue'
 import { getKnowledgeFileType } from '@/utils/knowledgeFile'
+import { canUse, FEATURE, currentTier } from '@/utils/licenseTier'
 
 const route = useRoute()
 const router = useRouter()
@@ -185,6 +231,24 @@ const reportBackPath = '/h5/home'
 const orderNo = ref(route.query.order || '')
 const detail = ref(null)
 const loadError = ref(false)
+const canWage = canUse(currentTier(), FEATURE.PieceWage)
+const todayGoodQty = ref(0)
+const todayWage = ref(0)
+
+function formatMoney(n) {
+  return Number(n || 0).toFixed(2)
+}
+
+async function loadTodaySummary() {
+  if (!canWage) return
+  try {
+    const res = await getTodayPieceSummary()
+    todayGoodQty.value = res.data?.todayGoodQty ?? 0
+    todayWage.value = res.data?.todayWage ?? 0
+  } catch (error) {
+    console.error('[今日计件] 加载失败', error)
+  }
+}
 const defects = ref([])
 const submitting = ref(false)
 const goodInput = ref(null)
@@ -196,10 +260,19 @@ const reportFields = ref([])
 const reportFieldsLoadError = ref(false)
 const form = ref({ operationId: '', goodQty: 0, defectQty: 0, defectId: null, hours: 0, minutes: 0, ext: {} })
 const shareEnabled = ref(false)
+const shareMode = ref(1)
 const candidates = ref([])
 const candidatesLoadError = ref(false)
 const participantIds = ref([])
+const participantDurations = ref({})
 const pendingClientRequestId = ref('')
+const role = Number(localStorage.getItem('role') || 0)
+const canAssign = role === 1 || role === 3
+const assignPanelOpen = ref(false)
+const assignWorkersList = ref([])
+const assignWorkersError = ref(false)
+const assignSelectedIds = ref([])
+const assignSaving = ref(false)
 const myUserId = Number(localStorage.getItem('userId') || 0) || (() => {
   try {
     const token = localStorage.getItem('token') || ''
@@ -215,6 +288,19 @@ const myUserId = Number(localStorage.getItem('userId') || 0) || (() => {
     return 0
   }
 })()
+
+const currentTask = computed(() => {
+  if (!detail.value || !form.value.operationId) return null
+  return (detail.value.tasks || []).find(x => String(x.operationId) === String(form.value.operationId)) || null
+})
+
+const assignLabel = computed(() => {
+  const t = currentTask.value
+  if (!t) return '未派工'
+  const list = t.assignees || []
+  if (list.length) return list.map(a => a.userName || a.userId).join('、')
+  return t.assigneeName || '未派工'
+})
 
 const noReportableOps = computed(() =>
   !!detail.value && !loadError.value && (!(detail.value.tasks || []).length)
@@ -256,18 +342,59 @@ const sharePreview = computed(() => {
   if (n < 1) return []
   const good = Number(form.value.goodQty) || 0
   const defect = Number(form.value.defectQty) || 0
-  const goodBase = Math.floor(good / n)
-  const goodRem = good % n
-  const defectBase = Math.floor(defect / n)
-  const defectRem = defect % n
-  return ids.map(id => {
+  const goods = new Array(n).fill(0)
+  const defectsArr = new Array(n).fill(0)
+  if (shareMode.value === 2) {
+    const filled = ids.map(id => Number(participantDurations.value[id] || 0)).filter(d => d > 0)
+    if (filled.length === 0) {
+      const goodBase = Math.floor(good / n)
+      const goodRem = good % n
+      const defectBase = Math.floor(defect / n)
+      const defectRem = defect % n
+      ids.forEach((id, i) => {
+        const isMe = id === myUserId
+        goods[i] = goodBase + (isMe ? goodRem : 0)
+        defectsArr[i] = defectBase + (isMe ? defectRem : 0)
+      })
+    } else {
+      // 未填时长：权重=已填均值（均分兜底拿一份）；落库时长仍为 0，不计时工资
+      const avgFilled = Math.max(1, Math.floor(filled.reduce((s, d) => s + d, 0) / filled.length))
+      const weights = ids.map(id => {
+        const d = Number(participantDurations.value[id] || 0)
+        return d > 0 ? d : avgFilled
+      })
+      const sumW = weights.reduce((s, w) => s + w, 0)
+      let gAlloc = 0
+      let dAlloc = 0
+      let reporterIdx = 0
+      ids.forEach((id, i) => {
+        goods[i] = Math.floor((good * weights[i]) / sumW)
+        defectsArr[i] = Math.floor((defect * weights[i]) / sumW)
+        gAlloc += goods[i]
+        dAlloc += defectsArr[i]
+        if (id === myUserId) reporterIdx = i
+      })
+      goods[reporterIdx] += good - gAlloc
+      defectsArr[reporterIdx] += defect - dAlloc
+    }
+  } else {
+    const goodBase = Math.floor(good / n)
+    const goodRem = good % n
+    const defectBase = Math.floor(defect / n)
+    const defectRem = defect % n
+    ids.forEach((id, i) => {
+      const isMe = id === myUserId
+      goods[i] = goodBase + (isMe ? goodRem : 0)
+      defectsArr[i] = defectBase + (isMe ? defectRem : 0)
+    })
+  }
+  return ids.map((id, i) => {
     const c = candidates.value.find(x => x.id === id)
-    const isMe = id === myUserId
     return {
       userId: id,
       name: c?.name || String(id),
-      good: goodBase + (isMe ? goodRem : 0),
-      defect: defectBase + (isMe ? defectRem : 0)
+      good: goods[i],
+      defect: defectsArr[i]
     }
   })
 })
@@ -296,9 +423,12 @@ onMounted(async () => {
     router.replace(reportBackPath)
     return
   }
+  loadTodaySummary()
   await reloadDetail()
   await tryPreselectOp()
+  await tryOpenAssignFromQuery()
   await loadReportFields()
+  if (canAssign) await loadAssignWorkers()
 })
 
 /** 扫工序码带入的 op：合法且在工单工序里 → 预选；否则退回手动选，不报错 */
@@ -312,6 +442,24 @@ async function tryPreselectOp() {
   if (!hit) return
   form.value.operationId = String(id)
   await onOpChange()
+}
+
+/** 工单列表「派工」入口：?assign=1 时预选首道可派工序并展开派工面板 */
+async function tryOpenAssignFromQuery() {
+  if (!canAssign || !detail.value || loadError.value) return
+  if (String(route.query.assign || '') !== '1') return
+  if (!form.value.operationId) {
+    const tasks = (detail.value.tasks || []).filter(t => t.id)
+    const prefer = tasks.find(t => !(t.assignees || []).length && !t.assigneeUserId) || tasks[0]
+    if (prefer) {
+      form.value.operationId = String(prefer.operationId)
+      await onOpChange()
+    }
+  }
+  if (form.value.operationId) {
+    syncAssignSelection()
+    assignPanelOpen.value = true
+  }
 }
 
 async function loadReportFields() {
@@ -412,12 +560,65 @@ async function reloadCandidates() {
 async function onOpChange() {
   form.value.defectId = null
   participantIds.value = myUserId ? [myUserId] : []
+  participantDurations.value = {}
   candidates.value = []
   candidatesLoadError.value = false
+  assignPanelOpen.value = false
+  syncAssignSelection()
   if (!form.value.operationId) { defects.value = []; return }
   const res = await getDefectsByOp(Number(form.value.operationId))
   defects.value = res.data || []
   await reloadCandidates()
+}
+
+function syncAssignSelection() {
+  const t = currentTask.value
+  if (!t) {
+    assignSelectedIds.value = []
+    return
+  }
+  const list = t.assignees || []
+  if (list.length) {
+    assignSelectedIds.value = list.map(a => a.userId)
+  } else if (t.assigneeUserId) {
+    assignSelectedIds.value = [t.assigneeUserId]
+  } else {
+    assignSelectedIds.value = []
+  }
+}
+
+async function loadAssignWorkers() {
+  if (!canAssign) return
+  assignWorkersError.value = false
+  try {
+    const res = await assignWorkers()
+    assignWorkersList.value = res.data || []
+  } catch {
+    assignWorkersList.value = []
+    assignWorkersError.value = true
+  }
+}
+
+async function saveAssign() {
+  const t = currentTask.value
+  if (!t?.id) {
+    showToast('该工序暂无可派工任务行')
+    return
+  }
+  assignSaving.value = true
+  try {
+    const ids = [...new Set(assignSelectedIds.value.map(Number).filter(x => x > 0))]
+    await assign(t.id, ids)
+    showSuccessToast(ids.length ? '已派工' : '已取消派工')
+    const res = await getOrderByNo(detail.value.orderNo)
+    detail.value = res.data
+    syncAssignSelection()
+    assignPanelOpen.value = false
+  } catch (e) {
+    showToast(e?.msg || e?.message || '派工失败')
+  } finally {
+    assignSaving.value = false
+  }
 }
 
 function validate() {
@@ -464,7 +665,16 @@ function buildPayload() {
     ext: form.value.ext
   }
   if (shareEnabled.value) {
-    payload.participantUserIds = [...new Set(participantIds.value.map(Number))]
+    payload.shareMode = shareMode.value === 2 ? 2 : 1
+    const ids = [...new Set(participantIds.value.map(Number))]
+    if (shareMode.value === 2) {
+      payload.participants = ids.map(id => ({
+        userId: id,
+        durationMinutes: Number(participantDurations.value[id] || 0)
+      }))
+    } else {
+      payload.participantUserIds = ids
+    }
   }
   return payload
 }
@@ -519,6 +729,7 @@ async function onContinue() {
     if (!data) return
     showSuccessToast(formatReceipt(data === true ? null : data))
     clearQty()
+    loadTodaySummary()
     try {
       await reloadDetail()
     } catch {
@@ -554,6 +765,13 @@ async function onSubmit() {
 .order-no { font-size: 20px; font-weight: 700; margin: 0; color: var(--app-text-1); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .title-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .product { color: var(--app-text-2); font-size: 15px; margin: 0 0 12px; }
+.today-card {
+  background: var(--app-card); border-radius: var(--h5-card-radius); padding: 12px 14px;
+  margin-bottom: 12px; box-shadow: var(--app-shadow);
+}
+.today-label { font-size: 12px; color: var(--app-text-3); margin-bottom: 2px; }
+.today-val { font-size: 17px; font-weight: 700; color: var(--app-primary); }
+.today-tip { margin-top: 4px; font-size: 11px; color: var(--app-text-4); }
 .no-ops-tip {
   background: var(--app-card); border-radius: var(--h5-card-radius); padding: 20px var(--h5-card-padding);
   margin-bottom: 16px; text-align: center; color: var(--app-text-2); font-size: 15px;
@@ -616,10 +834,21 @@ async function onSubmit() {
 .share-box {
   background: var(--app-bg); border-radius: var(--app-radius-sm); padding: 10px 12px; margin-top: 8px;
 }
+.share-mode { display: flex; gap: 16px; margin-bottom: 8px; font-size: 14px; }
+.share-mode label { display: flex; align-items: center; gap: 4px; font-weight: 400; }
 .share-hint { margin: 0 0 8px; font-size: 12px; color: var(--app-text-3); }
-.share-person { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 15px; font-weight: 400; }
+.share-person { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 15px; font-weight: 400; flex-wrap: wrap; }
+.share-name { flex: 1; min-width: 4em; }
+.share-dur { width: 72px; height: 32px; padding: 0 6px; border: 1px solid var(--app-border); border-radius: 6px; }
+.share-dur-unit { font-size: 12px; color: var(--app-text-3); }
 .share-preview { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--app-border); }
 .share-preview-row { font-size: 13px; color: var(--app-text-2); padding: 2px 0; }
+.assign-box {
+  background: var(--app-bg); border-radius: var(--app-radius-sm); padding: 10px 12px; margin: 8px 0 12px;
+}
+.assign-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 14px; }
+.assign-panel { margin-top: 8px; }
+.assign-save { width: 100%; height: 40px; margin-top: 8px; }
 .guide-block {
   background: var(--app-card); border-radius: var(--h5-card-radius); padding: var(--h5-card-padding);
   margin-bottom: 16px; box-shadow: var(--app-shadow);

@@ -31,7 +31,12 @@
           <span class="page-title">{{ $route.meta.title || '首页' }}</span>
         </div>
         <div class="header-right">
-          <el-button v-if="isMobile" size="small" text type="primary" @click="goH5">报工端</el-button>
+          <el-button
+            v-if="isMobile"
+            type="primary"
+            :icon="Iphone"
+            @click="goH5"
+          >报工端</el-button>
           <el-button v-if="!isMobile" text @click="toggleTheme">{{ isLegacy ? '切简约版' : '切经典版' }}</el-button>
           <el-button
             v-if="!isMobile"
@@ -62,6 +67,7 @@
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Iphone } from '@element-plus/icons-vue'
 import SideMenu from './SideMenu.vue'
 import PageHelp from '@/components/PageHelp.vue'
 import { getInstanceInfo, getLicenseStatus } from '@/api/auth'
@@ -104,9 +110,18 @@ function applyLicenseStatus(data) {
   }
 }
 
+/** docs/141：工人拿手机误开 PC 后台 → 送进报工端 */
+function maybeRedirectWorkerToH5() {
+  if (!isMobile.value) return
+  if (role !== 2) return
+  if (route.path.startsWith('/h5')) return
+  router.replace('/h5/home')
+}
+
 function checkMobile() {
   isMobile.value = window.matchMedia('(max-width: 768px)').matches
   if (!isMobile.value) drawerOpen.value = false
+  maybeRedirectWorkerToH5()
 }
 
 function toggleTheme() {
@@ -124,7 +139,10 @@ function goH5() {
   router.push('/h5/home')
 }
 
-watch(() => route.path, () => { drawerOpen.value = false })
+watch(() => route.path, () => {
+  drawerOpen.value = false
+  maybeRedirectWorkerToH5()
+})
 
 onMounted(() => {
   checkMobile()

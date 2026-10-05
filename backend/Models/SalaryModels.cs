@@ -11,16 +11,7 @@ public class SalaryStatement
     public byte PeriodType { get; set; }            // 1月 2周
     public string PeriodValue { get; set; } = "";   // yyyy-MM / yyyy-Www
     public decimal TotalAmount { get; set; }
-    /// <summary>底薪（手工，docs/73）</summary>
-    public decimal BaseSalary { get; set; }
-    /// <summary>餐补</summary>
-    public decimal MealAllowance { get; set; }
-    /// <summary>其他补贴</summary>
-    public decimal OtherAllowance { get; set; }
-    /// <summary>社保个税（正数，系统减）</summary>
-    public decimal SocialTax { get; set; }
-    /// <summary>其他扣款（正数，系统减）</summary>
-    public decimal OtherDeduction { get; set; }
+    // docs/136：5 手工列已拿掉；库中若仍有列则为历史遗留停用，实体不再映射
     public byte Status { get; set; }                // 0草稿 1已确认（2已发放预留）
     public DateTime? ConfirmedAt { get; set; }
     public DateTime CreatedAt { get; set; }

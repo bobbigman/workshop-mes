@@ -31,7 +31,9 @@ public class InstanceController : ControllerBase
             factoryCode = _opt.FactoryCode,
             version = AppVersion.Current,
             // docs/111：失败兜底「请洽…」称呼；空则前端用默认文案
-            supportProviderName = (_support.ProviderName ?? "").Trim()
+            supportProviderName = (_support.ProviderName ?? "").Trim(),
+            // docs/213：空=胡工单方版；有值=联合出品伙伴名（胡工锁代码常量）
+            creditPartner = (_opt.CreditPartner ?? "").Trim()
         });
     }
 }

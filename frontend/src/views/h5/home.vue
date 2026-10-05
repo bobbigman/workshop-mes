@@ -13,6 +13,14 @@
       @click="router.push('/h5/scan')"
     >去扫码报工</button>
 
+    <section v-if="canWage" class="today-card">
+      <div class="today-label">今日计件</div>
+      <div class="today-val">
+        今日 {{ todayGoodQty }} 件 / ￥{{ formatMoney(todayWage) }}
+      </div>
+      <div class="today-tip">按已复核+待复核报工估算，以工资单为准</div>
+    </section>
+
     <section class="block">
       <h3 class="block-title">我的任务</h3>
       <div v-if="list.length === 0" class="empty">暂无派给我的任务，可扫码报工</div>
@@ -38,7 +46,12 @@
     <section class="block">
       <h3 class="block-title">快捷入口</h3>
       <div class="shortcuts">
-        <button type="button" class="shortcut" @click="router.push('/h5/orders')">工单</button>
+        <button
+          v-if="showOrdersEntry"
+          type="button"
+          class="shortcut"
+          @click="router.push('/h5/orders')"
+        >工单</button>
         <button type="button" class="shortcut" @click="router.push('/h5/my-reports')">我的报工</button>
         <button
           v-if="canWage"
@@ -47,6 +60,13 @@
           @click="router.push('/h5/my-wage')"
         >我的工资</button>
       </div>
+      <!-- docs/141：管理员从报工端回 PC，不起眼小入口 -->
+      <button
+        v-if="role !== 2"
+        type="button"
+        class="admin-back"
+        @click="router.push('/order')"
+      >管理后台</button>
     </section>
 
     <TabBar active="home" />
@@ -62,17 +82,27 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { myTasks } from '@/api/assign'
+import { getWorkerView, getTodayPieceSummary } from '@/api/prod'
 import TabBar from './TabBar.vue'
 import FactoryBadge from '@/components/FactoryBadge.vue'
 import H5LogoutBtn from '@/components/H5LogoutBtn.vue'
 import PwaGuide from '@/components/PwaGuide.vue'
 import { canUse, FEATURE, currentTier } from '@/utils/licenseTier'
+import { setWorkerViewMode, isWorkerTasksOnlyView } from '@/utils/workerView'
 
 const router = useRouter()
 const list = ref([])
 const showPwaGuide = ref(false)
+const showOrdersEntry = ref(true)
+const role = Number(localStorage.getItem('role') || 0)
 const canScan = canUse(currentTier(), FEATURE.ScanReport)
 const canWage = canUse(currentTier(), FEATURE.PieceWage)
+const todayGoodQty = ref(0)
+const todayWage = ref(0)
+
+function formatMoney(n) {
+  return Number(n || 0).toFixed(2)
+}
 
 const STATUS = { 0: '未开始', 1: '执行中', 2: '已结束', 3: '已取消' }
 function statusLabel(s) { return STATUS[s] ?? s }
@@ -104,13 +134,36 @@ function onPwaDismissForever() {
 }
 
 onMounted(() => {
+  refreshViewMode()
   load()
+  loadTodaySummary()
   maybeShowPwaGuide()
 })
+
+async function refreshViewMode() {
+  try {
+    const res = await getWorkerView()
+    setWorkerViewMode(res.data?.workerViewMode)
+  } catch (error) {
+    console.error('[工人视角] 读取工厂视角配置失败', error)
+  }
+  showOrdersEntry.value = !isWorkerTasksOnlyView()
+}
 
 async function load() {
   const res = await myTasks()
   list.value = res.data || []
+}
+
+async function loadTodaySummary() {
+  if (!canWage) return
+  try {
+    const res = await getTodayPieceSummary()
+    todayGoodQty.value = res.data?.todayGoodQty ?? 0
+    todayWage.value = res.data?.todayWage ?? 0
+  } catch (error) {
+    console.error('[今日计件] 加载失败', error)
+  }
 }
 </script>
 
@@ -137,6 +190,16 @@ h2 { margin: 0; font-size: 18px; flex: none; color: var(--app-text-1); }
   cursor: pointer;
 }
 .scan-btn:active { opacity: 0.9; }
+.today-card {
+  background: var(--app-card);
+  border-radius: var(--h5-card-radius);
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  box-shadow: var(--app-shadow);
+}
+.today-label { font-size: 13px; color: var(--app-text-3); margin-bottom: 4px; }
+.today-val { font-size: 20px; font-weight: 700; color: var(--app-primary); }
+.today-tip { margin-top: 6px; font-size: 11px; color: var(--app-text-4); }
 .block { margin-bottom: 16px; }
 .block-title {
   margin: 0 0 10px;
@@ -178,4 +241,16 @@ h2 { margin: 0; font-size: 18px; flex: none; color: var(--app-text-1); }
   cursor: pointer;
 }
 .shortcut.wage { color: var(--app-primary); border-color: color-mix(in srgb, var(--app-primary) 35%, var(--app-border)); }
+.admin-back {
+  display: block;
+  margin: 14px auto 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--app-text-4);
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 </style>

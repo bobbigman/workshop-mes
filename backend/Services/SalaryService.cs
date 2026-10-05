@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using ahu.MicrosoftMes.Common;
 using ahu.MicrosoftMes.Data;
@@ -14,13 +13,21 @@ public interface ISalaryService
     Task<ApiResult<object?>> GenerateAsync(SalaryGenerateDto dto, long factoryId);
     Task<ApiResult<PageResult<SalaryListDto>>> QueryAsync(SalaryQueryDto query, long factoryId);
     Task<ApiResult<SalaryDetailDto>> GetAsync(long id, long factoryId);
+    /// <summary>docs/136：手工列已移除；旧端仍传字段则忽略不报错。</summary>
     Task<ApiResult<object?>> UpdateComponentsAsync(long id, SalaryComponentsDto dto, long factoryId, long operatorUserId);
     Task<ApiResult<object?>> ConfirmAsync(long id, long factoryId);
-    /// <summary>草稿按当前工价原地重算计件明细，保留手工项（docs/133）。</summary>
+    /// <summary>草稿按当前工价原地重算计件明细（docs/133/136）。</summary>
     Task<ApiResult<object?>> RecalcDraftAsync(long id, long factoryId, long operatorUserId);
+    /// <summary>软撤回已确认工资单：回草稿、回滚 settled_flag，保留单与明细（docs/136；docs/67 删单语义废弃）。</summary>
     Task<ApiResult<object?>> RevokeAsync(long id, long factoryId, long operatorUserId);
+    /// <summary>批量重算：草稿直接 recalc；已确认先软撤回再 recalc（docs/134/136）。</summary>
+    Task<ApiResult<object?>> BatchRecalcAsync(long[] ids, long factoryId, long operatorUserId, byte operatorRole);
     Task<ApiResult<object?>> DeleteDraftAsync(long id, long factoryId);
     Task<(byte[] Content, string FileName)> ExportCsvAsync(byte periodType, string periodValue, long factoryId);
+    /// <summary>工资明细多维度查询（docs/139）：按工序/时间筛选，报表层直显。</summary>
+    Task<ApiResult<PageResult<SalaryItemRowDto>>> QueryItemsAsync(SalaryItemsQueryDto query, long factoryId);
+    /// <summary>工资明细导出 CSV（docs/139）。</summary>
+    Task<(byte[] Content, string FileName)> ExportItemsCsvAsync(SalaryItemsQueryDto query, long factoryId);
     /// <summary>工人本人工资预估（docs/103）。</summary>
     Task<ApiResult<MyWageDto>> MineAsync(MyWageQueryDto query, long factoryId, long userId);
     /// <summary>工资按色码汇总（docs/103）。</summary>
@@ -52,11 +59,6 @@ public class SalaryListDto
     public string UserName { get; set; } = "";
     public byte PeriodType { get; set; }
     public string PeriodValue { get; set; } = "";
-    public decimal BaseSalary { get; set; }
-    public decimal MealAllowance { get; set; }
-    public decimal OtherAllowance { get; set; }
-    public decimal SocialTax { get; set; }
-    public decimal OtherDeduction { get; set; }
     public decimal TotalAmount { get; set; }
     public byte Status { get; set; }
     public DateTime? ConfirmedAt { get; set; }
@@ -72,16 +74,11 @@ public class SalaryDetailDto
     public string PeriodValue { get; set; } = "";
     public decimal TotalAmount { get; set; }
     public decimal PieceworkAmount { get; set; }
-    public decimal BaseSalary { get; set; }
-    public decimal MealAllowance { get; set; }
-    public decimal OtherAllowance { get; set; }
-    public decimal SocialTax { get; set; }
-    public decimal OtherDeduction { get; set; }
-    public bool AllowManualComponents { get; set; }
     public byte Status { get; set; }
     public List<SalaryItemDto> Items { get; set; } = new();
 }
 
+/// <summary>兼容旧端：字段可仍传入，服务端忽略（docs/136）。</summary>
 public class SalaryComponentsDto
 {
     public decimal BaseSalary { get; set; }
@@ -91,12 +88,23 @@ public class SalaryComponentsDto
     public decimal OtherDeduction { get; set; }
 }
 
+public class SalaryBatchRecalcResultItem
+{
+    public long Id { get; set; }
+    public bool Success { get; set; }
+    public string? Message { get; set; }
+}
+
 public class SalaryItemDto
 {
     public long Id { get; set; }
     public long ReportId { get; set; }
     public string OrderNo { get; set; } = "";
     public string OperationName { get; set; } = "";
+    /// <summary>工单颜色（docs/140）。</summary>
+    public string Color { get; set; } = "";
+    /// <summary>工单规格尺码（docs/140）。</summary>
+    public string Spec { get; set; } = "";
     public int GoodQty { get; set; }
     public int DefectQty { get; set; }
     public int DurationMinutes { get; set; }
@@ -108,6 +116,47 @@ public class SalaryItemDto
     public decimal NetAmount { get; set; }
     public bool Matched { get; set; }
     public DateTime ReportTime { get; set; }
+}
+
+/// <summary>工资明细多维度查询入参（docs/139）。</summary>
+public class SalaryItemsQueryDto
+{
+    public byte PeriodType { get; set; } = 1;
+    public string PeriodValue { get; set; } = "";
+    public long? OperationId { get; set; }
+    /// <summary>报工时间起（含），可选；不传则当前周期全部。</summary>
+    public DateTime? From { get; set; }
+    /// <summary>报工时间止（不含），可选。</summary>
+    public DateTime? To { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 200;
+}
+
+/// <summary>报表层工资明细行（docs/139；docs/140 追加 color/spec）。</summary>
+public class SalaryItemRowDto
+{
+    public long ItemId { get; set; }
+    public long StatementId { get; set; }
+    public long ReportId { get; set; }
+    public long UserId { get; set; }
+    public string UserName { get; set; } = "";
+    public string OrderNo { get; set; } = "";
+    public long OrderId { get; set; }
+    public long OperationId { get; set; }
+    public string OperationName { get; set; } = "";
+    public int GoodQty { get; set; }
+    public int DefectQty { get; set; }
+    public decimal UnitPrice { get; set; }
+    public decimal DeductAmount { get; set; }
+    /// <summary>小计 = amount（计件/计时毛额）。</summary>
+    public decimal Amount { get; set; }
+    /// <summary>应发 = amount − deduct_amount。</summary>
+    public decimal NetAmount { get; set; }
+    public DateTime ReportTime { get; set; }
+    /// <summary>工单颜色（docs/140）。</summary>
+    public string Color { get; set; } = "";
+    /// <summary>工单规格尺码（docs/140）。</summary>
+    public string Spec { get; set; } = "";
 }
 
 public class MyWageQueryDto
@@ -179,18 +228,13 @@ public class SalarySkuSummaryItemDto
 public class SalaryService : ISalaryService
 {
     private readonly AppDbContext _db;
-    private readonly IConfiguration _config;
     private readonly ILogger<SalaryService> _logger;
 
-    public SalaryService(AppDbContext db, IConfiguration config, ILogger<SalaryService> logger)
+    public SalaryService(AppDbContext db, ILogger<SalaryService> logger)
     {
         _db = db;
-        _config = config;
         _logger = logger;
     }
-
-    private bool AllowManualComponents =>
-        _config.GetValue("Salary:AllowManualComponents", true);
 
     public async Task<ApiResult<object?>> GenerateAsync(SalaryGenerateDto dto, long factoryId)
     {
@@ -239,11 +283,6 @@ public class SalaryService : ISalaryService
                     PeriodType = dto.PeriodType,
                     PeriodValue = periodValue,
                     TotalAmount = 0,
-                    BaseSalary = 0,
-                    MealAllowance = 0,
-                    OtherAllowance = 0,
-                    SocialTax = 0,
-                    OtherDeduction = 0,
                     Status = 0,
                     CreatedAt = now
                 };
@@ -276,7 +315,7 @@ public class SalaryService : ISalaryService
                     report.WageAmount = calc.Matched ? calc.WageAmount : null;
                     total += calc.WageAmount;
                 }
-                // 手工列默认 0，应发合计 = 计件合计
+                // 应发合计 = Σ(amount − deduct_amount)（docs/136）
                 statement.TotalAmount = Math.Round(total, 2, MidpointRounding.AwayFromZero);
                 created++;
             }
@@ -310,11 +349,6 @@ public class SalaryService : ISalaryService
             UserName = names.GetValueOrDefault(s.UserId, ""),
             PeriodType = s.PeriodType,
             PeriodValue = s.PeriodValue,
-            BaseSalary = s.BaseSalary,
-            MealAllowance = s.MealAllowance,
-            OtherAllowance = s.OtherAllowance,
-            SocialTax = s.SocialTax,
-            OtherDeduction = s.OtherDeduction,
             TotalAmount = s.TotalAmount,
             Status = s.Status,
             ConfirmedAt = s.ConfirmedAt,
@@ -329,31 +363,57 @@ public class SalaryService : ISalaryService
             .FirstOrDefaultAsync(x => x.Id == id && x.FactoryId == factoryId)
             ?? throw ThrowHelper.Biz(nameof(GetAsync), "工资单不存在");
         var userName = await _db.Users.AsNoTracking().Where(u => u.Id == s.UserId).Select(u => u.Name).FirstOrDefaultAsync() ?? "";
-        var items = await (
+        var rawItems = await (
             from i in _db.SalaryStatementItems.AsNoTracking()
             where i.StatementId == id
             join r in _db.Reports.AsNoTracking() on i.ReportId equals r.Id
             join o in _db.WorkOrders.AsNoTracking() on r.OrderId equals o.Id
             join op in _db.Operations.AsNoTracking() on r.OperationId equals op.Id
             orderby r.ReportTime
-            select new SalaryItemDto
+            select new
             {
-                Id = i.Id,
-                ReportId = i.ReportId,
+                i.Id,
+                i.ReportId,
+                OrderId = o.Id,
                 OrderNo = o.OrderNo,
                 OperationName = op.Name,
-                GoodQty = r.GoodQty,
-                DefectQty = r.DefectQty,
-                DurationMinutes = r.DurationMinutes,
-                RuleId = i.RuleId,
-                CalcQty = i.CalcQty,
-                UnitPrice = i.UnitPrice,
-                Amount = i.Amount,
+                r.GoodQty,
+                r.DefectQty,
+                r.DurationMinutes,
+                i.RuleId,
+                i.CalcQty,
+                i.UnitPrice,
+                i.Amount,
                 DeductAmount = i.DeductAmount ?? 0,
-                NetAmount = i.Amount - (i.DeductAmount ?? 0),
-                Matched = i.RuleId != null,
-                ReportTime = r.ReportTime
+                r.ReportTime
             }).ToListAsync();
+
+        var (colorFieldId, specFieldId, _) = await ResolveSkuFieldIdsAsync(factoryId);
+        var orderIds = rawItems.Select(x => x.OrderId).Distinct().ToList();
+        var valueMap = await LoadSkuValuesAsync(orderIds, colorFieldId, specFieldId);
+        string Lookup(long orderId, long? fieldId) =>
+            fieldId.HasValue && valueMap.TryGetValue((orderId, fieldId.Value), out var v) ? v : "";
+
+        var items = rawItems.Select(x => new SalaryItemDto
+        {
+            Id = x.Id,
+            ReportId = x.ReportId,
+            OrderNo = x.OrderNo,
+            OperationName = x.OperationName,
+            Color = Lookup(x.OrderId, colorFieldId),
+            Spec = Lookup(x.OrderId, specFieldId),
+            GoodQty = x.GoodQty,
+            DefectQty = x.DefectQty,
+            DurationMinutes = x.DurationMinutes,
+            RuleId = x.RuleId,
+            CalcQty = x.CalcQty,
+            UnitPrice = x.UnitPrice,
+            Amount = x.Amount,
+            DeductAmount = x.DeductAmount,
+            NetAmount = x.Amount - x.DeductAmount,
+            Matched = x.RuleId != null,
+            ReportTime = x.ReportTime
+        }).ToList();
 
         var piecework = Math.Round(items.Sum(i => i.NetAmount), 2, MidpointRounding.AwayFromZero);
         return ApiResult<SalaryDetailDto>.Ok(new SalaryDetailDto
@@ -365,12 +425,6 @@ public class SalaryService : ISalaryService
             PeriodValue = s.PeriodValue,
             TotalAmount = s.TotalAmount,
             PieceworkAmount = piecework,
-            BaseSalary = s.BaseSalary,
-            MealAllowance = s.MealAllowance,
-            OtherAllowance = s.OtherAllowance,
-            SocialTax = s.SocialTax,
-            OtherDeduction = s.OtherDeduction,
-            AllowManualComponents = AllowManualComponents,
             Status = s.Status,
             Items = items
         });
@@ -378,23 +432,8 @@ public class SalaryService : ISalaryService
 
     public async Task<ApiResult<object?>> UpdateComponentsAsync(long id, SalaryComponentsDto dto, long factoryId, long operatorUserId)
     {
-        if (!AllowManualComponents)
-        {
-            _logger.LogWarning(
-                "工资单手工项保存被拒（功能关闭） statementId={Id} operator={Op}",
-                id, operatorUserId);
-            throw ThrowHelper.BizUser("该功能已关闭");
-        }
-
-        if (dto.BaseSalary < 0 || dto.MealAllowance < 0 || dto.OtherAllowance < 0
-            || dto.SocialTax < 0 || dto.OtherDeduction < 0)
-        {
-            _logger.LogWarning(
-                "工资单手工项保存被拒（负数） statementId={Id} operator={Op} dto={@Dto}",
-                id, operatorUserId, dto);
-            throw ThrowHelper.BizUser("不能填负数");
-        }
-
+        // docs/136：手工列已移除；旧端仍传字段则忽略，不报错
+        _ = dto;
         var statement = await _db.SalaryStatements
             .FirstOrDefaultAsync(s => s.Id == id && s.FactoryId == factoryId)
             ?? throw ThrowHelper.Biz(nameof(UpdateComponentsAsync), "工资单不存在");
@@ -402,55 +441,27 @@ public class SalaryService : ISalaryService
         if (statement.Status != 0)
         {
             _logger.LogWarning(
-                "工资单手工项保存被拒（非草稿） statementId={Id} status={Status} operator={Op}",
+                "工资单 components 被拒（非草稿） statementId={Id} status={Status} operator={Op}",
                 id, statement.Status, operatorUserId);
             throw ThrowHelper.BizUser("已确认工资单不能修改");
         }
 
-        var before = new
-        {
-            statement.BaseSalary,
-            statement.MealAllowance,
-            statement.OtherAllowance,
-            statement.SocialTax,
-            statement.OtherDeduction,
-            statement.TotalAmount
-        };
-
         var piecework = await SumPieceworkAsync(id);
-        var total = CalcTotalAmount(
-            piecework,
-            dto.BaseSalary, dto.MealAllowance, dto.OtherAllowance,
-            dto.SocialTax, dto.OtherDeduction);
-
-        statement.BaseSalary = Round2(dto.BaseSalary);
-        statement.MealAllowance = Round2(dto.MealAllowance);
-        statement.OtherAllowance = Round2(dto.OtherAllowance);
-        statement.SocialTax = Round2(dto.SocialTax);
-        statement.OtherDeduction = Round2(dto.OtherDeduction);
-        statement.TotalAmount = total;
-
+        statement.TotalAmount = piecework;
         await _db.SaveChangesAsync();
 
         _logger.LogInformation(
-            "工资单手工项已保存 statementId={Id} operator={Op} before={@Before} after=({Base},{Meal},{Oth},{Tax},{Ded},total={Total})",
-            id, operatorUserId, before,
-            statement.BaseSalary, statement.MealAllowance, statement.OtherAllowance,
-            statement.SocialTax, statement.OtherDeduction, statement.TotalAmount);
+            "工资单 components 已忽略手工字段（docs/136） statementId={Id} operator={Op} total={Total}",
+            id, operatorUserId, statement.TotalAmount);
 
         return ApiResult<object?>.Ok(new
         {
             totalAmount = statement.TotalAmount,
-            pieceworkAmount = piecework,
-            baseSalary = statement.BaseSalary,
-            mealAllowance = statement.MealAllowance,
-            otherAllowance = statement.OtherAllowance,
-            socialTax = statement.SocialTax,
-            otherDeduction = statement.OtherDeduction
+            pieceworkAmount = piecework
         });
     }
 
-    /// <summary>草稿按当前工价原地重算计件明细，保留手工项（docs/133）。</summary>
+    /// <summary>草稿按当前工价原地重算计件明细（docs/133/136）。</summary>
     public async Task<ApiResult<object?>> RecalcDraftAsync(long id, long factoryId, long operatorUserId)
     {
         var statement = await _db.SalaryStatements
@@ -499,10 +510,7 @@ public class SalaryService : ISalaryService
 
         var piecework = Round2(pieceworkSum);
         var beforeTotal = statement.TotalAmount;
-        statement.TotalAmount = CalcTotalAmount(
-            piecework,
-            statement.BaseSalary, statement.MealAllowance, statement.OtherAllowance,
-            statement.SocialTax, statement.OtherDeduction);
+        statement.TotalAmount = CalcTotalAmount(piecework);
 
         await _db.SaveChangesAsync();
 
@@ -562,7 +570,8 @@ public class SalaryService : ISalaryService
     }
 
     /// <summary>
-    /// 撤回已确认工资单：删明细/删单、回滚 settled_flag，便于重新 generate（docs/67）。
+    /// 软撤回已确认工资单：status→草稿、settled_flag→0、保留单与明细（docs/136）。
+    /// docs/67 删单语义废弃；历史已被旧 revoke 删掉的单不回溯。
     /// </summary>
     public async Task<ApiResult<object?>> RevokeAsync(long id, long factoryId, long operatorUserId)
     {
@@ -575,8 +584,10 @@ public class SalaryService : ISalaryService
         if (statement.Status != 1)
             throw ThrowHelper.Biz(nameof(RevokeAsync), "仅已确认工资单可撤回");
 
-        var items = await _db.SalaryStatementItems.Where(i => i.StatementId == id).ToListAsync();
-        var reportIds = items.Select(i => i.ReportId).ToList();
+        var reportIds = await _db.SalaryStatementItems.AsNoTracking()
+            .Where(i => i.StatementId == id)
+            .Select(i => i.ReportId)
+            .ToListAsync();
         var auditTotal = statement.TotalAmount;
         var auditUserId = statement.UserId;
         var auditPeriodType = statement.PeriodType;
@@ -595,8 +606,8 @@ public class SalaryService : ISalaryService
             foreach (var r in reports)
                 r.SettledFlag = false;
 
-            _db.SalaryStatementItems.RemoveRange(items);
-            _db.SalaryStatements.Remove(statement);
+            statement.Status = 0;
+            statement.ConfirmedAt = null;
             await _db.SaveChangesAsync();
             await tx.CommitAsync();
         }
@@ -607,10 +618,104 @@ public class SalaryService : ISalaryService
         }
 
         _logger.LogInformation(
-            "工资单已撤回 statementId={Id} operator={Op} totalAmount={Total} reportCount={Cnt} userId={UserId} period={PeriodType}/{PeriodValue}",
+            "工资单已软撤回 statementId={Id} operator={Op} totalAmount={Total} reportCount={Cnt} userId={UserId} period={PeriodType}/{PeriodValue}",
             id, operatorUserId, auditTotal, reportIds.Count, auditUserId, auditPeriodType, auditPeriodValue);
 
         return ApiResult<object?>.OkMsg();
+    }
+
+    /// <summary>
+    /// 批量重算（docs/134/136）：草稿→recalc；已确认→软撤回+recalc（仅管理员）；失败不停批。
+    /// </summary>
+    public async Task<ApiResult<object?>> BatchRecalcAsync(
+        long[] ids, long factoryId, long operatorUserId, byte operatorRole)
+    {
+        if (ids == null || ids.Length == 0)
+            throw ThrowHelper.Biz(nameof(BatchRecalcAsync), "请至少选择一张工资单");
+
+        var results = new List<SalaryBatchRecalcResultItem>();
+        var isAdmin = operatorRole == 1;
+
+        foreach (var id in ids.Distinct())
+        {
+            try
+            {
+                var statement = await _db.SalaryStatements.AsNoTracking()
+                    .FirstOrDefaultAsync(s => s.Id == id && s.FactoryId == factoryId);
+                if (statement == null)
+                {
+                    results.Add(new SalaryBatchRecalcResultItem
+                    {
+                        Id = id,
+                        Success = false,
+                        Message = "工资单不存在或不属于本厂"
+                    });
+                    continue;
+                }
+
+                if (statement.Status == 1)
+                {
+                    if (!isAdmin)
+                    {
+                        results.Add(new SalaryBatchRecalcResultItem
+                        {
+                            Id = id,
+                            Success = false,
+                            Message = "仅管理员可对已确认工资单批量重算"
+                        });
+                        continue;
+                    }
+
+                    await RevokeAsync(id, factoryId, operatorUserId);
+                    await RecalcDraftAsync(id, factoryId, operatorUserId);
+                    results.Add(new SalaryBatchRecalcResultItem
+                    {
+                        Id = id,
+                        Success = true,
+                        Message = "已撤回并重算"
+                    });
+                }
+                else if (statement.Status == 0)
+                {
+                    await RecalcDraftAsync(id, factoryId, operatorUserId);
+                    results.Add(new SalaryBatchRecalcResultItem
+                    {
+                        Id = id,
+                        Success = true,
+                        Message = "已重算"
+                    });
+                }
+                else
+                {
+                    results.Add(new SalaryBatchRecalcResultItem
+                    {
+                        Id = id,
+                        Success = false,
+                        Message = "已发放工资单不可重算"
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                var msg = ex is BusinessException be ? be.Message : ex.Message;
+                _logger.LogWarning(ex,
+                    "批量重算单张失败 statementId={Id} operator={Op}", id, operatorUserId);
+                results.Add(new SalaryBatchRecalcResultItem
+                {
+                    Id = id,
+                    Success = false,
+                    Message = msg
+                });
+            }
+        }
+
+        var ok = results.Count(r => r.Success);
+        var fail = results.Count - ok;
+        _logger.LogInformation(
+            "批量重算完成 operator={Op} total={Total} ok={Ok} fail={Fail}",
+            operatorUserId, results.Count, ok, fail);
+
+        return ApiResult<object?>.Ok(new { list = results, ok, fail });
     }
 
     public async Task<ApiResult<object?>> DeleteDraftAsync(long id, long factoryId)
@@ -923,11 +1028,6 @@ public class SalaryService : ISalaryService
                 u.Name,
                 s.Id,
                 s.PeriodValue,
-                s.BaseSalary,
-                s.MealAllowance,
-                s.OtherAllowance,
-                s.SocialTax,
-                s.OtherDeduction,
                 s.TotalAmount,
                 s.Status
             }
@@ -945,17 +1045,155 @@ public class SalaryService : ISalaryService
             .ToDictionaryAsync(x => x.StatementId, x => Round2(x.Piecework));
 
         var sb = new StringBuilder();
-        sb.AppendLine("姓名,周期,底薪,餐补,其他补贴,社保个税,其他扣款,计件合计,应发合计,状态");
+        sb.AppendLine("姓名,周期,计件合计,应发合计,状态");
         foreach (var r in rows)
         {
             var st = r.Status == 1 ? "已确认" : "草稿";
             var piece = pieceworkMap.GetValueOrDefault(r.Id, 0m);
-            sb.AppendLine($"{EscapeCsv(r.Name)},{r.PeriodValue},{r.BaseSalary},{r.MealAllowance},{r.OtherAllowance},{r.SocialTax},{r.OtherDeduction},{piece},{r.TotalAmount},{st}");
+            sb.AppendLine($"{EscapeCsv(r.Name)},{r.PeriodValue},{piece},{r.TotalAmount},{st}");
         }
         // UTF-8 BOM，Excel 友好
         var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(sb.ToString())).ToArray();
         var file = $"salary_{periodValue}.csv";
         return (bytes, file);
+    }
+
+    /// <summary>工资明细多维度查询（docs/139）。</summary>
+    public async Task<ApiResult<PageResult<SalaryItemRowDto>>> QueryItemsAsync(
+        SalaryItemsQueryDto query, long factoryId)
+    {
+        var list = await LoadItemRowsAsync(query, factoryId, applyPaging: true);
+        var total = await CountItemRowsAsync(query, factoryId);
+        return ApiResult<PageResult<SalaryItemRowDto>>.Ok(new PageResult<SalaryItemRowDto>
+        {
+            List = list,
+            Total = total
+        });
+    }
+
+    /// <summary>工资明细导出 CSV（docs/139；docs/140 含颜色/规格）。</summary>
+    public async Task<(byte[] Content, string FileName)> ExportItemsCsvAsync(
+        SalaryItemsQueryDto query, long factoryId)
+    {
+        var rows = await LoadItemRowsAsync(query, factoryId, applyPaging: false);
+        var sb = new StringBuilder();
+        sb.AppendLine("人员,工单,工序,颜色,规格尺码,良品,不良,单价,不良扣款,小计,应发,报工时间");
+        foreach (var r in rows)
+        {
+            sb.AppendLine(string.Join(',',
+                EscapeCsv(r.UserName),
+                EscapeCsv(r.OrderNo),
+                EscapeCsv(r.OperationName),
+                EscapeCsv(r.Color),
+                EscapeCsv(r.Spec),
+                r.GoodQty,
+                r.DefectQty,
+                r.UnitPrice,
+                r.DeductAmount,
+                r.Amount,
+                r.NetAmount,
+                r.ReportTime.ToString("yyyy-MM-dd HH:mm:ss")));
+        }
+        var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(sb.ToString())).ToArray();
+        var period = (query.PeriodValue ?? "").Trim();
+        var file = $"salary_items_{period}.csv";
+        return (bytes, file);
+    }
+
+    private async Task<int> CountItemRowsAsync(SalaryItemsQueryDto query, long factoryId)
+    {
+        var q = BuildItemRowsQuery(query, factoryId);
+        return await q.CountAsync();
+    }
+
+    private async Task<List<SalaryItemRowDto>> LoadItemRowsAsync(
+        SalaryItemsQueryDto query, long factoryId, bool applyPaging)
+    {
+        var q = BuildItemRowsQuery(query, factoryId);
+        q = q.OrderBy(x => x.ReportTime).ThenBy(x => x.ItemId);
+
+        if (applyPaging)
+        {
+            var page = query.Page < 1 ? 1 : query.Page;
+            var size = query.PageSize < 1 ? 200 : Math.Min(query.PageSize, 500);
+            q = q.Skip((page - 1) * size).Take(size);
+        }
+
+        var rows = await q.ToListAsync();
+
+        // docs/140：复用色码 Lookup（无 color/spec 字段时为空串）
+        var (colorFieldId, specFieldId, _) = await ResolveSkuFieldIdsAsync(factoryId);
+        if (rows.Count == 0 || (colorFieldId == null && specFieldId == null))
+            return rows;
+
+        var orderIds = rows.Select(r => r.OrderId).Distinct().ToList();
+        var valueMap = await LoadSkuValuesAsync(orderIds, colorFieldId, specFieldId);
+
+        string Lookup(long orderId, long? fieldId) =>
+            fieldId.HasValue && valueMap.TryGetValue((orderId, fieldId.Value), out var v) ? v : "";
+
+        foreach (var r in rows)
+        {
+            r.Color = Lookup(r.OrderId, colorFieldId);
+            r.Spec = Lookup(r.OrderId, specFieldId);
+        }
+        return rows;
+    }
+
+    private IQueryable<SalaryItemRowDto> BuildItemRowsQuery(SalaryItemsQueryDto query, long factoryId)
+    {
+        var periodValue = (query.PeriodValue ?? "").Trim();
+        if (query.PeriodType is not (1 or 2))
+            throw ThrowHelper.Biz(nameof(QueryItemsAsync), "周期类型须为 1月 / 2周");
+        if (string.IsNullOrEmpty(periodValue))
+            throw ThrowHelper.Biz(nameof(QueryItemsAsync), "周期值不能为空");
+        _ = ParsePeriod(query.PeriodType, periodValue, nameof(QueryItemsAsync));
+
+        DateTime? from = query.From;
+        DateTime? to = query.To;
+        if (from.HasValue && to.HasValue && from.Value >= to.Value)
+            throw ThrowHelper.Biz(nameof(QueryItemsAsync), "时间范围起须早于止");
+
+        var q =
+            from i in _db.SalaryStatementItems.AsNoTracking()
+            join s in _db.SalaryStatements.AsNoTracking() on i.StatementId equals s.Id
+            where s.FactoryId == factoryId
+                  && s.PeriodType == query.PeriodType
+                  && s.PeriodValue == periodValue
+            join r in _db.Reports.AsNoTracking() on i.ReportId equals r.Id
+            join u in _db.Users.AsNoTracking() on s.UserId equals u.Id
+            join o in _db.WorkOrders.AsNoTracking() on r.OrderId equals o.Id
+            join op in _db.Operations.AsNoTracking() on r.OperationId equals op.Id
+            select new { i, s, r, u, o, op };
+
+        if (query.OperationId.HasValue)
+            q = q.Where(x => x.r.OperationId == query.OperationId.Value);
+        if (from.HasValue)
+            q = q.Where(x => x.r.ReportTime >= from.Value);
+        if (to.HasValue)
+            q = q.Where(x => x.r.ReportTime < to.Value);
+
+        return q.Select(x => new SalaryItemRowDto
+        {
+            ItemId = x.i.Id,
+            StatementId = x.s.Id,
+            ReportId = x.i.ReportId,
+            UserId = x.s.UserId,
+            UserName = x.u.Name,
+            OrderNo = x.o.OrderNo,
+            OrderId = x.o.Id,
+            OperationId = x.op.Id,
+            OperationName = x.op.Name,
+            GoodQty = x.r.GoodQty,
+            DefectQty = x.r.DefectQty,
+            UnitPrice = x.i.UnitPrice,
+            DeductAmount = x.i.DeductAmount ?? 0,
+            Amount = x.i.Amount,
+            NetAmount = x.i.Amount - (x.i.DeductAmount ?? 0),
+            ReportTime = x.r.ReportTime,
+            Color = "",
+            Spec = ""
+        });
     }
 
     private async Task<decimal> SumPieceworkAsync(long statementId)
@@ -966,13 +1204,8 @@ public class SalaryService : ISalaryService
         return Round2(sum);
     }
 
-    internal static decimal CalcTotalAmount(
-        decimal piecework,
-        decimal baseSalary, decimal mealAllowance, decimal otherAllowance,
-        decimal socialTax, decimal otherDeduction)
-    {
-        return Round2(piecework + baseSalary + mealAllowance + otherAllowance - socialTax - otherDeduction);
-    }
+    /// <summary>应发合计 = Σ(amount − deduct_amount)（docs/136）。</summary>
+    internal static decimal CalcTotalAmount(decimal piecework) => Round2(piecework);
 
     private static decimal Round2(decimal v) =>
         Math.Round(v, 2, MidpointRounding.AwayFromZero);

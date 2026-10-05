@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+<Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
@@ -43,5 +43,12 @@
     <PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
     <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
     <PackageReference Include="Serilog.Formatting.Compact" Version="3.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="scripts/wechat-events-cron.ps1" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="scripts/129-wechat-events.sql" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="scripts/129-WechatEvents-部署.md" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="scripts/131-wechat-group-webhook.sql" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="scripts/141-wechat-webhook-only.sql" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

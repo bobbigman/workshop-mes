@@ -1,5 +1,6 @@
 import axios from 'axios'
 import http, { setSupportProviderName } from './http'
+import { applyCreditPartner } from '@/utils/instanceDisplay'
 
 // 【业务背景】登录认证接口，对应后端 AuthController。
 export const login = (data) => http.post('/Auth/login', data)
@@ -7,7 +8,10 @@ export const loginByPhone = (data) => http.post('/Auth/login-phone', data)
 export const changePassword = (data) => http.post('/Auth/change-password', data)
 export const getInstanceInfo = () =>
   http.get('/instance-info').then(res => {
-    if (res?.code === 0) setSupportProviderName(res.data?.supportProviderName)
+    if (res?.code === 0) {
+      setSupportProviderName(res.data?.supportProviderName)
+      applyCreditPartner(res.data?.creditPartner)
+    }
     return res
   })
 /** 当前工厂授权状态（docs/89） */

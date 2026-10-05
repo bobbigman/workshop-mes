@@ -32,6 +32,29 @@ BEGIN
     ALTER TABLE prod_work_order_operation ADD assignee_user_id BIGINT NULL;
 END");
 
+        // 多人派工明细（docs/202）：一道工序可派多人；从旧单值列迁移
+        await db.Database.ExecuteSqlRawAsync(@"
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'prod_work_order_operation_assignee')
+BEGIN
+  CREATE TABLE prod_work_order_operation_assignee (
+    id                      BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_prod_wop_assignee PRIMARY KEY,
+    work_order_operation_id BIGINT NOT NULL,
+    user_id                 BIGINT NOT NULL,
+    CONSTRAINT UQ_prod_wop_assignee UNIQUE (work_order_operation_id, user_id)
+  );
+END
+IF EXISTS (SELECT 1 FROM sys.tables WHERE name = 'prod_work_order_operation_assignee')
+BEGIN
+  INSERT INTO prod_work_order_operation_assignee (work_order_operation_id, user_id)
+  SELECT t.id, t.assignee_user_id
+  FROM prod_work_order_operation t
+  WHERE t.assignee_user_id IS NOT NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM prod_work_order_operation_assignee a
+      WHERE a.work_order_operation_id = t.id AND a.user_id = t.assignee_user_id
+    );
+END");
+
         // 报工时长（分钟）
         await db.Database.ExecuteSqlRawAsync(@"
 IF COL_LENGTH('prod_report', 'duration_minutes') IS NULL
@@ -115,6 +138,12 @@ BEGIN
         CONSTRAINT UQ_sys_wechat_alert_log UNIQUE (factory_id, alert_key, send_date)
     );
 END");
+
+        // docs/129：紧跟企微设置/日志后建事件表+发送账本，避免后续升级段失败时测试推送缺表 500
+        await db.Database.ExecuteSqlRawAsync(WechatEventSchema.UpgradeSql);
+        await db.Database.ExecuteSqlRawAsync(WechatPushplusRollbackSql);
+        await db.Database.ExecuteSqlRawAsync(WechatEventSchema.GroupUpgradeSql);
+        await db.Database.ExecuteSqlRawAsync(WechatEventSchema.WebhookOnlyUpgradeSql);
 
         // 报工复核双轨（docs/22）：历史行 DEFAULT 1=已通过；新插入必须由应用显式赋 0/1
         await db.Database.ExecuteSqlRawAsync(@"
@@ -218,11 +247,6 @@ BEGIN
     period_type   TINYINT NOT NULL,
     period_value  NVARCHAR(16) NOT NULL,
     total_amount  DECIMAL(12,2) NOT NULL CONSTRAINT DF_salary_statement_amt DEFAULT 0,
-    base_salary      DECIMAL(12,2) NOT NULL CONSTRAINT DF_salary_statement_base DEFAULT 0,
-    meal_allowance   DECIMAL(12,2) NOT NULL CONSTRAINT DF_salary_statement_meal DEFAULT 0,
-    other_allowance  DECIMAL(12,2) NOT NULL CONSTRAINT DF_salary_statement_oall DEFAULT 0,
-    social_tax       DECIMAL(12,2) NOT NULL CONSTRAINT DF_salary_statement_tax DEFAULT 0,
-    other_deduction  DECIMAL(12,2) NOT NULL CONSTRAINT DF_salary_statement_oded DEFAULT 0,
     status        TINYINT NOT NULL CONSTRAINT DF_salary_statement_st DEFAULT 0,
     confirmed_at  DATETIME2 NULL,
     created_at    DATETIME2 NOT NULL CONSTRAINT DF_salary_statement_ca DEFAULT SYSDATETIME(),
@@ -230,22 +254,52 @@ BEGIN
   );
 END");
 
-        // 工资单手工列（docs/73）：底薪/补贴/扣款；老库幂等补列
+        // docs/136：5 手工列——历史全 0 则 DROP；有非 0 则保留列（历史遗留停用，实体已不映射）
+        // 不回溯：旧 revoke 删单留下的历史缺口不补；已删单不恢复。
+        // 整段必须动态 SQL：列已删/从未建时，静态 WHERE base_salary 会在批编译期报 207，阻断后续 DbCompat（含企微账本表）。
         await db.Database.ExecuteSqlRawAsync(@"
-IF COL_LENGTH('salary_statement', 'base_salary') IS NULL
-  ALTER TABLE salary_statement ADD base_salary DECIMAL(12,2) NOT NULL CONSTRAINT DF_salary_statement_base DEFAULT 0;");
-        await db.Database.ExecuteSqlRawAsync(@"
-IF COL_LENGTH('salary_statement', 'meal_allowance') IS NULL
-  ALTER TABLE salary_statement ADD meal_allowance DECIMAL(12,2) NOT NULL CONSTRAINT DF_salary_statement_meal DEFAULT 0;");
-        await db.Database.ExecuteSqlRawAsync(@"
-IF COL_LENGTH('salary_statement', 'other_allowance') IS NULL
-  ALTER TABLE salary_statement ADD other_allowance DECIMAL(12,2) NOT NULL CONSTRAINT DF_salary_statement_oall DEFAULT 0;");
-        await db.Database.ExecuteSqlRawAsync(@"
-IF COL_LENGTH('salary_statement', 'social_tax') IS NULL
-  ALTER TABLE salary_statement ADD social_tax DECIMAL(12,2) NOT NULL CONSTRAINT DF_salary_statement_tax DEFAULT 0;");
-        await db.Database.ExecuteSqlRawAsync(@"
-IF COL_LENGTH('salary_statement', 'other_deduction') IS NULL
-  ALTER TABLE salary_statement ADD other_deduction DECIMAL(12,2) NOT NULL CONSTRAINT DF_salary_statement_oded DEFAULT 0;");
+IF COL_LENGTH('salary_statement', 'base_salary') IS NOT NULL
+   AND COL_LENGTH('salary_statement', 'meal_allowance') IS NOT NULL
+   AND COL_LENGTH('salary_statement', 'other_allowance') IS NOT NULL
+   AND COL_LENGTH('salary_statement', 'social_tax') IS NOT NULL
+   AND COL_LENGTH('salary_statement', 'other_deduction') IS NOT NULL
+BEGIN
+  DECLARE @hasNonZero int = 1;
+  DECLARE @chk nvarchar(max) = N'
+    SELECT @cnt = CASE WHEN EXISTS (
+      SELECT 1 FROM salary_statement
+      WHERE base_salary <> 0 OR meal_allowance <> 0 OR other_allowance <> 0
+         OR social_tax <> 0 OR other_deduction <> 0
+    ) THEN 1 ELSE 0 END';
+  EXEC sp_executesql @chk, N'@cnt int OUTPUT', @cnt = @hasNonZero OUTPUT;
+  IF @hasNonZero = 0
+  BEGIN
+    DECLARE @df sysname, @sql nvarchar(512);
+    DECLARE @cols TABLE(name sysname);
+    INSERT INTO @cols(name) VALUES
+      (N'base_salary'),(N'meal_allowance'),(N'other_allowance'),(N'social_tax'),(N'other_deduction');
+    DECLARE c CURSOR LOCAL FAST_FORWARD FOR SELECT name FROM @cols;
+    DECLARE @col sysname;
+    OPEN c;
+    FETCH NEXT FROM c INTO @col;
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+      SELECT @df = dc.name
+      FROM sys.default_constraints dc
+      INNER JOIN sys.columns col ON col.default_object_id = dc.object_id
+      WHERE dc.parent_object_id = OBJECT_ID(N'salary_statement') AND col.name = @col;
+      IF @df IS NOT NULL
+      BEGIN
+        SET @sql = N'ALTER TABLE salary_statement DROP CONSTRAINT [' + @df + N']';
+        EXEC(@sql);
+      END
+      SET @sql = N'ALTER TABLE salary_statement DROP COLUMN [' + @col + N']';
+      EXEC(@sql);
+      FETCH NEXT FROM c INTO @col;
+    END
+    CLOSE c; DEALLOCATE c;
+  END
+END");
 
         await db.Database.ExecuteSqlRawAsync(@"
 IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'salary_statement_item')
@@ -362,6 +416,19 @@ BEGIN
   );
 END");
 
+        // 工人手机视角（docs/200）：每工厂一条；默认全车间可见
+        await db.Database.ExecuteSqlRawAsync(@"
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'sys_worker_view_setting')
+BEGIN
+  CREATE TABLE sys_worker_view_setting (
+    id               BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_sys_worker_view_setting PRIMARY KEY,
+    factory_id       BIGINT NOT NULL,
+    worker_view_mode TINYINT NOT NULL CONSTRAINT DF_sys_worker_view_mode DEFAULT 1,
+    updated_at       DATETIME2 NOT NULL CONSTRAINT DF_sys_worker_view_ua DEFAULT SYSDATETIME(),
+    CONSTRAINT UQ_sys_worker_view_setting_factory UNIQUE (factory_id)
+  );
+END");
+
         // 用户微信号（docs/80）：可空，仅记录；不做登录/推送
         await db.Database.ExecuteSqlRawAsync(@"
 IF COL_LENGTH('sys_user', 'wechat_id') IS NULL
@@ -443,5 +510,64 @@ BEGIN
         ON sys_wx_bind(factory_id, chan_type, wx_openid)
         WHERE status=1;
 END");
+
+        // 报工修改日志（docs/205）
+        await db.Database.ExecuteSqlRawAsync(@"
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'prod_report_change_log')
+BEGIN
+  CREATE TABLE prod_report_change_log (
+    id                   BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_prod_report_change_log PRIMARY KEY,
+    factory_id           BIGINT NOT NULL,
+    report_id            BIGINT NOT NULL,
+    changed_by           BIGINT NOT NULL,
+    old_good_qty         INT NOT NULL,
+    old_defect_qty       INT NOT NULL,
+    old_defect_id        BIGINT NULL,
+    old_duration_minutes INT NOT NULL,
+    new_good_qty         INT NOT NULL,
+    new_defect_qty       INT NOT NULL,
+    new_defect_id        BIGINT NULL,
+    new_duration_minutes INT NOT NULL,
+    source               TINYINT NOT NULL,
+    changed_at           DATETIME2 NOT NULL CONSTRAINT DF_prod_report_change_log_ca DEFAULT SYSDATETIME()
+  );
+  CREATE INDEX ix_report_change_log_report ON prod_report_change_log(report_id, changed_at DESC);
+  CREATE INDEX ix_report_change_log_factory ON prod_report_change_log(factory_id, changed_at DESC);
+END");
     }
+
+    /// <summary>docs/133 回滚：去掉 Pushplus 升表字段与规则扩展列；列不存在则跳过。</summary>
+    const string WechatPushplusRollbackSql = """
+DECLARE @drop NVARCHAR(MAX) = N'';
+SELECT @drop = @drop + N'ALTER TABLE sys_wechat_alert_setting DROP CONSTRAINT ' + QUOTENAME(dc.name) + N';'
+FROM sys.default_constraints dc
+JOIN sys.columns c ON c.default_object_id = dc.object_id
+WHERE dc.parent_object_id = OBJECT_ID(N'dbo.sys_wechat_alert_setting')
+  AND c.name IN (N'channel', N'pushplus_token', N'pushplus_tokens', N'due_warn_days', N'overdue_repeat_hours');
+IF LEN(@drop) > 0 EXEC sp_executesql @drop;
+IF COL_LENGTH(N'sys_wechat_alert_setting', N'channel') IS NOT NULL
+    ALTER TABLE sys_wechat_alert_setting DROP COLUMN channel;
+IF COL_LENGTH(N'sys_wechat_alert_setting', N'pushplus_token') IS NOT NULL
+    ALTER TABLE sys_wechat_alert_setting DROP COLUMN pushplus_token;
+IF COL_LENGTH(N'sys_wechat_alert_setting', N'pushplus_tokens') IS NOT NULL
+    ALTER TABLE sys_wechat_alert_setting DROP COLUMN pushplus_tokens;
+IF COL_LENGTH(N'sys_wechat_alert_setting', N'due_warn_days') IS NOT NULL
+    ALTER TABLE sys_wechat_alert_setting DROP COLUMN due_warn_days;
+IF COL_LENGTH(N'sys_wechat_alert_setting', N'overdue_repeat_hours') IS NOT NULL
+    ALTER TABLE sys_wechat_alert_setting DROP COLUMN overdue_repeat_hours;
+IF OBJECT_ID(N'dbo.sys_wechat_alert_rule', N'U') IS NOT NULL
+BEGIN
+    DELETE FROM sys_wechat_alert_rule WHERE event_type = N'due_alert';
+    IF COL_LENGTH(N'sys_wechat_alert_rule', N'severity') IS NOT NULL
+        ALTER TABLE sys_wechat_alert_rule DROP COLUMN severity;
+    IF COL_LENGTH(N'sys_wechat_alert_rule', N'quiet_begin') IS NOT NULL
+        ALTER TABLE sys_wechat_alert_rule DROP COLUMN quiet_begin;
+    IF COL_LENGTH(N'sys_wechat_alert_rule', N'quiet_end') IS NOT NULL
+        ALTER TABLE sys_wechat_alert_rule DROP COLUMN quiet_end;
+    IF COL_LENGTH(N'sys_wechat_alert_rule', N'dedup_key_type') IS NOT NULL
+        ALTER TABLE sys_wechat_alert_rule DROP COLUMN dedup_key_type;
+    IF COL_LENGTH(N'sys_wechat_alert_rule', N'dedup_limit') IS NOT NULL
+        ALTER TABLE sys_wechat_alert_rule DROP COLUMN dedup_limit;
+END
+""";
 }

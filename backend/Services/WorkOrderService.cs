@@ -110,8 +110,16 @@ public class WorkOrderTaskDto
     public int PlanQty { get; set; }
     public int DoneQty { get; set; }       // 该工序已报良品合计
     public int DefectQty { get; set; }     // 该工序已报不良合计
-    public long? AssigneeUserId { get; set; }   // 派工执行人（docs/29）；空=未派工
+    public long? AssigneeUserId { get; set; }   // 冗余首个执行人；空=未派工
     public string AssigneeName { get; set; } = "";
+    /// <summary>多人派工列表（docs/202）；空=未派工。</summary>
+    public List<WorkOrderAssigneeDto> Assignees { get; set; } = new();
+}
+
+public class WorkOrderAssigneeDto
+{
+    public long UserId { get; set; }
+    public string UserName { get; set; } = "";
 }
 
 public class WorkOrderDetailDto
@@ -132,7 +140,8 @@ public class WorkOrderDetailDto
 public class WorkOrderService : IWorkOrderService
 {
     private readonly AppDbContext _db;
-    public WorkOrderService(AppDbContext db) { _db = db; }
+    private readonly WechatEventService? _events;
+    public WorkOrderService(AppDbContext db, WechatEventService? events = null) { _db = db; _events = events; }
 
     public async Task<ApiResult<PageResult<WorkOrderListDto>>> QueryAsync(WorkOrderQueryDto query, long factoryId)
     {
@@ -442,21 +451,48 @@ public class WorkOrderService : IWorkOrderService
         }
 
         var names = await _db.Operations.AsNoTracking().ToDictionaryAsync(o => o.Id, o => o.Name);
-        var assigneeIds = tasks.Where(t => t.AssigneeUserId != null).Select(t => t.AssigneeUserId!.Value).Distinct().ToList();
-        var assigneeNames = assigneeIds.Count > 0
-            ? await _db.Users.AsNoTracking().Where(u => assigneeIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.Name)
-            : new Dictionary<long, string>();
-        return tasks.Select(t => new WorkOrderTaskDto
+        var taskIds = tasks.Select(t => t.Id).ToList();
+        var assigneeRows = taskIds.Count == 0
+            ? new List<(long TaskId, long UserId)>()
+            : (await _db.WorkOrderOperationAssignees.AsNoTracking()
+                .Where(a => taskIds.Contains(a.WorkOrderOperationId))
+                .Select(a => new { a.WorkOrderOperationId, a.UserId })
+                .ToListAsync())
+                .Select(a => (a.WorkOrderOperationId, a.UserId))
+                .ToList();
+        // 兼容仅有冗余列的旧数据
+        foreach (var t in tasks.Where(t => t.AssigneeUserId != null))
         {
-            Id = t.Id,
-            OperationId = t.OperationId,
-            OperationName = names.GetValueOrDefault(t.OperationId, ""),
-            Seq = t.Seq,
-            PlanQty = t.PlanQty,
-            DoneQty = goodMap.GetValueOrDefault(t.OperationId, 0),
-            DefectQty = defectMap.GetValueOrDefault(t.OperationId, 0),
-            AssigneeUserId = t.AssigneeUserId,
-            AssigneeName = t.AssigneeUserId == null ? "" : assigneeNames.GetValueOrDefault(t.AssigneeUserId.Value, "")
+            if (!assigneeRows.Any(a => a.Item1 == t.Id && a.Item2 == t.AssigneeUserId))
+                assigneeRows.Add((t.Id, t.AssigneeUserId!.Value));
+        }
+        var allAssigneeIds = assigneeRows.Select(a => a.Item2).Distinct().ToList();
+        var assigneeNames = allAssigneeIds.Count > 0
+            ? await _db.Users.AsNoTracking().Where(u => allAssigneeIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.Name)
+            : new Dictionary<long, string>();
+        return tasks.Select(t =>
+        {
+            var list = assigneeRows.Where(a => a.Item1 == t.Id)
+                .Select(a => new WorkOrderAssigneeDto
+                {
+                    UserId = a.Item2,
+                    UserName = assigneeNames.GetValueOrDefault(a.Item2, "")
+                }).ToList();
+            var first = list.FirstOrDefault();
+            return new WorkOrderTaskDto
+            {
+                Id = t.Id,
+                OperationId = t.OperationId,
+                OperationName = names.GetValueOrDefault(t.OperationId, ""),
+                Seq = t.Seq,
+                PlanQty = t.PlanQty,
+                DoneQty = goodMap.GetValueOrDefault(t.OperationId, 0),
+                DefectQty = defectMap.GetValueOrDefault(t.OperationId, 0),
+                AssigneeUserId = first?.UserId ?? t.AssigneeUserId,
+                AssigneeName = first?.UserName
+                    ?? (t.AssigneeUserId == null ? "" : assigneeNames.GetValueOrDefault(t.AssigneeUserId.Value, "")),
+                Assignees = list
+            };
         }).ToList();
     }
 
@@ -491,9 +527,11 @@ public class WorkOrderService : IWorkOrderService
 
     public async Task<ApiResult<object?>> UpdateAsync(long id, WorkOrderUpdateDto dto, long factoryId)
     {
+        await using var tx = await _db.Database.BeginTransactionAsync();
         var order = await _db.WorkOrders.FirstOrDefaultAsync(o => o.Id == id && o.FactoryId == factoryId)
             ?? throw ThrowHelper.Biz(nameof(UpdateAsync), "工单不存在");
 
+        await WechatEventService.LockOrderAsync(_db, order);
         if (order.Status == 3)
             throw ThrowHelper.Biz(nameof(UpdateAsync), "工单已取消，不可修改");
         if (order.Status == 2)
@@ -567,14 +605,18 @@ public class WorkOrderService : IWorkOrderService
             await SaveExtAsync(id, dto.Ext);
 
         await RecalcStatusAsync(order);
+        await tx.CommitAsync();
         return ApiResult<object?>.OkMsg();
     }
 
     public async Task<ApiResult<object?>> TransitionAsync(long id, string action, long factoryId)
     {
+        await using var tx = await _db.Database.BeginTransactionAsync();
         var order = await _db.WorkOrders.FirstOrDefaultAsync(o => o.Id == id && o.FactoryId == factoryId)
             ?? throw ThrowHelper.Biz(nameof(TransitionAsync), "工单不存在");
 
+        await WechatEventService.LockOrderAsync(_db, order);
+        var beforeStatus = order.Status;
         switch (action)
         {
             case "start":
@@ -603,6 +645,8 @@ public class WorkOrderService : IWorkOrderService
         }
 
         await _db.SaveChangesAsync();
+        if (_events != null) await _events.EnqueueAsync(order, beforeStatus);
+        await tx.CommitAsync();
         return ApiResult<object?>.OkMsg();
     }
 
@@ -757,6 +801,9 @@ public class WorkOrderService : IWorkOrderService
     /// <summary>按工序任务重算工单完成状态。注意：本方法不修改未开始(0)/已取消(3)。</summary>
     public async Task RecalcStatusAsync(ProdWorkOrder order)
     {
+        await using var ownedTx = _db.Database.CurrentTransaction == null ? await _db.Database.BeginTransactionAsync() : null;
+        await WechatEventService.LockOrderAsync(_db, order);
+        var beforeStatus = order.Status;
         if (order.Status == 3) return;
 
         var hasReport = await _db.Reports.AnyAsync(r => r.OrderId == order.Id && r.ReviewStatus != 2);
@@ -764,6 +811,8 @@ public class WorkOrderService : IWorkOrderService
         {
             if (order.Status == 1) order.Status = 0; // 无报工回到未开始
             await _db.SaveChangesAsync();
+            if (_events != null) await _events.EnqueueAsync(order, beforeStatus);
+            if (ownedTx != null) await ownedTx.CommitAsync();
             return;
         }
 
@@ -790,5 +839,7 @@ public class WorkOrderService : IWorkOrderService
         }
 
         await _db.SaveChangesAsync();
+        if (_events != null) await _events.EnqueueAsync(order, beforeStatus);
+        if (ownedTx != null) await ownedTx.CommitAsync();
     }
 }

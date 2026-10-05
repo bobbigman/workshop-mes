@@ -60,6 +60,20 @@ public class SupportSearchResult
     public int TotalMatched { get; set; }
 }
 
+/// <summary>FAQ 分组（docs/113：## = 分组）。</summary>
+public class FaqGroupDto
+{
+    public string Group { get; set; } = "";
+    public List<FaqQuestionDto> Questions { get; set; } = new();
+}
+
+/// <summary>FAQ 单条（docs/113：### = 问题标题，正文 = 口径）。</summary>
+public class FaqQuestionDto
+{
+    public string Title { get; set; } = "";
+    public string Content { get; set; } = "";
+}
+
 /// <summary>
 /// 智能客服知识目录服务（docs/25 §3、§4）。只读专用发布目录的 UTF-8 md/txt；
 /// 有界文件读取、路径逃逸防护、元信息解析、章节检索、指纹缓存失效。
@@ -68,6 +82,8 @@ public class SupportDocumentService
 {
     private const int BlockMaxChars = 1500;   // 长章节分块上限
     private const int ExcerptMaxChars = 800;  // 单个来源摘录上限（300→800，减少截断逼模型脑补）
+    private const string FaqFileName = "10-系统能力50问.md";
+    private const string FaqEmptyHint = "常见问题暂未收录";
 
     private sealed class SupportChapter
     {
@@ -118,6 +134,107 @@ public class SupportDocumentService
         if (!Directory.Exists(full))
             throw ThrowHelper.Biz(nameof(ResolveRoot), $"客服知识目录不存在：{full}");
         return full;
+    }
+
+    /// <summary>
+    /// PC 常见问题页（docs/113）：读 10-系统能力50问.md，按 ##=分组、###=问题+正文 解析。
+    /// md 缺失/解析失败返回空列表 + 占位文案，不抛错不编造。
+    /// </summary>
+    public List<FaqGroupDto> GetFaq()
+    {
+        try
+        {
+            if (!_opt.IsConfigured) return new List<FaqGroupDto>();
+            var root = TryResolveRootPath();
+            if (root == null) return new List<FaqGroupDto>();
+
+            var fullPath = Path.GetFullPath(Path.Combine(root, FaqFileName));
+            if (!fullPath.StartsWith(root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                    + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(fullPath, root, StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogWarning("FAQ 路径逃逸拦截 file={File}", FaqFileName);
+                return new List<FaqGroupDto>();
+            }
+            if (!File.Exists(fullPath))
+            {
+                _logger.LogWarning("FAQ 文件不存在 path={Path}", fullPath);
+                return new List<FaqGroupDto>();
+            }
+
+            var text = ReadUtf8(fullPath);
+            var (_, content) = SplitFrontMatter(text);
+            return ParseFaqMarkdown(content);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "FAQ 读取/解析失败 file={File}", FaqFileName);
+            return new List<FaqGroupDto>();
+        }
+    }
+
+    /// <summary>FAQ 占位文案（md 缺失或无分组时前端展示）。</summary>
+    public static string FaqPlaceholder => FaqEmptyHint;
+
+    /// <summary>解析 RootPath，不要求 Enabled；失败返回 null。</summary>
+    private string? TryResolveRootPath()
+    {
+        if (!_opt.IsConfigured) return null;
+        var root = _opt.RootPath.Trim();
+        var full = Path.IsPathRooted(root)
+            ? root
+            : Path.Combine(AppContext.BaseDirectory, root);
+        full = Path.GetFullPath(full);
+        return Directory.Exists(full) ? full : null;
+    }
+
+    /// <summary>## = 分组；### = 问题标题；其余行归入当前问题正文。忽略 # 一级标题。</summary>
+    private static List<FaqGroupDto> ParseFaqMarkdown(string content)
+    {
+        var groups = new List<FaqGroupDto>();
+        FaqGroupDto? curGroup = null;
+        FaqQuestionDto? curQ = null;
+        var body = new StringBuilder();
+
+        void FlushQuestion()
+        {
+            if (curGroup == null || curQ == null) return;
+            curQ.Content = body.ToString().Trim();
+            body.Clear();
+            if (!string.IsNullOrWhiteSpace(curQ.Title))
+                curGroup.Questions.Add(curQ);
+            curQ = null;
+        }
+
+        foreach (var raw in content.Split('\n'))
+        {
+            var line = raw.TrimEnd('\r');
+            var t = line.Trim();
+            if (t.StartsWith("### "))
+            {
+                FlushQuestion();
+                if (curGroup == null)
+                {
+                    curGroup = new FaqGroupDto { Group = "未分组" };
+                    groups.Add(curGroup);
+                }
+                curQ = new FaqQuestionDto { Title = t[4..].Trim() };
+                continue;
+            }
+            if (t.StartsWith("## "))
+            {
+                FlushQuestion();
+                curGroup = new FaqGroupDto { Group = t[3..].Trim() };
+                groups.Add(curGroup);
+                continue;
+            }
+            if (t.StartsWith("# "))
+                continue; // 文档总标题，忽略
+            if (curQ != null)
+                body.AppendLine(line);
+        }
+        FlushQuestion();
+        return groups.Where(g => g.Questions.Count > 0).ToList();
     }
 
     /// <summary>扫描并加载客服文档（S03：有界读取 + 元信息 + 路径安全 + 状态区分）。</summary>

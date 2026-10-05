@@ -42,6 +42,16 @@
         </ol>
       </section>
 
+      <section class="block" aria-label="本次新增">
+        <h2 class="block-title">本次新增（2026-10-02）</h2>
+        <ul class="ext-list">
+          <li v-for="item in newAdds" :key="item.label">
+            <strong>{{ item.label }}</strong>
+            <span>{{ item.text }}</span>
+          </li>
+        </ul>
+      </section>
+
       <section class="block" aria-label="三大差异">
         <h2 class="block-title">和别人比，您最该记住这三点</h2>
         <div class="diff-grid">
@@ -128,27 +138,36 @@
     </main>
 
     <footer class="adv-footer">
-      <p class="credit-line">{{ CREDIT_LINE }}</p>
-      <p class="credit-roles">{{ CREDIT_ROLES }}</p>
+      <p class="credit-line">{{ creditLine }}</p>
+      <p v-if="creditRoles" class="credit-roles">{{ creditRoles }}</p>
       <p>给老板看上面 · 销售备忘默认收着 · 口径对齐推广定盘</p>
     </footer>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import {
   Timer, Coin, View, Lock, Setting, OfficeBuilding,
   ArrowRight, ArrowDown, ArrowUp
 } from '@element-plus/icons-vue'
 import { VALUE_TIPS } from '@/constants/valueTips'
-import { CREDIT_LINE, CREDIT_ROLES } from '@/utils/instanceDisplay'
+import { getInstanceInfo } from '@/api/auth'
+import { creditLine, creditRoles } from '@/utils/instanceDisplay'
 
 const signedIn = !!localStorage.getItem('token')
 const returnPath = signedIn
   ? (Number(localStorage.getItem('role')) === 2 ? '/h5/home' : '/order')
   : '/login'
 const salesOpen = ref(false)
+
+onMounted(async () => {
+  try {
+    await getInstanceInfo()
+  } catch {
+    // 回退胡工单方版
+  }
+})
 
 const pains = [
   {
@@ -180,6 +199,17 @@ const flowSteps = [
   '派工 / 异常上报'
 ]
 
+const newAdds = [
+  { label: '手机端视角（200）', text: '工厂级开关，默认全车间可见可报；可选"只看我的任务"。' },
+  { label: '班组长手机派工（201）', text: '移动端派工 + 推送，班组长限本组。' },
+  { label: '多人派工 + 两种分摊（202）', text: '平均 / 按工时两种拆分计件。' },
+  { label: '手机撤回改 + 留痕（205）', text: '未审核报工手机撤改，修改留痕可追。' },
+  { label: '工人今日计件（206）', text: '手机看当日产量与工资，即时激励。' },
+  { label: '不良品三表（207，在做）', text: '分布 / 汇总 / 明细；口径含待复核+已通过、不含退回。' },
+  { label: '工资批量重算（134）', text: '多人一次重算，不用逐个点。' },
+  { label: '只算计件（135）', text: '工资单拿掉手工发薪项，保底/加班/考勤归人事。' }
+]
+
 const diffs = [
   {
     icon: Lock,
@@ -209,7 +239,7 @@ const demoLinks = [
   { path: '/h5/scan', label: '② 扫码报工', hint: '手机报工页' },
   { path: '/board', label: '③ 看板', hint: '进度跳、黄红预警' },
   { path: '/salary', label: '④ 工资', hint: '工资报表 · 明细可查' },
-  { path: '/wechat-alert', label: '⑤ 交期提醒', hint: '企业微信预警 · 当场推一条' },
+  { path: '/wechat-alert', label: '⑤ 交期提醒', hint: '微信预警 · 群机器人即可' },
   { path: '/quote-suggest', label: '⑥ 建议报价', hint: '金蝶取数 · 有依据' },
   { path: '/schedule', label: '⑥ 排产评分', hint: '齐套 · 不接烂单' },
   { path: '/execution-monitor', label: '⑦ 派工', hint: '执行监控' },

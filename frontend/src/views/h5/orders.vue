@@ -56,7 +56,10 @@
         <span class="time" :class="dueClass(row)">交期 {{ formatDue(row.dueDate) }}</span>
       </div>
       <div v-if="opLine(row)" class="op-line">{{ opLine(row) }}</div>
-      <div class="go">去报工 ›</div>
+      <div class="card-actions" @click.stop>
+        <button v-if="canAssign" type="button" class="act-btn" @click="goAssign(row)">派工</button>
+        <button type="button" class="act-btn primary" @click="goReport(row)">去报工 ›</button>
+      </div>
     </div>
 
     <TabBar active="home" />
@@ -66,14 +69,17 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getOrderList, getOrderStatusCounts } from '@/api/prod'
+import { getOrderList, getOrderStatusCounts, getWorkerView } from '@/api/prod'
 import TabBar from './TabBar.vue'
 import FactoryBadge from '@/components/FactoryBadge.vue'
 import H5LogoutBtn from '@/components/H5LogoutBtn.vue'
 import { canUse, FEATURE, currentTier } from '@/utils/licenseTier'
+import { setWorkerViewMode, isWorkerTasksOnlyView } from '@/utils/workerView'
 
 const router = useRouter()
 const canWage = canUse(currentTier(), FEATURE.PieceWage)
+const role = Number(localStorage.getItem('role') || 0)
+const canAssign = role === 1 || role === 3
 const statusTab = ref('all')
 const keyword = ref('')
 const list = ref([])
@@ -111,6 +117,16 @@ function opLine(row) {
 }
 
 onMounted(async () => {
+  try {
+    const res = await getWorkerView()
+    setWorkerViewMode(res.data?.workerViewMode)
+  } catch (error) {
+    console.error('[工人视角] 读取工厂视角配置失败', error)
+  }
+  if (isWorkerTasksOnlyView()) {
+    await router.replace('/h5/tasks')
+    return
+  }
   await loadCounts()
   await loadList()
 })
@@ -157,6 +173,10 @@ async function onTab(key) {
 
 function goReport(row) {
   router.push({ path: '/h5/report', query: { order: row.orderNo } })
+}
+
+function goAssign(row) {
+  router.push({ path: '/h5/report', query: { order: row.orderNo, assign: '1' } })
 }
 
 function goMine() {
@@ -224,5 +244,14 @@ h2 { margin: 0; font-size: 18px; flex: none; color: var(--app-text-1); }
 .due-warning { color: var(--app-warning); }
 .due-overdue { color: var(--app-danger); font-weight: 600; }
 .op-line { margin-top: 10px; font-size: 13px; color: var(--app-text-2); line-height: 1.4; }
-.go { margin-top: 8px; text-align: right; font-size: 14px; color: var(--app-primary); font-weight: 600; }
+.card-actions {
+  margin-top: 10px; display: flex; justify-content: flex-end; gap: 8px;
+}
+.act-btn {
+  height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid var(--app-border);
+  background: var(--app-card); color: var(--app-text-2); font-size: 13px; font-weight: 600;
+}
+.act-btn.primary {
+  border-color: var(--app-primary); background: var(--app-primary-light); color: var(--app-primary);
+}
 </style>

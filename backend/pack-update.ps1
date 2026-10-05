@@ -47,8 +47,12 @@ foreach ($d in @("publish-win64", "_build_out")) {
     $p = Join-Path $out $d
     if (Test-Path $p) { Remove-Item $p -Recurse -Force }
 }
+# 212: 历史验证构建残渣目录（如 _verify_build_81），非程序本体，递归删除
+Get-ChildItem $out -Recurse -Directory -Filter "_verify_*" | Remove-Item -Recurse -Force
 # 开发调试残留：非程序本体，删掉保持包干净
+# 212: 补漏——接口调试响应 _*.json（登录/工资/订单等）会被 publish 带进包，一律递归删除，含 wwwroot 下
 Get-ChildItem $out -Recurse -Include "global.json","_mcp_body.json","_t.json","*.staticwebassets*.json" -File | Remove-Item -Force -ErrorAction SilentlyContinue
+Get-ChildItem $out -Recurse -Filter "_*.json" -File | Remove-Item -Force -ErrorAction SilentlyContinue
 if (Test-Path (Join-Path $out "certs")) { Remove-Item (Join-Path $out "certs") -Recurse -Force }
 if (Test-Path (Join-Path $out "logs")) { Remove-Item (Join-Path $out "logs") -Recurse -Force }
 

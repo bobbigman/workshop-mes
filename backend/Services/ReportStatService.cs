@@ -10,6 +10,8 @@ public interface IReportStatService
     Task<ApiResult<ProductionReportDto>> ProductionAsync(ProductionReportQueryDto query, long factoryId);
     Task<ApiResult<BoardDto>> BoardAsync(long factoryId);
     Task<ApiResult<SkuSummaryDto>> SkuSummaryAsync(SkuSummaryQueryDto query, long factoryId);
+    /// <summary>不良品报表三表（docs/207）：分布/汇总/明细。口径：待复核+已通过，不含退回。</summary>
+    Task<ApiResult<DefectReportDto>> DefectAsync(DefectReportQueryDto query, long factoryId);
 }
 
 public class ProductionReportQueryDto
@@ -54,6 +56,70 @@ public class SkuSummaryItemDto
     public int TotalGood { get; set; }
     public int TotalDefect { get; set; }
     public int ReportCount { get; set; }
+}
+
+public class DefectReportQueryDto
+{
+    public string Period { get; set; } = "today";
+    /// <summary>工单号 / 产品编号 / 产品名称关键词（模糊）。</summary>
+    public string? Keyword { get; set; }
+}
+
+public class DefectReportDto
+{
+    /// <summary>页上展示的口径说明。</summary>
+    public string ReviewScope { get; set; } = "待复核+已通过，不含退回";
+    public List<DefectDistributionItemDto> Distribution { get; set; } = new();
+    public List<DefectSummaryItemDto> Summary { get; set; } = new();
+    public List<DefectDetailItemDto> Details { get; set; } = new();
+}
+
+public class DefectDistributionItemDto
+{
+    public long? DefectId { get; set; }
+    public string DefectName { get; set; } = "";
+    public int ReportCount { get; set; }
+    public int TotalDefect { get; set; }
+    /// <summary>占本期内全部不良数的占比（%）。</summary>
+    public double SharePercent { get; set; }
+    public List<DefectDistributionOpDto> ByOperation { get; set; } = new();
+}
+
+public class DefectDistributionOpDto
+{
+    public long OperationId { get; set; }
+    public string OperationName { get; set; } = "";
+    public int ReportCount { get; set; }
+    public int TotalDefect { get; set; }
+}
+
+public class DefectSummaryItemDto
+{
+    public long OperationId { get; set; }
+    public string OperationName { get; set; } = "";
+    public long? DefectId { get; set; }
+    public string DefectName { get; set; } = "";
+    public long UserId { get; set; }
+    public string UserName { get; set; } = "";
+    public int TotalDefect { get; set; }
+    public int TotalGood { get; set; }
+    /// <summary>不良率 = 不良/(良品+不良)×100。</summary>
+    public double DefectRate { get; set; }
+}
+
+public class DefectDetailItemDto
+{
+    public long Id { get; set; }
+    public string OrderNo { get; set; } = "";
+    public string ProductCode { get; set; } = "";
+    public string ProductName { get; set; } = "";
+    public string OperationName { get; set; } = "";
+    public string UserName { get; set; } = "";
+    public DateTime ReportTime { get; set; }
+    public string DefectName { get; set; } = "";
+    public int DefectQty { get; set; }
+    public int GoodQty { get; set; }
+    public int ReviewStatus { get; set; }
 }
 
 public class BoardDto
@@ -246,6 +312,143 @@ public class ReportStatService : IReportStatService
                     return (start, start.AddDays(1));
                 }
         }
+    }
+
+    public async Task<ApiResult<DefectReportDto>> DefectAsync(DefectReportQueryDto query, long factoryId)
+    {
+        var (start, end) = ResolvePeriod(query.Period);
+        var keyword = string.IsNullOrWhiteSpace(query.Keyword) ? null : query.Keyword.Trim();
+
+        // 口径：待复核(0)+已通过(1)，不含退回(2)；仅有不良数的报工（docs/207）
+        var baseQuery =
+            from r in _db.Reports.AsNoTracking()
+            where r.FactoryId == factoryId
+                  && r.ReviewStatus != 2
+                  && r.DefectQty > 0
+                  && r.ReportTime >= start && r.ReportTime < end
+            join o in _db.WorkOrders.AsNoTracking() on r.OrderId equals o.Id
+            join p in _db.Products.AsNoTracking() on o.ProductId equals p.Id
+            join op in _db.Operations.AsNoTracking() on r.OperationId equals op.Id
+            join u in _db.Users.AsNoTracking() on r.UserId equals u.Id
+            join d in _db.DefectItems.AsNoTracking() on r.DefectId equals d.Id into dj
+            from d in dj.DefaultIfEmpty()
+            select new
+            {
+                r.Id,
+                r.DefectId,
+                DefectName = d != null ? d.Name : "(未填原因)",
+                r.OperationId,
+                OperationName = op.Name,
+                r.UserId,
+                UserName = u.Name,
+                r.GoodQty,
+                r.DefectQty,
+                r.ReportTime,
+                r.ReviewStatus,
+                o.OrderNo,
+                ProductCode = p.Code,
+                ProductName = p.Name
+            };
+
+        if (keyword != null)
+        {
+            baseQuery = baseQuery.Where(x =>
+                x.OrderNo.Contains(keyword)
+                || x.ProductCode.Contains(keyword)
+                || x.ProductName.Contains(keyword));
+        }
+
+        var rows = await baseQuery.ToListAsync();
+
+        var totalDefectAll = rows.Sum(x => x.DefectQty);
+
+        var distribution = rows
+            .GroupBy(x => new { x.DefectId, x.DefectName })
+            .Select(g =>
+            {
+                var totalDefect = g.Sum(x => x.DefectQty);
+                var byOp = g.GroupBy(x => new { x.OperationId, x.OperationName })
+                    .Select(og => new DefectDistributionOpDto
+                    {
+                        OperationId = og.Key.OperationId,
+                        OperationName = og.Key.OperationName,
+                        ReportCount = og.Count(),
+                        TotalDefect = og.Sum(x => x.DefectQty)
+                    })
+                    .OrderByDescending(x => x.TotalDefect)
+                    .ThenBy(x => x.OperationName)
+                    .ToList();
+                return new DefectDistributionItemDto
+                {
+                    DefectId = g.Key.DefectId,
+                    DefectName = g.Key.DefectName,
+                    ReportCount = g.Count(),
+                    TotalDefect = totalDefect,
+                    SharePercent = totalDefectAll == 0
+                        ? 0
+                        : Math.Round(totalDefect * 100.0 / totalDefectAll, 2),
+                    ByOperation = byOp
+                };
+            })
+            .OrderByDescending(x => x.TotalDefect)
+            .ThenBy(x => x.DefectName)
+            .ToList();
+
+        var summary = rows
+            .GroupBy(x => new { x.OperationId, x.OperationName, x.DefectId, x.DefectName, x.UserId, x.UserName })
+            .Select(g =>
+            {
+                var totalDefect = g.Sum(x => x.DefectQty);
+                var totalGood = g.Sum(x => x.GoodQty);
+                var denom = totalGood + totalDefect;
+                return new DefectSummaryItemDto
+                {
+                    OperationId = g.Key.OperationId,
+                    OperationName = g.Key.OperationName,
+                    DefectId = g.Key.DefectId,
+                    DefectName = g.Key.DefectName,
+                    UserId = g.Key.UserId,
+                    UserName = g.Key.UserName,
+                    TotalDefect = totalDefect,
+                    TotalGood = totalGood,
+                    DefectRate = denom == 0 ? 0 : Math.Round(totalDefect * 100.0 / denom, 2)
+                };
+            })
+            .OrderByDescending(x => x.TotalDefect)
+            .ThenBy(x => x.OperationName)
+            .ThenBy(x => x.DefectName)
+            .ThenBy(x => x.UserName)
+            .ToList();
+
+        var details = rows
+            .OrderByDescending(x => x.ReportTime)
+            .ThenByDescending(x => x.Id)
+            .Select(x => new DefectDetailItemDto
+            {
+                Id = x.Id,
+                OrderNo = x.OrderNo,
+                ProductCode = x.ProductCode,
+                ProductName = x.ProductName,
+                OperationName = x.OperationName,
+                UserName = x.UserName,
+                ReportTime = x.ReportTime,
+                DefectName = x.DefectName,
+                DefectQty = x.DefectQty,
+                GoodQty = x.GoodQty,
+                ReviewStatus = x.ReviewStatus
+            })
+            .ToList();
+
+        _logger.LogInformation(
+            "DefectReport factory={FactoryId} period={Period} keyword={Keyword} dist={Dist} summary={Summary} detail={Detail}",
+            factoryId, query.Period, keyword, distribution.Count, summary.Count, details.Count);
+
+        return ApiResult<DefectReportDto>.Ok(new DefectReportDto
+        {
+            Distribution = distribution,
+            Summary = summary,
+            Details = details
+        });
     }
 
     public async Task<ApiResult<BoardDto>> BoardAsync(long factoryId)

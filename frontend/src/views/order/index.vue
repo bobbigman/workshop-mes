@@ -188,13 +188,16 @@
         <el-table-column prop="operationName" label="工序" />
         <el-table-column prop="planQty" label="计划" width="80" />
         <el-table-column prop="doneQty" label="已报良品" width="100" />
-        <el-table-column v-if="canAssign" label="执行人" min-width="140">
+        <el-table-column v-if="canAssign" label="执行人" min-width="180">
           <template #default="{ row }">
             <el-select
               v-if="row.id"
-              :model-value="row.assigneeUserId ?? ''"
+              :model-value="(row.assignees || []).map(a => a.userId)"
+              multiple
               clearable
               filterable
+              collapse-tags
+              collapse-tags-tooltip
               placeholder="未派工"
               size="small"
               style="width:100%"
@@ -256,8 +259,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getOrderList, getOrder, getOrderStatusCounts, createOrder, updateOrder, transitionOrder, copyOrder, deleteOrder, getCustomFields } from '@/api/prod'
 import { getProductList } from '@/api/base'
-import { assign } from '@/api/assign'
-import { getUserList } from '@/api/sys'
+import { assign, assignWorkers } from '@/api/assign'
 import { getKnowledgeFileByOrder, getKnowledgeFileRaw } from '@/api/knowledge'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PrintSettingDialog from './PrintSettingDialog.vue'
@@ -342,8 +344,8 @@ onMounted(async () => {
 })
 
 async function loadWorkers() {
-  const res = await getUserList({ page: 1, pageSize: 200 })
-  workerOptions.value = (res.data.list || []).filter(u => u.role !== 1)
+  const res = await assignWorkers()
+  workerOptions.value = res.data || []
 }
 
 async function loadFields() {
@@ -529,9 +531,9 @@ function closeImgPreview() {
 }
 
 async function onAssignChange(taskRow, v) {
-  const userId = v === '' || v == null ? null : v
-  await assign(taskRow.id, userId)
-  ElMessage.success(userId ? '已派工' : '已取消派工')
+  const ids = Array.isArray(v) ? v.filter(x => x != null && x !== '') : []
+  await assign(taskRow.id, ids)
+  ElMessage.success(ids.length ? '已派工' : '已取消派工')
   const res = await getOrder(detail.value.id)
   detail.value = res.data
 }

@@ -21,7 +21,7 @@ const orders = ['pc/下工单', 'pc/派工：把工序派给工人', 'mobile/我
 const reporting = ['pc/电脑报工', 'pc/复核：通过或退回报工', 'pc/报错数量怎么改', 'pc/一键补报未完工序', 'pc/处理现场异常上报', 'mobile/用手机摄像头扫码', 'mobile/用 PDA 扫码枪，或手动输入', 'mobile/选工序、填本次数量', 'mobile/提交后怎么确认成功', 'mobile/现场异常怎么上报']
 const quantity = ['faq/报工后生产报表为什么没增加', 'faq/完成数为什么是 80，不是 180', 'faq/工单找不到、结束后又变执行中', 'faq/超出计划数、剩余可报为零', 'pc/工价和工资报表', 'pc/建议报价（相似件 · 金蝶材料 + 车间实绩）']
 const faq = chapters.filter(chapter => chapter.group === 'faq').map(chapter => chapter.id)
-const salary = ['pc/工价和工资报表', 'pc/微信预警（企业微信推送，默认关闭）', 'pc/产品优势速览（演示给老板看）']
+const salary = ['pc/工价和工资报表', 'pc/微信预警（企业微信群机器人，默认关闭）', 'pc/产品优势速览（演示给老板看）']
 const permission = ['start/先看懂每天要做什么', 'pc/建部门、把人加入部门', 'faq/提示无报工权限', 'faq/产品或基础资料删不掉', 'pc/使用 AI 助手查问题', 'pc/产品优势速览（演示给老板看）']
 const outputs = [
   ['SupportDocs/01-操作入门.md', '操作入门', ['start/先看懂每天要做什么', 'start/登录前准备什么', 'pc/登录与选厂（多账套）', 'start/第一次配置的顺序', ...basic.slice(0, 2)]],
@@ -39,7 +39,7 @@ const outputs = [
 ]
 let stale = false
 for (const [path, title, ids] of outputs) {
-  const content = `---\ntitle: ${title}\nrole: 全员\nversion: 1.7\nsystemVersion: 2026-09-30\nupdatedAt: 2026-09-30\n---\n\n# ${title}\n\n> 与操作手册同源生成；维护 docs/30、31 和 docs/manual 正文后运行 npm run manual:sync。\n\n${ids.map(section).join('\n\n')}\n`
+  const content = `---\ntitle: ${title}\nrole: 全员\nversion: 1.8\nsystemVersion: 2026-10-03\nupdatedAt: 2026-10-03\n---\n\n# ${title}\n\n${ids.map(section).join('\n\n')}\n`
   if (process.argv.includes('--check')) {
     if (readFileSync(resolve(root, path), 'utf8') !== content) {
       console.error(`手册同步检查失败：${path}，请运行 npm run manual:sync`)

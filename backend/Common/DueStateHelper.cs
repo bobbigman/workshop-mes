@@ -20,17 +20,20 @@ public static class DueStateHelper
     ///   1. status ≥ 2（已结束/已取消）→ Normal
     ///   2. dueDate == null（未设交期）→ Normal
     ///   3. now &gt; dueDate → Overdue（已超期）
-    ///   4. dueDate - now ≤ DueWarnDays 天 → Warning（临期，含当天到期）
+    ///   4. dueDate - now ≤ warnDays 天 → Warning（临期，含当天到期）
     ///   5. 其余 → Normal
     /// </summary>
-    public static string Calc(byte status, DateTime? dueDate, DateTime now)
+    public static string Calc(byte status, DateTime? dueDate, DateTime now) =>
+        Calc(status, dueDate, now, DueWarnDays);
+
+    public static string Calc(byte status, DateTime? dueDate, DateTime now, int warnDays)
     {
         if (status >= 2) return DueState.Normal;
         if (dueDate == null) return DueState.Normal;
 
         var span = dueDate.Value - now;
         if (span < TimeSpan.Zero) return DueState.Overdue;
-        if (span.TotalDays <= DueWarnDays) return DueState.Warning;
+        if (span.TotalDays <= Math.Clamp(warnDays, 1, 30)) return DueState.Warning;
         return DueState.Normal;
     }
 }

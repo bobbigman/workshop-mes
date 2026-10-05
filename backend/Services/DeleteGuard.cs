@@ -64,7 +64,8 @@ public static class DeleteGuard
                     return "该用户已有报工记录，不可删除";
                 if (await db.SalaryStatements.AnyAsync(s => s.UserId == id))
                     return "该用户已有工资单，不可删除";
-                if (await db.WorkOrderOperations.AnyAsync(t => t.AssigneeUserId == id))
+                if (await db.WorkOrderOperations.AnyAsync(t => t.AssigneeUserId == id)
+                    || await db.WorkOrderOperationAssignees.AnyAsync(a => a.UserId == id))
                     return "该用户已被派工，请先在工单详情取消派工";
                 break;
 

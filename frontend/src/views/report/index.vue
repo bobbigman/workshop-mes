@@ -56,9 +56,15 @@
         </template>
       </el-table-column>
       <el-table-column prop="reportTime" label="时间" width="170" />
-      <el-table-column label="操作" width="80">
+      <el-table-column label="操作" width="140">
         <template #default="{ row }">
-          <el-button link type="primary" :disabled="row.reviewStatus === 1" @click="openEdit(row)">修改</el-button>
+          <el-button
+            link
+            type="primary"
+            :disabled="row.reviewStatus === 1 || row.settledFlag"
+            @click="openEdit(row)"
+          >修改</el-button>
+          <el-button link type="info" @click="openChangeLogs(row)">修改记录</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -161,6 +167,24 @@
         <el-button @click="dlg=false">取消</el-button>
         <el-button type="primary" @click="onSave">保存</el-button>
       </template>
+    </el-dialog>
+
+    <!-- 修改日志（docs/205） -->
+    <el-dialog v-model="logDlg" title="修改记录" width="640px">
+      <el-table :data="changeLogs" v-loading="logLoading" empty-text="暂无修改记录" max-height="420">
+        <el-table-column prop="changedAt" label="时间" width="170" />
+        <el-table-column prop="changedByName" label="修改人" width="90" />
+        <el-table-column label="来源" width="60">
+          <template #default="{ row }">{{ row.source === 2 ? 'H5' : 'PC' }}</template>
+        </el-table-column>
+        <el-table-column label="原值 → 新值" min-width="220">
+          <template #default="{ row }">
+            良品 {{ row.oldGoodQty }}→{{ row.newGoodQty }}；
+            不良 {{ row.oldDefectQty }}→{{ row.newDefectQty }}；
+            时长 {{ row.oldDurationMinutes }}→{{ row.newDurationMinutes }} 分
+          </template>
+        </el-table-column>
+      </el-table>
     </el-dialog>
 
     <!-- 代报工（docs/94，管理员/班组长） -->
@@ -317,7 +341,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getReportList, updateReport, submitReport, batchReport, getDefectsByOp, getOrderByNo, getOrderList, getReportCandidates } from '@/api/prod'
+import { getReportList, updateReport, submitReport, batchReport, getDefectsByOp, getOrderByNo, getOrderList, getReportCandidates, getReportChangeLogs } from '@/api/prod'
 import { getUserList } from '@/api/sys'
 import { ElMessage } from 'element-plus'
 import ValueTip from '@/components/ValueTip.vue'
@@ -329,6 +353,7 @@ const isAdmin = Number(localStorage.getItem('role') || 0) === 1
 const isLeader = Number(localStorage.getItem('role') || 0) === 3
 const canProxy = isAdmin || isLeader
 const list = ref([]), dlg = ref(false), createDlg = ref(false), defectOptions = ref([])
+const logDlg = ref(false), changeLogs = ref([]), logLoading = ref(false)
 const submitting = ref(false)
 const orderDetail = ref(null)
 const orderOptions = ref([])
@@ -702,6 +727,18 @@ async function openEdit(row) {
   dlg.value = true
 }
 
+async function openChangeLogs(row) {
+  logDlg.value = true
+  logLoading.value = true
+  changeLogs.value = []
+  try {
+    const res = await getReportChangeLogs(row.id)
+    changeLogs.value = res.data || []
+  } finally {
+    logLoading.value = false
+  }
+}
+
 async function onSave() {
   if (form.value.defectQty > 0 && !form.value.defectId) {
     ElMessage.error('有不良品时必须选择不良品原因')
@@ -718,7 +755,8 @@ async function onSave() {
     goodQty: form.value.goodQty,
     defectQty: form.value.defectQty,
     defectId: form.value.defectId,
-    durationMinutes
+    durationMinutes,
+    source: 1
   })
   ElMessage.success('已保存')
   dlg.value = false

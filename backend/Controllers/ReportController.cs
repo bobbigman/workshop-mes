@@ -34,6 +34,16 @@ public class ReportController : ControllerBase
     public Task<ApiResult<PageResult<ReportListDto>>> Mine([FromQuery] ReportMineQueryDto query) =>
         _reportService.QueryMineAsync(query, JwtHelper.GetFactoryId(User), JwtHelper.GetUserId(User));
 
+    /// <summary>本人今日计件汇总（docs/206）：已通过+待复核</summary>
+    [HttpGet("mine/today-summary")]
+    public Task<ApiResult<ReportTodaySummaryDto>> TodaySummary() =>
+        _reportService.TodaySummaryAsync(JwtHelper.GetFactoryId(User), JwtHelper.GetUserId(User));
+
+    /// <summary>报工修改日志（docs/205）</summary>
+    [HttpGet("{id:long}/changes")]
+    public Task<ApiResult<List<ReportChangeLogDto>>> Changes(long id) =>
+        _reportService.GetChangeLogsAsync(id, JwtHelper.GetFactoryId(User), JwtHelper.GetUserId(User));
+
     /// <summary>工序报权部门内可选人员（多人分摊/代报选人）</summary>
     [HttpGet("candidates/{operationId:long}")]
     public Task<ApiResult<List<ReportCandidateDto>>> Candidates(long operationId) =>

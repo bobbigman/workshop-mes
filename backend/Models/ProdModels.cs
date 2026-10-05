@@ -25,7 +25,15 @@ public class ProdWorkOrderOperation
     public long OperationId { get; set; }             // 工序
     public int Seq { get; set; }                      // 顺序
     public int PlanQty { get; set; }                  // 该工序计划数
-    public long? AssigneeUserId { get; set; }         // 派工执行人（docs/29）；空=未派工
+    public long? AssigneeUserId { get; set; }         // 派工执行人（docs/29/202：冗余首个；空=未派工；真源见关联表）
+}
+
+/// <summary>工单工序派工明细（一道工序可派多人，docs/202）</summary>
+public class ProdWorkOrderOperationAssignee
+{
+    public long Id { get; set; }
+    public long WorkOrderOperationId { get; set; }
+    public long UserId { get; set; }
 }
 
 /// <summary>报工记录</summary>
@@ -54,6 +62,26 @@ public class ProdReport
     public string? ClientRequestId { get; set; }    // 客户端提交去重标识（docs/94）
     public string? ShareBatchNo { get; set; }       // 多人分摊/代报同批号；与 BatchNo 独立
     public long? OperatorUserId { get; set; }       // 代报/分摊操作人；自报为空
+}
+
+/// <summary>报工修改日志（docs/205）</summary>
+public class ProdReportChangeLog
+{
+    public long Id { get; set; }
+    public long FactoryId { get; set; }
+    public long ReportId { get; set; }
+    public long ChangedBy { get; set; }
+    public int OldGoodQty { get; set; }
+    public int OldDefectQty { get; set; }
+    public long? OldDefectId { get; set; }
+    public int OldDurationMinutes { get; set; }
+    public int NewGoodQty { get; set; }
+    public int NewDefectQty { get; set; }
+    public long? NewDefectId { get; set; }
+    public int NewDurationMinutes { get; set; }
+    /// <summary>1=PC 2=H5</summary>
+    public byte Source { get; set; }
+    public DateTime ChangedAt { get; set; }
 }
 
 /// <summary>工人异常上报（docs/28；官方三类）</summary>
