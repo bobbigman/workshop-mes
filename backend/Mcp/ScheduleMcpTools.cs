@@ -10,7 +10,6 @@ namespace ahu.MicrosoftMes.Mcp;
 public class ScheduleMcpTools
 {
     private readonly IScheduleScoreService _scheduleService;
-    private readonly IMcpAuthService _authService;
     private readonly IMcpRequestContext _mcpCtx;
     private readonly IMcpWxBindService _wxBind;
     private readonly IConfiguration _config;
@@ -23,24 +22,21 @@ public class ScheduleMcpTools
         IConfiguration config)
     {
         _scheduleService = scheduleService;
-        _authService = authService;
         _mcpCtx = mcpCtx;
         _wxBind = wxBind;
         _config = config;
     }
 
-    [McpServerTool, Description("计算工单排产优先级。交期紧迫度自动算；客户/金额/换型/齐套四维可手填（不接金蝶时用中性分）。返回加权总分、排名、建议开工顺序。演示模式可空授权码；非演示需先绑定。")]
+    [McpServerTool, Description("计算工单排产优先级。交期紧迫度自动算；客户/金额/换型/齐套四维可手填（不接金蝶时用中性分）。返回加权总分、排名、建议开工顺序。演示模式可空授权码；正式模式仅本厂已绑定管理员可用，不需金蝶授权码。")]
     public async Task<string> CalcSchedulePriority(
-        [Description("授权码，由发起授权后获得；演示模式下可留空")] string? authToken = null,
+        [Description("兼容旧调用保留的参数；车间查询不使用金蝶授权码")] string? authToken = null,
         [Description("可选：按工单号手填四维分，JSON 如 {\"MO001\":{\"customer\":80,\"amount\":60,\"kit\":90,\"changeover\":70}}")] string? manualScores = null,
         [Description("可选：临时覆盖权重，JSON 如 {\"due\":0.3,\"kit\":0.25,\"customer\":0.2,\"changeover\":0.15,\"amount\":0.1}")] string? weights = null,
         [Description("渠道，可空")] string? chanType = null,
         [Description("会话身份，可空")] string? sessionId = null)
     {
-        var bindHint = await _wxBind.RequireBoundOrHintAsync(chanType, sessionId, nameof(CalcSchedulePriority));
-        if (bindHint != null) return bindHint;
-        if (!_config.GetValue("Mcp:DemoSkipAuth", false))
-            await _authService.RequireAuthAsync(authToken, nameof(CalcSchedulePriority));
+        var access = await McpDataAccess.ResolveAsync(_wxBind, _config, chanType, sessionId, adminOnly: true);
+        if (access.Hint != null) return access.Hint;
 
         long factoryId = _mcpCtx.RequireFactoryId(nameof(CalcSchedulePriority));
 

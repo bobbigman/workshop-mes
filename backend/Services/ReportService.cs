@@ -9,7 +9,7 @@ public interface IReportService
 {
     Task<ApiResult<object?>> SubmitAsync(ReportDto dto, long currentUserId);
     Task<ApiResult<object?>> UpdateAsync(long id, ReportDto dto, long currentUserId);
-    Task<ApiResult<PageResult<ReportListDto>>> QueryAsync(ReportQueryDto query, long factoryId);
+    Task<ApiResult<PageResult<ReportListDto>>> QueryAsync(ReportQueryDto query, long factoryId, long? userId = null);
     Task<ApiResult<PageResult<ReportListDto>>> QueryMineAsync(ReportMineQueryDto query, long factoryId, long userId);
     Task<ApiResult<ReportTodaySummaryDto>> TodaySummaryAsync(long factoryId, long userId);
     Task<ApiResult<List<ReportChangeLogDto>>> GetChangeLogsAsync(long reportId, long factoryId, long currentUserId);
@@ -887,7 +887,7 @@ public class ReportService : IReportService
         return ApiResult<object?>.OkMsg();
     }
 
-    public async Task<ApiResult<PageResult<ReportListDto>>> QueryAsync(ReportQueryDto query, long factoryId)
+    public async Task<ApiResult<PageResult<ReportListDto>>> QueryAsync(ReportQueryDto query, long factoryId, long? userId = null)
     {
         var q = from r in _db.Reports.AsNoTracking()
                 where r.FactoryId == factoryId
@@ -907,6 +907,9 @@ public class ReportService : IReportService
             q = q.Where(x => x.p.Name.Contains(query.ProductName));
         if (query.ReviewStatus.HasValue)
             q = q.Where(x => x.r.ReviewStatus == query.ReviewStatus.Value);
+
+        if (userId.HasValue)
+            q = q.Where(x => x.r.UserId == userId.Value);
 
         var total = await q.CountAsync();
         var list = await q.OrderByDescending(x => x.r.ReportTime)

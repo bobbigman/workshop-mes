@@ -11,7 +11,6 @@ namespace ahu.MicrosoftMes.Mcp;
 public class SalaryMcpTools
 {
     private readonly ISalaryService _salaryService;
-    private readonly IMcpAuthService _authService;
     private readonly IMcpRequestContext _mcpCtx;
     private readonly IMcpWxBindService _wxBind;
     private readonly IConfiguration _config;
@@ -24,35 +23,28 @@ public class SalaryMcpTools
         IConfiguration config)
     {
         _salaryService = salaryService;
-        _authService = authService;
         _mcpCtx = mcpCtx;
         _wxBind = wxBind;
         _config = config;
     }
 
-    [McpServerTool, Description("查询工资单列表（财务敏感）。工资由系统计算（工价表在系统内维护，非来自金蝶），本工具只读查询。需先绑定且仅管理员/财务可查。可按周期类型、周期值、状态筛选。")]
+    [McpServerTool, Description("查询工资单列表（财务敏感）。工资由系统计算（工价表在系统内维护，非来自金蝶），本工具只读查询。正式模式钥匙定厂并先绑定：管理员查本厂，生产人员/班组长仅查本人已生成工资单，不是工资预估；不需金蝶授权码。可按周期类型、周期值、状态筛选。")]
     public async Task<string> QuerySalary(
-        [Description("授权码，由发起授权后获得；演示+金蝶授权模式用")] string? authToken = null,
+        [Description("兼容旧调用保留的参数；车间查询不使用金蝶授权码")] string? authToken = null,
         [Description("周期类型：1月 2周，可空")] byte? periodType = null,
         [Description("周期值：月为 yyyy-MM，周为 yyyy-Www，可空")] string? periodValue = null,
         [Description("状态：0草稿 1已确认，可空")] byte? status = null,
         [Description("渠道，可空")] string? chanType = null,
         [Description("会话身份，可空")] string? sessionId = null)
     {
-        var bindHint = await _wxBind.RequireBoundOrHintAsync(chanType, sessionId, nameof(QuerySalary));
-        if (bindHint != null) return bindHint;
-
-        if (!_config.GetValue("Mcp:DemoSkipAuth", false))
-        {
-            var auth = await _authService.RequireAuthAsync(authToken, nameof(QuerySalary));
-            if (!auth.IsFinance)
-                throw new McpException($"{nameof(QuerySalary)}：无权限：仅财务人员可查询工资数据");
-        }
+        var access = await McpDataAccess.ResolveAsync(_wxBind, _config, chanType, sessionId);
+        if (access.Hint != null) return access.Hint;
 
         long factoryId = _mcpCtx.RequireFactoryId(nameof(QuerySalary));
 
         var query = new SalaryQueryDto
         {
+            UserId = access.User?.Role is 2 or 3 ? access.User.Id : null,
             PeriodType = periodType,
             PeriodValue = periodValue,
             Status = status,
