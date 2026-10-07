@@ -146,16 +146,8 @@ public class McpWxBindService : IMcpWxBindService
         if (user == null)
             return """{"code":1,"msg":"请先绑定：报您的手机号"}""";
 
-        // 工资工具额外校验：仅管理员（role=1）或财务名单账号
-        if (string.Equals(toolName, "QuerySalary", StringComparison.OrdinalIgnoreCase))
-        {
-            var financeAccounts = (_config["Mcp:FinanceKingdeeAccounts"] ?? "")
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            var ok = user.Role == 1
-                || financeAccounts.Any(a => string.Equals(a, user.Account, StringComparison.OrdinalIgnoreCase));
-            if (!ok)
-                return $"{{\"code\":1,\"msg\":\"您（{user.Name}）无权查询此数据\"}}";
-        }
+        if (user.Role is not (1 or 2 or 3) || (toolName == "CalcSchedulePriority" && user.Role != 1))
+            return System.Text.Json.JsonSerializer.Serialize(new { code = 1, msg = $"您（{user.Name}）无权查询此数据" });
 
         return null;
     }

@@ -55,7 +55,7 @@ public class SupportDocsMcpToolsTests
         var svc = new SupportDocumentService(
             Options.Create(new AiOptions { SupportDocs = supportOpt }),
             NullLogger<SupportDocumentService>.Instance);
-        return new SupportDocsMcpTools(svc, auth ?? new FakeAuth(), cfg);
+        return new SupportDocsMcpTools(svc, auth ?? new FakeAuth(), new McpDataAccessTests.Bind(), cfg);
     }
 
     [Fact]
@@ -99,12 +99,13 @@ public class SupportDocsMcpToolsTests
     }
 
     [Fact]
-    public async Task DemoSkipAuth_false_withoutToken_rejects()
+    public async Task Formal_bound_withoutToken_ok()
     {
         var auth = new FakeAuth { ShouldFail = false };
         var tools = Build(false, new SupportDocsOptions { Enabled = true, RootPath = FindRepoSupportDocs() }, auth);
-        await Assert.ThrowsAsync<BusinessException>(() => tools.SearchSupportDocs("怎么补报", null));
-        Assert.True(auth.RequireCalled);
+        using var doc = JsonDocument.Parse(await tools.SearchSupportDocs("怎么补报", null));
+        Assert.Equal("ready", doc.RootElement.GetProperty("state").GetString());
+        Assert.False(auth.RequireCalled);
     }
 
     [Fact]
@@ -113,7 +114,7 @@ public class SupportDocsMcpToolsTests
         var auth = new FakeAuth();
         var tools = Build(false, new SupportDocsOptions { Enabled = true, RootPath = FindRepoSupportDocs() }, auth);
         var json = await tools.SearchSupportDocs("怎么补报", "tok");
-        Assert.True(auth.RequireCalled);
+        Assert.False(auth.RequireCalled);
         using var doc = JsonDocument.Parse(json);
         Assert.Equal("ready", doc.RootElement.GetProperty("state").GetString());
     }

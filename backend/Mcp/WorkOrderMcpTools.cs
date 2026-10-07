@@ -18,7 +18,6 @@ public class WorkOrderMcpTools
     };
 
     private readonly IWorkOrderService _workOrderService;
-    private readonly IMcpAuthService _authService;
     private readonly IMcpRequestContext _mcpCtx;
     private readonly IMcpWxBindService _wxBind;
     private readonly IConfiguration _config;
@@ -31,24 +30,21 @@ public class WorkOrderMcpTools
         IConfiguration config)
     {
         _workOrderService = workOrderService;
-        _authService = authService;
         _mcpCtx = mcpCtx;
         _wxBind = wxBind;
         _config = config;
     }
 
-    [McpServerTool, Description("查询车间工单列表，可按关键词（工单号/产品名/产品编号）或状态筛选。演示模式下无需授权码；非演示模式需先手机号绑定。查「列表/今天有哪些单」用本工具；查「某单做到哪了/进度」请用 query_work_order_progress。")]
+    [McpServerTool, Description("查询车间工单列表，可按关键词（工单号/产品名/产品编号）或状态筛选。演示模式下无需授权码；正式模式需钥匙定厂及手机号绑定，不需金蝶授权码。查「列表/今天有哪些单」用本工具；查「某单做到哪了/进度」请用 query_work_order_progress。")]
     public async Task<string> QueryWorkOrder(
-        [Description("授权码，由发起授权后获得；演示模式下可留空")] string? authToken = null,
+        [Description("兼容旧调用保留的参数；车间查询不使用金蝶授权码")] string? authToken = null,
         [Description("关键词：工单号、产品名称或产品编号，可空")] string? keyword = null,
         [Description("状态：0未开始 1执行中 2已完成 3已取消，可空查全部")] byte? status = null,
         [Description("渠道，可空")] string? chanType = null,
         [Description("会话身份，可空")] string? sessionId = null)
     {
-        var bindHint = await _wxBind.RequireBoundOrHintAsync(chanType, sessionId, nameof(QueryWorkOrder));
-        if (bindHint != null) return bindHint;
-        if (!_config.GetValue("Mcp:DemoSkipAuth", false))
-            await _authService.RequireAuthAsync(authToken, nameof(QueryWorkOrder));
+        var access = await McpDataAccess.ResolveAsync(_wxBind, _config, chanType, sessionId);
+        if (access.Hint != null) return access.Hint;
 
         long factoryId = _mcpCtx.RequireFactoryId(nameof(QueryWorkOrder));
 
@@ -64,6 +60,16 @@ public class WorkOrderMcpTools
         if (result.Code != 0)
             return JsonSerializer.Serialize(new { code = result.Code, msg = result.Msg }, JsonOpts);
 
+        if (access.User?.Role is 2 or 3)
+            return JsonSerializer.Serialize(new
+            {
+                code = 0, total = result.Data?.Total ?? 0,
+                list = (result.Data?.List ?? new List<WorkOrderListDto>()).Select(w => new
+                { w.Id, w.OrderNo, w.ProductCode, w.ProductName, w.Qty, w.PlanQty,
+                  w.DoneQty, w.RemainQty, w.ProgressPercent, w.ProgressHint, w.Status,
+                  w.DueDate, ops = w.Ops.Select(o => new { o.OperationName, o.PlanQty, o.DoneQty }) })
+            }, JsonOpts);
+
         return JsonSerializer.Serialize(new
         {
             code = 0,
@@ -74,7 +80,7 @@ public class WorkOrderMcpTools
 
     [McpServerTool, Description("查询单张工单生产进度（做到哪了/第几道/完成百分比/距交期）。按工单号或产品编号/名称定位；演示模式可空授权码。查列表请用 query_work_order，不要用本工具顶替。")]
     public async Task<string> QueryWorkOrderProgress(
-        [Description("授权码，由发起授权后获得；演示模式下可留空")] string? authToken = null,
+        [Description("兼容旧调用保留的参数；车间查询不使用金蝶授权码")] string? authToken = null,
         [Description("工单号（精确，推荐）")] string? orderNo = null,
         [Description("产品编号（精确）")] string? productCode = null,
         [Description("产品名称（模糊）")] string? productName = null,
@@ -82,10 +88,8 @@ public class WorkOrderMcpTools
         [Description("渠道，可空")] string? chanType = null,
         [Description("会话身份，可空")] string? sessionId = null)
     {
-        var bindHint = await _wxBind.RequireBoundOrHintAsync(chanType, sessionId, nameof(QueryWorkOrderProgress));
-        if (bindHint != null) return bindHint;
-        if (!_config.GetValue("Mcp:DemoSkipAuth", false))
-            await _authService.RequireAuthAsync(authToken, nameof(QueryWorkOrderProgress));
+        var access = await McpDataAccess.ResolveAsync(_wxBind, _config, chanType, sessionId);
+        if (access.Hint != null) return access.Hint;
 
         long factoryId = _mcpCtx.RequireFactoryId(nameof(QueryWorkOrderProgress));
         var no = (orderNo ?? "").Trim();
