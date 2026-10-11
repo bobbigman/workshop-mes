@@ -242,7 +242,7 @@ public class WechatEventDatabaseTests(Wechat129Database fixture) : IAsyncLifetim
     {
         await using var db = fixture.Open(); var (events, _) = Services(db);
         var (order, user, op) = await SeedAsync(db, events);
-        var report = new ReportService(db, events);
+        var report = new ReportService(db, new ReportUpstreamSettingService(db), events);
         var dto = new ReportDto { OrderId = order.Id, OperationId = op.Id, GoodQty = 10, ClientRequestId = "req-1" };
         await report.SubmitAsync(dto, user.Id); await report.SubmitAsync(dto, user.Id);
         var rows = await db.WechatAlertDeliveries.Where(x => x.FactoryId == order.FactoryId).ToListAsync();
@@ -268,7 +268,7 @@ public class WechatEventDatabaseTests(Wechat129Database fixture) : IAsyncLifetim
     public async Task CompleteDirectlyDoesNotSendStartAndWithdrawDoesNotSendStart()
     {
         await using var db = fixture.Open(); var (events, _) = Services(db); var (order, user, op) = await SeedAsync(db, events);
-        await new ReportService(db, events).SubmitAsync(new() { OrderId = order.Id, OperationId = op.Id, GoodQty = 100 }, user.Id);
+        await new ReportService(db, new ReportUpstreamSettingService(db), events).SubmitAsync(new() { OrderId = order.Id, OperationId = op.Id, GoodQty = 100 }, user.Id);
         Assert.False(await db.WechatAlertDeliveries.AnyAsync(x => x.FactoryId == order.FactoryId && x.EventType == "order_started"));
         var wo = new WorkOrderService(db, events); await wo.TransitionAsync(order.Id, "withdraw", order.FactoryId); await wo.TransitionAsync(order.Id, "finish", order.FactoryId);
         Assert.Equal(2, await db.WechatAlertDeliveries.CountAsync(x => x.FactoryId == order.FactoryId && x.EventType == "order_completed"));
@@ -358,7 +358,7 @@ public class WechatEventDatabaseTests(Wechat129Database fixture) : IAsyncLifetim
         await db.Database.ExecuteSqlRawAsync(trigger);
         try
         {
-            await Assert.ThrowsAnyAsync<Exception>(() => new ReportService(db, events).SubmitAsync(new() { OrderId = order.Id, OperationId = op.Id, GoodQty = 10 }, user.Id));
+            await Assert.ThrowsAnyAsync<Exception>(() => new ReportService(db, new ReportUpstreamSettingService(db), events).SubmitAsync(new() { OrderId = order.Id, OperationId = op.Id, GoodQty = 10 }, user.Id));
             db.ChangeTracker.Clear();
             Assert.Equal(0, await db.Reports.CountAsync(x => x.OrderId == order.Id));
             Assert.Equal(0, await db.WechatAlertDeliveries.CountAsync(x => x.FactoryId == order.FactoryId));
@@ -378,7 +378,7 @@ public class WechatEventDatabaseTests(Wechat129Database fixture) : IAsyncLifetim
         await events.SaveRuleAsync(null, new() { Name = "高不良率", EventType = "report_created", ConditionType = "defect_rate", Threshold = 10, Enabled = true,
             ToUser = "Quality", Template = "{工序} {良品数} {不良数} {不良率}" }, order.FactoryId);
         var rule = await db.WechatAlertRules.SingleAsync(x => x.FactoryId == order.FactoryId && x.Name == "高不良率");
-        await new ReportService(db, events).SubmitAsync(new() { OrderId = order.Id, OperationId = op.Id,
+        await new ReportService(db, new ReportUpstreamSettingService(db), events).SubmitAsync(new() { OrderId = order.Id, OperationId = op.Id,
             Assignees = [new() { UserId = admin.Id, GoodQty = 4, DefectQty = 1, DefectId = defect.Id }, new() { UserId = other.Id, GoodQty = 9, DefectQty = 1, DefectId = defect.Id }] }, admin.Id);
         var matching = await db.WechatAlertDeliveries.AsNoTracking().SingleAsync(x => x.RuleId == rule.Id);
         Assert.Contains("4 1 20.00%", matching.Content);

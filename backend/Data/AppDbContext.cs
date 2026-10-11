@@ -40,6 +40,7 @@ public class AppDbContext : DbContext
     public DbSet<SysPrintSetting> PrintSettings => Set<SysPrintSetting>();
     public DbSet<LoginSetting> LoginSettings => Set<LoginSetting>();
     public DbSet<SysWorkerViewSetting> WorkerViewSettings => Set<SysWorkerViewSetting>();
+    public DbSet<SysReportUpstreamSetting> ReportUpstreamSettings => Set<SysReportUpstreamSetting>();
     public DbSet<SysWechatAlertSetting> WechatAlertSettings => Set<SysWechatAlertSetting>();
     public DbSet<SysWechatAlertLog> WechatAlertLogs => Set<SysWechatAlertLog>();
     public DbSet<SysMcpAuth> McpAuths => Set<SysMcpAuth>();
@@ -62,7 +63,7 @@ public class AppDbContext : DbContext
             e.Property(x => x.WebhookKey).HasColumnName("webhook_key").HasMaxLength(200);
             e.Property(x => x.UpdatedAt).HasDefaultValueSql("SYSDATETIME()");
             e.ToTable("sys_wechat_alert_rule", t => {
-                t.HasCheckConstraint("ck_wechat_rule_event", "event_type IN ('report_created','order_started','order_completed','abnormal_reported')");
+                t.HasCheckConstraint("ck_wechat_rule_event", "event_type IN ('report_created','order_started','order_completed','abnormal_reported','operation_assigned')");
                 t.HasCheckConstraint("ck_wechat_rule_channel", "target_channel IN ('session','group')");
                 t.HasCheckConstraint("ck_wechat_rule_condition", "(condition_type = 'always' AND threshold IS NULL) OR (event_type = 'report_created' AND condition_type = 'defect_rate' AND threshold BETWEEN 0 AND 100 AND threshold IS NOT NULL) OR (event_type = 'abnormal_reported' AND condition_type IN ('abnormal_device','abnormal_material','abnormal_quality') AND threshold IS NULL)");
             });
@@ -113,8 +114,10 @@ public class AppDbContext : DbContext
             e.Property(x => x.WechatId).HasColumnName("wechat_id").HasMaxLength(64);
             e.Property(x => x.Name).HasColumnName("name").HasMaxLength(64);
             e.Property(x => x.Role).HasColumnName("role");
+            e.Property(x => x.UserType).HasColumnName("user_type");
             e.Property(x => x.Password).HasColumnName("password").HasMaxLength(128);
             e.Property(x => x.Status).HasColumnName("status");
+            e.Property(x => x.LoginQrSecret).HasColumnName("login_qr_secret").HasMaxLength(64);
             e.Property(x => x.CreatedAt).HasColumnName("created_at");
         });
 
@@ -232,6 +235,7 @@ public class AppDbContext : DbContext
             e.Property(x => x.Seq).HasColumnName("seq");
             e.Property(x => x.PlanQty).HasColumnName("plan_qty");
             e.Property(x => x.AssigneeUserId).HasColumnName("assignee_user_id");
+            e.Property(x => x.AssigneeDepartmentId).HasColumnName("assignee_department_id");
         });
 
         modelBuilder.Entity<ProdWorkOrderOperationAssignee>(e =>
@@ -435,6 +439,16 @@ public class AppDbContext : DbContext
             e.HasIndex(x => x.FactoryId).IsUnique();
             e.Property(x => x.FactoryId).HasColumnName("factory_id");
             e.Property(x => x.WorkerViewMode).HasColumnName("worker_view_mode");
+            e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+        });
+
+        modelBuilder.Entity<SysReportUpstreamSetting>(e =>
+        {
+            e.ToTable("sys_report_upstream_setting");
+            e.HasIndex(x => x.FactoryId).IsUnique();
+            e.Property(x => x.FactoryId).HasColumnName("factory_id");
+            e.Property(x => x.Mode).HasColumnName("mode").HasMaxLength(16);
+            e.Property(x => x.HardOperationIds).HasColumnName("hard_operation_ids").HasMaxLength(2000);
             e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
         });
 

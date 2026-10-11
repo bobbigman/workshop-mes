@@ -95,6 +95,13 @@ http.interceptors.response.use(
       }
     }
     if (body && body.code !== 0) {
+      // docs/150：报工上级 soft 确认，不弹错误，交给页面二次确认后带 confirmUpstream 重提
+      if (body.code === 1002) {
+        const err = new Error(body.msg || '上级工序未达上限，是否继续？')
+        err.code = 1002
+        err.softConfirm = true
+        return Promise.reject(err)
+      }
       const tip = body.msg
         ? withTraceIfLong(body.msg, res.headers)
         : fallbackFailTip(res.headers)

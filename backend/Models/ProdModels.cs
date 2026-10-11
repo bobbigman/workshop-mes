@@ -26,6 +26,7 @@ public class ProdWorkOrderOperation
     public int Seq { get; set; }                      // 顺序
     public int PlanQty { get; set; }                  // 该工序计划数
     public long? AssigneeUserId { get; set; }         // 派工执行人（docs/29/202：冗余首个；空=未派工；真源见关联表）
+    public long? AssigneeDepartmentId { get; set; }   // 派工班组=部门（docs/214）；与人互斥
 }
 
 /// <summary>工单工序派工明细（一道工序可派多人，docs/202）</summary>

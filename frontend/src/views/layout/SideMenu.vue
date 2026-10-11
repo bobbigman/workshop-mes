@@ -2,8 +2,7 @@
   <el-menu
     :default-active="active"
     :default-openeds="openedGroups"
-    router
-    @select="$emit('navigate')"
+    @select="onSelect"
     @open="onOpen"
     @close="onClose"
   >
@@ -31,17 +30,21 @@
       <el-menu-item index="/custom-field">自定义字段</el-menu-item>
       <el-menu-item v-if="canWechat" index="/wechat-alert">微信预警</el-menu-item>
       <el-menu-item index="/worker-view">工人手机视角</el-menu-item>
+      <el-menu-item index="/report-upstream">报工上级校验</el-menu-item>
       <el-menu-item index="/ai-assistant">AI 助手</el-menu-item>
       <el-menu-item index="/login-setting">登录页图片</el-menu-item>
       <el-menu-item index="/mcp-key">MCP 钥匙</el-menu-item>
+    </el-sub-menu>
+    <el-sub-menu v-if="role === 1 && canWage" index="salary">
+      <template #title>工资</template>
+      <el-menu-item index="/salary">工资报表</el-menu-item>
+      <el-menu-item index="/salary-sku">工资色码汇总</el-menu-item>
     </el-sub-menu>
     <el-sub-menu index="report">
       <template #title>报表</template>
       <el-menu-item index="/stat">生产报表</el-menu-item>
       <el-menu-item index="/defect-stat">不良品报表</el-menu-item>
       <el-menu-item index="/sku-stat">色码汇总</el-menu-item>
-      <el-menu-item v-if="role === 1 && canWage" index="/salary">工资报表</el-menu-item>
-      <el-menu-item v-if="role === 1 && canWage" index="/salary-sku">工资色码汇总</el-menu-item>
       <el-menu-item v-if="role === 1 && canKingdee" index="/quote-suggest">建议报价</el-menu-item>
       <el-menu-item v-if="role === 1" index="/schedule">排产评分</el-menu-item>
       <el-menu-item index="/board">车间看板</el-menu-item>
@@ -63,6 +66,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { Tickets, Monitor, EditPen, CircleCheck, Warning, Trophy, InfoFilled } from '@element-plus/icons-vue'
 import { canUse, FEATURE } from '@/utils/licenseTier'
 
@@ -71,14 +75,15 @@ const props = defineProps({
   active: { type: String, required: true },
   tier: { type: String, default: 'trial' }
 })
-defineEmits(['navigate'])
+const emit = defineEmits(['navigate'])
+const router = useRouter()
 
 const canReview = computed(() => canUse(props.tier, FEATURE.ReportReview))
 const canWage = computed(() => canUse(props.tier, FEATURE.PieceWage))
 const canWechat = computed(() => canUse(props.tier, FEATURE.WechatDueAlert))
 const canKingdee = computed(() => canUse(props.tier, FEATURE.KingdeeMcp))
 
-const ALL_GROUPS = ['production', 'base-data', 'sys-config', 'report', 'help']
+const ALL_GROUPS = ['production', 'base-data', 'sys-config', 'salary', 'report', 'help']
 const STORAGE_KEY = 'menu-opened-groups'
 
 function loadOpened() {
@@ -97,6 +102,14 @@ const openedGroups = ref(loadOpened())
 
 function persist() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(openedGroups.value))
+}
+
+function onSelect(index) {
+  // 不用 el-menu 的 router 属性：它读 globalProperties.$router，偶发拿不到时只高亮不跳转
+  if (typeof index === 'string' && index.startsWith('/')) {
+    router.push(index)
+  }
+  emit('navigate')
 }
 
 function onOpen(index) {

@@ -6,7 +6,7 @@
       <H5LogoutBtn />
     </div>
 
-    <div v-if="list.length === 0" class="empty">暂无派给我的任务</div>
+    <div v-if="list.length === 0" class="empty">暂无派给我的或本班组任务</div>
     <div
       v-for="row in list"
       :key="row.taskId"
@@ -15,6 +15,7 @@
     >
       <div class="row1">
         <span class="tag" :class="'s' + row.orderStatus">{{ statusLabel(row.orderStatus) }}</span>
+        <span v-if="row.assignSource === 'team' || row.assignSource === 'both'" class="tag team">班组</span>
         <span class="no">{{ row.orderNo }}</span>
       </div>
       <div class="product">{{ row.productName }} · {{ row.operationName }}</div>
@@ -79,6 +80,7 @@ h2 { margin: 0; font-size: 18px; flex: none; color: var(--app-text-1); }
 .tag.s1 { background: var(--app-primary-light); color: var(--app-primary); }
 .tag.s2 { background: color-mix(in srgb, var(--app-success) 14%, var(--app-card)); color: var(--app-success); }
 .tag.s3 { background: color-mix(in srgb, var(--app-danger) 14%, var(--app-card)); color: var(--app-danger); }
+.tag.team { background: color-mix(in srgb, var(--app-warning) 16%, var(--app-card)); color: var(--app-warning); }
 .product { font-size: 16px; font-weight: 600; color: var(--app-text-1); margin-bottom: 12px; }
 .meta { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .remain { font-size: 13px; color: var(--app-text-2); }

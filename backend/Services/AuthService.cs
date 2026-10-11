@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using ahu.MicrosoftMes.Common;
 using ahu.MicrosoftMes.Data;
@@ -9,15 +10,25 @@ namespace ahu.MicrosoftMes.Services;
 public interface IAuthService
 {
     Task<ApiResult<LoginResultDto>> LoginAsync(LoginDto dto);
+    Task<ApiResult<LoginResultDto>> SelectFactoryAsync(SelectFactoryDto dto);
     Task<ApiResult<LoginResultDto>> LoginByPhoneAsync(PhoneLoginDto dto);
+    /// <summary>个人免密二维码登录（docs/150）：签发 30 天 JWT</summary>
+    Task<ApiResult<LoginResultDto>> LoginByQrAsync(LoginByQrDto dto);
     Task<ApiResult<object?>> ChangePasswordAsync(ChangePasswordDto dto, long userId);
 }
 
 public class LoginDto
 {
+    /// <summary>已废弃（docs/151）：登录不再前端选厂；保留字段仅为兼容旧客户端忽略。</summary>
     public string FactoryCode { get; set; } = "";
     public string Account { get; set; } = "";
     public string Password { get; set; } = "";
+}
+
+public class SelectFactoryDto
+{
+    public string SelectToken { get; set; } = "";
+    public string FactoryCode { get; set; } = "";
 }
 
 public class PhoneLoginDto
@@ -26,14 +37,31 @@ public class PhoneLoginDto
     public string SmsCode { get; set; } = "";
 }
 
+public class LoginByQrDto
+{
+    /// <summary>个人免密码密钥（URL 查询参数 pq）</summary>
+    public string Code { get; set; } = "";
+}
+
 public class ChangePasswordDto
 {
     public string OldPassword { get; set; } = "";
     public string NewPassword { get; set; } = "";
 }
 
+public class FactoryCandidateDto
+{
+    public string FactoryCode { get; set; } = "";
+    public string FactoryName { get; set; } = "";
+}
+
 public class LoginResultDto
 {
+    /// <summary>true=需同页选厂，此时 Token 为空，用 SelectToken + Candidates（docs/151）</summary>
+    public bool NeedSelectFactory { get; set; }
+    public string? SelectToken { get; set; }
+    public List<FactoryCandidateDto>? Candidates { get; set; }
+
     public string Token { get; set; } = "";
     public long UserId { get; set; }
     public string Name { get; set; } = "";
@@ -51,12 +79,18 @@ public class LoginResultDto
 
 public class AuthService : IAuthService
 {
+    /// <summary>个人免密二维码登录 JWT 有效期（小时）；账号密码仍用 Jwt:ExpireHours</summary>
+    public const int PersonalQrExpireHours = 30 * 24;
+
+    private static readonly string SelectTokenCachePrefix = "select-factory:jti:";
+
     private readonly AppDbContext _db;
     private readonly JwtOptions _jwt;
     private readonly InstanceOptions _instance;
     private readonly ILicenseCloudService _licenseCloud;
     private readonly DeploymentOptions _deployment;
     private readonly TrialCleanupOptions _trialCleanup;
+    private readonly IMemoryCache _cache;
 
     public AuthService(
         AppDbContext db,
@@ -64,7 +98,8 @@ public class AuthService : IAuthService
         IOptions<InstanceOptions> instance,
         ILicenseCloudService licenseCloud,
         IOptions<DeploymentOptions> deployment,
-        IOptions<TrialCleanupOptions> trialCleanup)
+        IOptions<TrialCleanupOptions> trialCleanup,
+        IMemoryCache cache)
     {
         _db = db;
         _jwt = jwt.Value;
@@ -72,31 +107,132 @@ public class AuthService : IAuthService
         _licenseCloud = licenseCloud;
         _deployment = deployment.Value;
         _trialCleanup = trialCleanup.Value;
+        _cache = cache;
     }
 
+    /// <summary>docs/151：按账号+BCrypt 验密，不带 factory；1 厂直发 JWT / ≥2 厂发 selectToken</summary>
     public async Task<ApiResult<LoginResultDto>> LoginAsync(LoginDto dto)
     {
         if (string.IsNullOrWhiteSpace(dto.Account))
-            throw ThrowHelper.BizUser("账号不能为空");
-
-        // docs/52：多账套——优先前端传入的 FactoryCode；为空回退 Instance:FactoryCode
-        var requested = (dto.FactoryCode ?? "").Trim();
-        var factoryCode = string.IsNullOrWhiteSpace(requested)
-            ? (_instance.FactoryCode?.Trim() ?? "")
-            : requested;
-
-        if (string.IsNullOrWhiteSpace(factoryCode))
-            throw ThrowHelper.BizUser("工厂代码缺失，请联系管理员");
-
-        var factory = await _db.Factories.FirstOrDefaultAsync(f => f.FactoryCode == factoryCode)
-            ?? throw ThrowHelper.BizUser("账套不存在，请联系管理员");
-
-        var user = await _db.Users.FirstOrDefaultAsync(u =>
-            u.FactoryId == factory.Id && u.Account == dto.Account && u.Status == 1)
-            ?? throw ThrowHelper.BizUser("账号不存在或已停用");
-
-        if (!PasswordHelper.Verify(dto.Password, user.Password))
             throw ThrowHelper.BizUser("账号或密码错误");
+        if (string.IsNullOrEmpty(dto.Password))
+            throw ThrowHelper.BizUser("账号或密码错误");
+
+        var account = dto.Account.Trim();
+        var users = await _db.Users.AsNoTracking()
+            .Where(u => u.Account == account && u.Status == 1)
+            .ToListAsync();
+
+        var matched = new List<(SysUser User, SysFactory Factory)>();
+        foreach (var user in users)
+        {
+            if (!PasswordHelper.Verify(dto.Password, user.Password))
+                continue;
+            var factory = await _db.Factories.AsNoTracking()
+                .FirstOrDefaultAsync(f => f.Id == user.FactoryId);
+            if (factory == null)
+                continue;
+            matched.Add((user, factory));
+        }
+
+        if (matched.Count == 0)
+            throw ThrowHelper.BizUser("账号或密码错误");
+
+        // docs/161：外部供应商不进选厂列表；若密码对但全是外部 → 明确拒登
+        var loginable = matched.Where(m => m.User.UserType != UserTypeHelper.External).ToList();
+        if (loginable.Count == 0)
+            throw ThrowHelper.BizUser(UserTypeHelper.ExternalLoginDeniedMsg);
+
+        if (loginable.Count == 1)
+        {
+            var (user, factory) = loginable[0];
+            return await IssueLoginAsync(user, factory, _jwt.ExpireHours);
+        }
+
+        var claims = loginable
+            .Select(m => new SelectFactoryCandidateClaim
+            {
+                FactoryCode = m.Factory.FactoryCode,
+                UserId = m.User.Id
+            })
+            .ToList();
+        var (selectToken, jti) = JwtHelper.CreateSelectFactoryToken(_jwt, claims);
+        _cache.Set(
+            SelectTokenCachePrefix + jti,
+            1,
+            new MemoryCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(JwtHelper.SelectFactoryExpireMinutes)
+            });
+
+        return ApiResult<LoginResultDto>.Ok(new LoginResultDto
+        {
+            NeedSelectFactory = true,
+            SelectToken = selectToken,
+            Candidates = loginable
+                .Select(m => new FactoryCandidateDto
+                {
+                    FactoryCode = m.Factory.FactoryCode,
+                    FactoryName = m.Factory.FactoryName
+                })
+                .OrderBy(c => c.FactoryCode)
+                .ToList()
+        });
+    }
+
+    /// <summary>docs/151：用短时 selectToken 换正式 JWT；伪造厂码 / 过期 / 复用一律拒</summary>
+    public async Task<ApiResult<LoginResultDto>> SelectFactoryAsync(SelectFactoryDto dto)
+    {
+        var factoryCode = (dto.FactoryCode ?? "").Trim();
+        if (string.IsNullOrEmpty(factoryCode))
+            throw ThrowHelper.BizUser("请选择工厂");
+
+        var (jti, candidates) = JwtHelper.ValidateSelectFactoryToken(_jwt, dto.SelectToken ?? "");
+        var cacheKey = SelectTokenCachePrefix + jti;
+        if (!_cache.TryGetValue(cacheKey, out _))
+            throw ThrowHelper.BizUser("选厂凭证无效或已过期，请重新登录");
+        _cache.Remove(cacheKey);
+
+        var hit = candidates.FirstOrDefault(c =>
+            string.Equals(c.FactoryCode, factoryCode, StringComparison.OrdinalIgnoreCase));
+        if (hit == null || hit.UserId <= 0)
+            throw ThrowHelper.BizUser("无权进入该工厂，请重新登录");
+
+        var user = await _db.Users.AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Id == hit.UserId && u.Status == 1)
+            ?? throw ThrowHelper.BizUser("选厂凭证无效或已过期，请重新登录");
+
+        var factory = await _db.Factories.AsNoTracking()
+            .FirstOrDefaultAsync(f => f.Id == user.FactoryId)
+            ?? throw ThrowHelper.BizUser("无权进入该工厂，请重新登录");
+
+        if (!string.Equals(factory.FactoryCode, factoryCode, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(factory.FactoryCode, hit.FactoryCode, StringComparison.OrdinalIgnoreCase))
+            throw ThrowHelper.BizUser("无权进入该工厂，请重新登录");
+
+        return await IssueLoginAsync(user, factory, _jwt.ExpireHours);
+    }
+
+    public async Task<ApiResult<LoginResultDto>> LoginByQrAsync(LoginByQrDto dto)
+    {
+        var code = (dto.Code ?? "").Trim();
+        if (string.IsNullOrEmpty(code) || code.Length > 64)
+            throw ThrowHelper.BizUser("个人码无效或账号已停用，请使用账号密码登录");
+
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.LoginQrSecret == code && u.Status == 1);
+        if (user == null)
+            throw ThrowHelper.BizUser("个人码无效或账号已停用，请使用账号密码登录");
+
+        var factory = await _db.Factories.FirstOrDefaultAsync(f => f.Id == user.FactoryId)
+            ?? throw ThrowHelper.BizUser("个人码无效或账号已停用，请使用账号密码登录");
+
+        return await IssueLoginAsync(user, factory, PersonalQrExpireHours);
+    }
+
+    private async Task<ApiResult<LoginResultDto>> IssueLoginAsync(SysUser user, SysFactory factory, int expireHours)
+    {
+        // docs/161：外部供应商 JWT 签发前硬拒（账号密码 / 选厂 / 个人码共用）
+        UserTypeHelper.EnsureCanLogin(user.UserType);
 
         // docs/90：体验到期/已清场拦截（先于授权云，绝不误伤正式/私有）
         RejectIfTrialExpired(factory);
@@ -104,13 +240,14 @@ public class AuthService : IAuthService
         await _licenseCloud.RefreshAsync(factory.Id);
         var lic = await _licenseCloud.GetStatusAsync(factory.Id);
 
-        var token = JwtHelper.CreateToken(_jwt, user.Id, user.FactoryId, user.Role, user.Name);
+        var token = JwtHelper.CreateToken(_jwt, user.Id, user.FactoryId, user.Role, user.Name, expireHours);
         var viewMode = await _db.WorkerViewSettings.AsNoTracking()
             .Where(x => x.FactoryId == factory.Id)
             .Select(x => (byte?)x.WorkerViewMode)
             .FirstOrDefaultAsync();
         return ApiResult<LoginResultDto>.Ok(new LoginResultDto
         {
+            NeedSelectFactory = false,
             Token = token,
             UserId = user.Id,
             Name = user.Name,

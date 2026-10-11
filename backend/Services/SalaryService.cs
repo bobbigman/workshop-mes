@@ -12,6 +12,10 @@ public interface ISalaryService
 {
     Task<ApiResult<object?>> GenerateAsync(SalaryGenerateDto dto, long factoryId);
     Task<ApiResult<PageResult<SalaryListDto>>> QueryAsync(SalaryQueryDto query, long factoryId);
+    /// <summary>本期工资汇总（docs/222）：已确认/草稿计件额 + 返工扣款，按明细汇总，不受分页截断。</summary>
+    Task<ApiResult<SalaryPeriodSummaryDto>> SummarizePeriodAsync(SalaryQueryDto query, long factoryId);
+    /// <summary>当日计件试算（docs/222）：只读、不落库；按工价表 PriceRuleMatcher 逐条算。</summary>
+    Task<ApiResult<DailyPieceworkEstimateDto>> EstimateDailyPieceworkAsync(long factoryId, long userId, string? businessTimeZone);
     Task<ApiResult<SalaryDetailDto>> GetAsync(long id, long factoryId);
     /// <summary>docs/136：手工列已移除；旧端仍传字段则忽略不报错。</summary>
     Task<ApiResult<object?>> UpdateComponentsAsync(long id, SalaryComponentsDto dto, long factoryId, long operatorUserId);
@@ -23,7 +27,7 @@ public interface ISalaryService
     /// <summary>批量重算：草稿直接 recalc；已确认先软撤回再 recalc（docs/134/136）。</summary>
     Task<ApiResult<object?>> BatchRecalcAsync(long[] ids, long factoryId, long operatorUserId, byte operatorRole);
     Task<ApiResult<object?>> DeleteDraftAsync(long id, long factoryId);
-    Task<(byte[] Content, string FileName)> ExportCsvAsync(byte periodType, string periodValue, long factoryId);
+    Task<(byte[] Content, string FileName)> ExportCsvAsync(byte periodType, string periodValue, long factoryId, byte? userType = null);
     /// <summary>工资明细多维度查询（docs/139）：按工序/时间筛选，报表层直显。</summary>
     Task<ApiResult<PageResult<SalaryItemRowDto>>> QueryItemsAsync(SalaryItemsQueryDto query, long factoryId);
     /// <summary>工资明细导出 CSV（docs/139）。</summary>
@@ -48,6 +52,10 @@ public class SalaryQueryDto
     public string? PeriodValue { get; set; }
     public long? UserId { get; set; }
     public byte? Status { get; set; }
+    /// <summary>姓名/账号模糊（与用户列表 Keyword 同口径；不传=不过滤）</summary>
+    public string? Keyword { get; set; }
+    /// <summary>人员类型筛选（docs/161）；不传=全部</summary>
+    public byte? UserType { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 20;
 }
@@ -57,12 +65,52 @@ public class SalaryListDto
     public long Id { get; set; }
     public long UserId { get; set; }
     public string UserName { get; set; } = "";
+    /// <summary>人员类型（docs/161）</summary>
+    public byte UserType { get; set; }
     public byte PeriodType { get; set; }
     public string PeriodValue { get; set; } = "";
     public decimal TotalAmount { get; set; }
+    /// <summary>本单返工/不良扣款合计（docs/222，明细 DeductAmount 汇总）</summary>
+    public decimal DeductAmount { get; set; }
     public byte Status { get; set; }
     public DateTime? ConfirmedAt { get; set; }
     public DateTime CreatedAt { get; set; }
+}
+
+/// <summary>本期工资拆分汇总（docs/222）：本月 X = 已确认 Y + 待确认 Z − 返工扣 W。</summary>
+public class SalaryPeriodSummaryDto
+{
+    /// <summary>已确认工资单明细计件额合计（Σ Amount，未扣）</summary>
+    public decimal ConfirmedAmount { get; set; }
+    /// <summary>草稿工资单明细计件额合计（Σ Amount，未扣）</summary>
+    public decimal DraftAmount { get; set; }
+    /// <summary>返工/不良扣款合计（Σ DeductAmount）</summary>
+    public decimal DeductAmount { get; set; }
+    /// <summary>应发合计 = 已确认 + 待确认 − 返工扣</summary>
+    public decimal PayableAmount { get; set; }
+    public int ConfirmedCount { get; set; }
+    public int DraftCount { get; set; }
+    public int StatementCount { get; set; }
+    public string PeriodValue { get; set; } = "";
+    public byte? PeriodType { get; set; }
+}
+
+/// <summary>当日计件试算（docs/222）：不落库、非工资单。</summary>
+public class DailyPieceworkEstimateDto
+{
+    public string BusinessDate { get; set; } = "";
+    public decimal TotalNet { get; set; }
+    public decimal ReviewedNet { get; set; }
+    public decimal UnreviewedNet { get; set; }
+    public decimal DeductAmount { get; set; }
+    public int ReportCount { get; set; }
+    public int MatchedCount { get; set; }
+    public int UnmatchedCount { get; set; }
+    public int ReviewedCount { get; set; }
+    public int UnreviewedCount { get; set; }
+    /// <summary>固定口径，回答时必须带出</summary>
+    public string Disclaimer { get; set; } =
+        "按工价表试算、未复核未入账、复核后定；不生成工资单、不落库";
 }
 
 public class SalaryDetailDto
@@ -124,6 +172,8 @@ public class SalaryItemsQueryDto
     public byte PeriodType { get; set; } = 1;
     public string PeriodValue { get; set; } = "";
     public long? OperationId { get; set; }
+    /// <summary>人员类型筛选（docs/161）；不传=全部</summary>
+    public byte? UserType { get; set; }
     /// <summary>报工时间起（含），可选；不传则当前周期全部。</summary>
     public DateTime? From { get; set; }
     /// <summary>报工时间止（不含），可选。</summary>
@@ -140,6 +190,8 @@ public class SalaryItemRowDto
     public long ReportId { get; set; }
     public long UserId { get; set; }
     public string UserName { get; set; } = "";
+    /// <summary>人员类型（docs/161）</summary>
+    public byte UserType { get; set; }
     public string OrderNo { get; set; } = "";
     public long OrderId { get; set; }
     public long OperationId { get; set; }
@@ -332,29 +384,198 @@ public class SalaryService : ISalaryService
 
     public async Task<ApiResult<PageResult<SalaryListDto>>> QueryAsync(SalaryQueryDto query, long factoryId)
     {
-        var q = _db.SalaryStatements.AsNoTracking().Where(s => s.FactoryId == factoryId);
+        var q = ApplySalaryQueryFilters(
+            _db.SalaryStatements.AsNoTracking().Where(s => s.FactoryId == factoryId), query, factoryId);
+
+        var total = await q.CountAsync();
+        var page = query.Page < 1 ? 1 : query.Page;
+        var pageSize = query.PageSize < 1 ? 20 : query.PageSize;
+        var rows = await q.OrderByDescending(s => s.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+        var userMap = await _db.Users.AsNoTracking()
+            .ToDictionaryAsync(u => u.Id, u => new { u.Name, u.UserType });
+        var ids = rows.Select(s => s.Id).ToList();
+        var deductMap = ids.Count == 0
+            ? new Dictionary<long, decimal>()
+            : await _db.SalaryStatementItems.AsNoTracking()
+                .Where(i => ids.Contains(i.StatementId))
+                .GroupBy(i => i.StatementId)
+                .Select(g => new { StatementId = g.Key, Deduct = g.Sum(i => i.DeductAmount ?? 0m) })
+                .ToDictionaryAsync(x => x.StatementId, x => Round2(x.Deduct));
+        var list = rows.Select(s =>
+        {
+            var u = userMap.GetValueOrDefault(s.UserId);
+            return new SalaryListDto
+            {
+                Id = s.Id,
+                UserId = s.UserId,
+                UserName = u?.Name ?? "",
+                UserType = u?.UserType ?? 0,
+                PeriodType = s.PeriodType,
+                PeriodValue = s.PeriodValue,
+                TotalAmount = s.TotalAmount,
+                DeductAmount = deductMap.GetValueOrDefault(s.Id),
+                Status = s.Status,
+                ConfirmedAt = s.ConfirmedAt,
+                CreatedAt = s.CreatedAt
+            };
+        }).ToList();
+        return ApiResult<PageResult<SalaryListDto>>.Ok(new PageResult<SalaryListDto> { List = list, Total = total });
+    }
+
+    public async Task<ApiResult<SalaryPeriodSummaryDto>> SummarizePeriodAsync(SalaryQueryDto query, long factoryId)
+    {
+        var q = ApplySalaryQueryFilters(_db.SalaryStatements.AsNoTracking().Where(s => s.FactoryId == factoryId), query, factoryId);
+        var statements = await q.Select(s => new { s.Id, s.Status, s.PeriodType, s.PeriodValue }).ToListAsync();
+        var ids = statements.Select(s => s.Id).ToList();
+        var itemAgg = ids.Count == 0
+            ? new List<(long StatementId, decimal Amount, decimal Deduct)>()
+            : (await _db.SalaryStatementItems.AsNoTracking()
+                .Where(i => ids.Contains(i.StatementId))
+                .GroupBy(i => i.StatementId)
+                .Select(g => new
+                {
+                    StatementId = g.Key,
+                    Amount = g.Sum(i => i.Amount),
+                    Deduct = g.Sum(i => i.DeductAmount ?? 0m)
+                })
+                .ToListAsync())
+              .Select(x => (x.StatementId, x.Amount, x.Deduct)).ToList();
+        var byId = itemAgg.ToDictionary(x => x.StatementId, x => x);
+
+        decimal confirmedAmt = 0, draftAmt = 0, deduct = 0;
+        var confirmedCount = 0;
+        var draftCount = 0;
+        foreach (var s in statements)
+        {
+            byId.TryGetValue(s.Id, out var items);
+            if (s.Status == 1)
+            {
+                confirmedAmt += items.Amount;
+                confirmedCount++;
+            }
+            else if (s.Status == 0)
+            {
+                draftAmt += items.Amount;
+                draftCount++;
+            }
+            deduct += items.Deduct;
+        }
+
+        var periodValue = !string.IsNullOrWhiteSpace(query.PeriodValue)
+            ? query.PeriodValue.Trim()
+            : statements.Select(s => s.PeriodValue).FirstOrDefault() ?? "";
+
+        return ApiResult<SalaryPeriodSummaryDto>.Ok(new SalaryPeriodSummaryDto
+        {
+            ConfirmedAmount = Round2(confirmedAmt),
+            DraftAmount = Round2(draftAmt),
+            DeductAmount = Round2(deduct),
+            PayableAmount = Round2(confirmedAmt + draftAmt - deduct),
+            ConfirmedCount = confirmedCount,
+            DraftCount = draftCount,
+            StatementCount = statements.Count,
+            PeriodValue = periodValue,
+            PeriodType = query.PeriodType ?? statements.Select(s => (byte?)s.PeriodType).FirstOrDefault()
+        });
+    }
+
+    public async Task<ApiResult<DailyPieceworkEstimateDto>> EstimateDailyPieceworkAsync(
+        long factoryId, long userId, string? businessTimeZone)
+    {
+        var tz = AiBusinessTime.Resolve(businessTimeZone);
+        var dayStart = AiBusinessTime.TodayStart(tz);
+        var dayEnd = dayStart.AddDays(1);
+        var businessDate = dayStart.ToString("yyyy-MM-dd");
+
+        // 含待复核+已通过，排除退回；与 docs/206 今日计件范围一致，金额按工价表现算
+        var reports = await _db.Reports.AsNoTracking()
+            .Where(r => r.FactoryId == factoryId
+                        && r.UserId == userId
+                        && r.ReportTime >= dayStart && r.ReportTime < dayEnd
+                        && (r.ReviewStatus == 0 || r.ReviewStatus == 1))
+            .OrderBy(r => r.ReportTime)
+            .ToListAsync();
+
+        if (reports.Count == 0)
+        {
+            return ApiResult<DailyPieceworkEstimateDto>.Ok(new DailyPieceworkEstimateDto
+            {
+                BusinessDate = businessDate,
+                ReportCount = 0,
+                MatchedCount = 0,
+                UnmatchedCount = 0
+            });
+        }
+
+        var rules = await _db.PriceRules.AsNoTracking().Where(r => r.FactoryId == factoryId).ToListAsync();
+        decimal reviewedNet = 0, unreviewedNet = 0, deductTotal = 0;
+        var matched = 0;
+        var unmatched = 0;
+        var reviewedCount = 0;
+        var unreviewedCount = 0;
+
+        foreach (var report in reports)
+        {
+            var rule = PriceRuleMatcher.Match(
+                rules, factoryId, report.ProductId, report.OperationId,
+                report.DepartmentId, report.UserId, report.ReportTime);
+            var calc = PriceRuleMatcher.Calculate(rule, report.GoodQty, report.DefectQty, report.DurationMinutes);
+            if (calc.Matched) matched++;
+            else unmatched++;
+
+            deductTotal += calc.DeductAmount;
+            if (report.ReviewStatus == 1)
+            {
+                reviewedNet += calc.WageAmount;
+                reviewedCount++;
+            }
+            else
+            {
+                unreviewedNet += calc.WageAmount;
+                unreviewedCount++;
+            }
+        }
+
+        return ApiResult<DailyPieceworkEstimateDto>.Ok(new DailyPieceworkEstimateDto
+        {
+            BusinessDate = businessDate,
+            TotalNet = Round2(reviewedNet + unreviewedNet),
+            ReviewedNet = Round2(reviewedNet),
+            UnreviewedNet = Round2(unreviewedNet),
+            DeductAmount = Round2(deductTotal),
+            ReportCount = reports.Count,
+            MatchedCount = matched,
+            UnmatchedCount = unmatched,
+            ReviewedCount = reviewedCount,
+            UnreviewedCount = unreviewedCount
+        });
+    }
+
+    private IQueryable<SalaryStatement> ApplySalaryQueryFilters(
+        IQueryable<SalaryStatement> q, SalaryQueryDto query, long factoryId)
+    {
         if (query.PeriodType.HasValue) q = q.Where(s => s.PeriodType == query.PeriodType);
         if (!string.IsNullOrWhiteSpace(query.PeriodValue)) q = q.Where(s => s.PeriodValue == query.PeriodValue);
         if (query.UserId.HasValue) q = q.Where(s => s.UserId == query.UserId);
         if (query.Status.HasValue) q = q.Where(s => s.Status == query.Status);
-
-        var total = await q.CountAsync();
-        var rows = await q.OrderByDescending(s => s.Id)
-            .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).ToListAsync();
-        var names = await _db.Users.AsNoTracking().ToDictionaryAsync(u => u.Id, u => u.Name);
-        var list = rows.Select(s => new SalaryListDto
+        if (!string.IsNullOrWhiteSpace(query.Keyword))
         {
-            Id = s.Id,
-            UserId = s.UserId,
-            UserName = names.GetValueOrDefault(s.UserId, ""),
-            PeriodType = s.PeriodType,
-            PeriodValue = s.PeriodValue,
-            TotalAmount = s.TotalAmount,
-            Status = s.Status,
-            ConfirmedAt = s.ConfirmedAt,
-            CreatedAt = s.CreatedAt
-        }).ToList();
-        return ApiResult<PageResult<SalaryListDto>>.Ok(new PageResult<SalaryListDto> { List = list, Total = total });
+            var kw = query.Keyword.Trim();
+            var matchedUserIds = _db.Users.AsNoTracking()
+                .Where(u => u.FactoryId == factoryId
+                    && (u.Name.Contains(kw) || u.Account.Contains(kw)))
+                .Select(u => u.Id);
+            q = q.Where(s => matchedUserIds.Contains(s.UserId));
+        }
+        if (query.UserType.HasValue)
+        {
+            var typeUserIds = _db.Users.AsNoTracking()
+                .Where(u => u.FactoryId == factoryId && u.UserType == query.UserType.Value)
+                .Select(u => u.Id);
+            q = q.Where(s => typeUserIds.Contains(s.UserId));
+        }
+        return q;
     }
 
     public async Task<ApiResult<SalaryDetailDto>> GetAsync(long id, long factoryId)
@@ -1012,26 +1233,32 @@ public class SalaryService : ISalaryService
         }
     }
 
-    public async Task<(byte[] Content, string FileName)> ExportCsvAsync(byte periodType, string periodValue, long factoryId)
+    public async Task<(byte[] Content, string FileName)> ExportCsvAsync(
+        byte periodType, string periodValue, long factoryId, byte? userType = null)
     {
         periodValue = (periodValue ?? "").Trim();
         if (string.IsNullOrEmpty(periodValue))
             throw ThrowHelper.Biz(nameof(ExportCsvAsync), "周期值不能为空");
 
-        var rows = await (
+        var q =
             from s in _db.SalaryStatements.AsNoTracking()
             where s.FactoryId == factoryId && s.PeriodType == periodType && s.PeriodValue == periodValue
             join u in _db.Users.AsNoTracking() on s.UserId equals u.Id
-            orderby u.Name
-            select new
+            select new { s, u };
+        if (userType.HasValue)
+            q = q.Where(x => x.u.UserType == userType.Value);
+
+        var rows = await q.OrderBy(x => x.u.Name)
+            .Select(x => new
             {
-                u.Name,
-                s.Id,
-                s.PeriodValue,
-                s.TotalAmount,
-                s.Status
-            }
-        ).ToListAsync();
+                x.u.Name,
+                x.u.UserType,
+                x.s.Id,
+                x.s.PeriodValue,
+                x.s.TotalAmount,
+                x.s.Status
+            })
+            .ToListAsync();
 
         var ids = rows.Select(r => r.Id).ToList();
         var pieceworkMap = await _db.SalaryStatementItems.AsNoTracking()
@@ -1045,12 +1272,12 @@ public class SalaryService : ISalaryService
             .ToDictionaryAsync(x => x.StatementId, x => Round2(x.Piecework));
 
         var sb = new StringBuilder();
-        sb.AppendLine("姓名,周期,计件合计,应发合计,状态");
+        sb.AppendLine("姓名,人员类型,周期,计件合计,应发合计,状态");
         foreach (var r in rows)
         {
             var st = r.Status == 1 ? "已确认" : "草稿";
             var piece = pieceworkMap.GetValueOrDefault(r.Id, 0m);
-            sb.AppendLine($"{EscapeCsv(r.Name)},{r.PeriodValue},{piece},{r.TotalAmount},{st}");
+            sb.AppendLine($"{EscapeCsv(r.Name)},{EscapeCsv(UserTypeHelper.Label(r.UserType))},{r.PeriodValue},{piece},{r.TotalAmount},{st}");
         }
         // UTF-8 BOM，Excel 友好
         var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(sb.ToString())).ToArray();
@@ -1077,11 +1304,12 @@ public class SalaryService : ISalaryService
     {
         var rows = await LoadItemRowsAsync(query, factoryId, applyPaging: false);
         var sb = new StringBuilder();
-        sb.AppendLine("人员,工单,工序,颜色,规格尺码,良品,不良,单价,不良扣款,小计,应发,报工时间");
+        sb.AppendLine("人员,人员类型,工单,工序,颜色,规格尺码,良品,不良,单价,不良扣款,小计,应发,报工时间");
         foreach (var r in rows)
         {
             sb.AppendLine(string.Join(',',
                 EscapeCsv(r.UserName),
+                EscapeCsv(UserTypeHelper.Label(r.UserType)),
                 EscapeCsv(r.OrderNo),
                 EscapeCsv(r.OperationName),
                 EscapeCsv(r.Color),
@@ -1168,6 +1396,8 @@ public class SalaryService : ISalaryService
 
         if (query.OperationId.HasValue)
             q = q.Where(x => x.r.OperationId == query.OperationId.Value);
+        if (query.UserType.HasValue)
+            q = q.Where(x => x.u.UserType == query.UserType.Value);
         if (from.HasValue)
             q = q.Where(x => x.r.ReportTime >= from.Value);
         if (to.HasValue)
@@ -1180,6 +1410,7 @@ public class SalaryService : ISalaryService
             ReportId = x.i.ReportId,
             UserId = x.s.UserId,
             UserName = x.u.Name,
+            UserType = x.u.UserType,
             OrderNo = x.o.OrderNo,
             OrderId = x.o.Id,
             OperationId = x.op.Id,

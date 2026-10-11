@@ -108,13 +108,14 @@ import { getWechatRules, createWechatRule, updateWechatRule, getWechatDeliveries
 defineProps({ defaultWebhookConfigured: { type: Boolean, default: false } })
 const legacyRule = computed(() => !!ruleId.value && form.value.targetChannel !== 'group')
 
-const events = { report_created: '报工成功', order_started: '工单开始', order_completed: '工单结束', abnormal_reported: '异常上报' }
+const events = { report_created: '报工成功', order_started: '工单开始', order_completed: '工单结束', abnormal_reported: '异常上报', operation_assigned: '派工' }
 const statuses = { pending: '待发', processing: '处理中', success: '已接受', retry: '待重试', failed: '失败', partial: '部分成功', unknown: '结果未知', cancelled: '已取消', confirmed: '人工确认已发送', requeued: '管理员重新排队' }
 const templates = {
   report_created: '【微聚】报工成功\n工单：{工单号} 产品：{产品编号} {产品名称}\n工序：{工序} 良品：{良品数} 不良：{不良数} 不良率：{不良率}\n时间：{事件时间}',
   order_started: '【微聚】工单开始\n工单：{工单号} 产品：{产品编号} {产品名称}\n时间：{事件时间}',
   order_completed: '【微聚】工单结束\n工单：{工单号} 产品：{产品编号} {产品名称}\n时间：{事件时间}',
-  abnormal_reported: '【微聚】异常上报\n类型：{异常类型}\n描述：{问题描述}\n工单：{工单号} 产品：{产品编号} {产品名称}\n上报人：{上报人}\n时间：{事件时间}'
+  abnormal_reported: '【微聚】异常上报\n类型：{异常类型}\n描述：{问题描述}\n工单：{工单号} 产品：{产品编号} {产品名称}\n上报人：{上报人}\n时间：{事件时间}',
+  operation_assigned: '【派工】工单{工单号}-工序{工序}已派给{派工对象}，请到任务页查看\n时间：{事件时间}'
 }
 const kinds = { abnormal_device: '仅设备故障', abnormal_material: '仅物料短缺', abnormal_quality: '仅质量异常' }
 const conditionText = row => row.conditionType === 'defect_rate' ? `本次不良率 > ${row.threshold}%` : (kinds[row.conditionType] || '每次提醒')
@@ -123,8 +124,8 @@ const page = ref(1), total = ref(0), loading = ref(false), loadingDeliveries = r
 const ruleDialog = ref(false), ruleId = ref(null), form = ref({})
 const detailDialog = ref(false), detail = ref(null), verifyDialog = ref(false), verifyId = ref(null), verification = ref({ sent: true, note: '' })
 const verifyCanRequeue = computed(() => rules.value.some(rule => rule.id === deliveries.value.find(row => row.id === verifyId.value)?.ruleId && rule.targetChannel === 'group'))
-const placeholders = computed(() => ['工单号', '产品编号', '产品名称', '事件时间', ...(form.value.eventType === 'report_created' ? ['工序', '良品数', '不良数', '不良率'] : []), ...(form.value.eventType === 'abnormal_reported' ? ['异常类型', '问题描述', '上报人'] : [])])
-const sample = { 工单号: 'WO-示例', 产品编号: 'P-001', 产品名称: '示例产品', 事件时间: '2026-10-02 09:00:00', 工序: '裁切', 良品数: '89', 不良数: '11', 不良率: '11.00%', 异常类型: '物料短缺', 问题描述: '缺料暂停', 上报人: '张三' }
+const placeholders = computed(() => ['工单号', '产品编号', '产品名称', '事件时间', ...(form.value.eventType === 'report_created' ? ['工序', '良品数', '不良数', '不良率'] : []), ...(form.value.eventType === 'abnormal_reported' ? ['异常类型', '问题描述', '上报人'] : []), ...(form.value.eventType === 'operation_assigned' ? ['工序', '派工对象'] : [])])
+const sample = { 工单号: 'WO-示例', 产品编号: 'P-001', 产品名称: '示例产品', 事件时间: '2026-10-02 09:00:00', 工序: '裁切', 良品数: '89', 不良数: '11', 不良率: '11.00%', 异常类型: '物料短缺', 问题描述: '缺料暂停', 上报人: '张三', 派工对象: '班组缝纫组' }
 const preview = computed(() => (form.value.template || '').replace(/\{([^{}]+)\}/g, (_, key) => sample[key] ?? `【未知：${key}】`))
 const tokenText = token => `{${token}}`
 const formatTime = value => value ? value.replace('T', ' ').slice(0, 19) : '—'

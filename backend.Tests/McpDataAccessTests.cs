@@ -40,15 +40,85 @@ public class McpDataAccessTests
     public async Task Salary_UsesBoundScope_NotFinanceToken(byte role, bool demo, long? expected)
     {
         var bind = new Bind(); bind.User!.Role = role; bind.User.Account = "worker";
-        var called = false;
-        var svc = Service<ISalaryService>((m,a) => {
-            Assert.Equal("QueryAsync", m.Name); var q = Assert.IsType<SalaryQueryDto>(a[0]);
-            Assert.Equal(expected,q.UserId); Assert.Equal("2026-10",q.PeriodValue); Assert.Equal(8L,a[1]); called=true;
-            return Task.FromResult(ApiResult<PageResult<SalaryListDto>>.Ok(new() { Total=0, List=new() }));
+        var queryCalled = false;
+        var summaryCalled = false;
+        var svc = Service<ISalaryService>((m, a) =>
+        {
+            if (m.Name == "QueryAsync")
+            {
+                var q = Assert.IsType<SalaryQueryDto>(a[0]);
+                Assert.Equal(expected, q.UserId);
+                Assert.Equal("2026-10", q.PeriodValue);
+                Assert.Equal(8L, a[1]);
+                queryCalled = true;
+                return Task.FromResult(ApiResult<PageResult<SalaryListDto>>.Ok(new() { Total = 0, List = new() }));
+            }
+            if (m.Name == "SummarizePeriodAsync")
+            {
+                var q = Assert.IsType<SalaryQueryDto>(a[0]);
+                Assert.Equal(expected, q.UserId);
+                summaryCalled = true;
+                return Task.FromResult(ApiResult<SalaryPeriodSummaryDto>.Ok(new SalaryPeriodSummaryDto
+                {
+                    ConfirmedAmount = 100,
+                    DraftAmount = 20,
+                    DeductAmount = 5,
+                    PayableAmount = 115,
+                    PeriodValue = "2026-10"
+                }));
+            }
+            throw new InvalidOperationException($"unexpected {m.Name}");
         });
         var tool = new SalaryMcpTools(svc, null!, Context(), bind, Config(demo));
-        using var json = JsonDocument.Parse(await tool.QuerySalary(periodValue:"2026-10"));
-        Assert.True(called); Assert.Equal(0,json.RootElement.GetProperty("total").GetInt32());
+        using var json = JsonDocument.Parse(await tool.QuerySalary(periodValue: "2026-10"));
+        Assert.True(queryCalled);
+        Assert.True(summaryCalled);
+        Assert.Equal(0, json.RootElement.GetProperty("total").GetInt32());
+        Assert.Equal(115, json.RootElement.GetProperty("summary").GetProperty("payableAmount").GetDecimal());
+    }
+
+    [Fact]
+    public async Task DailyPiecework_RequiresBoundUser_EvenInDemo()
+    {
+        var tool = new SalaryMcpTools(
+            Service<ISalaryService>((_, _) => throw new InvalidOperationException("不应调用")),
+            null!, Context(), new Bind(), Config(demo: true));
+        using var json = JsonDocument.Parse(await tool.QueryDailyPiecework());
+        Assert.Equal(1, json.RootElement.GetProperty("code").GetInt32());
+        Assert.Contains("绑定", json.RootElement.GetProperty("msg").GetString());
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(1)]
+    public async Task DailyPiecework_UsesBoundUserId(byte role)
+    {
+        var bind = new Bind(); bind.User!.Role = role;
+        long? calledUser = null;
+        var svc = Service<ISalaryService>((m, a) =>
+        {
+            Assert.Equal("EstimateDailyPieceworkAsync", m.Name);
+            Assert.Equal(8L, a[0]);
+            calledUser = (long)a[1]!;
+            return Task.FromResult(ApiResult<DailyPieceworkEstimateDto>.Ok(new DailyPieceworkEstimateDto
+            {
+                BusinessDate = "2026-10-10",
+                TotalNet = 12.5m,
+                ReviewedNet = 10m,
+                UnreviewedNet = 2.5m,
+                ReportCount = 2,
+                MatchedCount = 2,
+                ReviewedCount = 1,
+                UnreviewedCount = 1,
+                Disclaimer = "按工价表试算、未复核未入账、复核后定；不生成工资单、不落库"
+            }));
+        });
+        var tool = new SalaryMcpTools(svc, null!, Context(), bind, Config());
+        using var json = JsonDocument.Parse(await tool.QueryDailyPiecework());
+        Assert.Equal(17L, calledUser);
+        Assert.Equal(0, json.RootElement.GetProperty("code").GetInt32());
+        Assert.Contains("未复核未入账", json.RootElement.GetProperty("data").GetProperty("disclaimer").GetString());
     }
 
     [Fact]

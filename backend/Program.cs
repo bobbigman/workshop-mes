@@ -86,6 +86,7 @@ try
     builder.Services.AddHostedService<ErrorLogCleanupService>();
     builder.Services.AddHostedService<TrialAccountCleanupService>();
 
+    builder.Services.AddMemoryCache();
     builder.Services.AddControllers();
     builder.Services.AddEndpointsApiExplorer();
     if (instanceOpt.EnableSwagger)
@@ -175,11 +176,13 @@ try
     builder.Services.AddScoped<WechatMessageSender>();
     builder.Services.AddScoped<WechatEventService>();
     builder.Services.AddScoped<IWorkerViewService, WorkerViewService>();
+    builder.Services.AddScoped<IReportUpstreamSettingService, ReportUpstreamSettingService>();
     builder.Services.AddScoped<IKingdeeAuthService, FakeKingdeeAuthService>();
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddScoped<IMcpRequestContext, McpRequestContext>();
     builder.Services.AddScoped<IMcpKeyService, McpKeyService>();
     builder.Services.AddScoped<IMcpWxBindService, McpWxBindService>();
+    builder.Services.AddScoped<IMcpReportLinkService, McpReportLinkService>();
     builder.Services.AddScoped<IMcpAuthService, McpAuthService>();
     builder.Services.AddScoped<IScheduleScoreService, ScheduleScoreService>();
     builder.Services.AddScoped<IKnowledgeService, KnowledgeService>();

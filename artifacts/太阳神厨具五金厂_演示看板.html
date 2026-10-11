@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>太阳神厨具五金厂(深圳)·车间智能看板演示</title>
+<style>
+  :root{--red:#d93829;--orange:#e8801c;--green:#2f9e63;--blue:#2d6cdf;--ink:#1f2430;--mut:#6b7280;--line:#e6e8ee;--bg:#f5f6f9;--card:#fff;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;color:var(--ink);background:var(--bg);line-height:1.6;padding:0 0 48px;}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 20px;}
+  header{background:linear-gradient(135deg,#12315e,#1d4f92 60%,#2d6cdf);color:#fff;padding:26px 20px;}
+  .hd-inner{max-width:1180px;margin:0 auto;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px;}
+  h1{font-size:26px;font-weight:700;letter-spacing:.5px;}
+  .hd-sub{color:#c8d9f5;font-size:14px;margin-top:6px;}
+  .hd-badge{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:8px;padding:6px 14px;font-size:13px;}
+  .kpis{display:grid;grid-template-columns:repeat(8,1fr);gap:12px;margin:22px 0;}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 12px;text-align:center;}
+  .kpi .v{font-size:26px;font-weight:800;line-height:1.2;}
+  .kpi .l{font-size:12px;color:var(--mut);margin-top:2px;}
+  .kpi .v.r{color:var(--red);} .kpi .v.o{color:var(--orange);} .kpi .v.g{color:var(--green);}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:20px;}
+  .sec-t{font-size:18px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+  .sec-t .tag{font-size:12px;font-weight:600;padding:2px 8px;border-radius:5px;color:#fff;}
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;}
+  .wo{border:1px solid var(--line);border-radius:10px;padding:14px 16px;}
+  .wo.o{border-left:5px solid var(--orange);} .wo.r{border-left:5px solid var(--red);} .wo.g{border-left:5px solid var(--green);}
+  .wo .top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;}
+  .wo .no{font-weight:700;font-size:15px;}
+  .wo .prod{font-size:13px;color:var(--mut);}
+  .wo .risk{font-size:12px;font-weight:700;padding:2px 8px;border-radius:6px;color:#fff;}
+  .risk.ov{background:var(--red);} .risk.warn{background:var(--orange);} .risk.ok{background:var(--green);}
+  .wo .meta{font-size:13px;color:var(--mut);margin:8px 0 6px;}
+  .bar{background:#eceef3;border-radius:6px;height:10px;overflow:hidden;margin:6px 0 10px;}
+  .bar i{display:block;height:100%;border-radius:6px;}
+  .wo .adv{font-size:13px;color:var(--ink);background:#f7f8fb;border:1px solid var(--line);border-radius:8px;padding:8px 10px;}
+  .abn{display:flex;gap:12px;padding:12px 0;border-bottom:1px dashed var(--line);align-items:flex-start;}
+  .abn:last-child{border-bottom:none;}
+  .abn .ty{flex:0 0 auto;font-size:12px;font-weight:700;color:#fff;padding:2px 10px;border-radius:6px;}
+  .ty.dev{background:var(--red);} .ty.qual{background:var(--orange);} .ty.mat{background:var(--blue);}
+  .abn .desc{font-size:14px;} .abn .meta{font-size:12px;color:var(--mut);margin-top:2px;}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);}
+  th{color:var(--mut);font-weight:600;background:#fafbfd;}
+  .st{display:inline-block;font-size:12px;font-weight:700;padding:2px 9px;border-radius:6px;color:#fff;}
+  .st.ov{background:var(--red);} .st.warn{background:var(--orange);} .st.doing{background:var(--blue);} .st.done{background:var(--green);}
+  .play{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin-bottom:14px;}
+  .play .q{font-weight:700;font-size:15px;margin-bottom:6px;}
+  .play .q::before{content:"问 ";color:var(--blue);font-weight:800;}
+  .play .a{background:#f7f8fb;border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:14px;}
+  .play .a::before{content:"AI / 演示应达效果 ";color:var(--green);font-weight:800;font-size:13px;}
+  .play .why{font-size:13px;color:var(--mut);margin-top:6px;}
+  footer{color:var(--mut);font-size:12.5px;border-top:1px solid var(--line);padding-top:14px;margin-top:8px;}
+  .note{background:#fff8ec;border:1px solid #f0d9a6;border-radius:8px;padding:8px 12px;font-size:13px;color:#7a5a1e;margin-bottom:14px;}
+  @media(max-width:900px){.kpis{grid-template-columns:repeat(4,1fr);}.grid{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<header>
+  <div class="hd-inner">
+    <div>
+      <h1>太阳神厨具五金厂（深圳）· 车间智能看板</h1>
+      <div class="hd-sub">小工单系统 · 纯演示模拟数据 · 数据截至 2026-10-09</div>
+    </div>
+    <div class="hd-badge">产品 6 · 工单 14 · 在制 11 · 交期预警 3 · 逾期 1 · 未恢复异常 3</div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="kpis">
+    <div class="kpi"><div class="v">14</div><div class="l">工单总数</div></div>
+    <div class="kpi"><div class="v" style="color:var(--blue)">11</div><div class="l">进行中</div></div>
+    <div class="kpi"><div class="v g">3</div><div class="l">已完成</div></div>
+    <div class="kpi"><div class="v">9,028</div><div class="l">累计良品(件)</div></div>
+    <div class="kpi"><div class="v">20</div><div class="l">不良(件)</div></div>
+    <div class="kpi"><div class="v">0.22%</div><div class="l">不良率</div></div>
+    <div class="kpi"><div class="v o">3</div><div class="l">交期预警</div></div>
+    <div class="kpi"><div class="v r">1</div><div class="l">已逾期</div></div>
+  </div>
+
+  <div class="note">本页为演示用模拟数据，用于向客户展示系统能力。三场景对话中的"AI 应达效果"为演示口径；实际 AI 对话需 DeepSeek 账户余额可用时才会实时作答。</div>
+
+  <div class="card">
+    <div class="sec-t"><span class="tag" style="background:var(--orange)">风险</span>交期风险 TOP · 今天先盯这几张</div>
+    <div class="grid">
+      <div class="wo r">
+        <div class="top"><span class="no">GD2026100902</span><span class="risk ov">已逾期</span></div>
+        <div class="prod">不锈钢汤锅24cm · 计划200件 · 今日交期</div>
+        <div class="meta">当前：下料200 → 冲压100，设备故障停机中 · 剩余3道工序未做</div>
+        <div class="bar"><i style="width:50%;background:var(--red)"></i></div>
+        <div class="adv">建议：先修冲压机（机修给恢复时间）→ 确认能否转其他设备 → 评估改期或分批交货。</div>
+      </div>
+      <div class="wo o">
+        <div class="top"><span class="no">GD2026100901</span><span class="risk warn">明日交期</span></div>
+        <div class="prod">不锈钢炒锅30cm · 计划300件 · 明日交期</div>
+        <div class="meta">当前：下料300 → 冲压280 → 打磨180(毛刺返工)，质检未过</div>
+        <div class="bar"><i style="width:60%;background:var(--orange)"></i></div>
+        <div class="adv">建议：打磨返工量先确认 → 质检放行后补组装/包装，今天先核产能。</div>
+      </div>
+      <div class="wo o">
+        <div class="top"><span class="no">GD2026100904</span><span class="risk warn">预警</span></div>
+        <div class="prod">家用不锈钢菜刀 · 计划400件 · 交期10-11</div>
+        <div class="meta">当前：下料400 → 冲压380 → 打磨360 → 质检350，组装/包装未做</div>
+        <div class="bar"><i style="width:87%;background:var(--orange)"></i></div>
+        <div class="adv">建议：质检良品350，还有2道工序；节奏偏慢，明天关注组装产能。</div>
+      </div>
+      <div class="wo o">
+        <div class="top"><span class="no">GD2026100906</span><span class="risk warn">预警</span></div>
+        <div class="prod">打蛋器 · 计划150件 · 交期10-11</div>
+        <div class="meta">当前：下料150 → 冲压150 → 打磨140 → 质检140 → 组装130</div>
+        <div class="bar"><i style="width:87%;background:var(--orange)"></i></div>
+        <div class="adv">建议：已到组装，余量20件+包装；明天上午应可收尾。</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="sec-t"><span class="tag" style="background:var(--red)">异常</span>未恢复异常 · 3 条最影响生产</div>
+    <div class="abn"><span class="ty dev">设备故障</span><div><div class="desc">冲压机冲头磨损，已停机待修，关联今日交期工单 GD2026100902(汤锅)，冲压工序停滞。</div><div class="meta">上报 2026-10-07 09:00 · 持续未恢复 · 关联工单今日交期</div></div></div>
+    <div class="abn"><span class="ty qual">质量异常</span><div><div class="desc">打磨工序毛刺超标，批退返工，关联明日交期工单 GD2026100901(炒锅)，质检未过。</div><div class="meta">上报 2026-10-08 10:00 · 返工中 · 关联工单明日交期</div></div></div>
+    <div class="abn"><span class="ty mat">物料短缺</span><div><div class="desc">不锈钢板材到货延迟，下料待料，关联工单 GD2026100905(漏勺)。</div><div class="meta">上报 2026-10-09 09:30 · 待采购跟进</div></div></div>
+  </div>
+
+  <div class="card">
+    <div class="sec-t"><span class="tag" style="background:var(--blue)">进度</span>全部工单进度（截至 2026-10-09）</div>
+    <div style="overflow-x:auto">
+    <table>
+      <tr><th>工单号</th><th>产品</th><th>数量</th><th>交期</th><th>当前所在工序 / 已报量</th><th>状态</th></tr>
+      <tr><td>GD2026100902</td><td>不锈钢汤锅24cm</td><td>200</td><td>10-09</td><td>冲压 100/200 · 设备故障停机</td><td><span class="st ov">逾期</span></td></tr>
+      <tr><td>GD2026100901</td><td>不锈钢炒锅30cm</td><td>300</td><td>10-10</td><td>打磨 180/300 · 质量返工</td><td><span class="st warn">预警</span></td></tr>
+      <tr><td>GD2026100904</td><td>家用不锈钢菜刀</td><td>400</td><td>10-11</td><td>质检 350/400</td><td><span class="st warn">预警</span></td></tr>
+      <tr><td>GD2026100906</td><td>打蛋器</td><td>150</td><td>10-11</td><td>组装 130/150</td><td><span class="st warn">预警</span></td></tr>
+      <tr><td>GD2026100903</td><td>木柄锅铲</td><td>500</td><td>10-12</td><td>已全部完成 500</td><td><span class="st done">健康</span></td></tr>
+      <tr><td>GD2026100905</td><td>不锈钢漏勺</td><td>300</td><td>10-13</td><td>质检 280/300 · 板材待料</td><td><span class="st doing">在制</span></td></tr>
+      <tr><td>A0001</td><td>打蛋器</td><td>10</td><td>10-13</td><td>待下料</td><td><span class="st doing">在制</span></td></tr>
+      <tr><td>GD2026100907</td><td>不锈钢炒锅30cm</td><td>200</td><td>10-15</td><td>已全部完成 200</td><td><span class="st done">健康</span></td></tr>
+      <tr><td>GD2026100908</td><td>不锈钢汤锅24cm</td><td>150</td><td>10-16</td><td>冲压 120/150</td><td><span class="st doing">在制</span></td></tr>
+    </table>
+    </div>
+    <div style="font-size:12.5px;color:var(--mut);margin-top:8px">口径：进度按末道工序累计良品数；多工序数量不相加当完成量。演示数据，非真实生产。</div>
+  </div>
+
+  <div class="card">
+    <div class="sec-t"><span class="tag" style="background:#2d6cdf">演示</span>三场景演示剧本 · 问一句，系统答到位</div>
+
+    <div class="play">
+      <div class="q">未来三天哪些工单需要优先关注？为什么？建议怎么处理？</div>
+      <div class="a">优先盯 3 张：① GD2026100902 汤锅今日交期已逾期，卡在冲压（设备故障停机），建议机修先给恢复时间，生产确认能否转设备；② GD2026100901 炒锅明日交期，打磨毛刺返工卡质检，建议先核返工量；③ GD2026100904 菜刀后日交期，质检后组装/包装未做，节奏偏慢。整体明天交付的 3 张单里有 1 张被异常卡住，需优先处理。</div>
+      <div class="why">依据：交期 + 各工序累计良品 + 未恢复异常；区分"已逾期/可能延期"，不把在制量当完成量。</div>
+    </div>
+
+    <div class="play">
+      <div class="q">现在未恢复的异常，哪些最影响生产？应该先找谁？</div>
+      <div class="a">按影响排：① 设备故障（冲压机磨损）关联今日交期汤锅，最紧急，建议机修先反馈恢复时间、生产评估转设备；② 质量异常（打磨毛刺返工）关联明日交期炒锅，建议质检先确认放行标准、生产核返工；③ 物料短缺（板材延迟）关联漏勺，建议采购催到货、排产评估能否顺延。</div>
+      <div class="why">依据：异常类型 + 关联工单交期 + 报工记录；已恢复异常不列入，未确认的影响单列待核实。</div>
+    </div>
+
+    <div class="play">
+      <div class="q">给我一份今天的生产简报，重点说问题和明天要处理的事。</div>
+      <div class="a">今天 3 张工单已完成（锅铲、炒锅），主要问题：汤锅今日交期被设备故障卡住已逾期；炒锅明日交期有打磨返工。明天优先：先确认冲压机恢复、再核炒锅质检放行、补漏勺板材到货。今天数据含近期补报，不宜据此判断日产能上升。</div>
+      <div class="why">依据：当日报工/完工变化 + 近交期工单 + 未恢复异常；只报有证据的增减，缺失与口径如实说明。</div>
+    </div>
+  </div>
+
+  <footer>
+    太阳神厨具五金厂（深圳）· 小工单系统演示材料 · 数据为模拟，用于售前/内部演示 · 生成于 2026-10-09。<br>
+    演示路径建议：①看板（本页）→ ②交期风险 TOP → ③异常清单 → ④AI 三场景对话（需 DeepSeek 余额可用）。
+  </footer>
+</div>
+</body>
+</html>

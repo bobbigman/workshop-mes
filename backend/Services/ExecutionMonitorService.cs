@@ -305,6 +305,7 @@ public class ExecutionMonitorService : IExecutionMonitorService
                 from t in _db.WorkOrderOperations.AsNoTracking()
                 where t.PlanQty > 0
                       && t.AssigneeUserId == null
+                      && t.AssigneeDepartmentId == null
                       && !assignedTaskIds.Contains(t.Id)
                 join o in _db.WorkOrders.AsNoTracking() on t.WorkOrderId equals o.Id
                 where o.FactoryId == factoryId && (o.Status == 0 || o.Status == 1)

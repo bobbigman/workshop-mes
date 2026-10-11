@@ -57,7 +57,7 @@ public class AssignServiceTests
     {
         var (db, svc) = New();
         await svc.AssignAsync(_fx.TaskId, _fx.WorkerId, _fx.FactoryId, _fx.LeaderId);
-        await svc.AssignAsync(_fx.TaskId, null, _fx.FactoryId, _fx.LeaderId);
+        await svc.AssignAsync(_fx.TaskId, (long?)null, _fx.FactoryId, _fx.LeaderId);
 
         var t = await db.WorkOrderOperations.AsNoTracking().FirstAsync(x => x.Id == _fx.TaskId);
         Assert.Null(t.AssigneeUserId);
@@ -89,6 +89,27 @@ public class AssignServiceTests
         await Assert.ThrowsAsync<BusinessException>(() =>
             svc.AssignAsync(999999, _fx.WorkerId, _fx.FactoryId, _fx.LeaderId));
     }
+
+    [Fact]
+    public async Task Assign_Department_Then_MyTasks_For_Team_Member()
+    {
+        var (db, svc) = New();
+        await svc.AssignAsync(_fx.TaskId, new AssignDto { DepartmentId = _fx.DeptId }, _fx.FactoryId, _fx.LeaderId);
+
+        var t = await db.WorkOrderOperations.AsNoTracking().FirstAsync(x => x.Id == _fx.TaskId);
+        Assert.Equal(_fx.DeptId, t.AssigneeDepartmentId);
+        Assert.Null(t.AssigneeUserId);
+
+        var mine = await svc.MyTasksAsync(_fx.FactoryId, _fx.WorkerId);
+        var row = Assert.Single(mine.Data!);
+        Assert.Equal("team", row.AssignSource);
+
+        // 改派个人 → 班组清空
+        await svc.AssignAsync(_fx.TaskId, _fx.WorkerId, _fx.FactoryId, _fx.LeaderId);
+        t = await db.WorkOrderOperations.AsNoTracking().FirstAsync(x => x.Id == _fx.TaskId);
+        Assert.Null(t.AssigneeDepartmentId);
+        Assert.Equal(_fx.WorkerId, t.AssigneeUserId);
+    }
 }
 
 [CollectionDefinition("assign_db", DisableParallelization = true)]
@@ -108,6 +129,7 @@ public class AssignDbFixture : IDisposable
     public long OtherFactoryTaskId;
     public long OrderId;
     public long OperationId;
+    public long DeptId;
     public long PlanQty;
     public string OrderNo = "";
 
@@ -131,15 +153,26 @@ public class AssignDbFixture : IDisposable
         var orderIds = db.WorkOrders.Where(o => fids.Contains(o.FactoryId)).Select(o => o.Id).ToList();
         var taskIds = db.WorkOrderOperations.Where(t => orderIds.Contains(t.WorkOrderId)).Select(t => t.Id).ToList();
         if (taskIds.Count > 0)
+        {
+            db.WorkOrderOperationAssignees.RemoveRange(
+                db.WorkOrderOperationAssignees.Where(a => taskIds.Contains(a.WorkOrderOperationId)));
             db.WorkOrderOperations.RemoveRange(db.WorkOrderOperations.Where(t => taskIds.Contains(t.Id)));
+        }
         if (orderIds.Count > 0)
         {
             db.Reports.RemoveRange(db.Reports.Where(r => orderIds.Contains(r.OrderId)));
             db.WorkOrders.RemoveRange(db.WorkOrders.Where(o => orderIds.Contains(o.Id)));
         }
+        var opIds = db.Operations.Where(o => fids.Contains(o.FactoryId)).Select(o => o.Id).ToList();
+        if (opIds.Count > 0)
+            db.OperationDepartments.RemoveRange(db.OperationDepartments.Where(x => opIds.Contains(x.OperationId)));
+        var deptIds = db.Departments.Where(d => fids.Contains(d.FactoryId)).Select(d => d.Id).ToList();
+        if (deptIds.Count > 0)
+            db.DepartmentUsers.RemoveRange(db.DepartmentUsers.Where(x => deptIds.Contains(x.DepartmentId)));
         db.Products.RemoveRange(db.Products.Where(p => fids.Contains(p.FactoryId)));
         db.Units.RemoveRange(db.Units.Where(u => fids.Contains(u.FactoryId)));
         db.Operations.RemoveRange(db.Operations.Where(o => fids.Contains(o.FactoryId)));
+        db.Departments.RemoveRange(db.Departments.Where(d => fids.Contains(d.FactoryId)));
         db.Users.RemoveRange(db.Users.Where(u => fids.Contains(u.FactoryId)));
         db.Factories.RemoveRange(db.Factories.Where(f => fids.Contains(f.Id)));
         db.SaveChanges();
@@ -165,10 +198,21 @@ public class AssignDbFixture : IDisposable
         LeaderId = leader.Id;
         WorkerId = worker.Id;
 
+        var dept = new SysDepartment { FactoryId = f.Id, Code = "ASG-D1", Name = "切料班", CreatedAt = now };
+        db.Departments.Add(dept);
+        db.SaveChanges();
+        DeptId = dept.Id;
+        db.DepartmentUsers.AddRange(
+            new SysDepartmentUser { DepartmentId = dept.Id, UserId = leader.Id },
+            new SysDepartmentUser { DepartmentId = dept.Id, UserId = worker.Id });
+        db.SaveChanges();
+
         var op = new BaseOperation { FactoryId = f.Id, Code = "ASG-CUT", Name = "切料", CreatedAt = now };
         db.Operations.Add(op);
         db.SaveChanges();
         OperationId = op.Id;
+        db.OperationDepartments.Add(new BaseOperationDepartment { OperationId = op.Id, DepartmentId = dept.Id });
+        db.SaveChanges();
 
         var prod = new BaseProduct { FactoryId = f.Id, Code = "ASG-P1", Name = "派工产品", UnitId = unit.Id, CreatedAt = now };
         db.Products.Add(prod);

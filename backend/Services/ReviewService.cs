@@ -49,6 +49,12 @@ public class ReviewListDto
     public DateTime ReportTime { get; set; }
     public decimal? UnitPrice { get; set; }
     public decimal? WageAmount { get; set; }
+    /// <summary>上工序合格库存/可报上限；首道=工单计划数；无法判定工序顺序时为 null。</summary>
+    public int? UpstreamLimit { get; set; }
+    /// <summary>同工单同工序已通过+待复核良品合计（含本笔）。</summary>
+    public int SameOpOccupiedQty { get; set; }
+    /// <summary>同工序累计占用 &gt; 可报上限。</summary>
+    public bool QtyAbnormal { get; set; }
 }
 
 /// <summary>复核页工单下拉：有待复核报工的工单（去重）。</summary>
@@ -100,11 +106,15 @@ public class ReviewService : IReviewService
         }
 
         var total = await q.CountAsync();
-        var list = await q.OrderByDescending(x => x.r.ReportTime)
+        var rows = await q.OrderByDescending(x => x.r.ReportTime)
             .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
-            .Select(x => new ReviewListDto
+            .Select(x => new
             {
-                Id = x.r.Id,
+                x.r.Id,
+                OrderId = x.o.Id,
+                OrderQty = x.o.Qty,
+                ProductId = x.o.ProductId,
+                OperationId = x.r.OperationId,
                 OrderNo = x.o.OrderNo,
                 ProductName = x.p.Name,
                 OperationName = x.op.Name,
@@ -120,7 +130,124 @@ public class ReviewService : IReviewService
                 WageAmount = x.r.WageAmount
             }).ToListAsync();
 
+        var list = rows.Select(x => new ReviewListDto
+        {
+            Id = x.Id,
+            OrderNo = x.OrderNo,
+            ProductName = x.ProductName,
+            OperationName = x.OperationName,
+            UserName = x.UserName,
+            UserId = x.UserId,
+            GoodQty = x.GoodQty,
+            DefectQty = x.DefectQty,
+            DurationMinutes = x.DurationMinutes,
+            ReviewStatus = x.ReviewStatus,
+            RejectReason = x.RejectReason,
+            ReportTime = x.ReportTime,
+            UnitPrice = x.UnitPrice,
+            WageAmount = x.WageAmount
+        }).ToList();
+
+        await FillQtyCheckAsync(list, rows.Select(x => (x.Id, x.OrderId, x.OrderQty, x.ProductId, x.OperationId)).ToList());
+
         return ApiResult<PageResult<ReviewListDto>>.Ok(new PageResult<ReviewListDto> { List = list, Total = total });
+    }
+
+    /// <summary>
+    /// 可报上限：首道=工单计划数；非首道=紧邻上一道已复核通过良品合计。
+    /// 异常：同工单同工序已通过+待复核良品合计（含本笔）&gt; 可报上限。
+    /// </summary>
+    private async Task FillQtyCheckAsync(
+        List<ReviewListDto> list,
+        List<(long Id, long OrderId, int OrderQty, long ProductId, long OperationId)> keys)
+    {
+        if (list.Count == 0) return;
+
+        var byId = keys.ToDictionary(x => x.Id);
+        var orderIds = keys.Select(x => x.OrderId).Distinct().ToList();
+
+        // 工序顺序：优先工单任务行，否则产品工艺路线
+        var taskRows = await _db.WorkOrderOperations.AsNoTracking()
+            .Where(t => orderIds.Contains(t.WorkOrderId))
+            .Select(t => new { t.WorkOrderId, t.OperationId, t.Seq })
+            .ToListAsync();
+        var tasksByOrder = taskRows.GroupBy(t => t.WorkOrderId)
+            .ToDictionary(g => g.Key, g => g.OrderBy(x => x.Seq).ToList());
+
+        var needRouteOrderIds = orderIds.Where(oid => !tasksByOrder.ContainsKey(oid)).ToList();
+        var routeOpsByOrder = new Dictionary<long, List<(long OperationId, int Seq)>>();
+        if (needRouteOrderIds.Count > 0)
+        {
+            var productIds = keys.Where(k => needRouteOrderIds.Contains(k.OrderId))
+                .Select(k => k.ProductId).Distinct().ToList();
+            var products = await _db.Products.AsNoTracking()
+                .Where(p => productIds.Contains(p.Id))
+                .Select(p => new { p.Id, p.RoutingId })
+                .ToListAsync();
+            var productRoute = products.ToDictionary(p => p.Id, p => p.RoutingId);
+            var routingIds = products.Where(p => p.RoutingId != null).Select(p => p.RoutingId!.Value).Distinct().ToList();
+            var steps = routingIds.Count == 0
+                ? new List<(long RoutingId, long OperationId, int Seq)>()
+                : (await _db.RoutingSteps.AsNoTracking()
+                    .Where(s => routingIds.Contains(s.RoutingId))
+                    .Select(s => new { s.RoutingId, s.OperationId, s.Seq })
+                    .ToListAsync())
+                    .Select(s => (s.RoutingId, s.OperationId, s.Seq)).ToList();
+            var stepsByRoute = steps.GroupBy(s => s.RoutingId)
+                .ToDictionary(g => g.Key, g => g.OrderBy(x => x.Seq).ToList());
+
+            foreach (var oid in needRouteOrderIds)
+            {
+                var pid = keys.First(k => k.OrderId == oid).ProductId;
+                if (!productRoute.TryGetValue(pid, out var rid) || rid == null) continue;
+                if (!stepsByRoute.TryGetValue(rid.Value, out var slist) || slist.Count == 0) continue;
+                routeOpsByOrder[oid] = slist.Select(s => (s.OperationId, s.Seq)).ToList();
+            }
+        }
+
+        // 已通过良品（上工序上限）+ 已通过/待复核良品（同工序占用）
+        var reportAgg = await _db.Reports.AsNoTracking()
+            .Where(r => orderIds.Contains(r.OrderId) && (r.ReviewStatus == 0 || r.ReviewStatus == 1))
+            .GroupBy(r => new { r.OrderId, r.OperationId })
+            .Select(g => new
+            {
+                g.Key.OrderId,
+                g.Key.OperationId,
+                ApprovedGood = g.Sum(x => x.ReviewStatus == 1 ? x.GoodQty : 0),
+                OccupiedGood = g.Sum(x => x.GoodQty)
+            }).ToListAsync();
+        var approvedMap = reportAgg.ToDictionary(x => (x.OrderId, x.OperationId), x => x.ApprovedGood);
+        var occupiedMap = reportAgg.ToDictionary(x => (x.OrderId, x.OperationId), x => x.OccupiedGood);
+
+        foreach (var dto in list)
+        {
+            if (!byId.TryGetValue(dto.Id, out var key)) continue;
+
+            List<(long OperationId, int Seq)>? ops = null;
+            if (tasksByOrder.TryGetValue(key.OrderId, out var tasks))
+                ops = tasks.Select(t => (t.OperationId, t.Seq)).ToList();
+            else if (routeOpsByOrder.TryGetValue(key.OrderId, out var routeOps))
+                ops = routeOps;
+
+            int? limit = null;
+            if (ops != null && ops.Count > 0 && ops.Any(o => o.OperationId == key.OperationId))
+            {
+                var curSeq = ops.Where(o => o.OperationId == key.OperationId).Min(o => o.Seq);
+                var prev = ops.Where(o => o.Seq < curSeq).OrderByDescending(o => o.Seq).FirstOrDefault();
+                if (!ops.Any(o => o.Seq < curSeq))
+                    limit = key.OrderQty; // 首道：工单计划数
+                else
+                {
+                    approvedMap.TryGetValue((key.OrderId, prev.OperationId), out var approved);
+                    limit = approved;
+                }
+            }
+
+            occupiedMap.TryGetValue((key.OrderId, key.OperationId), out var occupied);
+            dto.UpstreamLimit = limit;
+            dto.SameOpOccupiedQty = occupied;
+            dto.QtyAbnormal = limit != null && occupied > limit.Value;
+        }
     }
 
     public async Task<ApiResult<List<ReviewOrderOptionDto>>> OrderOptionsAsync(long factoryId, long currentUserId)

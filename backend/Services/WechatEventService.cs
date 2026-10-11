@@ -51,7 +51,7 @@ public class WechatEventService(AppDbContext db, ILicenseTierService license, We
     {
         if (string.IsNullOrWhiteSpace(rule.Name) || rule.Name.Trim().Length > 64)
             throw ThrowHelper.BizUser("规则名称须 1～64 字符");
-        if (rule.EventType is not ("report_created" or "order_started" or "order_completed" or "abnormal_reported"))
+        if (rule.EventType is not ("report_created" or "order_started" or "order_completed" or "abnormal_reported" or "operation_assigned"))
             throw ThrowHelper.BizUser("未知消息事件");
         if (rule.TargetChannel is not ("session" or "group"))
             throw ThrowHelper.BizUser("目标通道须为会话到人或群消息");
@@ -64,6 +64,11 @@ public class WechatEventService(AppDbContext db, ILicenseTierService license, We
             if (rule.ConditionType is not ("abnormal_device" or "abnormal_material" or "abnormal_quality") || rule.Threshold != null)
                 throw ThrowHelper.BizUser("异常上报请选择设备故障/物料短缺/质量异常，且不要填阈值");
         }
+        else if (rule.EventType == "operation_assigned")
+        {
+            if (rule.ConditionType != "always" || rule.Threshold != null)
+                throw ThrowHelper.BizUser("派工事件仅支持全部提醒");
+        }
         else if (rule.ConditionType != "defect_rate" || rule.EventType != "report_created" ||
                  rule.Threshold == null || rule.Threshold < 0 || rule.Threshold > 100 || decimal.Round(rule.Threshold.Value, 2) != rule.Threshold)
             throw ThrowHelper.BizUser("不良率阈值须 0～100，最多两位小数，且仅用于报工事件");
@@ -72,6 +77,7 @@ public class WechatEventService(AppDbContext db, ILicenseTierService license, We
         var allowed = new HashSet<string> { "工单号", "产品编号", "产品名称", "事件时间" };
         if (rule.EventType == "report_created") allowed.UnionWith(["工序", "良品数", "不良数", "不良率"]);
         if (rule.EventType == "abnormal_reported") allowed.UnionWith(["异常类型", "问题描述", "上报人"]);
+        if (rule.EventType == "operation_assigned") allowed.UnionWith(["工序", "派工对象"]);
         foreach (Match match in Regex.Matches(rule.Template, @"\{([^{}]+)\}"))
             if (!allowed.Contains(match.Groups[1].Value)) throw ThrowHelper.BizUser($"该事件不支持占位符：{match.Value}");
         var rest = Regex.Replace(rule.Template, @"\{([^{}]+)\}", "");
@@ -196,6 +202,45 @@ public class WechatEventService(AppDbContext db, ILicenseTierService license, We
                 });
             }
         }
+    }
+
+    /// <summary>派工成功待发（docs/214）；须与派工业务同事务；取消派工不调用。</summary>
+    public async Task EnqueueAssignAsync(ProdWorkOrder order, ProdWorkOrderOperation task, string operationName, string targetLabel)
+    {
+        if (db.Database.CurrentTransaction == null) throw ThrowHelper.General(nameof(EnqueueAssignAsync), "待发消息须与业务写入同事务");
+        var setting = await db.WechatAlertSettings.AsNoTracking().FirstOrDefaultAsync(x => x.FactoryId == order.FactoryId);
+        if (setting == null || !setting.Enabled) return;
+        var rules = await db.WechatAlertRules.AsNoTracking()
+            .Where(x => x.FactoryId == order.FactoryId && x.Enabled && x.TargetChannel == "group" && x.EventType == "operation_assigned")
+            .ToListAsync();
+        if (rules.Count == 0 || !await license.CanUseAsync(order.FactoryId, LicenseFeature.WechatDueAlert)) return;
+        var product = await db.Products.AsNoTracking().FirstAsync(x => x.Id == order.ProductId && x.FactoryId == order.FactoryId);
+        var eventTime = DateTime.Now;
+        var values = new Dictionary<string, string>
+        {
+            ["工单号"] = order.OrderNo,
+            ["产品编号"] = product.Code,
+            ["产品名称"] = product.Name,
+            ["事件时间"] = eventTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+            ["工序"] = operationName,
+            ["派工对象"] = targetLabel
+        };
+        // 每次派工/改派单独事件，避免同工序改派被幂等吞掉
+        var eventId = $"{task.Id}:{Guid.NewGuid():N}";
+        foreach (var rule in rules)
+        {
+            if (await db.WechatAlertDeliveries.AnyAsync(x => x.FactoryId == order.FactoryId && x.RuleId == rule.Id && x.EventType == "operation_assigned" && x.EventId == eventId))
+                continue;
+            if (!TryRecipients(rule, setting, out var users)) continue;
+            var content = Regex.Replace(rule.Template, @"\{([^{}]+)\}", m => values[m.Groups[1].Value]);
+            db.WechatAlertDeliveries.Add(new SysWechatAlertDelivery
+            {
+                FactoryId = order.FactoryId, RuleId = rule.Id, RuleName = rule.Name, EventType = "operation_assigned", EventId = eventId,
+                OccurredAt = eventTime, OrderId = order.Id, ToUser = users,
+                Content = WechatMessageSender.FitText(content), Status = "pending", NextAttemptAt = eventTime
+            });
+        }
+        await db.SaveChangesAsync();
     }
 
     public async Task EnqueueAbnormalAsync(ProdAbnormal abnormal, SysUser reporter)

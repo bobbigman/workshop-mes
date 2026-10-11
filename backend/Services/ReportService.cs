@@ -40,6 +40,8 @@ public class ReportDto
     public Dictionary<long, string>? Ext { get; set; }
     /// <summary>修改来源（docs/205）：1=PC（默认）2=H5；仅 Update 使用。</summary>
     public byte Source { get; set; } = 1;
+    /// <summary>软提示确认后重提：true=跳过 soft 拦截（hard 仍拦）。docs/150。</summary>
+    public bool ConfirmUpstream { get; set; }
 }
 
 public class ReportAssigneeDto
@@ -94,6 +96,8 @@ public class ReportListDto
     public string ProductName { get; set; } = "";
     public string OperationName { get; set; } = "";
     public string UserName { get; set; } = "";
+    /// <summary>报工人人员类型（docs/161）</summary>
+    public byte UserType { get; set; }
     public int GoodQty { get; set; }
     public int DefectQty { get; set; }
     public long? DefectId { get; set; }
@@ -140,6 +144,8 @@ public class ReportQueryDto
     public string? ProductCode { get; set; }
     public string? ProductName { get; set; }
     public byte? ReviewStatus { get; set; }
+    /// <summary>按报工人人员类型筛选（docs/161）；不传=全部</summary>
+    public byte? UserType { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 20;
 }
@@ -159,6 +165,8 @@ public class BatchReportDto
     public int GoodQty { get; set; }
     public string? BatchNo { get; set; }
     public List<BatchReportOperationDto>? Allocations { get; set; }
+    /// <summary>软提示确认后重提：true=跳过 soft 拦截（hard 仍拦）。docs/150。</summary>
+    public bool ConfirmUpstream { get; set; }
 }
 
 public class BatchReportOperationDto
@@ -181,9 +189,18 @@ public class BatchReportResultDto
 
 public class ReportService : IReportService
 {
+    /// <summary>上级工序未达上限、需前端确认后重提（soft）。</summary>
+    public const int UpstreamSoftConfirmCode = 1002;
+
     private readonly AppDbContext _db;
     private readonly WechatEventService? _events;
-    public ReportService(AppDbContext db, WechatEventService? events = null) { _db = db; _events = events; }
+    private readonly IReportUpstreamSettingService _upstreamSetting;
+    public ReportService(AppDbContext db, IReportUpstreamSettingService upstreamSetting, WechatEventService? events = null)
+    {
+        _db = db;
+        _upstreamSetting = upstreamSetting;
+        _events = events;
+    }
 
     public async Task<ApiResult<object?>> SubmitAsync(ReportDto dto, long currentUserId)
     {
@@ -277,6 +294,9 @@ public class ReportService : IReportService
         }
 
         var totalGood = lines.Sum(x => x.GoodQty);
+
+        // docs/150：上级校验在写库前；soft 可 ConfirmUpstream 跳过，hard 不可
+        await EnsureUpstreamOkAsync(order, dto.OperationId, totalGood, dto.ConfirmUpstream, nameof(SubmitAsync));
 
         await using var tx = await _db.Database.BeginTransactionAsync();
         try
@@ -907,6 +927,8 @@ public class ReportService : IReportService
             q = q.Where(x => x.p.Name.Contains(query.ProductName));
         if (query.ReviewStatus.HasValue)
             q = q.Where(x => x.r.ReviewStatus == query.ReviewStatus.Value);
+        if (query.UserType.HasValue)
+            q = q.Where(x => x.u.UserType == query.UserType.Value);
 
         if (userId.HasValue)
             q = q.Where(x => x.r.UserId == userId.Value);
@@ -922,6 +944,7 @@ public class ReportService : IReportService
                 ProductName = x.p.Name,
                 OperationName = x.op.Name,
                 UserName = x.u.Name,
+                UserType = x.u.UserType,
                 GoodQty = x.r.GoodQty,
                 DefectQty = x.r.DefectQty,
                 DefectId = x.r.DefectId,
@@ -988,6 +1011,9 @@ public class ReportService : IReportService
 
         EnsureQtyWithinRemain(pending, dto.GoodQty, nameof(BatchReportAsync));
         var perOpUsers = BuildPerOpUsers(pending, dto.Allocations, dto.GoodQty, currentUserId, nameof(BatchReportAsync));
+
+        // docs/150：批量补报同样走上级校验（含 soft/hard）
+        await EnsureUpstreamOkForBatchAsync(order, pending, perOpUsers, dto.ConfirmUpstream, nameof(BatchReportAsync));
 
         await using var tx = await _db.Database.BeginTransactionAsync();
         try
@@ -1292,4 +1318,126 @@ public class ReportService : IReportService
 
         await _db.SaveChangesAsync();
     }
+
+    /// <summary>
+    /// docs/150：与复核页 UpstreamLimit 同口径。
+    /// 首道不校验；非首道：紧邻上一道已复核通过良品 &lt; 同工序占用(含本次) → soft 确认 / hard 拒绝。
+    /// </summary>
+    private async Task EnsureUpstreamOkAsync(
+        ProdWorkOrder order, long operationId, int addGoodQty, bool confirmUpstream, string where)
+    {
+        if (addGoodQty <= 0) return;
+
+        var hit = await EvaluateUpstreamAsync(order, operationId, addGoodQty);
+        if (hit == null) return;
+
+        var cfg = await _upstreamSetting.GetOrDefaultAsync(order.FactoryId);
+        var hard = ReportUpstreamSettingService.IsHardForOp(cfg, operationId);
+        if (hard)
+            throw ThrowHelper.Biz(where, $"紧邻上一道【{hit.PrevOpName}】复核通过量不足，不可报工");
+        if (confirmUpstream) return;
+        throw ThrowHelper.BizCode(
+            $"紧邻上一道【{hit.PrevOpName}】复核通过量不足，是否继续报工？",
+            UpstreamSoftConfirmCode);
+    }
+
+    private async Task EnsureUpstreamOkForBatchAsync(
+        ProdWorkOrder order,
+        List<(long OperationId, string OperationName, int PlanQty, int Remain)> pending,
+        Dictionary<long, List<(long UserId, int GoodQty)>> perOpUsers,
+        bool confirmUpstream,
+        string where)
+    {
+        var softNames = new List<string>();
+        var hardNames = new List<string>();
+        var cfg = await _upstreamSetting.GetOrDefaultAsync(order.FactoryId);
+
+        foreach (var op in pending)
+        {
+            var add = perOpUsers.TryGetValue(op.OperationId, out var users)
+                ? users.Sum(u => u.GoodQty)
+                : 0;
+            if (add <= 0) continue;
+            var hit = await EvaluateUpstreamAsync(order, op.OperationId, add);
+            if (hit == null) continue;
+            if (ReportUpstreamSettingService.IsHardForOp(cfg, op.OperationId))
+                hardNames.Add(hit.PrevOpName);
+            else
+                softNames.Add(hit.PrevOpName);
+        }
+
+        if (hardNames.Count > 0)
+        {
+            var names = string.Join("、", hardNames.Distinct());
+            throw ThrowHelper.Biz(where, $"紧邻上一道【{names}】复核通过量不足，不可报工");
+        }
+        if (softNames.Count == 0 || confirmUpstream) return;
+        {
+            var names = string.Join("、", softNames.Distinct());
+            throw ThrowHelper.BizCode(
+                $"紧邻上一道【{names}】复核通过量不足，是否继续报工？",
+                UpstreamSoftConfirmCode);
+        }
+    }
+
+    private sealed class UpstreamHit
+    {
+        public string PrevOpName { get; set; } = "";
+    }
+
+    /// <summary>未超限或首道/无法判定顺序 → null；超限 → 含上一道名称。</summary>
+    private async Task<UpstreamHit?> EvaluateUpstreamAsync(ProdWorkOrder order, long operationId, int addGoodQty)
+    {
+        var ops = await LoadOpSequenceAsync(order);
+        if (ops == null || ops.Count == 0 || ops.All(o => o.OperationId != operationId))
+            return null;
+
+        var curSeq = ops.Where(o => o.OperationId == operationId).Min(o => o.Seq);
+        var prev = ops.Where(o => o.Seq < curSeq).OrderByDescending(o => o.Seq).FirstOrDefault();
+        if (!ops.Any(o => o.Seq < curSeq))
+            return null; // 首道：不校验上级
+
+        var limit = await _db.Reports.AsNoTracking()
+            .Where(r => r.OrderId == order.Id && r.OperationId == prev.OperationId && r.ReviewStatus == 1)
+            .SumAsync(r => (int?)r.GoodQty) ?? 0;
+        var occupied = await _db.Reports.AsNoTracking()
+            .Where(r => r.OrderId == order.Id && r.OperationId == operationId
+                        && (r.ReviewStatus == 0 || r.ReviewStatus == 1))
+            .SumAsync(r => (int?)r.GoodQty) ?? 0;
+
+        if (occupied + addGoodQty <= limit)
+            return null;
+
+        var prevName = await _db.Operations.AsNoTracking()
+            .Where(o => o.Id == prev.OperationId)
+            .Select(o => o.Name)
+            .FirstOrDefaultAsync();
+        return new UpstreamHit { PrevOpName = string.IsNullOrWhiteSpace(prevName) ? "上工序" : prevName };
+    }
+
+    /// <summary>工序顺序：优先工单任务行，否则产品工艺路线（与 ReviewService 同口径）。</summary>
+    private async Task<List<(long OperationId, int Seq)>?> LoadOpSequenceAsync(ProdWorkOrder order)
+    {
+        var tasks = await _db.WorkOrderOperations.AsNoTracking()
+            .Where(t => t.WorkOrderId == order.Id)
+            .OrderBy(t => t.Seq)
+            .Select(t => new { t.OperationId, t.Seq })
+            .ToListAsync();
+        if (tasks.Count > 0)
+            return tasks.Select(t => (t.OperationId, t.Seq)).ToList();
+
+        var routingId = await _db.Products.AsNoTracking()
+            .Where(p => p.Id == order.ProductId)
+            .Select(p => p.RoutingId)
+            .FirstOrDefaultAsync();
+        if (routingId == null) return null;
+
+        var steps = await _db.RoutingSteps.AsNoTracking()
+            .Where(s => s.RoutingId == routingId.Value)
+            .OrderBy(s => s.Seq)
+            .Select(s => new { s.OperationId, s.Seq })
+            .ToListAsync();
+        return steps.Count == 0 ? null : steps.Select(s => (s.OperationId, s.Seq)).ToList();
+    }
 }
+

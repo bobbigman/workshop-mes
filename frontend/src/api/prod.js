@@ -48,5 +48,8 @@ export const pushWechatOverdue = () => http.post('/WechatAlert/push-overdue')
 export const getWorkerView = () => http.get('/WorkerView')
 export const saveWorkerView = (data) => http.put('/WorkerView', data)
 
+export const getReportUpstreamSetting = () => http.get('/ReportUpstreamSetting')
+export const saveReportUpstreamSetting = (data) => http.put('/ReportUpstreamSetting', data)
+
 export const downloadTemplate = (entityType) => http.get('/Import/template', { params: { entityType }, responseType: 'blob' })
 export const uploadImport = (entityType, formData) => http.post(`/Import/upload?entityType=${entityType}`, formData)

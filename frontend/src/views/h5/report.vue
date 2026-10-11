@@ -75,21 +75,38 @@
 
       <div v-if="canAssign && currentTask" class="assign-box">
         <div class="assign-head">
-          <span>执行人：{{ assignLabel }}</span>
-          <button type="button" class="link-btn" @click="assignPanelOpen = !assignPanelOpen">
+          <span>派工：{{ assignLabel }}</span>
+          <button type="button" class="link-btn" @click="toggleAssignPanel">
             {{ assignPanelOpen ? '收起' : '派工' }}
           </button>
         </div>
         <div v-if="assignPanelOpen" class="assign-panel">
-          <p class="share-hint">可多选；清空即取消派工。派工不拦报工。</p>
-          <label v-for="w in assignWorkersList" :key="w.id" class="share-person">
-            <input type="checkbox" :value="w.id" v-model="assignSelectedIds" />
-            {{ w.name }}
-          </label>
-          <p v-if="assignWorkersError" class="share-hint err">
-            工人列表加载失败
-            <button type="button" class="link-btn" @click="loadAssignWorkers">重试</button>
-          </p>
+          <p class="share-hint">个人可多选，或选一个班组（互斥）。清空即取消。派工不拦报工。</p>
+          <div class="assign-mode">
+            <label><input type="radio" value="person" v-model="assignMode" /> 个人</label>
+            <label><input type="radio" value="dept" v-model="assignMode" /> 班组</label>
+          </div>
+          <template v-if="assignMode === 'person'">
+            <label v-for="w in assignWorkersList" :key="w.id" class="share-person">
+              <input type="checkbox" :value="w.id" v-model="assignSelectedIds" />
+              {{ w.name }}
+            </label>
+            <p v-if="assignWorkersError" class="share-hint err">
+              工人列表加载失败
+              <button type="button" class="link-btn" @click="loadAssignWorkers">重试</button>
+            </p>
+          </template>
+          <template v-else>
+            <label v-for="d in assignDeptList" :key="d.id" class="share-person">
+              <input type="radio" name="assignDept" :value="d.id" v-model="assignSelectedDeptId" />
+              {{ d.name }}
+            </label>
+            <p v-if="!assignDeptList.length && !assignDeptError" class="share-hint">暂无可派班组（需工序已配报工权限部门）</p>
+            <p v-if="assignDeptError" class="share-hint err">
+              班组列表加载失败
+              <button type="button" class="link-btn" @click="loadAssignDepts">重试</button>
+            </p>
+          </template>
           <button type="button" class="btn btn-primary assign-save" :disabled="assignSaving" @click="saveAssign">
             保存派工
           </button>
@@ -212,11 +229,13 @@
 <script setup>
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { showToast, showSuccessToast, showImagePreview } from 'vant'
+import { showToast, showSuccessToast, showImagePreview, showConfirmDialog } from 'vant'
 import 'vant/es/toast/style'
 import 'vant/es/image-preview/style'
+import 'vant/es/dialog/style'
 import { getOrderByNo, submitReport, getDefectsByOp, getCustomFields, getReportCandidates, getTodayPieceSummary } from '@/api/prod'
-import { assign, assignWorkers } from '@/api/assign'
+import { isUpstreamSoftConfirm } from '@/utils/upstreamConfirm'
+import { assign, assignWorkers, assignDepartments } from '@/api/assign'
 import { getKnowledgeFileByOrder, getKnowledgeFileRaw } from '@/api/knowledge'
 import TabBar from './TabBar.vue'
 import FactoryBadge from '@/components/FactoryBadge.vue'
@@ -269,9 +288,13 @@ const pendingClientRequestId = ref('')
 const role = Number(localStorage.getItem('role') || 0)
 const canAssign = role === 1 || role === 3
 const assignPanelOpen = ref(false)
+const assignMode = ref('person')
 const assignWorkersList = ref([])
 const assignWorkersError = ref(false)
 const assignSelectedIds = ref([])
+const assignDeptList = ref([])
+const assignDeptError = ref(false)
+const assignSelectedDeptId = ref(null)
 const assignSaving = ref(false)
 const myUserId = Number(localStorage.getItem('userId') || 0) || (() => {
   try {
@@ -297,6 +320,7 @@ const currentTask = computed(() => {
 const assignLabel = computed(() => {
   const t = currentTask.value
   if (!t) return '未派工'
+  if (t.assigneeDepartmentId) return t.assigneeName || `班组·${t.assigneeDepartmentName || ''}`
   const list = t.assignees || []
   if (list.length) return list.map(a => a.userName || a.userId).join('、')
   return t.assigneeName || '未派工'
@@ -450,7 +474,7 @@ async function tryOpenAssignFromQuery() {
   if (String(route.query.assign || '') !== '1') return
   if (!form.value.operationId) {
     const tasks = (detail.value.tasks || []).filter(t => t.id)
-    const prefer = tasks.find(t => !(t.assignees || []).length && !t.assigneeUserId) || tasks[0]
+    const prefer = tasks.find(t => !(t.assignees || []).length && !t.assigneeUserId && !t.assigneeDepartmentId) || tasks[0]
     if (prefer) {
       form.value.operationId = String(prefer.operationId)
       await onOpChange()
@@ -459,6 +483,7 @@ async function tryOpenAssignFromQuery() {
   if (form.value.operationId) {
     syncAssignSelection()
     assignPanelOpen.value = true
+    await loadAssignDepts()
   }
 }
 
@@ -565,6 +590,7 @@ async function onOpChange() {
   candidatesLoadError.value = false
   assignPanelOpen.value = false
   syncAssignSelection()
+  assignDeptList.value = []
   if (!form.value.operationId) { defects.value = []; return }
   const res = await getDefectsByOp(Number(form.value.operationId))
   defects.value = res.data || []
@@ -575,8 +601,18 @@ function syncAssignSelection() {
   const t = currentTask.value
   if (!t) {
     assignSelectedIds.value = []
+    assignSelectedDeptId.value = null
+    assignMode.value = 'person'
     return
   }
+  if (t.assigneeDepartmentId) {
+    assignMode.value = 'dept'
+    assignSelectedDeptId.value = t.assigneeDepartmentId
+    assignSelectedIds.value = []
+    return
+  }
+  assignMode.value = 'person'
+  assignSelectedDeptId.value = null
   const list = t.assignees || []
   if (list.length) {
     assignSelectedIds.value = list.map(a => a.userId)
@@ -584,6 +620,14 @@ function syncAssignSelection() {
     assignSelectedIds.value = [t.assigneeUserId]
   } else {
     assignSelectedIds.value = []
+  }
+}
+
+async function toggleAssignPanel() {
+  assignPanelOpen.value = !assignPanelOpen.value
+  if (assignPanelOpen.value) {
+    await loadAssignWorkers()
+    await loadAssignDepts()
   }
 }
 
@@ -599,6 +643,23 @@ async function loadAssignWorkers() {
   }
 }
 
+async function loadAssignDepts() {
+  if (!canAssign) return
+  const t = currentTask.value
+  if (!t?.id) {
+    assignDeptList.value = []
+    return
+  }
+  assignDeptError.value = false
+  try {
+    const res = await assignDepartments(t.id)
+    assignDeptList.value = res.data || []
+  } catch {
+    assignDeptList.value = []
+    assignDeptError.value = true
+  }
+}
+
 async function saveAssign() {
   const t = currentTask.value
   if (!t?.id) {
@@ -607,9 +668,15 @@ async function saveAssign() {
   }
   assignSaving.value = true
   try {
-    const ids = [...new Set(assignSelectedIds.value.map(Number).filter(x => x > 0))]
-    await assign(t.id, ids)
-    showSuccessToast(ids.length ? '已派工' : '已取消派工')
+    if (assignMode.value === 'dept') {
+      const deptId = assignSelectedDeptId.value ? Number(assignSelectedDeptId.value) : null
+      await assign(t.id, [], deptId || null)
+      showSuccessToast(deptId ? '已派给班组' : '已取消派工')
+    } else {
+      const ids = [...new Set(assignSelectedIds.value.map(Number).filter(x => x > 0))]
+      await assign(t.id, ids)
+      showSuccessToast(ids.length ? '已派工' : '已取消派工')
+    }
     const res = await getOrderByNo(detail.value.orderNo)
     detail.value = res.data
     syncAssignSelection()
@@ -708,11 +775,11 @@ function formatReceipt(data) {
   return `已为 ${list.length} 人分摊，合计良品 ${good}（${reviewLabel(list[0].reviewStatus)}）${miss}`
 }
 
-async function doSubmit() {
+async function doSubmit(confirmUpstream = false) {
   if (!validate()) return false
   submitting.value = true
   try {
-    const res = await submitReport(buildPayload())
+    const res = await submitReport({ ...buildPayload(), confirmUpstream: !!confirmUpstream })
     pendingClientRequestId.value = ''
     return res?.data || true
   } catch (e) {
@@ -723,9 +790,23 @@ async function doSubmit() {
   }
 }
 
+/** docs/150：soft 先提交；code=1002 弹确认后带 confirmUpstream 重提 */
+async function doSubmitWithUpstreamConfirm() {
+  try {
+    return await doSubmit(false)
+  } catch (e) {
+    if (!isUpstreamSoftConfirm(e)) throw e
+    await showConfirmDialog({
+      title: '上级工序提示',
+      message: e.message || '紧邻上一道复核通过量不足，是否继续报工？'
+    })
+    return await doSubmit(true)
+  }
+}
+
 async function onContinue() {
   try {
-    const data = await doSubmit()
+    const data = await doSubmitWithUpstreamConfirm()
     if (!data) return
     showSuccessToast(formatReceipt(data === true ? null : data))
     clearQty()
@@ -738,18 +819,18 @@ async function onContinue() {
     await nextTick()
     goodInput.value?.focus()
   } catch {
-    // http 拦截器已提示
+    // soft 取消或 http 已提示
   }
 }
 
 async function onSubmit() {
   try {
-    const data = await doSubmit()
+    const data = await doSubmitWithUpstreamConfirm()
     if (!data) return
     showSuccessToast(formatReceipt(data === true ? null : data))
     router.replace(reportBackPath)
   } catch {
-    // http 拦截器已提示
+    // soft 取消或 http 已提示
   }
 }
 </script>
@@ -848,6 +929,7 @@ async function onSubmit() {
 }
 .assign-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 14px; }
 .assign-panel { margin-top: 8px; }
+.assign-mode { display: flex; gap: 16px; margin-bottom: 8px; font-size: 14px; color: var(--app-text-2); }
 .assign-save { width: 100%; height: 40px; margin-top: 8px; }
 .guide-block {
   background: var(--app-card); border-radius: var(--h5-card-radius); padding: var(--h5-card-padding);

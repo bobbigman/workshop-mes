@@ -188,23 +188,42 @@
         <el-table-column prop="operationName" label="工序" />
         <el-table-column prop="planQty" label="计划" width="80" />
         <el-table-column prop="doneQty" label="已报良品" width="100" />
-        <el-table-column v-if="canAssign" label="执行人" min-width="180">
+        <el-table-column v-if="canAssign" label="派工" min-width="220">
           <template #default="{ row }">
-            <el-select
-              v-if="row.id"
-              :model-value="(row.assignees || []).map(a => a.userId)"
-              multiple
-              clearable
-              filterable
-              collapse-tags
-              collapse-tags-tooltip
-              placeholder="未派工"
-              size="small"
-              style="width:100%"
-              @change="(v) => onAssignChange(row, v)"
-            >
-              <el-option v-for="u in workerOptions" :key="u.id" :label="u.name" :value="u.id" />
-            </el-select>
+            <div v-if="row.id" class="assign-cell">
+              <el-select
+                :model-value="row.assigneeDepartmentId || null"
+                clearable
+                filterable
+                placeholder="班组（可选）"
+                size="small"
+                style="width:100%"
+                @visible-change="(open) => open && loadDeptOptions(row)"
+                @change="(v) => onAssignDeptChange(row, v)"
+              >
+                <el-option
+                  v-for="d in (deptOptionsMap[row.id] || (row.assigneeDepartmentId ? [{ id: row.assigneeDepartmentId, name: row.assigneeDepartmentName || '班组' }] : []))"
+                  :key="d.id"
+                  :label="d.name"
+                  :value="d.id"
+                />
+              </el-select>
+              <el-select
+                :model-value="(row.assignees || []).map(a => a.userId)"
+                multiple
+                clearable
+                filterable
+                collapse-tags
+                collapse-tags-tooltip
+                :disabled="!!row.assigneeDepartmentId"
+                placeholder="执行人（可多选）"
+                size="small"
+                style="width:100%;margin-top:4px"
+                @change="(v) => onAssignChange(row, v)"
+              >
+                <el-option v-for="u in workerOptions" :key="u.id" :label="u.name" :value="u.id" />
+              </el-select>
+            </div>
             <span v-else>—</span>
           </template>
         </el-table-column>
@@ -259,7 +278,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getOrderList, getOrder, getOrderStatusCounts, createOrder, updateOrder, transitionOrder, copyOrder, deleteOrder, getCustomFields } from '@/api/prod'
 import { getProductList } from '@/api/base'
-import { assign, assignWorkers } from '@/api/assign'
+import { assign, assignWorkers, assignDepartments } from '@/api/assign'
 import { getKnowledgeFileByOrder, getKnowledgeFileRaw } from '@/api/knowledge'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PrintSettingDialog from './PrintSettingDialog.vue'
@@ -288,6 +307,8 @@ const imgPreviewUrls = ref([])
 const docPreviewVisible = ref(false)
 const docPreviewFile = ref(null)
 const productOptions = ref([]), customFields = ref([]), workerOptions = ref([])
+/** @type {import('vue').Ref<Record<number, {id:number,name:string}[]>>} */
+const deptOptionsMap = ref({})
 const filterFieldId = ref(null), filterMatch = ref('exact'), filterValue = ref('')
 
 const listColumns = computed(() =>
@@ -346,6 +367,16 @@ onMounted(async () => {
 async function loadWorkers() {
   const res = await assignWorkers()
   workerOptions.value = res.data || []
+}
+
+async function loadDeptOptions(row) {
+  if (!row?.id) return
+  try {
+    const res = await assignDepartments(row.id)
+    deptOptionsMap.value = { ...deptOptionsMap.value, [row.id]: res.data || [] }
+  } catch {
+    deptOptionsMap.value = { ...deptOptionsMap.value, [row.id]: [] }
+  }
 }
 
 async function loadFields() {
@@ -538,6 +569,18 @@ async function onAssignChange(taskRow, v) {
   detail.value = res.data
 }
 
+async function onAssignDeptChange(taskRow, deptId) {
+  if (deptId) {
+    await assign(taskRow.id, [], deptId)
+    ElMessage.success('已派给班组')
+  } else {
+    await assign(taskRow.id, [])
+    ElMessage.success('已取消派工')
+  }
+  const res = await getOrder(detail.value.id)
+  detail.value = res.data
+}
+
 function onPrint(row) {
   printOrderId.value = row.id
   printLabelDlg.value = true
@@ -571,6 +614,7 @@ async function onDelete(row) {
 .plan-name { width: 120px; }
 .plan-hint { color: var(--app-text-3); font-size: 12px; }
 .detail-tasks { margin-top: var(--app-section-gap); }
+.assign-cell { display: flex; flex-direction: column; }
 .kf-block { margin-top: var(--app-section-gap); }
 .kf-title { font-weight: 600; margin-bottom: 8px; color: #303133; }
 .kf-empty { color: var(--app-text-3, #909399); font-size: 13px; padding: 4px 0; }

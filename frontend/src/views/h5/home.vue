@@ -23,7 +23,7 @@
 
     <section class="block">
       <h3 class="block-title">我的任务</h3>
-      <div v-if="list.length === 0" class="empty">暂无派给我的任务，可扫码报工</div>
+      <div v-if="list.length === 0" class="empty">暂无派给我的或本班组任务，可扫码报工</div>
       <div
         v-for="row in list"
         :key="row.taskId"

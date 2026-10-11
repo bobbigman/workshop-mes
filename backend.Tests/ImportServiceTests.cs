@@ -86,26 +86,51 @@ public class ImportServiceTests
     }
 
     [Fact]
-    public async Task Duplicate_Account_PartialSuccess()
+    public async Task Existing_Account_OverwriteDept_And_NewOk()
     {
         var (db, svc) = New();
         var tag = Guid.NewGuid().ToString("N")[..8];
         var exist = $"dup_{tag}";
-        db.Users.Add(new SysUser
+        var user = new SysUser
         {
             FactoryId = _fx.FactoryId, Account = exist, Name = "已有", Role = 2,
             Password = "x", Status = 1, CreatedAt = DateTime.Now
-        });
+        };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        var deptId = await db.Departments.Where(d => d.FactoryId == _fx.FactoryId && d.Code == _fx.DeptCode)
+            .Select(d => d.Id).FirstAsync();
+        db.DepartmentUsers.Add(new SysDepartmentUser { DepartmentId = deptId, UserId = user.Id });
         await db.SaveChangesAsync();
 
+        // 已有账号：覆盖式清空部门；新账号成功
         var bytes = BuildXlsx(
-            (2, new[] { exist, "13900000002", "重复", "2", "Admin123" }),
-            (3, new[] { $"ok_{tag}", "13900000003", "成功", "2", "Admin123" }));
+            (2, new[] { exist, "13900000002", "重复", "2", "Admin123", "" }),
+            (3, new[] { $"ok_{tag}", "13900000003", "成功", "2", "Admin123", _fx.DeptCode }));
         var res = await svc.ImportAsync("user", bytes, _fx.FactoryId);
-        Assert.Equal(1, res.Data!.SuccessCount);
+        Assert.Equal(2, res.Data!.SuccessCount);
+        Assert.Equal(0, res.Data.FailCount);
+        Assert.False(await db.DepartmentUsers.AnyAsync(x => x.UserId == user.Id));
+        var newUser = await db.Users.FirstAsync(u => u.FactoryId == _fx.FactoryId && u.Account == $"ok_{tag}");
+        Assert.True(await db.DepartmentUsers.AnyAsync(x => x.UserId == newUser.Id && x.DepartmentId == deptId));
+    }
+
+    [Fact]
+    public async Task User_BadDept_ReportsRow()
+    {
+        var (db, svc) = New();
+        var tag = Guid.NewGuid().ToString("N")[..8];
+        var bytes = BuildXlsx(
+            (2, new[] { $"u1_{tag}", "13900000011", "好", "2", "Admin123", _fx.DeptCode }),
+            (3, new[] { $"u2_{tag}", "13900000012", "坏部门", "2", "Admin123", "NO_SUCH_DEPT" }),
+            (4, new[] { $"u3_{tag}", "13900000013", "好2", "2", "Admin123", "" }));
+        var res = await svc.ImportAsync("user", bytes, _fx.FactoryId);
+        Assert.Equal(2, res.Data!.SuccessCount);
         Assert.Equal(1, res.Data.FailCount);
-        Assert.Contains(res.Data.Errors, e => e.StartsWith("第2行：") && e.Contains("已存在"));
-        Assert.True(await db.Users.AnyAsync(u => u.FactoryId == _fx.FactoryId && u.Account == $"ok_{tag}"));
+        Assert.Contains(res.Data.Errors, e => e.StartsWith("第3行：") && e.Contains("部门编码NO_SUCH_DEPT不存在"));
+        Assert.True(await db.Users.AnyAsync(u => u.Account == $"u1_{tag}"));
+        Assert.False(await db.Users.AnyAsync(u => u.Account == $"u2_{tag}"));
+        Assert.True(await db.Users.AnyAsync(u => u.Account == $"u3_{tag}"));
     }
 
     [Fact]
@@ -164,23 +189,14 @@ public class ImportServiceTests
     {
         var (_, svc) = New();
         var tag = Guid.NewGuid().ToString("N")[..8];
-        // 第2行成功，第3行空（跳过），第4行账号重复失败 → 错误应写第4行
-        var exist = $"gap_{tag}";
-        var (db, _) = New();
-        db.Users.Add(new SysUser
-        {
-            FactoryId = _fx.FactoryId, Account = exist, Name = "已有", Role = 2,
-            Password = "x", Status = 1, CreatedAt = DateTime.Now
-        });
-        await db.SaveChangesAsync();
-
+        // 第2行成功，第3行空（跳过），第4行部门编码错误 → 错误应写第4行
         var bytes = BuildXlsx(
-            (2, new[] { $"gap_ok_{tag}", "13900000004", "空行测试", "2", "Admin123" }),
-            (4, new[] { exist, "13900000005", "应失败", "2", "Admin123" }));
+            (2, new[] { $"gap_ok_{tag}", "13900000004", "空行测试", "2", "Admin123", "" }),
+            (4, new[] { $"gap_bad_{tag}", "13900000005", "应失败", "2", "Admin123", "NO_SUCH_DEPT" }));
         var res = await svc.ImportAsync("user", bytes, _fx.FactoryId);
         Assert.Equal(1, res.Data!.SuccessCount);
         Assert.Equal(1, res.Data.FailCount);
-        Assert.Contains(res.Data.Errors, e => e.StartsWith("第4行："));
+        Assert.Contains(res.Data.Errors, e => e.StartsWith("第4行：") && e.Contains("部门编码"));
     }
 
     [Fact]
@@ -235,6 +251,11 @@ public class ImportDbFixture : IDisposable
         }
         if (routingIds.Count > 0)
             db.RoutingSteps.RemoveRange(db.RoutingSteps.Where(x => routingIds.Contains(x.RoutingId)));
+        var deptIds = db.Departments.Where(d => fids.Contains(d.FactoryId)).Select(d => d.Id).ToList();
+        var userIds = db.Users.Where(u => fids.Contains(u.FactoryId)).Select(u => u.Id).ToList();
+        if (deptIds.Count > 0 || userIds.Count > 0)
+            db.DepartmentUsers.RemoveRange(db.DepartmentUsers.Where(x =>
+                deptIds.Contains(x.DepartmentId) || userIds.Contains(x.UserId)));
         db.Products.RemoveRange(db.Products.Where(p => fids.Contains(p.FactoryId)));
         db.Routings.RemoveRange(db.Routings.Where(r => fids.Contains(r.FactoryId)));
         db.Operations.RemoveRange(db.Operations.Where(o => fids.Contains(o.FactoryId)));

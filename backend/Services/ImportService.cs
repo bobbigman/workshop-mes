@@ -27,7 +27,7 @@ public class ImportService : IImportService
     // 母版列定义（顺序即列）
     private static readonly Dictionary<string, string[]> Templates = new()
     {
-        ["user"] = new[] { "账号", "手机号", "姓名", "角色(1管理员/2生产)", "初始密码(可空)" },
+        ["user"] = new[] { "账号", "手机号", "姓名", "角色(1管理员/2生产/3班组长)", "初始密码(可空)", "部门编码(逗号分隔,可空)", "人员类型(内部/临时/外部,可空)" },
         ["defect"] = new[] { "名称" },
         ["operation"] = new[] { "编号", "名称", "报工部门编码(逗号分隔)", "不良品项名称(逗号分隔)" },
         ["routing"] = new[] { "编号", "名称", "工序编码(按顺序逗号分隔)" },
@@ -66,6 +66,7 @@ public class ImportService : IImportService
                 ws.Cell(2, 3).Value = "示例用户";
                 ws.Cell(2, 4).Value = "2";
                 ws.Cell(2, 5).Value = "Admin123";
+                ws.Cell(2, 6).GetComment().AddText("可选；填了必须是本厂已有部门编码，多个用逗号分隔");
                 break;
             case "defect":
                 ws.Cell(2, 1).Value = "示例不良品";
@@ -137,11 +138,16 @@ public class ImportService : IImportService
             throw ThrowHelper.Biz(nameof(ImportAsync), "没有可导入的数据行");
 
         var result = new ImportResultDto();
+        // 本文件内已出现过的账号：后续同行部门取并集；库中已有账号首次出现则覆盖部门
+        var userAccountsSeenInFile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (excelRow, cells) in rows)
         {
             try
             {
-                await ImportRowAsync(entityType, cells, factoryId);
+                if (entityType == "user")
+                    await ImportUserAsync(cells, factoryId, userAccountsSeenInFile);
+                else
+                    await ImportRowAsync(entityType, cells, factoryId);
                 result.SuccessCount++;
             }
             catch (BusinessException ex)
@@ -157,7 +163,6 @@ public class ImportService : IImportService
     {
         switch (entityType)
         {
-            case "user": await ImportUserAsync(row, factoryId); break;
             case "defect": await ImportDefectAsync(row, factoryId); break;
             case "operation": await ImportOperationAsync(row, factoryId); break;
             case "routing": await ImportRoutingAsync(row, factoryId); break;
@@ -166,33 +171,83 @@ public class ImportService : IImportService
         }
     }
 
-    private async Task ImportUserAsync(string[] r, long factoryId)
+    private async Task ImportUserAsync(string[] r, long factoryId, HashSet<string> seenInFile)
     {
         var account = r[0];
         if (string.IsNullOrWhiteSpace(account)) throw ThrowHelper.Biz(nameof(ImportUserAsync), "账号为空");
-        if (await _db.Users.AnyAsync(u => u.FactoryId == factoryId && u.Account == account))
-            throw ThrowHelper.Biz(nameof(ImportUserAsync), $"账号 {account} 已存在");
 
-        var role = r[3] switch
+        var deptCodes = Split(r.Length > 5 ? r[5] : null).ToList();
+        var deptIds = new List<long>();
+        foreach (var deptCode in deptCodes)
         {
-            "2" => (byte)2,
-            "3" => (byte)3,
-            _ => (byte)1
-        };
-        var pwd = string.IsNullOrWhiteSpace(r[4]) ? "Admin123" : r[4];
-        PasswordHelper.EnsureComplexity(pwd, nameof(ImportUserAsync));
-        _db.Users.Add(new SysUser
+            var dept = await _db.Departments.AsNoTracking()
+                .FirstOrDefaultAsync(d => d.FactoryId == factoryId && d.Code == deptCode);
+            if (dept == null)
+                throw ThrowHelper.Biz(nameof(ImportUserAsync), $"部门编码{deptCode}不存在");
+            deptIds.Add(dept.Id);
+        }
+
+        var userType = UserTypeHelper.ParseImport(r.Length > 6 ? r[6] : null);
+
+        var existing = await _db.Users.FirstOrDefaultAsync(u => u.FactoryId == factoryId && u.Account == account);
+        long userId;
+        if (existing == null)
         {
-            FactoryId = factoryId,
-            Account = account,
-            Phone = r[1],
-            Name = string.IsNullOrWhiteSpace(r[2]) ? account : r[2],
-            Role = role,
-            Password = PasswordHelper.Hash(pwd),
-            Status = 1,
-            CreatedAt = DateTime.Now
-        });
+            var role = r[3] switch
+            {
+                "2" => (byte)2,
+                "3" => (byte)3,
+                _ => (byte)1
+            };
+            var pwd = string.IsNullOrWhiteSpace(r[4]) ? "Admin123" : r[4];
+            PasswordHelper.EnsureComplexity(pwd, nameof(ImportUserAsync));
+            var user = new SysUser
+            {
+                FactoryId = factoryId,
+                Account = account,
+                Phone = r[1],
+                Name = string.IsNullOrWhiteSpace(r[2]) ? account : r[2],
+                Role = role,
+                UserType = userType,
+                Password = PasswordHelper.Hash(pwd),
+                Status = 1,
+                CreatedAt = DateTime.Now
+            };
+            _db.Users.Add(user);
+            await _db.SaveChangesAsync();
+            userId = user.Id;
+            await ReplaceUserDeptLinksAsync(userId, deptIds, union: false);
+        }
+        else
+        {
+            // 库中已有：首次出现覆盖部门；本文件内再次出现则并集；人员类型按本行覆盖
+            var union = seenInFile.Contains(account);
+            existing.UserType = userType;
+            userId = existing.Id;
+            await ReplaceUserDeptLinksAsync(userId, deptIds, union);
+        }
+
+        seenInFile.Add(account);
         await _db.SaveChangesAsync();
+    }
+
+    private async Task ReplaceUserDeptLinksAsync(long userId, List<long> deptIds, bool union)
+    {
+        var want = deptIds.Distinct().ToList();
+        if (union)
+        {
+            var have = await _db.DepartmentUsers
+                .Where(x => x.UserId == userId).Select(x => x.DepartmentId).ToListAsync();
+            foreach (var did in want.Where(id => !have.Contains(id)))
+                _db.DepartmentUsers.Add(new SysDepartmentUser { DepartmentId = did, UserId = userId });
+        }
+        else
+        {
+            var old = _db.DepartmentUsers.Where(x => x.UserId == userId);
+            _db.DepartmentUsers.RemoveRange(old);
+            foreach (var did in want)
+                _db.DepartmentUsers.Add(new SysDepartmentUser { DepartmentId = did, UserId = userId });
+        }
     }
 
     private async Task ImportDefectAsync(string[] r, long factoryId)

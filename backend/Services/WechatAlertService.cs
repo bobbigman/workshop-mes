@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using System.Collections.Concurrent;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using ahu.MicrosoftMes.Common;
 using ahu.MicrosoftMes.Data;
 using ahu.MicrosoftMes.Models;
@@ -47,25 +48,47 @@ public class WechatAlertSettingDto
 
 public class WechatAlertService : IWechatAlertService
 {
+    private const int AiMainMaxChars = 80;
+    private const string AiSystemPrompt =
+        """
+        你是车间生产助理。下面给一张工单的真实数据，请用「提醒同事」的口吻写一段交期预警文案，
+        语气像业务助理，不要像系统告警、不要感叹号堆砌。
+
+        规则：
+        1. 只能使用下面提供的数据，缺失的信息一律不写、不许猜测或编造。
+        2. 不要自己计算任何数字（进度、天数、百分比只用给定值）。
+        3. 给出 1 条可执行建议（催办/调人/调整优先级），并说明原因。
+        4. 输出 80 字以内的简体中文；只输出文案，不要任何前缀解释。
+        """;
+
     private static readonly ConcurrentDictionary<string, (string Token, DateTime ExpireAt)> TokenCache = new();
     private readonly AppDbContext _db;
     private readonly IHttpClientFactory _httpFactory;
     private readonly OutboundHttpErrorLogger _httpErrorLogger;
     private readonly ILicenseTierService _license;
     private readonly WechatMessageSender _sender;
+    private readonly IDeepSeekClient _deepSeek;
+    private readonly AiOptions _aiOpt;
+    private readonly ILogger<WechatAlertService> _logger;
 
     public WechatAlertService(
         AppDbContext db,
         IHttpClientFactory httpFactory,
         OutboundHttpErrorLogger httpErrorLogger,
         ILicenseTierService license,
-        WechatMessageSender sender)
+        WechatMessageSender sender,
+        IDeepSeekClient deepSeek,
+        IOptions<AiOptions> aiOpt,
+        ILogger<WechatAlertService> logger)
     {
         _db = db;
         _httpFactory = httpFactory;
         _httpErrorLogger = httpErrorLogger;
         _license = license;
         _sender = sender;
+        _deepSeek = deepSeek;
+        _aiOpt = aiOpt.Value;
+        _logger = logger;
     }
 
     public async Task<ApiResult<WechatAlertSettingDto>> GetSettingAsync(long factoryId)
@@ -178,6 +201,7 @@ public class WechatAlertService : IWechatAlertService
 
     /// <summary>
     /// 一天一批一条：临期+超期合写；alert_key=due-alert:yyyy-MM-dd；当日批次不重推。
+    /// 最紧急 1 张调模型写主文（docs/220）；失败回退该行 75 模板。
     /// </summary>
     private async Task<WechatDuePushResultDto> PushDueAlertForFactoryAsync(long factoryId)
     {
@@ -291,19 +315,51 @@ public class WechatAlertService : IWechatAlertService
             return $"剩余 {days} 天";
         }
 
-        var lines = dueRows.Select(x =>
+        string BuildTemplateLine(string state, string orderNo, string productName, DateTime due, WorkOrderProgressQuery.OrderProgressBundle? bundle)
         {
-            var tag = x.state == DueState.Overdue ? "超期" : "临期";
-            progress.TryGetValue(x.o.Id, out var bundle);
+            var tag = state == DueState.Overdue ? "超期" : "临期";
             var opName = CurrentOpName(bundle);
-            return $"· [{tag}] {x.o.OrderNo} {x.o.ProductName} · {opName} · 交期 {x.o.DueDate:yyyy-MM-dd} · {DayLabel(x.state, x.o.DueDate!.Value, now)}";
-        });
+            return $"· [{tag}] {orderNo} {productName} · {opName} · 交期 {due:yyyy-MM-dd} · {DayLabel(state, due, now)}";
+        }
 
         var overdueCount = dueRows.Count(x => x.state == DueState.Overdue);
         var warningCount = dueRows.Count(x => x.state == DueState.Warning);
-        var content =
-            $"【微聚】交期预警（超期 {overdueCount} / 临期 {warningCount}，共 {dueRows.Count} 张）\n"
-            + string.Join("\n", lines);
+        var header = $"【微聚】交期预警（超期 {overdueCount} / 临期 {warningCount}，共 {dueRows.Count} 张）";
+
+        // 最紧急 1 张：已按超期优先、交期从早到晚排序（docs/220 方案 2）
+        var hero = dueRows[0];
+        progress.TryGetValue(hero.o.Id, out var heroBundle);
+        var heroTemplate = BuildTemplateLine(hero.state, hero.o.OrderNo, hero.o.ProductName, hero.o.DueDate!.Value, heroBundle);
+        var aiMain = await TryBuildAiMainLineAsync(
+            hero.o.OrderNo,
+            hero.o.ProductName,
+            CurrentOpName(heroBundle),
+            hero.o.DueDate.Value,
+            heroBundle,
+            nameof(PushDueAlertForFactoryAsync));
+
+        var bodyParts = new List<string>();
+        if (aiMain != null)
+        {
+            bodyParts.Add(aiMain);
+            bodyParts.Add(header);
+            foreach (var x in dueRows.Skip(1))
+            {
+                progress.TryGetValue(x.o.Id, out var bundle);
+                bodyParts.Add(BuildTemplateLine(x.state, x.o.OrderNo, x.o.ProductName, x.o.DueDate!.Value, bundle));
+            }
+        }
+        else
+        {
+            bodyParts.Add(header);
+            bodyParts.Add(heroTemplate);
+            foreach (var x in dueRows.Skip(1))
+            {
+                progress.TryGetValue(x.o.Id, out var bundle);
+                bodyParts.Add(BuildTemplateLine(x.state, x.o.OrderNo, x.o.ProductName, x.o.DueDate!.Value, bundle));
+            }
+        }
+        var content = string.Join("\n", bodyParts);
 
         var sendResult = await _sender.SendAsync(factoryId, alertKey, content, recipients: setting.ToUser, channel: "group");
         if (sendResult.Outcome != "success")
@@ -318,6 +374,84 @@ public class WechatAlertService : IWechatAlertService
             WarningCount = warningCount,
             Msg = $"已推送交期预警（超期 {overdueCount} / 临期 {warningCount}，共 {dueRows.Count} 张）"
         };
+    }
+
+    /// <summary>
+    /// 最紧急 1 张的业务助理主文；失败返回 null（调用方回退模板行）。docs/220。
+    /// </summary>
+    private async Task<string?> TryBuildAiMainLineAsync(
+        string orderNo,
+        string productName,
+        string operationName,
+        DateTime dueDate,
+        WorkOrderProgressQuery.OrderProgressBundle? bundle,
+        string where)
+    {
+        if (!_aiOpt.IsConfigured || !_aiOpt.HasModel)
+        {
+            _logger.LogWarning("{Where} 交期预警主文跳过模型：Ai 未配置 ApiKey/Model", where);
+            return null;
+        }
+
+        try
+        {
+            var tz = AiBusinessTime.Resolve(_aiOpt.BusinessTimeZone);
+            var today = AiBusinessTime.TodayStart(tz);
+            var daysToDue = (dueDate.Date - today).Days;
+            var progressPercent = bundle?.Progress.ProgressPercent;
+            var remainingOps = bundle?.Ops.Count(op =>
+                op.Status != WorkOrderProgressCalculator.OpFull
+                && op.Status != WorkOrderProgressCalculator.OpZeroPlan) ?? 0;
+
+            var userPrompt = new StringBuilder()
+                .AppendLine($"工单号：{orderNo}")
+                .AppendLine($"产品名：{productName}")
+                .AppendLine($"当前工序：{operationName}")
+                .AppendLine($"计划交期：{AiBusinessTime.FormatDate(dueDate)}")
+                .AppendLine($"距交期：{daysToDue} 天（正=剩余，负=已超期）");
+            if (progressPercent != null)
+                userPrompt.AppendLine($"完成进度：{progressPercent}%");
+            userPrompt.AppendLine($"剩余工序：{remainingOps}");
+
+            using var cts = new CancellationTokenSource(
+                TimeSpan.FromSeconds(Math.Clamp(_aiOpt.RequestTimeoutSeconds, 10, 90)));
+            var result = await _deepSeek.ChatAsync(
+                new[]
+                {
+                    new DeepSeekChatMessage { Role = "system", Content = AiSystemPrompt },
+                    new DeepSeekChatMessage { Role = "user", Content = userPrompt.ToString().TrimEnd() }
+                },
+                tools: null,
+                cts.Token);
+
+            var text = NormalizeAiMainLine(result.Content);
+            if (text == null)
+            {
+                _logger.LogWarning("{Where} 交期预警主文无效或为空 orderNo={OrderNo}", where, orderNo);
+                return null;
+            }
+            return text;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "{Where} 交期预警主文模型调用失败 orderNo={OrderNo}，回退模板", where, orderNo);
+            return null;
+        }
+    }
+
+    private static string? NormalizeAiMainLine(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var text = raw.Trim().Replace("\r", " ").Replace("\n", " ");
+        while (text.Contains("  ", StringComparison.Ordinal))
+            text = text.Replace("  ", " ", StringComparison.Ordinal);
+        if (text.Length >= 2
+            && ((text[0] == '"' && text[^1] == '"') || (text[0] == '「' && text[^1] == '」')))
+            text = text[1..^1].Trim();
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        if (text.Length > AiMainMaxChars)
+            text = text[..AiMainMaxChars];
+        return text;
     }
 
     public async Task SendAsync(long factoryId, string alertKey, string content, string level = "info")

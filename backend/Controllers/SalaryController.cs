@@ -85,9 +85,13 @@ public class SalaryController : ControllerBase
         _svc.DeleteDraftAsync(id, JwtHelper.GetFactoryId(User));
 
     [HttpGet("export")]
-    public async Task<IActionResult> Export([FromQuery] byte periodType, [FromQuery] string periodValue)
+    public async Task<IActionResult> Export(
+        [FromQuery] byte periodType,
+        [FromQuery] string periodValue,
+        [FromQuery] byte? userType = null)
     {
-        var (content, fileName) = await _svc.ExportCsvAsync(periodType, periodValue, JwtHelper.GetFactoryId(User));
+        var (content, fileName) = await _svc.ExportCsvAsync(
+            periodType, periodValue, JwtHelper.GetFactoryId(User), userType);
         return File(content, "text/csv; charset=utf-8", fileName);
     }
 }

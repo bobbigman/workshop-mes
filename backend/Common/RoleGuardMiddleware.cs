@@ -7,8 +7,8 @@ namespace ahu.MicrosoftMes.Common;
 ///   role=2 生产人员：可查询工单/报工/报表/看板；报工提交仍走部门权限。不能改基础数据。
 ///   role=3 班组长：工人白名单 + 复核 API + 报工列表 + 生产报表/看板只读
 ///   role=1 管理员：不拦截
-///   登录与实例信息永不拦截（浏览器里可能还带着旧 token）。
-/// </summary>
+    ///   登录相关与实例信息永不拦截（浏览器里可能还带着旧 token，如工人再扫个人免密码）。
+    /// </summary>
 public class RoleGuardMiddleware
 {
     private readonly RequestDelegate _next;
@@ -137,10 +137,17 @@ public class RoleGuardMiddleware
     {
         if (path.Equals("/api/instance-info", StringComparison.OrdinalIgnoreCase) && method.Equals("GET", StringComparison.OrdinalIgnoreCase))
             return true;
+        // 登录页配图（docs/69）：[AllowAnonymous]；工人带着旧 token 再进登录页仍须可读
+        if (path.Equals("/api/LoginSetting", StringComparison.OrdinalIgnoreCase) && method.Equals("GET", StringComparison.OrdinalIgnoreCase))
+            return true;
         if (!method.Equals("POST", StringComparison.OrdinalIgnoreCase))
             return false;
+        // 账号密码 / 手机 / 个人免密（docs/150）/ 选厂 / 清缓存：均可能带着旧工人 JWT 再调
         return path.Equals("/api/Auth/login", StringComparison.OrdinalIgnoreCase)
-            || path.Equals("/api/Auth/login-phone", StringComparison.OrdinalIgnoreCase);
+            || path.Equals("/api/Auth/login-phone", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("/api/Auth/login-by-qr", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("/api/Auth/select-factory", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("/api/Auth/clear-browser-cache", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsAllowedForLeader(string path, string method)
@@ -162,8 +169,11 @@ public class RoleGuardMiddleware
             && path.EndsWith("/resolve", StringComparison.OrdinalIgnoreCase))
             return true;
 
-        // 派工（docs/29/201）：班组长/管理员把工序派给工人；GET workers 已在 worker 白名单
+        // 派工（docs/29/201/214）：班组长派个人或班组；GET workers / departments
         if (path.Equals("/api/Assign/workers", StringComparison.OrdinalIgnoreCase) && method == "GET")
+            return true;
+        if (method.Equals("GET", StringComparison.OrdinalIgnoreCase)
+            && path.StartsWith("/api/Assign/departments/", StringComparison.OrdinalIgnoreCase))
             return true;
         if (method.Equals("PUT", StringComparison.OrdinalIgnoreCase)
             && path.StartsWith("/api/Assign/", StringComparison.OrdinalIgnoreCase))

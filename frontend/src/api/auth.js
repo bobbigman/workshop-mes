@@ -4,7 +4,11 @@ import { applyCreditPartner } from '@/utils/instanceDisplay'
 
 // 【业务背景】登录认证接口，对应后端 AuthController。
 export const login = (data) => http.post('/Auth/login', data)
+/** 多厂第二步（docs/151）：{ selectToken, factoryCode } → 正式 JWT；不带密码 */
+export const selectFactory = (data) => http.post('/Auth/select-factory', data)
 export const loginByPhone = (data) => http.post('/Auth/login-phone', data)
+/** 个人免密二维码登录（docs/150）：{ code } → 与 login 同结构 LoginResult */
+export const loginByQr = (data) => http.post('/Auth/login-by-qr', data)
 export const changePassword = (data) => http.post('/Auth/change-password', data)
 export const getInstanceInfo = () =>
   http.get('/instance-info').then(res => {
@@ -16,8 +20,6 @@ export const getInstanceInfo = () =>
   })
 /** 当前工厂授权状态（docs/89） */
 export const getLicenseStatus = () => http.get('/license/status')
-// 可用账套（工厂）列表：登录页选厂；仅返回 code + name
-export const getFactories = () => http.get('/factories')
 // 登录页图片（docs/69）：读取 bannerUrl，按账套；上传仅管理员
 export const getLoginSetting = (factoryCode) => http.get('/LoginSetting', { params: { factoryCode } })
 export const uploadLoginBanner = (formData) => http.post('/LoginSetting/banner', formData)

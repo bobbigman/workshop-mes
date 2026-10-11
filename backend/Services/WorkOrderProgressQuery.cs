@@ -27,6 +27,7 @@ public static class WorkOrderProgressQuery
         public int DefectQty { get; set; }
         public long? AssigneeUserId { get; set; }
         public string AssigneeName { get; set; } = "";
+        public long? AssigneeDepartmentId { get; set; }
         /// <summary>true=无任务行时按路线生成的虚拟工序，不可直接派工。</summary>
         public bool IsVirtual { get; set; }
         public string Status { get; set; } = "";
@@ -66,7 +67,8 @@ public static class WorkOrderProgressQuery
                 op.Name,
                 t.Seq,
                 t.PlanQty,
-                t.AssigneeUserId
+                t.AssigneeUserId,
+                t.AssigneeDepartmentId
             }).ToListAsync();
 
         var tasksByOrder = taskRows.GroupBy(x => x.WorkOrderId)
@@ -139,6 +141,13 @@ public static class WorkOrderProgressQuery
             : await db.Users.AsNoTracking()
                 .Where(u => assigneeIds.Contains(u.Id) && u.FactoryId == factoryId)
                 .ToDictionaryAsync(u => u.Id, u => u.Name);
+        var deptIds = taskRows.Where(t => t.AssigneeDepartmentId != null)
+            .Select(t => t.AssigneeDepartmentId!.Value).Distinct().ToList();
+        var deptNames = deptIds.Count == 0
+            ? new Dictionary<long, string>()
+            : await db.Departments.AsNoTracking()
+                .Where(d => deptIds.Contains(d.Id) && d.FactoryId == factoryId)
+                .ToDictionaryAsync(d => d.Id, d => d.Name);
 
         foreach (var order in orders)
         {
@@ -151,7 +160,9 @@ public static class WorkOrderProgressQuery
                     var ids = multiAssignees.Where(a => a.Item1 == t.Id).Select(a => a.Item2).ToList();
                     if (ids.Count == 0 && t.AssigneeUserId.HasValue)
                         ids.Add(t.AssigneeUserId.Value);
-                    var nameStr = string.Join("、", ids.Select(id => assigneeNames.GetValueOrDefault(id, "")).Where(n => n != ""));
+                    var nameStr = t.AssigneeDepartmentId != null
+                        ? (deptNames.TryGetValue(t.AssigneeDepartmentId.Value, out var dn) ? $"班组·{dn}" : "班组")
+                        : string.Join("、", ids.Select(id => assigneeNames.GetValueOrDefault(id, "")).Where(n => n != ""));
                     var row = new OpRow
                     {
                         TaskId = t.Id,
@@ -162,6 +173,7 @@ public static class WorkOrderProgressQuery
                         DoneQty = rd.Done,
                         DefectQty = rd.Defect,
                         AssigneeUserId = ids.Count > 0 ? ids[0] : t.AssigneeUserId,
+                        AssigneeDepartmentId = t.AssigneeDepartmentId,
                         AssigneeName = nameStr,
                         IsVirtual = false
                     };

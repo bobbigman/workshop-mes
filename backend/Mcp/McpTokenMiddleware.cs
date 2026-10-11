@@ -115,8 +115,28 @@ public class McpTokenMiddleware
             "MCP 放行 alias={Alias} factory={FactoryName}({FactoryId}) path={Path} ip={Ip}",
             alias, factoryName, factoryId, context.Request.Path, context.Connection.RemoteIpAddress);
 
+        // docs/149 临时探活已关（每请求 Warning 写盘）；若再查 X-Mcp-Session-Id，取消下方注释即可。
+        // LogSessionProbe(context.Request, alias);
+
         await _next(context);
     }
+
+    // /// <summary>docs/149 临时探活：有无 X-Mcp-Session-Id + SHA256 前 8 + 渠道；不打明文 session。</summary>
+    // private void LogSessionProbe(HttpRequest request, string keyAlias)
+    // {
+    //     var raw = request.Headers["X-Mcp-Session-Id"].FirstOrDefault();
+    //     var present = !string.IsNullOrWhiteSpace(raw);
+    //     var prefix = present
+    //         ? McpWxBindService.HashSession(raw!.Trim())[..8]
+    //         : "-";
+    //     var chan = request.Headers["X-Mcp-Channel"].FirstOrDefault()
+    //         ?? request.Headers["X-Mcp-Chan-Type"].FirstOrDefault()
+    //         ?? keyAlias;
+    //     // Warning：文件 sink 最低级是 Warning，Information 只进控制台、盘上看不到
+    //     _logger.LogWarning(
+    //         "MCP会话探活149 sessionPresent={Present} hashPrefix={Prefix} chan={Chan} path={Path}",
+    //         present, prefix, chan, request.Path);
+    // }
 
     private static string? ExtractPresentedKey(HttpRequest request)
     {

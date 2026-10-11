@@ -1,0 +1,16 @@
+我是一名金蝶云星空二次开发者，自研了一套对标黑湖小工单的车间管理系统，面向制造业客户。
+
+**需求：** 用 AI Agent 的 Skill 机制实现——工单智能预警（结合客户容忍度、历史投诉、产线状态生成有判断力的文案，而非“超期了”通知）；ERP/财务数据决策辅助（结合金蝶数据给老板、财务、生产提供建议）。
+
+**已知：** 金蝶灵基有 CEO 驾驶舱 Skill；用友 BIP 有 623 个 Skill/MCP；SAP Joule 有 2400+ Skills；社区有 kingdee-k3cloud-skill 和 kingdee-k3cloud-mcp；Agent Skills 统一规范为 SKILL.md + 可选 scripts/references/assets。
+
+**请帮我扒：**
+
+1. 金蝶灵基 CEO 驾驶舱 Skill 的完整骨架（数据/场景/能力/治理清单，分析规则如何定义）
+2. 用友 BIP Skill 构建器的资产封装结构，有无公开示例
+3. SAP Joule 中面向制造业工单预警、财务决策的 Skill 及其 SKILL.md 结构
+4. Oracle 有无类似 Skill 体系，结构如何
+5. Anthropic 官方技能库中企业工作流类 Skill 的写法
+6. 社区现成的“工单预警”“老板决策”“ERP 数据判断”类 SKILL.md
+
+**要求：** 越具体越好，给出实际骨架、模板或代码片段；无法导出的说明设计思路和复现方式。

@@ -16,35 +16,14 @@
           <span class="brand-name">{{ PRODUCT_TITLE }}</span>
           <span class="brand-tag">轻MES</span>
         </div>
-        <el-form ref="formRef" :model="form" :rules="formRules" label-position="top" @submit.prevent="onLogin">
-          <el-form-item v-if="showFactorySelect" label="账套 / 工厂" prop="factoryCode">
-            <el-select v-model="form.factoryCode" size="large" placeholder="请选择账套" style="width: 100%">
-              <el-option
-                v-for="f in factories"
-                :key="f.factoryCode"
-                :label="f.factoryName"
-                :value="f.factoryCode"
-              />
-            </el-select>
-          </el-form-item>
-          <el-form-item v-else-if="factoriesLoading" label="账套 / 工厂">
-            <div class="factory-hint">正在加载账套列表…</div>
-          </el-form-item>
-          <el-form-item v-else-if="factoriesLoadError" label="账套 / 工厂">
-            <div class="factory-inline-err">
-              <span>账套列表加载失败</span>
-              <el-button
-                class="factory-refresh"
-                link
-                type="primary"
-                :loading="factoriesLoading"
-                :icon="Refresh"
-                title="重新加载"
-                aria-label="重新加载账套列表"
-                @click="loadFactories"
-              />
-            </div>
-          </el-form-item>
+        <!-- docs/151：账密态 / 选厂态同页切换，登录前不出现厂名下拉 -->
+        <el-form
+          v-if="step === 'credentials'"
+          ref="formRef"
+          :model="form"
+          label-position="top"
+          @submit.prevent="onLogin"
+        >
           <el-form-item label="账号">
             <el-input v-model="form.account" size="large" placeholder="请输入账号" autocomplete="username">
               <template #prefix>
@@ -78,6 +57,25 @@
             <button type="button" class="ghost-link" :disabled="loading || clearing" @click="onForgotPassword">忘记密码</button>
           </div>
         </el-form>
+        <div v-else class="select-factory-panel">
+          <p class="select-factory-title">选择要进入的工厂</p>
+          <p class="select-factory-hint">仅显示本账号有权进入的工厂</p>
+          <el-button
+            v-for="f in candidates"
+            :key="f.factoryCode"
+            class="factory-pick-btn"
+            size="large"
+            :loading="loading && selectingCode === f.factoryCode"
+            :disabled="loading || clearing"
+            @click="onSelectFactory(f.factoryCode)"
+          >{{ f.factoryName }}</el-button>
+          <button
+            type="button"
+            class="ghost-link back-credentials"
+            :disabled="loading || clearing"
+            @click="backToCredentials"
+          >返回重新登录</button>
+        </div>
         <p v-if="cacheLimitedMsg" class="cache-limited">
           {{ cacheLimitedMsg }}
           <button type="button" class="ghost-link" @click="doRefreshAfterClear">刷新页面</button>
@@ -111,11 +109,11 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { login, getInstanceInfo, getFactories, getLoginSetting, requestClearBrowserCache } from '@/api/auth'
+import { login, selectFactory, loginByQr, getInstanceInfo, getLoginSetting, requestClearBrowserCache } from '@/api/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Refresh, User, Lock } from '@element-plus/icons-vue'
+import { User, Lock } from '@element-plus/icons-vue'
 import {
   CREDIT_RIGHTS,
   PRODUCT_TITLE,
@@ -148,19 +146,22 @@ const appVersionLabel = (() => {
   return raw.startsWith('v') || raw.startsWith('V') ? raw : `v${raw}`
 })()
 const formRef = ref(null)
-const form = ref({ account: '', password: '', factoryCode: '' })
-const factories = ref([])
-const factoriesLoading = ref(false)
-const factoriesLoadError = ref(false)
-const showFactorySelect = computed(() => factories.value.length >= 2)
-const formRules = computed(() => ({
-  factoryCode: showFactorySelect.value
-    ? [{ required: true, message: '请先选择账套/工厂', trigger: 'change' }]
-    : []
-}))
+const form = ref({ account: '', password: '' })
+/** credentials | selectFactory（docs/151 同页两态） */
+const step = ref('credentials')
+const selectToken = ref('')
+const candidates = ref([])
+const selectingCode = ref('')
 
 function onLogoError() {
   logoOk.value = false
+}
+
+function backToCredentials() {
+  step.value = 'credentials'
+  selectToken.value = ''
+  candidates.value = []
+  selectingCode.value = ''
 }
 
 const DEFAULT_BANNER = '/login-banner-default.svg'
@@ -215,64 +216,20 @@ async function loadInstanceInfo() {
   console.warn('[登录页] 实例信息加载失败', lastErr)
 }
 
-/** 重启后后端常晚于前端就绪：失败自动重试，仍失败则账套区露出内联刷新。 */
-async function loadFactories() {
-  factoriesLoading.value = true
-  factoriesLoadError.value = false
-  const maxAttempts = 6
-  let lastErr = null
-  try {
-    for (let i = 0; i < maxAttempts; i++) {
-      try {
-        const res = await getFactories()
-        const list = res.data || []
-        factories.value = list
-        factoriesLoadError.value = false
-        if (list.length === 1) {
-          form.value.factoryCode = list[0].factoryCode
-          await loadBanner(list[0].factoryCode)
-        } else {
-          await loadBanner(form.value.factoryCode || instanceFactoryCode.value)
-        }
-        return
-      } catch (e) {
-        lastErr = e
-        if (i < maxAttempts - 1) await sleep(800 * (i + 1))
-      }
-    }
-    factories.value = []
-    factoriesLoadError.value = true
-    console.warn('[登录页] 账套列表加载失败', lastErr)
-  } finally {
-    factoriesLoading.value = false
-  }
-}
-
 async function restoreFormAfterCacheRefresh() {
   stripRefreshParam()
   const saved = consumeFormRestore()
   if (!saved) return
   if (saved.account) form.value.account = saved.account
-  // 账套列表加载后再套用仍有效的 factoryCode
-  return saved.factoryCode || ''
 }
 
 onMounted(async () => {
-  const pendingFactory = await restoreFormAfterCacheRefresh()
+  await restoreFormAfterCacheRefresh()
   await loadInstanceInfo()
-  await loadFactories()
-  if (pendingFactory) {
-    const stillValid = factories.value.some((f) => f.factoryCode === pendingFactory)
-    if (stillValid) {
-      form.value.factoryCode = pendingFactory
-      await loadBanner(pendingFactory)
-    }
-    // 账套已不存在：不造数据，沿用 loadFactories 原选择规则
-  }
-})
-
-watch(() => form.value.factoryCode, (code) => {
-  if (factories.value.length >= 2) loadBanner(code || instanceFactoryCode.value)
+  await loadBanner(instanceFactoryCode.value)
+  // docs/150：个人免密二维码 → /#/login?pq=密钥
+  const pq = typeof route.query.pq === 'string' ? route.query.pq.trim() : ''
+  if (pq) await tryLoginByQr(pq)
 })
 
 function goHelp() {
@@ -314,7 +271,7 @@ async function onCopyright() {
 }
 
 function doRefreshAfterClear() {
-  saveFormForRestore(form.value.account, form.value.factoryCode)
+  saveFormForRestore(form.value.account, '')
   location.replace(buildRefreshUrl(location.href))
 }
 
@@ -351,16 +308,49 @@ async function onClearCache() {
   }
 }
 
+function applyLoginSession(data) {
+  localStorage.setItem('token', data.token)
+  localStorage.setItem('userId', String(data.userId || ''))
+  localStorage.setItem('userName', data.name)
+  localStorage.setItem('role', String(data.role))
+  localStorage.setItem('instanceName', resolveInstanceLabel(displayName.value))
+  if (data.factoryName) localStorage.setItem('factoryName', data.factoryName)
+  if (data.factoryCode) localStorage.setItem('factoryCode', data.factoryCode)
+  localStorage.setItem('licenseTier', data.licenseTier || 'trial')
+  if (data.licenseStatus) localStorage.setItem('licenseStatus', data.licenseStatus)
+  if (data.licenseMessage) localStorage.setItem('licenseMessage', data.licenseMessage)
+  else localStorage.removeItem('licenseMessage')
+  setWorkerViewMode(data.workerViewMode)
+}
+
+async function goAfterLogin(data) {
+  const redirect = route.query.redirect
+  const role = Number(data.role || 0)
+  const failure = typeof redirect === 'string' && redirect.startsWith('/h5/') && !redirect.startsWith('//')
+    ? await router.replace(redirect)
+    : await router.push(role === 2 ? workerHomePath() : '/order')
+  if (failure) throw failure
+  ElMessage.success('登录成功')
+}
+
+/** 个人免密扫码（docs/150）；失败留在登录页，可改用账号密码 */
+async function tryLoginByQr(code) {
+  if (loading.value || clearing.value) return
+  try {
+    loading.value = true
+    const res = await loginByQr({ code })
+    applyLoginSession(res.data)
+    await goAfterLogin(res.data)
+  } catch (error) {
+    // http 拦截器已弹业务提示；留在登录页，可改用账号密码
+    console.warn('[登录页] 个人码免密登录失败', error)
+  } finally {
+    loading.value = false
+  }
+}
+
 async function onLogin() {
   if (loading.value || clearing.value) return
-  if (showFactorySelect.value) {
-    try {
-      await formRef.value?.validateField('factoryCode')
-    } catch {
-      return
-    }
-    if (!String(form.value.factoryCode || '').trim()) return
-  }
   if (!form.value.account || !form.value.password) {
     ElMessage.error('请填写账号和密码')
     return
@@ -369,36 +359,59 @@ async function onLogin() {
     loading.value = true
     const res = await login({
       account: form.value.account,
-      password: form.value.password,
-      factoryCode: form.value.factoryCode || ''
+      password: form.value.password
     })
-    localStorage.setItem('token', res.data.token)
-    localStorage.setItem('userId', String(res.data.userId || ''))
-    localStorage.setItem('userName', res.data.name)
-    localStorage.setItem('role', String(res.data.role))
-    localStorage.setItem('instanceName', resolveInstanceLabel(displayName.value))
-    // 当前登录工厂名（PC 侧栏 / H5 顶栏 / 看板展示用）
-    if (res.data.factoryName) localStorage.setItem('factoryName', res.data.factoryName)
-    if (res.data.factoryCode) localStorage.setItem('factoryCode', res.data.factoryCode)
-    localStorage.setItem('licenseTier', res.data.licenseTier || 'trial')
-    if (res.data.licenseStatus) localStorage.setItem('licenseStatus', res.data.licenseStatus)
-    if (res.data.licenseMessage) localStorage.setItem('licenseMessage', res.data.licenseMessage)
-    else localStorage.removeItem('licenseMessage')
-    setWorkerViewMode(res.data.workerViewMode)
-    const redirect = route.query.redirect
+    if (res.data?.needSelectFactory) {
+      selectToken.value = res.data.selectToken || ''
+      candidates.value = res.data.candidates || []
+      if (!selectToken.value || candidates.value.length < 2) {
+        ElMessage.error('选厂信息无效，请重新登录')
+        return
+      }
+      step.value = 'selectFactory'
+      return
+    }
+    applyLoginSession(res.data)
     try {
-      const role = Number(res.data.role || 0)
-      const failure = typeof redirect === 'string' && redirect.startsWith('/h5/') && !redirect.startsWith('//')
-        ? await router.replace(redirect)
-        : await router.push(role === 2 ? workerHomePath() : '/order')
-      if (failure) throw failure
-      ElMessage.success('登录成功')
+      await goAfterLogin(res.data)
     } catch (error) {
       console.error('[登录页] 身份验证成功后打开目标页面失败', error)
       ElMessage.error('账号验证成功，但页面加载失败，请刷新后重试')
     }
   } finally {
     loading.value = false
+  }
+}
+
+/** docs/151：第二步只带 selectToken + factoryCode，绝不带密码 */
+async function onSelectFactory(factoryCode) {
+  if (loading.value || clearing.value) return
+  const code = String(factoryCode || '').trim()
+  if (!code || !selectToken.value) {
+    ElMessage.error('选厂凭证无效，请重新登录')
+    backToCredentials()
+    return
+  }
+  try {
+    loading.value = true
+    selectingCode.value = code
+    const res = await selectFactory({
+      selectToken: selectToken.value,
+      factoryCode: code
+    })
+    applyLoginSession(res.data)
+    try {
+      await goAfterLogin(res.data)
+    } catch (error) {
+      console.error('[登录页] 选厂成功后打开目标页面失败', error)
+      ElMessage.error('账号验证成功，但页面加载失败，请刷新后重试')
+    }
+  } catch {
+    // 过期/复用/伪造：回账密态，http 拦截器已提示
+    backToCredentials()
+  } finally {
+    loading.value = false
+    selectingCode.value = ''
   }
 }
 </script>
@@ -527,30 +540,38 @@ async function onLogin() {
 .ghost-link:hover:not(:disabled) { color: var(--app-primary); opacity: 1; }
 .ghost-link:disabled { cursor: not-allowed; opacity: 0.5; }
 
-.factory-hint {
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--app-text-2);
-  min-height: 48px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+.select-factory-panel {
+  width: 100%;
 }
 
-.factory-inline-err {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 40px;
+.select-factory-title {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2329;
+  text-align: center;
+}
+
+.select-factory-hint {
+  margin: 0 0 20px;
   font-size: 13px;
   line-height: 1.4;
-  color: #cf1322;
+  color: var(--app-text-2);
+  text-align: center;
 }
 
-.factory-refresh {
-  padding: 0 4px !important;
-  height: 24px;
+.factory-pick-btn {
+  width: 100%;
+  height: 48px;
+  margin-bottom: 12px;
+  font-size: 15px;
+}
+
+.back-credentials {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  text-align: center;
 }
 
 .cache-limited {

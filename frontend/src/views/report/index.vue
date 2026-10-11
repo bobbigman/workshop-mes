@@ -22,6 +22,9 @@
       </el-select>
       <el-input v-model="q.productCode" placeholder="产品编号" clearable style="width:160px" />
       <el-input v-model="q.productName" placeholder="产品名称" clearable style="width:160px" />
+      <el-select v-model="q.userType" clearable placeholder="人员类型" style="width:140px" @change="load">
+        <el-option v-for="o in USER_TYPE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
+      </el-select>
       <el-button type="primary" @click="load">查询</el-button>
       <el-button type="success" @click="openCreate()">+ 报工</el-button>
       <el-button v-if="canProxy" type="primary" plain @click="openProxy()">代报工</el-button>
@@ -31,7 +34,12 @@
       <el-table-column prop="orderNo" label="工单编号" />
       <el-table-column prop="productName" label="产品" />
       <el-table-column prop="operationName" label="工序" />
-      <el-table-column prop="userName" label="报工人" />
+      <el-table-column prop="userName" label="报工人" width="90" />
+      <el-table-column label="人员类型" width="110">
+        <template #default="{ row }">
+          <el-tag :type="userTypeTagType(row.userType)" size="small">{{ userTypeLabel(row.userType) }}</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column prop="goodQty" label="良品" width="80" />
       <el-table-column prop="defectQty" label="不良品" width="80" />
       <el-table-column prop="defectName" label="不良原因" />
@@ -343,9 +351,11 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getReportList, updateReport, submitReport, batchReport, getDefectsByOp, getOrderByNo, getOrderList, getReportCandidates, getReportChangeLogs } from '@/api/prod'
 import { getUserList } from '@/api/sys'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { isUpstreamSoftConfirm } from '@/utils/upstreamConfirm'
 import ValueTip from '@/components/ValueTip.vue'
 import { VALUE_TIPS } from '@/constants/valueTips'
+import { USER_TYPE_OPTIONS, userTypeLabel, userTypeTagType } from '@/constants/userType'
 
 const route = useRoute()
 const router = useRouter()
@@ -357,7 +367,7 @@ const logDlg = ref(false), changeLogs = ref([]), logLoading = ref(false)
 const submitting = ref(false)
 const orderDetail = ref(null)
 const orderOptions = ref([])
-const q = ref({ orderNo: '', productCode: '', productName: '' })
+const q = ref({ orderNo: '', productCode: '', productName: '', userType: null })
 const form = ref({
   id: null, operationId: null, operationName: '',
   goodQty: 0, defectQty: 0, defectId: null, hours: 0, minutes: 0
@@ -451,7 +461,15 @@ async function loadOrderOptions() {
 }
 
 async function load() {
-  const res = await getReportList({ ...q.value, page: 1, pageSize: 100 })
+  const params = {
+    orderNo: q.value.orderNo || undefined,
+    productCode: q.value.productCode || undefined,
+    productName: q.value.productName || undefined,
+    page: 1,
+    pageSize: 100
+  }
+  if (q.value.userType != null) params.userType = q.value.userType
+  const res = await getReportList(params)
   list.value = res.data.list || []
 }
 
@@ -572,7 +590,7 @@ async function onCreate(keepOpen) {
   submitting.value = true
   try {
     if (!createClientRequestId.value) createClientRequestId.value = newClientRequestId()
-    const res = await submitReport({
+    const payload = {
       orderId: orderDetail.value.id,
       operationId: createForm.value.operationId,
       goodQty: createForm.value.goodQty || 0,
@@ -580,7 +598,8 @@ async function onCreate(keepOpen) {
       defectId: createForm.value.defectId,
       durationMinutes,
       clientRequestId: createClientRequestId.value
-    })
+    }
+    const res = await submitReportWithUpstreamConfirm(payload)
     createClientRequestId.value = ''
     const item = res?.data?.reports?.[0]
     const unmatched = (res?.data?.reports || []).some(r => r.unitPrice == null)
@@ -601,8 +620,39 @@ async function onCreate(keepOpen) {
     } else {
       createDlg.value = false
     }
+  } catch {
+    // soft 取消或 http 已提示
   } finally {
     submitting.value = false
+  }
+}
+
+/** docs/150：soft 确认后带 confirmUpstream 重提 */
+async function submitReportWithUpstreamConfirm(payload) {
+  try {
+    return await submitReport({ ...payload, confirmUpstream: false })
+  } catch (e) {
+    if (!isUpstreamSoftConfirm(e)) throw e
+    await ElMessageBox.confirm(e.message || '紧邻上一道复核通过量不足，是否继续报工？', '上级工序提示', {
+      type: 'warning',
+      confirmButtonText: '继续报工',
+      cancelButtonText: '取消'
+    })
+    return await submitReport({ ...payload, confirmUpstream: true })
+  }
+}
+
+async function batchReportWithUpstreamConfirm(payload) {
+  try {
+    return await batchReport({ ...payload, confirmUpstream: false })
+  } catch (e) {
+    if (!isUpstreamSoftConfirm(e)) throw e
+    await ElMessageBox.confirm(e.message || '紧邻上一道复核通过量不足，是否继续报工？', '上级工序提示', {
+      type: 'warning',
+      confirmButtonText: '继续补报',
+      cancelButtonText: '取消'
+    })
+    return await batchReport({ ...payload, confirmUpstream: true })
   }
 }
 
@@ -683,7 +733,7 @@ async function onProxySubmit() {
   proxySubmitting.value = true
   try {
     if (!proxyClientRequestId.value) proxyClientRequestId.value = newClientRequestId()
-    const res = await submitReport({
+    const res = await submitReportWithUpstreamConfirm({
       orderId: proxyDetail.value.id,
       operationId: proxyForm.value.operationId,
       goodQty: 0,
@@ -705,6 +755,8 @@ async function onProxySubmit() {
     else ElMessage.success(tip)
     proxyDlg.value = false
     await load()
+  } catch {
+    // soft 取消或 http 已提示
   } finally {
     proxySubmitting.value = false
   }
@@ -869,7 +921,7 @@ async function onBatchSubmit() {
 
   batchSubmitting.value = true
   try {
-    const res = await batchReport({
+    const res = await batchReportWithUpstreamConfirm({
       orderId: batchDetail.value.id,
       goodQty: n,
       batchNo,
@@ -879,6 +931,8 @@ async function onBatchSubmit() {
     ElMessage.success(`已为 ${data.operationCount || 0} 道工序生成 ${data.reportCount || 0} 条报工`)
     batchDlg.value = false
     await load()
+  } catch {
+    // soft 取消或 http 已提示
   } finally {
     batchSubmitting.value = false
   }

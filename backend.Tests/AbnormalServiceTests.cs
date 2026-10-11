@@ -5,6 +5,7 @@ using ahu.MicrosoftMes.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace WorkshopMes.Tests;
@@ -22,7 +23,7 @@ public class AbnormalServiceTests
             .Options;
         var db = new AppDbContext(opts);
         var env = new FakeWebHostEnvironment();
-        return (db, new AbnormalService(db, env), new ReportStatService(db));
+        return (db, new AbnormalService(db, env), new ReportStatService(db, NullLogger<ReportStatService>.Instance));
     }
 
     [Fact]

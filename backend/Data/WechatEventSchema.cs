@@ -17,7 +17,7 @@ CREATE TABLE sys_wechat_alert_rule (
   template NVARCHAR(1000) NOT NULL,
   enabled BIT NOT NULL DEFAULT 0,
   updated_at DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
-  CONSTRAINT ck_wechat_rule_event CHECK (event_type IN ('report_created','order_started','order_completed')),
+  CONSTRAINT ck_wechat_rule_event CHECK (event_type IN ('report_created','order_started','order_completed','abnormal_reported','operation_assigned')),
   CONSTRAINT ck_wechat_rule_condition CHECK ((condition_type = 'always' AND threshold IS NULL) OR (event_type = 'report_created' AND condition_type = 'defect_rate' AND threshold BETWEEN 0 AND 100 AND threshold IS NOT NULL))
 );
 CREATE INDEX ix_wechat_rule_factory ON sys_wechat_alert_rule(factory_id, enabled);
@@ -97,7 +97,7 @@ BEGIN
     IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'ck_wechat_rule_event')
         ALTER TABLE sys_wechat_alert_rule DROP CONSTRAINT ck_wechat_rule_event;
     ALTER TABLE sys_wechat_alert_rule ADD CONSTRAINT ck_wechat_rule_event
-      CHECK (event_type IN ('report_created','order_started','order_completed','abnormal_reported'));
+      CHECK (event_type IN ('report_created','order_started','order_completed','abnormal_reported','operation_assigned'));
     IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'ck_wechat_rule_condition')
         ALTER TABLE sys_wechat_alert_rule DROP CONSTRAINT ck_wechat_rule_condition;
     ALTER TABLE sys_wechat_alert_rule ADD CONSTRAINT ck_wechat_rule_condition CHECK (

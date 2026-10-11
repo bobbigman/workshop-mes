@@ -19,6 +19,10 @@ public static class ThrowHelper
         return new BusinessException(what);
     }
 
+    /// <summary>带业务错误码（如报工 soft 确认 1002）；Message 仍只放业务提示。</summary>
+    public static BusinessException BizCode(string what, int code) =>
+        new BusinessException(what, code);
+
     /// <summary>执行 SQL 失败 —— Message 带 SQL 原文；可选参数快照（已建议脱敏后传入）。</summary>
     public static Exception Sql(string sql, Exception ex, string? parametersSnapshot = null)
     {

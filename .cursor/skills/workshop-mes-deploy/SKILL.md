@@ -104,7 +104,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File backend\pack-update.ps1
 
 产物在 `backend\publish-update`（约几十 MB）。包内**没有** `appsettings*.json`、`start.bat`、`stop.bat`，也**没有**会破坏自包含的 FDD 版 `WorkshopMes.exe` / runtimeconfig / deps（脚本会校验并 throw）。
 
-客户机：结束 `WorkshopMes.exe`（或 `stop.bat`）→ 拷过去 → 双击 `apply-update.bat` → 用**服务器原有** `start.bat` 启动。说明见 `README-update.txt`。
+客户机：拷过去 → 双击 `apply-update.bat`（脚本内自动：停进程 → 更新 wwwroot/dll → 用安装目录原有 `start.bat` 拉起）。说明见 `README-update.txt`。
 
 **禁止**把更新包里的 `WorkshopMes.exe` / `*.runtimeconfig.json` / `*.deps.json` 拷进安装目录。盖上去会出现 `You must install or update .NET`。若已误盖，用 `backend/publish-repair-runtime`（或整包里同名文件）盖回，并保留客户机 `appsettings.json` 与 `start.bat`。
 

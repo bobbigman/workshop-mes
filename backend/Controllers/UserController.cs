@@ -27,4 +27,19 @@ public class UserController : ControllerBase
 
     [HttpDelete("{id}")]
     public Task<ApiResult<object?>> Delete(long id) => _svc.DeleteAsync(id);
+
+    /// <summary>停用/启用（docs/219）；不踢已发 JWT</summary>
+    [HttpPut("{id}/status")]
+    public Task<ApiResult<object?>> SetStatus(long id, [FromBody] UserStatusDto dto) =>
+        _svc.SetStatusAsync(id, dto.Status, JwtHelper.GetFactoryId(User), JwtHelper.GetUserId(User));
+
+    /// <summary>获取或首次生成个人免密二维码（docs/150）</summary>
+    [HttpGet("{id}/login-qr")]
+    public Task<ApiResult<UserLoginQrDto>> GetLoginQr(long id) =>
+        _svc.GetOrCreateLoginQrAsync(id, JwtHelper.GetFactoryId(User));
+
+    /// <summary>重新生成个人免密码，旧码立刻失效</summary>
+    [HttpPost("{id}/login-qr/regenerate")]
+    public Task<ApiResult<UserLoginQrDto>> RegenerateLoginQr(long id) =>
+        _svc.RegenerateLoginQrAsync(id, JwtHelper.GetFactoryId(User));
 }

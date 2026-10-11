@@ -114,6 +114,9 @@ public class WorkOrderTaskDto
     public string AssigneeName { get; set; } = "";
     /// <summary>多人派工列表（docs/202）；空=未派工。</summary>
     public List<WorkOrderAssigneeDto> Assignees { get; set; } = new();
+    /// <summary>派工班组=部门（docs/214）；与人互斥。</summary>
+    public long? AssigneeDepartmentId { get; set; }
+    public string AssigneeDepartmentName { get; set; } = "";
 }
 
 public class WorkOrderAssigneeDto
@@ -470,6 +473,10 @@ public class WorkOrderService : IWorkOrderService
         var assigneeNames = allAssigneeIds.Count > 0
             ? await _db.Users.AsNoTracking().Where(u => allAssigneeIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.Name)
             : new Dictionary<long, string>();
+        var deptIds = tasks.Where(t => t.AssigneeDepartmentId != null).Select(t => t.AssigneeDepartmentId!.Value).Distinct().ToList();
+        var deptNames = deptIds.Count > 0
+            ? await _db.Departments.AsNoTracking().Where(d => deptIds.Contains(d.Id)).ToDictionaryAsync(d => d.Id, d => d.Name)
+            : new Dictionary<long, string>();
         return tasks.Select(t =>
         {
             var list = assigneeRows.Where(a => a.Item1 == t.Id)
@@ -479,6 +486,11 @@ public class WorkOrderService : IWorkOrderService
                     UserName = assigneeNames.GetValueOrDefault(a.Item2, "")
                 }).ToList();
             var first = list.FirstOrDefault();
+            var deptName = t.AssigneeDepartmentId == null
+                ? ""
+                : deptNames.GetValueOrDefault(t.AssigneeDepartmentId.Value, "");
+            var personName = first?.UserName
+                ?? (t.AssigneeUserId == null ? "" : assigneeNames.GetValueOrDefault(t.AssigneeUserId.Value, ""));
             return new WorkOrderTaskDto
             {
                 Id = t.Id,
@@ -489,9 +501,10 @@ public class WorkOrderService : IWorkOrderService
                 DoneQty = goodMap.GetValueOrDefault(t.OperationId, 0),
                 DefectQty = defectMap.GetValueOrDefault(t.OperationId, 0),
                 AssigneeUserId = first?.UserId ?? t.AssigneeUserId,
-                AssigneeName = first?.UserName
-                    ?? (t.AssigneeUserId == null ? "" : assigneeNames.GetValueOrDefault(t.AssigneeUserId.Value, "")),
-                Assignees = list
+                AssigneeName = !string.IsNullOrEmpty(deptName) ? $"班组·{deptName}" : personName,
+                Assignees = list,
+                AssigneeDepartmentId = t.AssigneeDepartmentId,
+                AssigneeDepartmentName = deptName
             };
         }).ToList();
     }

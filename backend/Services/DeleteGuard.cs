@@ -55,6 +55,8 @@ public static class DeleteGuard
                     return "该部门下还有用户，请先移除";
                 if (await db.PriceRules.AnyAsync(r => r.DepartmentId == id))
                     return "该部门已被工价规则引用，请先删除相关工价规则";
+                if (await db.WorkOrderOperations.AnyAsync(t => t.AssigneeDepartmentId == id))
+                    return "该部门已被派工为班组，请先在工单详情取消派工";
                 break;
 
             case "User":

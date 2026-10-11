@@ -1,4 +1,5 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { canUse, FEATURE, currentTier } from '@/utils/licenseTier'
 
 const routes = [
@@ -27,6 +28,7 @@ const routes = [
       { path: 'custom-field', name: 'CustomField', component: () => import('@/views/custom-field/index.vue'), meta: { title: '自定义字段', adminOnly: true } },
       { path: 'wechat-alert', name: 'WechatAlert', component: () => import('@/views/wechat-alert/index.vue'), meta: { title: '微信预警', adminOnly: true, feature: FEATURE.WechatDueAlert } },
       { path: 'worker-view', name: 'WorkerView', component: () => import('@/views/worker-view/index.vue'), meta: { title: '工人手机视角', adminOnly: true } },
+      { path: 'report-upstream', name: 'ReportUpstream', component: () => import('@/views/report-upstream/index.vue'), meta: { title: '报工上级校验', adminOnly: true } },
       { path: 'stat', name: 'Stat', component: () => import('@/views/stat/index.vue'), meta: { title: '生产报表' } },
       { path: 'defect-stat', name: 'DefectStat', component: () => import('@/views/defect-stat/index.vue'), meta: { title: '不良品报表' } },
       { path: 'sku-stat', name: 'SkuStat', component: () => import('@/views/sku-stat/index.vue'), meta: { title: '色码汇总' } },
@@ -51,6 +53,7 @@ const routes = [
   { path: '/h5/abnormal', name: 'H5Abnormal', component: () => import('@/views/h5/abnormal.vue'), meta: { title: '上报异常' } },
   { path: '/h5/review', name: 'H5Review', component: () => import('@/views/h5/review.vue'), meta: { title: '报工复核', feature: FEATURE.ReportReview } },
   { path: '/board', name: 'Board', component: () => import('@/views/board/index.vue'), meta: { title: '车间看板' } },
+  { path: '/board/screen', name: 'BoardScreen', component: () => import('@/views/board/screen.vue'), meta: { title: '车间生产监控大屏' } },
 ]
 
 const router = createRouter({
@@ -85,7 +88,7 @@ router.beforeEach((to, from, next) => {
   }
   // 生产人员：电脑端仅工单、报工、生产报表、看板 + H5
   const h5Only = to.path.startsWith('/h5')
-  const workerQuery = to.path === '/order' || to.path === '/execution-monitor' || to.path === '/report' || to.path === '/stat' || to.path === '/defect-stat' || to.path === '/sku-stat' || to.path === '/board' || to.path === '/about' || to.path === '/faq' || to.path === '/help' || to.path === '/advantages' || to.path === '/onboarding'
+  const workerQuery = to.path === '/order' || to.path === '/execution-monitor' || to.path === '/report' || to.path === '/stat' || to.path === '/defect-stat' || to.path === '/sku-stat' || to.path === '/board' || to.path === '/board/screen' || to.path === '/about' || to.path === '/faq' || to.path === '/help' || to.path === '/advantages' || to.path === '/onboarding'
   if (role === 2 && !h5Only && !workerQuery) {
     return next('/order')
   }
@@ -94,6 +97,14 @@ router.beforeEach((to, from, next) => {
     return next(to.path.startsWith('/h5') ? '/h5/tasks' : '/order')
   }
   next()
+})
+
+// 前端刚换过 wwwroot 时，旧页面里的懒加载 chunk 会 404，菜单点了像没反应
+router.onError((err) => {
+  const msg = String(err?.message || err || '')
+  if (/Failed to fetch dynamically imported module|Loading chunk|Loading CSS chunk/i.test(msg)) {
+    ElMessage.error('页面资源已更新，请按 Ctrl+F5 强制刷新')
+  }
 })
 
 export default router

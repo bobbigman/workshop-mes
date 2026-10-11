@@ -32,6 +32,13 @@ BEGIN
     ALTER TABLE prod_work_order_operation ADD assignee_user_id BIGINT NULL;
 END");
 
+        // 派工到班组（docs/214）：与 assignee_user_id 互斥，一道工序最多一个班组
+        await db.Database.ExecuteSqlRawAsync(@"
+IF COL_LENGTH('prod_work_order_operation', 'assignee_department_id') IS NULL
+BEGIN
+    ALTER TABLE prod_work_order_operation ADD assignee_department_id BIGINT NULL;
+END");
+
         // 多人派工明细（docs/202）：一道工序可派多人；从旧单值列迁移
         await db.Database.ExecuteSqlRawAsync(@"
 IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'prod_work_order_operation_assignee')
@@ -436,6 +443,28 @@ BEGIN
     ALTER TABLE sys_user ADD wechat_id NVARCHAR(64) NULL;
 END");
 
+        // 人员类型（docs/161）：0内部员工 / 1临时用工 / 2外部供应商；存量默认内部
+        await db.Database.ExecuteSqlRawAsync(@"
+IF COL_LENGTH('sys_user', 'user_type') IS NULL
+BEGIN
+    ALTER TABLE sys_user ADD user_type TINYINT NOT NULL
+        CONSTRAINT DF_sys_user_user_type DEFAULT 0;
+END");
+
+        // 个人免密登录码密钥（docs/150）：可轮换；空=未生成
+        // 加列与建索引必须分批：同批时索引会在编译期引用尚不存在的列（207）
+        await db.Database.ExecuteSqlRawAsync(@"
+IF COL_LENGTH('sys_user', 'login_qr_secret') IS NULL
+BEGIN
+    ALTER TABLE sys_user ADD login_qr_secret NVARCHAR(64) NULL;
+END");
+        await db.Database.ExecuteSqlRawAsync(@"
+IF COL_LENGTH('sys_user', 'login_qr_secret') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ux_user_login_qr_secret' AND object_id = OBJECT_ID('sys_user'))
+BEGIN
+    CREATE UNIQUE INDEX ux_user_login_qr_secret ON sys_user(login_qr_secret) WHERE login_qr_secret IS NOT NULL;
+END");
+
         // 工厂授权档（docs/88）：trial / enterprise / flagship；存量默认入门款
         await db.Database.ExecuteSqlRawAsync(@"
 IF COL_LENGTH('sys_factory', 'license_tier') IS NULL
@@ -533,6 +562,20 @@ BEGIN
   );
   CREATE INDEX ix_report_change_log_report ON prod_report_change_log(report_id, changed_at DESC);
   CREATE INDEX ix_report_change_log_factory ON prod_report_change_log(factory_id, changed_at DESC);
+END");
+
+        // 报工上级工序校验（docs/150）：每工厂一条；默认 soft
+        await db.Database.ExecuteSqlRawAsync(@"
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'sys_report_upstream_setting')
+BEGIN
+  CREATE TABLE sys_report_upstream_setting (
+    id                  BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_sys_report_upstream_setting PRIMARY KEY,
+    factory_id          BIGINT NOT NULL,
+    mode                NVARCHAR(16) NOT NULL CONSTRAINT DF_sys_report_upstream_mode DEFAULT N'soft',
+    hard_operation_ids  NVARCHAR(2000) NULL,
+    updated_at          DATETIME2 NOT NULL CONSTRAINT DF_sys_report_upstream_ua DEFAULT SYSDATETIME(),
+    CONSTRAINT UQ_sys_report_upstream_setting_factory UNIQUE (factory_id)
+  );
 END");
     }
 

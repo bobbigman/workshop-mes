@@ -35,8 +35,12 @@ public class SysUser
     public string? WechatId { get; set; }           // 微信号（可空，仅记录；不做登录/推送）
     public string Name { get; set; } = "";          // 姓名
     public byte Role { get; set; }                  // 角色: 1管理员 2生产人员 3班组长
+    /// <summary>人员类型：0内部员工 1临时用工 2外部供应商（docs/161）</summary>
+    public byte UserType { get; set; } = 0;
     public string Password { get; set; } = "";      // 加密密码(BCrypt)
     public byte Status { get; set; } = 1;           // 1启用 0停用
+    /// <summary>个人免密登录码密钥（docs/150）；可轮换，空=未生成</summary>
+    public string? LoginQrSecret { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 
@@ -93,6 +97,18 @@ public class SysWorkerViewSetting
     public long FactoryId { get; set; }
     /// <summary>1=全车间可见(默认) 2=只看我的任务</summary>
     public byte WorkerViewMode { get; set; } = 1;
+    public DateTime UpdatedAt { get; set; }
+}
+
+/// <summary>报工上级工序校验（每工厂一条；默认 soft，docs/150）</summary>
+public class SysReportUpstreamSetting
+{
+    public long Id { get; set; }
+    public long FactoryId { get; set; }
+    /// <summary>soft=弹确认可继续；hard=清单内硬拦（清单空=全部 hard）</summary>
+    public string Mode { get; set; } = "soft";
+    /// <summary>硬拦截工序 ID 列表 JSON，如 [1,2]；空数组/空串=mode=hard 时全部工序硬拦</summary>
+    public string? HardOperationIds { get; set; }
     public DateTime UpdatedAt { get; set; }
 }
 

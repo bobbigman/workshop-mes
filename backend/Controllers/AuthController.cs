@@ -12,13 +12,27 @@ public class AuthController : ControllerBase
     private readonly IAuthService _authService;
     public AuthController(IAuthService authService) { _authService = authService; }
 
+    /// <summary>账号密码登录（docs/151）：1 厂直发 JWT；≥2 厂返回 selectToken，不发 JWT</summary>
+    [AllowAnonymous]
     [HttpPost("login")]
     public Task<ApiResult<LoginResultDto>> Login([FromBody] LoginDto dto) =>
         _authService.LoginAsync(dto);
 
+    /// <summary>多厂第二步：短时 selectToken + factoryCode 换正式 JWT（docs/151）</summary>
+    [AllowAnonymous]
+    [HttpPost("select-factory")]
+    public Task<ApiResult<LoginResultDto>> SelectFactory([FromBody] SelectFactoryDto dto) =>
+        _authService.SelectFactoryAsync(dto);
+
     [HttpPost("login-phone")]
     public Task<ApiResult<LoginResultDto>> LoginByPhone([FromBody] PhoneLoginDto dto) =>
         _authService.LoginByPhoneAsync(dto);
+
+    /// <summary>个人免密二维码登录（docs/150）：匿名；签发 30 天 JWT</summary>
+    [AllowAnonymous]
+    [HttpPost("login-by-qr")]
+    public Task<ApiResult<LoginResultDto>> LoginByQr([FromBody] LoginByQrDto dto) =>
+        _authService.LoginByQrAsync(dto);
 
     [Authorize]
     [HttpPost("change-password")]
