@@ -71,6 +71,7 @@
           <div class="gauge-panel">
             <div class="gauge-wrap">
               <div ref="gaugeRef" class="gauge"></div>
+              <div class="gauge-title">在制工单数量完成率</div>
               <div class="gauge-note">未完工单完成数量合计 ÷ 计划数量合计</div>
             </div>
             <div class="gauge-side">
@@ -406,7 +407,7 @@ function renderGauge() {
       min: 0,
       max: 100,
       radius: '88%',
-      center: ['50%', '58%'],
+      center: ['50%', '48%'],
       progress: {
         show: true,
         width: 14,
@@ -420,20 +421,15 @@ function renderGauge() {
       axisLabel: { show: false },
       pointer: { show: false },
       anchor: { show: false },
-      title: {
-        show: true,
-        offsetCenter: [0, '68%'],
-        color: 'rgba(180,210,240,0.75)',
-        fontSize: 16
-      },
+      title: { show: false },
       detail: {
         valueAnimation: true,
         formatter: '{value}%',
         color,
-        fontSize: 44,
+        fontSize: 32,
         fontFamily: '"DIN Alternate", "Roboto Mono", system-ui, sans-serif',
         fontWeight: 700,
-        offsetCenter: [0, '8%']
+        offsetCenter: [0, 0]
       },
       data: [{ value: rate, name: '在制工单数量完成率' }]
     }]
@@ -754,6 +750,7 @@ function renderDefectChart() {
 }
 .gauge-wrap { position: relative; min-width: 0; }
 .gauge { width: 100%; height: 132px; }
+.gauge-title { text-align: center; margin-top: -8px; margin-bottom: 8px; font-size: 16px; color: var(--muted); }
 .gauge-note {
   margin-top: -8px;
   text-align: center;
