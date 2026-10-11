@@ -93,7 +93,7 @@ workshop-mes/
 
 ## Cursor Cloud specific instructions
 
-- 这台机器没有 systemd。SQL Server 2022 在 Docker 容器 `workshop-mssql` 里，数据目录 `/var/lib/workshop-mes/mssql`（属主 uid 10001）。环境 `start` 把 SQL 登录连接串写到 `/home/ubuntu/.workshop-mes/dev.env` 的 `ConnectionStrings__Default`，并带上 `Encrypt=False`。集成测试读同一文件里的 `MES_TEST_DB`（库名 `WorkshopMes_Test`）。`AiReportEvidenceServiceTests` 的连接串是写死的 Windows 集成认证，在 Linux 上会失败。
+- 这台机器没有 systemd。SQL Server 2022 在 Docker 容器 `workshop-mssql` 里，走 host 网络（宿主机 `127.0.0.1:1433`），数据目录 `/var/lib/workshop-mes/mssql`（属主 uid 10001）。环境 `start` 把 SQL 登录连接串写到 `/home/ubuntu/.workshop-mes/dev.env` 的 `ConnectionStrings__Default`，并带上 `Encrypt=False`。集成测试读同一文件里的 `MES_TEST_DB`（库名 `WorkshopMes_Test`）。`AiReportEvidenceServiceTests` 的连接串是写死的 Windows 集成认证，在 Linux 上会失败。
 - 后端监听 `http://127.0.0.1:8080`。`dotnet build` / `dotnet run` 会调用 `powershell`，并把 `backend/version.txt` 和 `frontend/package.json` 的 patch 加 1。只想编译、不改版本号时加 `-p:SkipVersionBump=true`。
 - 前端 `npm run dev` 使用 `frontend/certs/` 里的证书，HTTPS 在 `https://127.0.0.1:5173`，`/api` 代理到 8080。
 - 演示种子账号是 `admin` / `Admin123`（见 `SeedData`）。
