@@ -337,7 +337,8 @@ function dueLabel(o) {
   const [year, month, day] = date.split('-').map(Number)
   const today = now.value
   const days = Math.round((Date.UTC(year, month - 1, day) - Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000)
-  return days < 0 ? label + ' ' + Math.abs(days) + ' 天' : days === 0 ? label + ' · 今日交期' : label + ' · 剩余 ' + days + ' 天'
+  if (days === 0) return o.dueState === 'overdue' ? '今日交期 · 已逾时' : '今日交期'
+  return days < 0 ? '超期 ' + Math.abs(days) + ' 天' : label + ' · 剩余 ' + days + ' 天'
 }
 function formatTime(t) { return t ? String(t).replace('T', ' ').slice(5, 16) : '' }
 function formatDue(t) {
