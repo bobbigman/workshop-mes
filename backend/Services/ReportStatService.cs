@@ -130,6 +130,10 @@ public class BoardDto
     public int TotalGood { get; set; }
     public int TotalDefect { get; set; }
     public double DefectRate { get; set; }
+    /// <summary>本月良品。待复核+已通过，不含退回。与大屏不良分布同一月。</summary>
+    public int MonthGood { get; set; }
+    /// <summary>本月不良。口径同 MonthGood。</summary>
+    public int MonthDefect { get; set; }
     public int DueWarnCount { get; set; }
     public int DueOverdueCount { get; set; }
     public int OpenAbnormalCount { get; set; }
@@ -149,6 +153,10 @@ public class BoardOrderProgressDto
     public string? ProgressHint { get; set; }
     public DateTime? DueDate { get; set; }
     public string DueState { get; set; } = "normal";
+    /// <summary>0 未开始 / 1 执行中 / ≥2 已结束。</summary>
+    public byte Status { get; set; }
+    /// <summary>按工序顺序，第一道还没报满的工序；都报满则为空。</summary>
+    public string? StuckOperationName { get; set; }
 }
 
 public class ReportStatService : IReportStatService
@@ -453,6 +461,10 @@ public class ReportStatService : IReportStatService
 
     public async Task<ApiResult<BoardDto>> BoardAsync(long factoryId)
     {
+        var now = DateTime.Now;
+        var monthStart = new DateTime(now.Year, now.Month, 1);
+        var monthEnd = monthStart.AddMonths(1);
+
         var orders = await _db.WorkOrders.AsNoTracking()
             .Where(o => o.FactoryId == factoryId)
             .Select(o => new { o.Id, o.OrderNo, o.ProductId, o.Qty, o.Status, o.DueDate })
@@ -469,6 +481,19 @@ public class ReportStatService : IReportStatService
             .SumAsync(r => (int?)r.DefectQty) ?? 0;
         var rate = totalGood + totalDefect == 0 ? 0 : Math.Round(totalDefect * 100.0 / (totalGood + totalDefect), 2);
 
+        var month = await _db.Reports.AsNoTracking()
+            .Where(r => r.FactoryId == factoryId
+                        && r.ReviewStatus != 2
+                        && r.ReportTime >= monthStart
+                        && r.ReportTime < monthEnd)
+            .GroupBy(r => r.FactoryId)
+            .Select(g => new
+            {
+                Good = g.Sum(x => (int?)x.GoodQty) ?? 0,
+                Defect = g.Sum(x => (int?)x.DefectQty) ?? 0
+            })
+            .FirstOrDefaultAsync();
+
         var keys = orders.Select(o => new WorkOrderProgressQuery.OrderKey
         {
             Id = o.Id,
@@ -477,7 +502,6 @@ public class ReportStatService : IReportStatService
         }).ToList();
         var bundles = await WorkOrderProgressQuery.LoadAsync(_db, factoryId, keys, nameof(BoardAsync));
 
-        var now = DateTime.Now;
         var progress = orders.Select(o =>
         {
             var bundle = bundles[o.Id];
@@ -491,7 +515,9 @@ public class ReportStatService : IReportStatService
                 ProgressPercent = bundle.Progress.ProgressPercent,
                 ProgressHint = bundle.Progress.ProgressHint,
                 DueDate = o.DueDate,
-                DueState = DueStateHelper.Calc(o.Status, o.DueDate, now)
+                DueState = DueStateHelper.Calc(o.Status, o.DueDate, now),
+                Status = o.Status,
+                StuckOperationName = FirstUnfinishedOperation(bundle.Ops)
             };
         }).ToList();
 
@@ -517,7 +543,7 @@ public class ReportStatService : IReportStatService
             Id = a.Id,
             AbnormalType = a.AbnormalType,
             TypeLabel = AbnormalService.TypeLabel(a.AbnormalType),
-            Description = a.Description.Length > 40 ? a.Description[..40] + "…" : a.Description,
+            Description = a.Description,
             OrderNo = a.WorkOrderId.HasValue ? tickerOrderNos.GetValueOrDefault(a.WorkOrderId.Value) : null,
             ReportedAt = a.ReportedAt
         }).ToList();
@@ -530,11 +556,24 @@ public class ReportStatService : IReportStatService
             TotalGood = totalGood,
             TotalDefect = totalDefect,
             DefectRate = rate,
+            MonthGood = month?.Good ?? 0,
+            MonthDefect = month?.Defect ?? 0,
             DueWarnCount = dueWarnCount,
             DueOverdueCount = dueOverdueCount,
             OpenAbnormalCount = openCount,
             AbnormalTicker = ticker,
             Orders = progress
         });
+    }
+
+    /// <summary>工序顺序上第一道计划数大于 0 且还没报满的工序。</summary>
+    private static string? FirstUnfinishedOperation(IReadOnlyList<WorkOrderProgressQuery.OpRow> ops)
+    {
+        var stuck = ops
+            .Where(o => o.PlanQty > 0 && o.Status != WorkOrderProgressCalculator.OpFull)
+            .OrderBy(o => o.Seq)
+            .ThenBy(o => o.OperationName)
+            .FirstOrDefault();
+        return string.IsNullOrWhiteSpace(stuck?.OperationName) ? null : stuck!.OperationName;
     }
 }
