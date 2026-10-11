@@ -90,3 +90,11 @@ workshop-mes/
 - 前端开发者只需掌握 Vue3 的「模板语法 + v-model + 调 API」，其余用现成组件库。
 - 异常不吞、必须抛且带上下文：SQL 出错带 SQL 原文；API 出错带 网址+报文+返回；其它带「位置+做什么失败」。统一用 `Common/ThrowHelper.cs`。
 - 命名空间统一 `ahu.MicrosoftMes`。
+
+## Cursor Cloud specific instructions
+
+- 这台机器没有 systemd。SQL Server 2022 在 Docker 容器 `workshop-mssql` 里，数据目录 `/var/lib/workshop-mes/mssql`（属主 uid 10001）。环境 `start` 把 SQL 登录连接串写到 `/home/ubuntu/.workshop-mes/dev.env` 的 `ConnectionStrings__Default`，并带上 `Encrypt=False`。集成测试读同一文件里的 `MES_TEST_DB`（库名 `WorkshopMes_Test`）。`AiReportEvidenceServiceTests` 的连接串是写死的 Windows 集成认证，在 Linux 上会失败。
+- 后端监听 `http://127.0.0.1:8080`。`dotnet build` / `dotnet run` 会调用 `powershell`，并把 `backend/version.txt` 和 `frontend/package.json` 的 patch 加 1。只想编译、不改版本号时加 `-p:SkipVersionBump=true`。
+- 前端 `npm run dev` 使用 `frontend/certs/` 里的证书，HTTPS 在 `https://127.0.0.1:5173`，`/api` 代理到 8080。
+- 演示种子账号是 `admin` / `Admin123`（见 `SeedData`）。
+- `global.json` 要求 SDK 9.0.311 及以上（`rollForward: latestMajor`）。项目目标框架是 `net8.0`，所以 `/usr/share/dotnet` 里要同时有 9.0 SDK 和 8.0 目标包。Ubuntu 软件源里的 `dotnet-sdk-9.0` 低于这个 pin，安装用 `https://dot.net/v1/dotnet-install.sh`。
