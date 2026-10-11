@@ -35,8 +35,8 @@
   --app-shadow-lg: 0 8px 24px rgba(29, 33, 41, 0.08);
 
   /* ---- PC 空间尺度（纯尺寸，不涉及业务） ---- */
-  --app-page-padding-x: 24px;
-  --app-page-padding-y: 20px;
+  --app-page-padding-x: 32px;
+  --app-page-padding-y: 28px;
   --app-section-gap: 16px;
   --app-card-padding: 20px;
   --app-control-height: 36px;
@@ -56,18 +56,18 @@
   --app-font-mono: 'SF Mono', 'Roboto Mono', Consolas, 'Courier New', monospace;
 
   /* ---- 布局尺度（简约；经典版在 theme-legacy 回退） ---- */
-  --app-aside-width: 232px;
-  --app-header-height: 60px;
+  --app-aside-width: 256px;
+  --app-header-height: 72px;
   --app-header-shadow: none;
   --app-menu-item-height: 46px;
   --app-menu-group-letter-spacing: 0.12em;
 
   /* 简约侧栏：浅灰底衬出白内容区，当前项白底加蓝边，字用深色。 */
-  --app-aside-bg: #f3f6fb;
+  --app-aside-bg: #ffffff;
   --app-aside-border: #e3e8f0;
   --app-aside-text: #1f2329;
   --app-aside-text-active: #1d4ed8;
-  --app-aside-active-bg: #ffffff;
+  --app-aside-active-bg: #edf3ff;
   --app-aside-hover-bg: #e7eef8;
   --app-aside-group-text: #86909c;
   --app-brand-gradient: linear-gradient(135deg, #3370ff 0%, #1a4db8 100%);
@@ -76,8 +76,8 @@
   --app-logo-color: var(--app-text-1);
   --app-logo-sub-color: var(--app-text-3);
   --app-logo-sub-display: block;
-  --app-logo-min-height: 76px;
-  --app-logo-padding: 0 20px;
+  --app-logo-min-height: 112px;
+  --app-logo-padding: 22px 28px;
   --app-logo-title-size: 18px;
   --app-logo-border: var(--app-border);
   --app-header-bg: #ffffff;
@@ -330,7 +330,7 @@ body.theme-legacy {
   --app-primary-border: #b1d8ff;
 
   /* 尺度 / 圆角 / 阴影回退到改版前。侧栏宽度和字距在下面的经典侧栏里单独定。 */
-  --app-header-height: 52px;
+  --app-header-height: 72px;
   --app-header-shadow: none;
   --app-radius: 10px;
   --app-radius-sm: 6px;
@@ -338,13 +338,13 @@ body.theme-legacy {
   --app-shadow-lg: 0 4px 16px rgba(29, 33, 41, 0.10);
   --el-border-radius-base: 6px;
   --el-border-radius-small: 4px;
-  --el-component-size: 32px;
+  --el-component-size: var(--app-control-height);
 
   /* 经典侧栏：深墨蓝渐变。当前项比悬停更亮，并留一条亮边。 */
-  --app-aside-width: 220px;
-  --app-menu-item-height: 44px;
+  --app-aside-width: 256px;
+  --app-menu-item-height: 46px;
   --app-menu-group-letter-spacing: 0.14em;
-  --app-aside-bg: linear-gradient(180deg, #17325c 0%, #0c1a33 46%, #081226 100%);
+  --app-aside-bg: linear-gradient(165deg, #1b3557 0%, #12243c 55%, #101d31 100%);
   --app-aside-border: rgba(255, 255, 255, 0.08);
   --app-aside-text: #d7e3f4;
   --app-aside-text-active: #ffffff;
@@ -356,9 +356,9 @@ body.theme-legacy {
   --app-logo-color: #ffffff;
   --app-logo-sub-color: #9bb0cc;
   --app-logo-sub-display: block;
-  --app-logo-min-height: 72px;
-  --app-logo-padding: 18px 20px 14px;
-  --app-logo-title-size: 17px;
+  --app-logo-min-height: 112px;
+  --app-logo-padding: 22px 28px;
+  --app-logo-title-size: 18px;
   --app-logo-border: rgba(255, 255, 255, 0.08);
   --app-header-bg: #ffffff;
   --app-login-bg: linear-gradient(135deg, #409eff, #66b1ff);
@@ -374,19 +374,45 @@ body.theme-legacy {
 }
 
 /* 简约侧栏：当前项左侧加蓝边，和浅灰底分开 */
-body:not(.theme-legacy) .el-menu-item.is-active {
+body:not(.theme-legacy) .layout .el-menu-item.is-active {
   box-shadow: inset 3px 0 0 #3370ff;
 }
 
 /* 经典侧栏：菜单透出整条渐变，当前项左侧加亮边 */
-body.theme-legacy .el-menu {
+body.theme-legacy .layout .el-menu {
   background: transparent;
 }
-body.theme-legacy .el-menu-item.is-active {
+body.theme-legacy .layout .el-menu-item.is-active {
   box-shadow: inset 3px 0 0 #8ec0ff;
 }
 body.theme-legacy .logo-title {
   letter-spacing: 0.04em;
+}
+
+/* PC 管理工作区：清晰的白色表面与适度留白，限定在布局内。 */
+@media (min-width: 769px) {
+  .layout:not(.monitor-shell) .main .toolbar {
+    padding: 18px 20px;
+    background: var(--app-card);
+    border: 1px solid var(--app-border);
+    border-radius: var(--app-radius);
+  }
+  .layout:not(.monitor-shell) .main .el-table {
+    border: 1px solid var(--app-border);
+    border-radius: var(--app-radius);
+    --el-table-header-bg-color: #f8fafc;
+    --el-table-row-hover-bg-color: #f0f5fc;
+  }
+  .layout:not(.monitor-shell) .main .el-table th.el-table__cell {
+    padding: 15px 0;
+    background: var(--el-table-header-bg-color);
+  }
+  .layout:not(.monitor-shell) .main .el-table td.el-table__cell {
+    padding: 15px 0;
+  }
+  .layout:not(.monitor-shell) .main .el-table__empty-block {
+    min-height: 160px;
+  }
 }
 
 /* 技术错误详情弹窗：长 SQL/报文可换行选中复制 */

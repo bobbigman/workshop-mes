@@ -177,6 +177,8 @@ onUnmounted(() => {
   overflow-y: auto;
   border-right: 1px solid var(--app-aside-border);
   flex-shrink: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--app-aside-group-text) transparent;
 }
 .logo {
   display: flex;
@@ -192,7 +194,8 @@ onUnmounted(() => {
 .logo-title {
   font-weight: 700;
   font-size: var(--app-logo-title-size);
-  line-height: 1.3;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 .main-wrap { min-width: 0; flex: 1; }
 .license-banner { margin: 0; border-radius: 0; }
@@ -208,7 +211,7 @@ onUnmounted(() => {
 }
 .header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .page-title {
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 600;
   color: var(--app-text-1);
   white-space: nowrap;
@@ -216,7 +219,7 @@ onUnmounted(() => {
   text-overflow: ellipsis;
 }
 .header-right { display: flex; align-items: center; flex-shrink: 0; gap: 8px; }
-.user { margin: 0 10px; color: var(--app-text-2); font-size: 14px; }
+.user { margin: 0 10px; padding-left: 18px; border-left: 1px solid var(--app-border); color: var(--app-text-2); font-size: 14px; }
 .main { background: var(--app-bg); min-width: 0; }
 
 /* 监控工作台只改顶栏和内容区。左侧菜单跟当前主题走，不在本页单独改色。 */
@@ -277,6 +280,8 @@ onUnmounted(() => {
   font-size: 12px;
   font-weight: 400;
   line-height: 1.3;
-  opacity: 0.7;
+  margin-top: 8px;
+  color: var(--app-logo-sub-color);
+  letter-spacing: 0.16em;
 }
 </style>
