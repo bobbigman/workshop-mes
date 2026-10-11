@@ -60,15 +60,15 @@
   --app-header-height: 60px;
   --app-header-shadow: none;
   --app-menu-item-height: 46px;
-  --app-menu-group-letter-spacing: 0.08em;
+  --app-menu-group-letter-spacing: 0.12em;
 
-  /* ---- 布局 / 侧边栏（供 layout/login 使用，主题切换只动这些） ---- */
-  --app-aside-bg: #ffffff;
-  --app-aside-border: #e5e6eb;
-  --app-aside-text: #4e5969;
-  --app-aside-text-active: #3370ff;
-  --app-aside-active-bg: #e8eeff;
-  --app-aside-hover-bg: #f5f6f8;
+  /* 简约侧栏：浅灰底衬出白内容区，当前项白底加蓝边，字用深色。 */
+  --app-aside-bg: #f3f6fb;
+  --app-aside-border: #e3e8f0;
+  --app-aside-text: #1f2329;
+  --app-aside-text-active: #1d4ed8;
+  --app-aside-active-bg: #ffffff;
+  --app-aside-hover-bg: #e7eef8;
   --app-aside-group-text: #86909c;
   --app-brand-gradient: linear-gradient(135deg, #3370ff 0%, #1a4db8 100%);
   /* 默认简约主题：Logo 跟侧栏同色，不铺品牌渐变。经典版在 theme-legacy 里单独覆盖。 */
@@ -329,12 +329,9 @@ body.theme-legacy {
   --app-primary-light: #ecf5ff;
   --app-primary-border: #b1d8ff;
 
-  /* 尺度 / 圆角 / 阴影回退到改版前 */
-  --app-aside-width: 200px;
+  /* 尺度 / 圆角 / 阴影回退到改版前。侧栏宽度和字距在下面的经典侧栏里单独定。 */
   --app-header-height: 52px;
   --app-header-shadow: none;
-  --app-menu-item-height: 42px;
-  --app-menu-group-letter-spacing: normal;
   --app-radius: 10px;
   --app-radius-sm: 6px;
   --app-shadow: 0 1px 4px rgba(29, 33, 41, 0.06);
@@ -343,23 +340,26 @@ body.theme-legacy {
   --el-border-radius-small: 4px;
   --el-component-size: 32px;
 
-  /* 深色侧边栏；logo 无品牌渐变条 */
-  --app-aside-bg: #0e1b33;
-  --app-aside-border: #1c2c4a;
-  --app-aside-text: #cfd8e8;
+  /* 经典侧栏：深墨蓝渐变。当前项比悬停更亮，并留一条亮边。 */
+  --app-aside-width: 220px;
+  --app-menu-item-height: 44px;
+  --app-menu-group-letter-spacing: 0.14em;
+  --app-aside-bg: linear-gradient(180deg, #17325c 0%, #0c1a33 46%, #081226 100%);
+  --app-aside-border: rgba(255, 255, 255, 0.08);
+  --app-aside-text: #d7e3f4;
   --app-aside-text-active: #ffffff;
-  --app-aside-active-bg: #1c2c4a;
-  --app-aside-hover-bg: #1c2c4a;
-  --app-aside-group-text: #6b7c99;
+  --app-aside-active-bg: #1b447a;
+  --app-aside-hover-bg: #14345f;
+  --app-aside-group-text: #8ea4c4;
   --app-brand-gradient: none;
   --app-logo-bg: transparent;
   --app-logo-color: #ffffff;
-  --app-logo-sub-color: transparent;
-  --app-logo-sub-display: none;
-  --app-logo-min-height: 0;
-  --app-logo-padding: 18px 16px;
-  --app-logo-title-size: 16px;
-  --app-logo-border: #1c2c4a;
+  --app-logo-sub-color: #9bb0cc;
+  --app-logo-sub-display: block;
+  --app-logo-min-height: 72px;
+  --app-logo-padding: 18px 20px 14px;
+  --app-logo-title-size: 17px;
+  --app-logo-border: rgba(255, 255, 255, 0.08);
   --app-header-bg: #ffffff;
   --app-login-bg: linear-gradient(135deg, #409eff, #66b1ff);
 
@@ -371,6 +371,22 @@ body.theme-legacy {
   --el-color-primary-light-8: #c6e2ff;
   --el-color-primary-light-9: #ecf5ff;
   --el-color-primary-dark-2: #337ecc;
+}
+
+/* 简约侧栏：当前项左侧加蓝边，和浅灰底分开 */
+body:not(.theme-legacy) .el-menu-item.is-active {
+  box-shadow: inset 3px 0 0 #3370ff;
+}
+
+/* 经典侧栏：菜单透出整条渐变，当前项左侧加亮边 */
+body.theme-legacy .el-menu {
+  background: transparent;
+}
+body.theme-legacy .el-menu-item.is-active {
+  box-shadow: inset 3px 0 0 #8ec0ff;
+}
+body.theme-legacy .logo-title {
+  letter-spacing: 0.04em;
 }
 
 /* 技术错误详情弹窗：长 SQL/报文可换行选中复制 */

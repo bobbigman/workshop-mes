@@ -219,20 +219,9 @@ onUnmounted(() => {
 .user { margin: 0 10px; color: var(--app-text-2); font-size: 14px; }
 .main { background: var(--app-bg); min-width: 0; }
 
-/* 监控工作台：深蓝导航只作用于本页，其他业务页保留现有主题。 */
+/* 监控工作台只改顶栏和内容区。左侧菜单跟当前主题走，不在本页单独改色。 */
 .monitor-shell {
   --app-aside-width: 196px;
-  --app-aside-bg: #092748;
-  --app-aside-border: #123558;
-  --app-aside-text: #c1d0e2;
-  --app-aside-text-active: #fff;
-  --app-aside-active-bg: #246fe5;
-  --app-aside-hover-bg: #153a60;
-  --app-aside-group-text: #6e90b3;
-  --app-logo-bg: #092748;
-  --app-logo-color: #fff;
-  --app-logo-sub-color: #7b9abb;
-  --app-logo-border: #163655;
   --app-logo-min-height: 66px;
   --app-menu-item-height: 40px;
   --app-header-bg: #092748;
