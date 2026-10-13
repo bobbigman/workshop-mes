@@ -72,6 +72,7 @@ import SideMenu from './SideMenu.vue'
 import PageHelp from '@/components/PageHelp.vue'
 import { getInstanceInfo, getLicenseStatus } from '@/api/auth'
 import { resolveInstanceLabel, PRODUCT_TITLE } from '@/utils/instanceDisplay'
+import { LOGIN_FACTORY_KEY, rememberLoginFactory } from '@/utils/loginAppearance'
 
 const router = useRouter()
 const route = useRoute()
@@ -131,7 +132,9 @@ function toggleTheme() {
 }
 
 function onLogout() {
+  const appearanceCode = localStorage.getItem('factoryCode') || localStorage.getItem(LOGIN_FACTORY_KEY)
   localStorage.clear()
+  rememberLoginFactory(appearanceCode)
   router.push('/login')
 }
 

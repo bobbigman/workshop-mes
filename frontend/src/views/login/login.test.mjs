@@ -4,7 +4,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 const source = readFileSync(new URL('./index.vue', import.meta.url), 'utf8')
-const handler = source.slice(source.indexOf('async function onLogin()'), source.indexOf('</script>'))
+const handler = source.slice(source.indexOf('function applyLoginSession(data)'), source.indexOf('</script>'))
 
 function page(navigate, redirect) {
   const messages = [], paths = [], storage = new Map()
@@ -17,6 +17,7 @@ function page(navigate, redirect) {
   const context = vm.createContext({
     loading: { value: false },
     clearing: { value: false },
+    rememberLoginFactory: () => {},
     showFactorySelect: { value: false },
     formRef: { value: null },
     form: { value: { account: 'test', password: 'test', factoryCode: '' } },
@@ -81,4 +82,36 @@ test('保留扫码登录后的站内报工回跳', async () => {
   await p.context.onLogin()
   assert.deepEqual(p.paths, ['/h5/report?order=GD20260925005'])
   assert.equal(p.messages[0][0], 'success')
+})
+
+test('手机首次打开不请求背景配置也不设置图片地址', async () => {
+  const background = source.slice(source.indexOf('const DEFAULT_BANNER'), source.indexOf('function sleep(ms)'))
+  let requests = 0
+  const context = vm.createContext({
+    ref: value => ({ value }),
+    window: { matchMedia: () => ({ matches: true }) },
+    onUnmounted: () => {},
+    getLoginSetting: async () => { requests++; return { data: { bannerUrl: '/uploads/login/5.webp?v=1' } } }
+  })
+  vm.runInContext(background, context)
+  await context.loadBanner('SUN')
+  assert.equal(requests, 0)
+  assert.equal(vm.runInContext('bannerUrl.value', context), '')
+})
+
+test('电脑背景请求中切到手机，迟到响应不能触发大图加载', async () => {
+  const background = source.slice(source.indexOf('const DEFAULT_BANNER'), source.indexOf('function sleep(ms)'))
+  let finish
+  const context = vm.createContext({
+    ref: value => ({ value }),
+    window: { matchMedia: () => ({ matches: false }) },
+    onUnmounted: () => {},
+    getLoginSetting: () => new Promise(resolve => { finish = resolve })
+  })
+  vm.runInContext(background, context)
+  const pending = context.loadBanner('SUN')
+  context.onViewportChange({ matches: true })
+  finish({ data: { bannerUrl: '/uploads/login/5.webp?v=1' } })
+  await pending
+  assert.equal(vm.runInContext('bannerUrl.value', context), '')
 })
