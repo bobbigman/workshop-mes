@@ -1,0 +1,20 @@
+# 部署更新铁律
+
+## 已上线机
+
+- **只用** `publish-update` + `apply-update.bat`。
+- **禁止**用整包 `publish-win64` 覆盖生产目录。
+- **永不覆盖**：`appsettings*.json`、`start.bat`、`stop.bat`、`certs\`、`logs\`、自包含的 `WorkshopMes.exe` / `*.runtimeconfig.json` / `*.deps.json`。
+- 日常只覆盖：`wwwroot\`、`*.dll`（及可选 `web.config`）。
+- 新配置项：只合并新键，不动服务器旧值；记入更新说明。
+
+## 首次安装（空目录）
+
+可用整包 `publish-win64`；拷进去的配置即该机定稿，之后改走上面「已上线机」规则。
+
+## 权威出处
+
+- `DEPLOYMENT_NOTES.md`
+- `docs/59-执行指令-部署更新铁律-appsettings不覆盖.md`
+- 脚本：`backend/pack-update.ps1`、`backend/apply-update.bat`
+- 技能：`workshop-mes-deploy`

@@ -124,11 +124,11 @@ function onClose(index) {
 </script>
 
 <style scoped>
-.el-menu { background: var(--app-aside-bg); border-right: none; }
+.el-menu { background: transparent; border-right: none; padding: 8px 0 20px; }
 :deep(.el-menu-item) {
   color: var(--app-aside-text);
   border-radius: var(--app-radius-sm);
-  margin: 0 12px;
+  margin: 3px 14px;
   height: var(--app-menu-item-height);
   line-height: var(--app-menu-item-height);
   padding: 0 16px !important;
@@ -139,7 +139,7 @@ function onClose(index) {
   color: var(--app-aside-text-active);
   font-weight: 600;
 }
-:deep(.el-menu-item:hover) { background: var(--app-aside-hover-bg); }
+:deep(.el-menu-item:not(.is-active):hover) { background: var(--app-aside-hover-bg); }
 :deep(.el-sub-menu__title) {
   color: var(--app-aside-group-text);
   font-size: 12px;

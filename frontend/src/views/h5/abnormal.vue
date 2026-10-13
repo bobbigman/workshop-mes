@@ -22,8 +22,9 @@
 
     <label class="field">
       <span>问题描述</span>
-      <textarea v-model="form.description" rows="4" maxlength="500" placeholder="简要说明现场情况" />
+      <textarea v-model="form.description" rows="4" maxlength="500" placeholder="简要说明现场情况；涉及交期或恢复时间，请写具体日期" aria-describedby="abnormal-date-hint" />
     </label>
+    <p id="abnormal-date-hint" class="date-hint">日期请写年月日，例如 2026-10-13，避免用“今日／明日”，方便后续查看。</p>
 
     <label class="field">
       <span>关联工单号（可选）</span>
@@ -136,6 +137,7 @@ async function onSubmit() {
   border: 1px solid var(--app-border); border-radius: 8px; font-size: 15px;
   background: var(--app-card); color: var(--app-text-1);
 }
+.date-hint { margin: -6px 0 14px; color: var(--app-text-3); font-size: 13px; line-height: 1.5; }
 .preview { margin-top: 8px; }
 .preview img { max-width: 100%; max-height: 180px; border-radius: 8px; }
 .submit {
