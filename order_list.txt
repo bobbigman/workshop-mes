@@ -1,0 +1,175 @@
+﻿账套: HY伞业 (HY001)  工具: query_work_order
+{
+  "code": 0,
+  "total": 2,
+  "list": [
+    {
+      "id": 23,
+      "orderNo": "A0002",
+      "productCode": "HY-001",
+      "productName": "三折晴雨伞（黑胶防紫外线）",
+      "qty": 200,
+      "planQty": 200,
+      "doneQty": 0,
+      "remainQty": 200,
+      "progressPercent": 0,
+      "progressHint": null,
+      "status": 1,
+      "dueDate": "2026-10-30T00:00:00",
+      "dueState": "normal",
+      "createdAt": "2026-10-06T01:19:11.2998457",
+      "ops": [
+        {
+          "operationName": "裁布",
+          "planQty": 200,
+          "doneQty": 100
+        },
+        {
+          "operationName": "包边",
+          "planQty": 200,
+          "doneQty": 0
+        },
+        {
+          "operationName": "面料检验",
+          "planQty": 200,
+          "doneQty": 0
+        },
+        {
+          "operationName": "三角片裁切",
+          "planQty": 200,
+          "doneQty": 0
+        },
+        {
+          "operationName": "丝网印刷",
+          "planQty": 200,
+          "doneQty": 0
+        },
+        {
+          "operationName": "车缝",
+          "planQty": 200,
+          "doneQty": 0
+        },
+        {
+          "operationName": "固定绑带",
+          "planQty": 200,
+          "doneQty": 0
+        },
+        {
+          "operationName": "上伞帽",
+          "planQty": 200,
+          "doneQty": 0
+        },
+        {
+          "operationName": "装伞头珠",
+          "planQty": 200,
+          "doneQty": 0
+        },
+        {
+          "operationName": "缝制",
+          "planQty": 200,
+          "doneQty": 0
+        },
+        {
+          "operationName": "质检",
+          "planQty": 200,
+          "doneQty": 0
+        },
+        {
+          "operationName": "装伞柄",
+          "planQty": 200,
+          "doneQty": 0
+        },
+        {
+          "operationName": "包装",
+          "planQty": 200,
+          "doneQty": 0
+        }
+      ],
+      "ext": {}
+    },
+    {
+      "id": 22,
+      "orderNo": "A0001",
+      "productCode": "HY-001",
+      "productName": "三折晴雨伞（黑胶防紫外线）",
+      "qty": 600,
+      "planQty": 600,
+      "doneQty": 0,
+      "remainQty": 600,
+      "progressPercent": 0,
+      "progressHint": null,
+      "status": 1,
+      "dueDate": "2026-10-04T00:00:00",
+      "dueState": "overdue",
+      "createdAt": "2026-10-05T14:18:08.5587711",
+      "ops": [
+        {
+          "operationName": "裁布",
+          "planQty": 50,
+          "doneQty": 50
+        },
+        {
+          "operationName": "包边",
+          "planQty": 50,
+          "doneQty": 50
+        },
+        {
+          "operationName": "面料检验",
+          "planQty": 50,
+          "doneQty": 50
+        },
+        {
+          "operationName": "三角片裁切",
+          "planQty": 50,
+          "doneQty": 50
+        },
+        {
+          "operationName": "丝网印刷",
+          "planQty": 50,
+          "doneQty": 49
+        },
+        {
+          "operationName": "车缝",
+          "planQty": 50,
+          "doneQty": 49
+        },
+        {
+          "operationName": "固定绑带",
+          "planQty": 50,
+          "doneQty": 49
+        },
+        {
+          "operationName": "上伞帽",
+          "planQty": 50,
+          "doneQty": 49
+        },
+        {
+          "operationName": "装伞头珠",
+          "planQty": 50,
+          "doneQty": 49
+        },
+        {
+          "operationName": "缝制",
+          "planQty": 50,
+          "doneQty": 49
+        },
+        {
+          "operationName": "质检",
+          "planQty": 50,
+          "doneQty": 0
+        },
+        {
+          "operationName": "装伞柄",
+          "planQty": 50,
+          "doneQty": 48
+        },
+        {
+          "operationName": "包装",
+          "planQty": 50,
+          "doneQty": 48
+        }
+      ],
+      "ext": {}
+    }
+  ]
+}

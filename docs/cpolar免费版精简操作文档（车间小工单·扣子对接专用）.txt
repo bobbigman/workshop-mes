@@ -1,0 +1,36 @@
+# cpolar免费版精简操作文档（车间小工单·扣子对接专用）
+## 一、首次绑定账号（仅一次）
+1. 官网dashboard.cpolar.com→验证，复制Authtoken
+2. 管理员CMD执行：`cpolar authtoken 你的token`
+3. 提示保存yml即完成；认证报错则官网重置token、删除.cpolar/cpolar.yml重绑
+
+## 二、搭建8080网页穿透隧道
+1. 打开本地面板：[http://localhost:9200](http://localhost:9200)
+2. 隧道管理→创建/编辑
+    名称：车间小工单｜协议：http｜本地地址：127.0.0.1:8080
+    域名：随机域名｜地区：China Top
+    本地服务是https自签证书→高级勾选【本地HTTPS】
+3. 更新保存，隧道列表点启动
+4. 状态-在线隧道列表，复制**不带端口**的https域名：[https://xxx.r18.cpolar.top](https://xxx.r18.cpolar.top)
+
+## 三、快速启停命令（CMD）
+```
+启动全部隧道：cpolar start-all
+停止全部隧道：cpolar stop-all
+重启服务：net stop cpolar && net start cpolar
+```
+
+## 四、扣子平台填写规范
+1. 基础地址：仅粘贴cpolar的https域名，**严禁加:端口**
+2. 接口路径：只用后端接口，删除#/login这类前端哈希路由
+3. 超时设90秒，免费版延迟高
+
+## 五、高频故障速修
+1. ERR_CONNECTION_REFUSED：删掉URL端口号；本地https则隧道开启【本地HTTPS】重启隧道
+2. Token认证失败：官网重置token，下线多余在线设备（免费限2台）
+3. 浏览器能打开、扣子调不通：本地服务切HTTP，由cpolar对外提供可信HTTPS
+
+## 六、免费版关键规则
+1. 随机域名24小时自动更换，次日需重新复制域名
+2. 上限4条隧道、2台设备同时在线
+3. 测试结束及时关闭隧道，避免公网长期暴露业务系统

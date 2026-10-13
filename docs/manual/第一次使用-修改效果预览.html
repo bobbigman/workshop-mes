@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>《第一次使用》修改效果预览</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #f2f3f5; color: #1f2329; line-height: 1.8; }
+  .preview-bar { background: #ffe9a8; color: #7a5b00; padding: 10px 20px; font-size: 14px; text-align: center; border-bottom: 2px dashed #d4a900; }
+  .container { max-width: 860px; margin: 24px auto 60px; background: #fff; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,.08); padding: 40px 56px; }
+  h1 { font-size: 26px; margin-bottom: 8px; }
+  .meta { color: #888; font-size: 13px; margin-bottom: 24px; border-bottom: 1px solid #eee; padding-bottom: 16px; }
+  h2 { font-size: 19px; margin: 28px 0 10px; padding-left: 10px; border-left: 4px solid #3370ff; }
+  p { margin: 10px 0; }
+  ol, ul { margin: 10px 0 10px 26px; }
+  li { margin: 6px 0; }
+  b, strong { color: #1f2329; }
+  .hl { background: #fff3bf; border-radius: 3px; padding: 1px 3px; }
+  .tag { display: inline-block; background: #3370ff; color: #fff; font-size: 11px; border-radius: 8px; padding: 0 8px; margin-left: 6px; vertical-align: middle; }
+  .legend { background: #f7f8fa; border: 1px solid #e5e6eb; border-radius: 6px; padding: 12px 16px; margin-bottom: 20px; font-size: 13px; color: #646a73; }
+  .legend b { color: #3370ff; }
+</style>
+</head>
+<body>
+  <div class="preview-bar">⚠ 效果预览（模拟帮助页面样式）—— 修改尚未写入正式文档，黄色底为改动点</div>
+  <div class="container">
+    <div class="legend">本次共改动 4 处：① 版本行去掉开发腔 ② “不能通过聊天指定工厂”安全腔精简 ③ 演示免责声明 3 句缩成 1 句 ④ “点图放大”提示从免责段挪到“怎么查这本手册”。</div>
+
+    <h1>第一次使用</h1>
+    <div class="meta">手册版本 1.1，更新于 2026-09-20。<span class="hl">按当前系统界面核对。</span><span class="tag">改①</span></div>
+
+    <h2>先看懂每天要做什么</h2>
+    <p><b>电脑下工单、打印二维码 → 工人扫码报数量 → 管理员复核、看进度</b>。</p>
+    <p>工单就是“这次做什么、做多少”；工序是“一步活”；工艺路线是“这些活按什么顺序做”；报工是“记下这次实际做的数量”。</p>
+    <ul>
+      <li>管理员：建人建资料、下单打印、查进度、处理错数和补报。</li>
+      <li>班组长：报工、复核本组、看工单和生产报表，不能改基础资料。</li>
+      <li>生产人员：手机/PDA 找工单、选工序、报本次数量。</li>
+    </ul>
+    <p>先跑通一张单，再逐步启用工资、AI 等功能。</p>
+    <p><span class="hl">登录后看到的是本厂数据；要看另一家工厂的资料，需使用获授权的对应系统和账号。</span><span class="tag">改②</span></p>
+    <p><span class="hl">图中的菜品、工序是演示示例，按本厂真实产品、工序操作即可。</span><span class="tag">改③</span></p>
+
+    <h2>登录前准备什么</h2>
+    <p>管理员提供本厂系统地址和个人账号。电脑、手机、PDA 连上能访问服务器的工厂网络。</p>
+    <ol>
+      <li>浏览器打开系统地址。</li>
+      <li>填【账号】【密码】，点【登录】，当前不填工厂代码。</li>
+      <li>核对系统名称和角色。生产人员进入手机工单页；管理员、班组长进入电脑工单页。</li>
+    </ol>
+    <p>做完怎么看：能打开对应工单页面。忘记密码找管理员，当前手机没有自助重置入口。</p>
+    <p>网页打不开先查网络、地址和服务器；提示密码错误再核对账号。不要反复重建用户。</p>
+
+    <h2>第一次配置的顺序</h2>
+    <p>谁来做：管理员。已有正确资料直接使用，不重复建立。</p>
+    <ol>
+      <li>【系统配置 → 用户】：先建工人、班组长账号。</li>
+      <li>【系统配置 → 部门】：建立部门，在【成员】里选人员。</li>
+      <li>【基础数据 → 单位】：建“件”“张”等单位。</li>
+      <li>【基础数据 → 不良品项】：建“划伤”“尺寸不合格”等原因。</li>
+      <li>【基础数据 → 工序】：建裁切、检验、包装等，选报工部门和不良品项。</li>
+      <li>【基础数据 → 工艺路线】：按实际顺序逐行选工序并保存。</li>
+      <li>【基础数据 → 产品定义】：填唯一编号，选单位和路线后保存。</li>
+    </ol>
+    <p>做完怎么看：产品对应正确路线、工序；每道工序允许实际操作者所在部门报工。</p>
+    <p>先建用户是因为部门页面从已有人员中选成员；用户页面没有选部门的字段。也可先建空部门，但之后还要补成员。</p>
+
+    <h2>跑通第一张工单</h2>
+    <p>先在明确的测试环境，用负责人同意的产品练习。以下 10 件只是演示数量，不要在正式账上虚报。</p>
+    <ol>
+      <li>管理员进【工单】，点【+ 创建工单】，选产品，填数量 10，保存并记工单号。</li>
+      <li>点【详情】检查工序计划，再【打印】检查流转卡预览。没设备可先手动输入工单号练习。</li>
+      <li>工人用自己的账号找到该单，选第一道工序，按实际测试方案报本次数量。</li>
+      <li>成功后管理员查【报工】核对人员、数量，再到【报工复核】核对通过。</li>
+      <li>逐道完成，再查【工单 → 详情】和【生产报表】。第一道报完、后道未报时，整单完成数仍可能为 0。</li>
+    </ol>
+    <p>做完怎么看：同一工单从创建、打印预览、报工一路查到复核和进度。工序全报满可自动结束；复核是否通过另查。</p>
+    <p>正式使用前用真实打印机、标签纸和 PDA 扫一次，屏幕预览不代替设备验收。</p>
+
+    <h2>怎么查这本手册</h2>
+    <p>电脑从【帮助 → 操作手册】打开；手机/PDA 点底部【帮助】；登录页也可点【操作手册】。</p>
+    <ol>
+      <li>新人看“第一次使用”；管理动作看“电脑日常操作”；工人看“手机/PDA 报工”。</li>
+      <li>搜“补报”“改数”“扫码”等词，会查标题和正文。多个词用空格分开，例如“报工 复核”。</li>
+      <li>点结果打开章节。发给同事时复制浏览器当前地址，同事需能访问同一系统地址。</li>
+      <li><span class="hl">正文配图下方注明了要看和要点的地方，点图可放大。</span><span class="tag">改④</span></li>
+      <li>没找到可清空搜索、换短关键词，或看“遇到问题”。</li>
+    </ol>
+    <p>手册随系统提供，不依赖 AI 或公网；阅读仍需能访问工厂服务器。内容更新和截图应随系统版本一起发布。</p>
+  </div>
+</body>
+</html>
