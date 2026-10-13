@@ -9,9 +9,59 @@ if (!appVersion) {
   throw new Error('[vite] package.json 的 version 不能为空（登录页角落要显示真实版本号）')
 }
 
+// 百度浏览器会在 Vite 开发客户端注册错误浮层、或给 import.meta.hot 赋值时抛 TypeError，
+// 模块图整段失败，登录页停在 BOOT-ASYNC。手机自带浏览器和电脑没有这个问题。
+const baiduDevBootPatch = `<script>(function(){var root=typeof globalThis!=="undefined"?globalThis:window;if(typeof root.HTMLElement!=="function"&&typeof window.HTMLElement==="function"){try{root.HTMLElement=window.HTMLElement}catch(e){}}var registry=window.customElements;if(!registry||typeof registry.define!=="function")return;var nativeDefine=registry.define.bind(registry);function safeDefine(name,ctor,options){try{return nativeDefine(name,ctor,options)}catch(err){if(window.console&&console.warn)console.warn("[startup] 自定义元素注册失败，已跳过",name,err&&(err.message||err.name))}}try{registry.define=safeDefine}catch(e){}})();</script>`
+
+function patchBaiduHot(code) {
+  const cut = code.indexOf('//# sourceMappingURL')
+  const head = cut >= 0 ? code.slice(0, cut) : code
+  const tail = cut >= 0 ? code.slice(cut) : ''
+  if (head.indexOf('import.meta.hot') === -1) return code
+  let next = head.replace(
+    /import\.meta\.hot = __vite__createHotContext\(([\s\S]*?)\);/g,
+    'try{import.meta.hot=__vite__createHotContext($1)}catch(e){}'
+  )
+  next = next.replace(
+    /(^|[^&])import\.meta\.hot\.(on|accept|dispose|prune|invalidate)\(/g,
+    '$1import.meta.hot&&import.meta.hot.$2('
+  )
+  return next + tail
+}
+
+function baiduDevCompatPlugin() {
+  return {
+    name: 'baidu-dev-compat',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html) {
+        const client = '<script type="module" src="/@vite/client"></script>'
+        if (!html.includes(client)) return html
+        return html.replace(client, baiduDevBootPatch + client)
+      }
+    },
+    // import.meta.hot 赋值是 Vite 在所有插件之后才塞进模块的，只能改最终响应。
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const origEnd = res.end
+        res.end = function (chunk, encoding, cb) {
+          const type = String(res.getHeader('content-type') || '')
+          if ((typeof chunk === 'string' || Buffer.isBuffer(chunk)) && type.includes('javascript')) {
+            const text = Buffer.isBuffer(chunk) ? chunk.toString('utf8') : chunk
+            const patched = patchBaiduHot(text)
+            if (patched !== text) chunk = Buffer.isBuffer(chunk) ? Buffer.from(patched) : patched
+          }
+          return origEnd.call(this, chunk, encoding, cb)
+        }
+        next()
+      })
+    }
+  }
+}
+
 // 【业务背景】局域网部署：开发时代理到后端 API，生产构建出静态 dist/ 由 IIS/Nginx 托管。
 export default defineConfig(({ mode }) => ({
-  plugins: [vue()],
+  plugins: [vue(), baiduDevCompatPlugin()],
   define: {
     // 登录页角落版本：读 package.json version，发版改 version 即自动变（禁止写死 / 禁止空串）
     __APP_VERSION__: JSON.stringify(appVersion)
@@ -32,13 +82,15 @@ export default defineConfig(({ mode }) => ({
     proxy: {
       // 默认连 WorkShop（WorkshopMes:8080）；npm run dev:b 连 WorkShopB（WorkshopMesB:8081）
       '/api': {
-        target: mode === 'b' ? 'http://127.0.0.1:8081' : 'http://127.0.0.1:8080',
-        changeOrigin: true
+        target: mode === 'b' ? 'http://127.0.0.1:8081' : 'https://127.0.0.1:8080',
+        changeOrigin: true,
+        secure: mode === 'b'
       },
       // 登录页 banner 等上传静态文件（docs/69）；开发态不代理会 404 破图
       '/uploads': {
-        target: mode === 'b' ? 'http://127.0.0.1:8081' : 'http://127.0.0.1:8080',
-        changeOrigin: true
+        target: mode === 'b' ? 'http://127.0.0.1:8081' : 'https://127.0.0.1:8080',
+        changeOrigin: true,
+        secure: mode === 'b'
       }
     }
   }

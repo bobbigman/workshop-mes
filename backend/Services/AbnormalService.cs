@@ -10,6 +10,7 @@ namespace ahu.MicrosoftMes.Services;
 public interface IAbnormalService
 {
     Task<ApiResult<object?>> CreateAsync(AbnormalCreateForm form, long userId, long factoryId);
+    Task<ApiResult<List<AbnormalHandlerDto>>> HandlersAsync(long factoryId);
     Task<ApiResult<PageResult<AbnormalListDto>>> QueryAsync(AbnormalQueryDto query, long factoryId);
     Task<ApiResult<object?>> ResolveAsync(long id, AbnormalResolveDto dto, long userId, long factoryId);
 }
@@ -19,7 +20,15 @@ public class AbnormalCreateForm
     public byte Type { get; set; }
     public string Description { get; set; } = "";
     public long? WorkOrderId { get; set; }
+    /// <summary>上报时指定的处理人，可空（docs/228）。</summary>
+    public long? HandlerUserId { get; set; }
     public IFormFile? Image { get; set; }
+}
+
+public class AbnormalHandlerDto
+{
+    public long Id { get; set; }
+    public string Name { get; set; } = "";
 }
 
 public class AbnormalResolveDto
@@ -106,6 +115,16 @@ public class AbnormalService : IAbnormalService
                 throw ThrowHelper.Biz(nameof(CreateAsync), "关联工单不存在");
         }
 
+        long? assignHandlerId = null;
+        if (form.HandlerUserId is > 0)
+        {
+            var handlerOk = await _db.Users.AsNoTracking()
+                .AnyAsync(u => u.Id == form.HandlerUserId.Value && u.FactoryId == factoryId && u.Status == 1);
+            if (!handlerOk)
+                throw ThrowHelper.Biz(nameof(CreateAsync), "指定处理人不存在或已停用");
+            assignHandlerId = form.HandlerUserId.Value;
+        }
+
         string? imagePath = null;
         if (form.Image != null && form.Image.Length > 0)
             imagePath = await SaveImageAsync(form.Image, factoryId);
@@ -118,6 +137,7 @@ public class AbnormalService : IAbnormalService
             ImagePath = imagePath,
             WorkOrderId = form.WorkOrderId,
             ReportedBy = userId,
+            AssignHandlerUserId = assignHandlerId,
             ReportedAt = DateTime.Now,
             Status = 0
         };
@@ -132,6 +152,16 @@ public class AbnormalService : IAbnormalService
         }
         await tx.CommitAsync();
         return ApiResult<object?>.OkMsg();
+    }
+
+    public async Task<ApiResult<List<AbnormalHandlerDto>>> HandlersAsync(long factoryId)
+    {
+        var list = await _db.Users.AsNoTracking()
+            .Where(u => u.FactoryId == factoryId && u.Status == 1)
+            .OrderBy(u => u.Name)
+            .Select(u => new AbnormalHandlerDto { Id = u.Id, Name = u.Name })
+            .ToListAsync();
+        return ApiResult<List<AbnormalHandlerDto>>.Ok(list);
     }
 
     public async Task<ApiResult<PageResult<AbnormalListDto>>> QueryAsync(AbnormalQueryDto query, long factoryId)

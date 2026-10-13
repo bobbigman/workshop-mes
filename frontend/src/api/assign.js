@@ -4,6 +4,7 @@ import http from './http'
 export const myTasks = () => http.get('/Assign/my-tasks')
 export const assignWorkers = () => http.get('/Assign/workers')
 export const assignDepartments = (taskId) => http.get(`/Assign/departments/${taskId}`)
+export const assignSuggest = (taskId) => http.get(`/Assign/suggest/${taskId}`)
 
 /**
  * @param {number} taskId

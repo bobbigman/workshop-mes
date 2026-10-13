@@ -22,6 +22,11 @@ public class AbnormalController : ControllerBase
     public Task<ApiResult<PageResult<AbnormalListDto>>> Query([FromQuery] AbnormalQueryDto q) =>
         _svc.QueryAsync(q, JwtHelper.GetFactoryId(User));
 
+    /// <summary>上报时可选的处理人：本厂启用用户，只回 id 与姓名（docs/228）。</summary>
+    [HttpGet("handlers")]
+    public Task<ApiResult<List<AbnormalHandlerDto>>> Handlers() =>
+        _svc.HandlersAsync(JwtHelper.GetFactoryId(User));
+
     [HttpPost("{id:long}/resolve")]
     public Task<ApiResult<object?>> Resolve(long id, [FromBody] AbnormalResolveDto dto)
     {

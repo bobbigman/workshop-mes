@@ -13,19 +13,24 @@
     detail.textContent = code;
     retry.hidden = false;
   }
+  function brief(err) {
+    var name = (err && err.name) || 'Error';
+    var msg = err && err.message ? String(err.message) : '';
+    msg = msg.replace(/https?:\/\/\S+/g, '').replace(/\s+/g, ' ').trim();
+    if (msg.length > 60) msg = msg.slice(0, 60);
+    return msg ? (name + '：' + msg) : name;
+  }
   function onError(event) {
     var target = event.target;
     if (target && target.tagName === 'SCRIPT') {
       show('启动脚本加载失败（BOOT-RESOURCE）');
     } else if (event.message) {
-      // 不展示原始报文/网址，避免业务信息泄露；详细原因仍在控制台。
-      var kind = event.error && event.error.name || 'Error';
-      show('浏览器执行失败（BOOT-SCRIPT / ' + kind + '）');
+      // 只留异常类型和短句，去掉网址，避免把接口地址摊在页面上。
+      show('浏览器执行失败（BOOT-SCRIPT / ' + brief(event.error || { name: 'Error', message: event.message }) + '）');
     }
   }
   function onRejection(event) {
-    var kind = event.reason && event.reason.name || 'Error';
-    show('页面初始化失败（BOOT-ASYNC / ' + kind + '）');
+    show('页面初始化失败（BOOT-ASYNC / ' + brief(event.reason) + '）');
   }
   retry.onclick = function () {
     var url = new URL(window.location.href);

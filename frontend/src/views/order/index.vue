@@ -47,13 +47,18 @@
       <el-button v-if="isAdmin && canPrint" @click="printSettingDlg = true">打印设置</el-button>
     </div>
 
-    <el-tabs v-model="statusTab" class="status-tabs" @tab-change="onStatusChange">
-      <el-tab-pane :label="`全部 ${counts.all}`" name="" />
-      <el-tab-pane :label="`未开始 ${counts.notStarted}`" name="0" />
-      <el-tab-pane :label="`执行中 ${counts.doing}`" name="1" />
-      <el-tab-pane :label="`已结束 ${counts.done}`" name="2" />
-      <el-tab-pane :label="`已取消 ${counts.cancelled}`" name="3" />
-    </el-tabs>
+    <div class="status-tabs" role="tablist" aria-label="工单状态">
+      <button
+        v-for="t in statusTabs"
+        :key="t.key || 'all'"
+        type="button"
+        class="status-tab"
+        role="tab"
+        :class="{ active: statusTab === t.key }"
+        :aria-selected="statusTab === t.key"
+        @click="onStatusTab(t.key)"
+      >{{ t.label }} {{ t.count }}</button>
+    </div>
 
     <!-- 桌面：表格；手机：卡片，避免窄屏挤成碎字 -->
     <el-table class="pc-table" :data="list">
@@ -173,7 +178,7 @@
     </el-dialog>
 
     <!-- 详情 -->
-    <el-dialog v-model="detailDlg" title="工单详情" width="620px">
+    <el-dialog v-model="detailDlg" title="工单详情" width="760px">
       <el-descriptions :column="2">
         <el-descriptions-item label="工单号">{{ detail.orderNo }}</el-descriptions-item>
         <el-descriptions-item label="产品">{{ detail.productName }}</el-descriptions-item>
@@ -188,9 +193,25 @@
         <el-table-column prop="operationName" label="工序" />
         <el-table-column prop="planQty" label="计划" width="80" />
         <el-table-column prop="doneQty" label="已报良品" width="100" />
-        <el-table-column v-if="canAssign" label="派工" min-width="220">
+        <el-table-column v-if="canAssign" label="派工" min-width="260">
           <template #default="{ row }">
             <div v-if="row.id" class="assign-cell">
+              <div v-if="suggestMap[row.id]?.length" class="assign-suggest">
+                <div class="assign-suggest-title">推荐派给谁</div>
+                <div class="assign-suggest-list">
+                  <button
+                    v-for="(s, i) in suggestMap[row.id]"
+                    :key="s.userId"
+                    type="button"
+                    class="assign-suggest-item"
+                    :class="{ top: i === 0 }"
+                    @click="onPickSuggest(row, s.userId)"
+                  >
+                    <span class="name">{{ s.name }}<template v-if="isSuggestedPicked(row, s.userId)"> · 已选</template></span>
+                    <span class="meta">近30天 {{ s.reportCount }} 次 · 良品 {{ s.goodQty }}</span>
+                  </button>
+                </div>
+              </div>
               <el-select
                 :model-value="row.assigneeDepartmentId || null"
                 clearable
@@ -278,7 +299,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getOrderList, getOrder, getOrderStatusCounts, createOrder, updateOrder, transitionOrder, copyOrder, deleteOrder, getCustomFields } from '@/api/prod'
 import { getProductList } from '@/api/base'
-import { assign, assignWorkers, assignDepartments } from '@/api/assign'
+import { assign, assignWorkers, assignDepartments, assignSuggest } from '@/api/assign'
 import { getKnowledgeFileByOrder, getKnowledgeFileRaw } from '@/api/knowledge'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PrintSettingDialog from './PrintSettingDialog.vue'
@@ -295,8 +316,15 @@ const role = Number(localStorage.getItem('role') || 0)
 const isAdmin = role === 1
 const canAssign = role === 1 || role === 3
 const canPrint = canUse(currentTier(), FEATURE.PrintLabel)
-const list = ref([]), keyword = ref(''), statusTab = ref('')
+const list = ref([]), keyword = ref(''), statusTab = ref('1')
 const counts = ref({ all: 0, notStarted: 0, doing: 0, done: 0, cancelled: 0 })
+const statusTabs = computed(() => [
+  { key: '', label: '全部', count: counts.value.all },
+  { key: '0', label: '未开始', count: counts.value.notStarted },
+  { key: '1', label: '执行中', count: counts.value.doing },
+  { key: '2', label: '已结束', count: counts.value.done },
+  { key: '3', label: '已取消', count: counts.value.cancelled }
+])
 const dlg = ref(false), editingId = ref(null), detailDlg = ref(false)
 const printSettingDlg = ref(false), printLabelDlg = ref(false), printOrderId = ref(null)
 const form = ref({ orderNo: '', productId: null, qty: 1, dueDate: null, ext: {}, tasks: [] })
@@ -309,6 +337,8 @@ const docPreviewFile = ref(null)
 const productOptions = ref([]), customFields = ref([]), workerOptions = ref([])
 /** @type {import('vue').Ref<Record<number, {id:number,name:string}[]>>} */
 const deptOptionsMap = ref({})
+/** @type {import('vue').Ref<Record<number, {userId:number,name:string,reportCount:number,goodQty:number}[]>>} */
+const suggestMap = ref({})
 const filterFieldId = ref(null), filterMatch = ref('exact'), filterValue = ref('')
 
 const listColumns = computed(() =>
@@ -438,14 +468,18 @@ async function load() {
 }
 
 function onSearch() { load() }
-function onStatusChange() { load() }
+function onStatusTab(key) {
+  if (statusTab.value === key) return
+  statusTab.value = key
+  load()
+}
 
 function onReset() {
   keyword.value = ''
   filterFieldId.value = null
   filterMatch.value = 'exact'
   filterValue.value = ''
-  statusTab.value = ''
+  statusTab.value = '1'
   load()
 }
 
@@ -514,10 +548,26 @@ async function onCopy(row) {
   await load()
 }
 
+function isSuggestedPicked(taskRow, userId) {
+  if (taskRow.assigneeDepartmentId) return false
+  return (taskRow.assignees || []).some(a => a.userId === userId)
+}
+
+async function loadSuggests(tasks) {
+  const next = {}
+  for (const t of (tasks || []).filter(x => x.id)) {
+    const res = await assignSuggest(t.id)
+    const list = res.data || []
+    if (list.length) next[t.id] = list
+  }
+  suggestMap.value = next
+}
+
 async function openDetail(row) {
   const res = await getOrder(row.id)
   detail.value = res.data
   guides.value = []
+  suggestMap.value = {}
   detailDlg.value = true
   try {
     const g = await getKnowledgeFileByOrder(row.id)
@@ -526,6 +576,7 @@ async function openDetail(row) {
     guides.value = []
     ElMessage.error('加载图纸 / 作业指导书失败')
   }
+  if (canAssign) await loadSuggests(detail.value.tasks)
 }
 
 async function openGuide(file) {
@@ -559,6 +610,13 @@ function closeImgPreview() {
   imgPreviewVisible.value = false
   for (const u of imgPreviewUrls.value) URL.revokeObjectURL(u)
   imgPreviewUrls.value = []
+}
+
+async function onPickSuggest(taskRow, userId) {
+  await assign(taskRow.id, [userId])
+  ElMessage.success('已派工')
+  const res = await getOrder(detail.value.id)
+  detail.value = res.data
 }
 
 async function onAssignChange(taskRow, v) {
@@ -600,10 +658,18 @@ async function onDelete(row) {
 .toolbar-field { width: 160px; }
 .toolbar-match { width: 120px; }
 .toolbar-value { width: 180px; }
-.status-tabs :deep(.el-tabs__item) { font-size: 14px; }
-.status-tabs :deep(.el-tabs__item.is-active) { font-weight: 600; }
-.status-tabs :deep(.el-tabs__header) { margin-bottom: var(--app-section-gap); }
-.status-tabs :deep(.el-tabs__content) { display: none; }
+.status-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: var(--app-section-gap); }
+.status-tab {
+  flex: none; padding: 8px 16px; border-radius: 16px; background: var(--app-card);
+  font-size: 14px; line-height: 1.2; color: var(--app-text-2); border: 1px solid var(--app-border);
+  white-space: nowrap; cursor: pointer;
+}
+.status-tab:hover:not(.active) {
+  border-color: var(--app-primary-border); color: var(--app-primary); background: var(--app-primary-light);
+}
+.status-tab.active {
+  background: var(--app-primary); color: var(--app-card); border-color: var(--app-primary); font-weight: 600;
+}
 :deep(td.col-order-no) { font-weight: 600; }
 :deep(td.col-order-no .cell) { white-space: nowrap; }
 .op-btns { display: flex; flex-wrap: nowrap; align-items: center; gap: 2px 10px; }
@@ -615,6 +681,17 @@ async function onDelete(row) {
 .plan-hint { color: var(--app-text-3); font-size: 12px; }
 .detail-tasks { margin-top: var(--app-section-gap); }
 .assign-cell { display: flex; flex-direction: column; }
+.assign-suggest { margin-bottom: 6px; }
+.assign-suggest-title { font-size: 12px; color: var(--app-text-3); margin-bottom: 4px; }
+.assign-suggest-list { display: flex; flex-direction: column; gap: 4px; max-height: 132px; overflow: auto; }
+.assign-suggest-item {
+  text-align: left; border: 1px solid var(--app-border); background: var(--app-card);
+  border-radius: 6px; padding: 4px 8px; cursor: pointer; font: inherit; color: inherit;
+}
+.assign-suggest-item.top { border-color: var(--app-primary); background: var(--app-primary-light); }
+.assign-suggest-item .name { display: block; font-weight: 600; font-size: 13px; }
+.assign-suggest-item.top .name { color: var(--app-primary); }
+.assign-suggest-item .meta { display: block; font-size: 12px; color: var(--app-text-3); }
 .kf-block { margin-top: var(--app-section-gap); }
 .kf-title { font-weight: 600; margin-bottom: 8px; color: #303133; }
 .kf-empty { color: var(--app-text-3, #909399); font-size: 13px; padding: 4px 0; }

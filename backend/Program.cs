@@ -328,11 +328,25 @@ try
     }
 
     var urls = Environment.GetEnvironmentVariable("ASPNETCORE_URLS") ?? "http://localhost:8080";
-    Console.WriteLine($"已启动 · 实例 {instanceOpt.Code} · 监听 {urls}");
-    Console.WriteLine($"本机打开 http://localhost:8080/  · 错误日志 {logDir}");
-    Console.WriteLine("本窗口不要关；关掉即停程序。");
-    Log.Warning("WorkshopMes 已启动 Instance={Instance} ErrorLogDir={LogDir} Urls={Urls}", instanceOpt.Code, logDir, urls);
-    app.Run();
+    var blockedPort = FirstBlockedListenPort(urls);
+    if (blockedPort is int port)
+    {
+        // 先挡住再交给 Kestrel，避免 Hosting failed to start 把英文堆栈打满窗口
+        WritePortInUseAndStop(port);
+    }
+    else
+    {
+        var localScheme = urls.Contains("https://", StringComparison.OrdinalIgnoreCase) ? "https" : "http";
+        Console.WriteLine($"已启动 · 实例 {instanceOpt.Code} · 监听 {urls}");
+        Console.WriteLine($"本机打开 {localScheme}://localhost:8080/  · 错误日志 {logDir}");
+        Console.WriteLine("本窗口不要关；关掉即停程序。");
+        Log.Warning("WorkshopMes 已启动 Instance={Instance} ErrorLogDir={LogDir} Urls={Urls}", instanceOpt.Code, logDir, urls);
+        app.Run();
+    }
+}
+catch (Exception ex) when (IsAddressInUse(ex))
+{
+    WritePortInUseAndStop(8080);
 }
 catch (Exception ex)
 {
@@ -342,4 +356,46 @@ catch (Exception ex)
 finally
 {
     Log.CloseAndFlush();
+}
+
+static bool IsAddressInUse(Exception ex)
+{
+    for (var e = ex; e != null; e = e.InnerException)
+    {
+        if (e is Microsoft.AspNetCore.Connections.AddressInUseException)
+            return true;
+        if (e is System.Net.Sockets.SocketException se && se.SocketErrorCode == System.Net.Sockets.SocketError.AddressAlreadyInUse)
+            return true;
+        if (e is IOException && e.Message.Contains("address already in use", StringComparison.OrdinalIgnoreCase))
+            return true;
+    }
+    return false;
+}
+
+static int? FirstBlockedListenPort(string urls)
+{
+    var ports = new List<int>();
+    foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(urls, @":(\d+)\b"))
+    {
+        if (int.TryParse(m.Groups[1].Value, out var p) && p is > 0 and <= 65535 && !ports.Contains(p))
+            ports.Add(p);
+    }
+    if (ports.Count == 0)
+        ports.Add(8080);
+
+    var active = System.Net.NetworkInformation.IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners();
+    foreach (var p in ports)
+    {
+        if (active.Any(ep => ep.Port == p))
+            return p;
+    }
+    return null;
+}
+
+static void WritePortInUseAndStop(int port)
+{
+    var msg = $"端口 {port} 已被占用：后端可能已经在运行，请勿重复启动。如需重启，请先运行 stop.bat。";
+    Console.WriteLine(msg);
+    Log.Warning("{Message}", msg);
+    Environment.ExitCode = 2;
 }

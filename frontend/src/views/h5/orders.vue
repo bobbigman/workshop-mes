@@ -80,7 +80,7 @@ const router = useRouter()
 const canWage = canUse(currentTier(), FEATURE.PieceWage)
 const role = Number(localStorage.getItem('role') || 0)
 const canAssign = role === 1 || role === 3
-const statusTab = ref('all')
+const statusTab = ref('1')
 const keyword = ref('')
 const list = ref([])
 const counts = ref({ all: 0, notStarted: 0, doing: 0, done: 0 })
@@ -158,7 +158,22 @@ async function loadList() {
   const kw = keyword.value.trim()
   if (kw) params.keyword = kw
   const res = await getOrderList(params)
-  list.value = res.data.list || []
+  const rows = res.data.list || []
+  list.value = statusTab.value === '2' ? rows : sortByDue(rows)
+}
+
+function dueWeight(row) {
+  if (row.dueState === 'overdue') return 0
+  if (row.dueState === 'warning') return 1
+  return 2
+}
+
+function sortByDue(rows) {
+  return [...rows].sort((a, b) => {
+    const byDue = dueWeight(a) - dueWeight(b)
+    if (byDue !== 0) return byDue
+    return Number(b.id || 0) - Number(a.id || 0)
+  })
 }
 
 function onSearchInput() {

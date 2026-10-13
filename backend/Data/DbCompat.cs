@@ -401,6 +401,7 @@ BEGIN
     image_path     NVARCHAR(512) NULL,
     work_order_id  BIGINT NULL,
     reported_by    BIGINT NOT NULL,
+    assign_handler_user_id BIGINT NULL,
     reported_at    DATETIME2 NOT NULL CONSTRAINT DF_prod_abnormal_ra DEFAULT SYSDATETIME(),
     status         TINYINT NOT NULL CONSTRAINT DF_prod_abnormal_st DEFAULT 0,
     handled_by     BIGINT NULL,
@@ -408,7 +409,10 @@ BEGIN
     handle_note    NVARCHAR(256) NULL
   );
   CREATE INDEX ix_abnormal_factory_status ON prod_abnormal(factory_id, status, reported_at DESC);
-END");
+END
+IF COL_LENGTH('prod_abnormal', 'assign_handler_user_id') IS NULL
+  ALTER TABLE prod_abnormal ADD assign_handler_user_id BIGINT NULL;
+");
 
         // 登录页设置（docs/69）：每工厂一条，左侧大图自配
         await db.Database.ExecuteSqlRawAsync(@"
@@ -443,12 +447,39 @@ BEGIN
     ALTER TABLE sys_user ADD wechat_id NVARCHAR(64) NULL;
 END");
 
+        // 企微通讯录账号（docs/226）：可空；派工群消息按此 @ 被派工人
+        await db.Database.ExecuteSqlRawAsync(@"
+IF COL_LENGTH('sys_user', 'wecom_userid') IS NULL
+BEGIN
+    ALTER TABLE sys_user ADD wecom_userid NVARCHAR(64) NULL;
+END");
+
         // 人员类型（docs/161）：0内部员工 / 1临时用工 / 2外部供应商；存量默认内部
         await db.Database.ExecuteSqlRawAsync(@"
 IF COL_LENGTH('sys_user', 'user_type') IS NULL
 BEGIN
     ALTER TABLE sys_user ADD user_type TINYINT NOT NULL
         CONSTRAINT DF_sys_user_user_type DEFAULT 0;
+END");
+
+        // 人级工价系数（docs/225）：存量默认 1，其他账套零影响。加列与 CHECK 分批，避免编译期引用尚不存在的列
+        await db.Database.ExecuteSqlRawAsync(@"
+IF COL_LENGTH('sys_user', 'wage_coeff') IS NULL
+BEGIN
+    ALTER TABLE sys_user ADD wage_coeff DECIMAL(4,2) NOT NULL
+        CONSTRAINT DF_sys_user_wage_coeff DEFAULT 1;
+END");
+        await db.Database.ExecuteSqlRawAsync(@"
+IF COL_LENGTH('sys_user', 'wage_coeff') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_sys_user_wage_coeff')
+BEGIN
+    ALTER TABLE sys_user ADD CONSTRAINT CK_sys_user_wage_coeff CHECK (wage_coeff > 0);
+END");
+        await db.Database.ExecuteSqlRawAsync(@"
+IF COL_LENGTH('salary_statement_item', 'wage_coeff') IS NULL
+BEGIN
+    ALTER TABLE salary_statement_item ADD wage_coeff DECIMAL(4,2) NOT NULL
+        CONSTRAINT DF_salary_statement_item_wage_coeff DEFAULT 1;
 END");
 
         // 个人免密登录码密钥（docs/150）：可轮换；空=未生成

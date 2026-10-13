@@ -227,11 +227,14 @@ public class WechatEventService(AppDbContext db, ILicenseTierService license, We
         };
         // 每次派工/改派单独事件，避免同工序改派被幂等吞掉
         var eventId = $"{task.Id}:{Guid.NewGuid():N}";
+        // docs/226：只 @ 被派工人的企微账号，不用规则上的固定名单；没有可 @ 的人则只发群
+        var mention = await ResolveAssignMentionsAsync(order.FactoryId, task.Id);
         foreach (var rule in rules)
         {
             if (await db.WechatAlertDeliveries.AnyAsync(x => x.FactoryId == order.FactoryId && x.RuleId == rule.Id && x.EventType == "operation_assigned" && x.EventId == eventId))
                 continue;
             if (!TryRecipients(rule, setting, out var users)) continue;
+            users = string.IsNullOrEmpty(mention) ? "(group)" : mention;
             var content = Regex.Replace(rule.Template, @"\{([^{}]+)\}", m => values[m.Groups[1].Value]);
             db.WechatAlertDeliveries.Add(new SysWechatAlertDelivery
             {
@@ -272,11 +275,19 @@ public class WechatEventService(AppDbContext db, ILicenseTierService license, We
             }
         }
         var eventId = abnormal.Id.ToString(CultureInfo.InvariantCulture);
+        // docs/228：指定了处理人则覆盖规则固定名单；没有有效企微号则只发群不 @
+        string? mentionOverride = null;
+        if (abnormal.AssignHandlerUserId is > 0)
+        {
+            var mention = await ResolveUserMentionAsync(abnormal.FactoryId, abnormal.AssignHandlerUserId.Value);
+            mentionOverride = string.IsNullOrEmpty(mention) ? "(group)" : mention;
+        }
         foreach (var rule in rules)
         {
             if (!MatchesAbnormal(rule.ConditionType, abnormal.AbnormalType)) continue;
             if (await db.WechatAlertDeliveries.AnyAsync(x => x.FactoryId == abnormal.FactoryId && x.RuleId == rule.Id && x.EventType == "abnormal_reported" && x.EventId == eventId)) continue;
             if (!TryRecipients(rule, setting, out var users)) continue;
+            if (mentionOverride != null) users = mentionOverride;
             var content = Regex.Replace(rule.Template, @"\{([^{}]+)\}", m => values[m.Groups[1].Value]);
             db.WechatAlertDeliveries.Add(new SysWechatAlertDelivery {
                 FactoryId = abnormal.FactoryId, RuleId = rule.Id, RuleName = rule.Name, EventType = "abnormal_reported", EventId = eventId,
@@ -288,6 +299,52 @@ public class WechatEventService(AppDbContext db, ILicenseTierService license, We
     }
 
     private static string? NullIfEmpty(string value) => string.IsNullOrEmpty(value) ? null : value;
+
+    /// <summary>被派工人的企微账号，去重。无人、未填或格式无效则返回空（只发群不 @）。</summary>
+    private async Task<string> ResolveAssignMentionsAsync(long factoryId, long taskId)
+    {
+        var userIds = await db.WorkOrderOperationAssignees.AsNoTracking()
+            .Where(a => a.WorkOrderOperationId == taskId)
+            .Select(a => a.UserId)
+            .ToListAsync();
+        if (userIds.Count == 0) return "";
+        var raw = await db.Users.AsNoTracking()
+            .Where(u => u.FactoryId == factoryId && userIds.Contains(u.Id) && u.WecomUserId != null && u.WecomUserId != "")
+            .Select(u => u.WecomUserId!)
+            .ToListAsync();
+        var ids = raw.Select(x => x.Trim()).Where(x => x.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (ids.Count == 0) return "";
+        try
+        {
+            return WechatMessageSender.NormalizeGroupUsers(string.Join('|', ids));
+        }
+        catch (BusinessException ex)
+        {
+            logger.LogWarning(ex, "派工@人跳过无效企微UserId Factory={Factory} Task={Task}", factoryId, taskId);
+            return "";
+        }
+    }
+
+    /// <summary>单个用户的企微账号。未启用、未填或格式无效则返回空（只发群不 @）。</summary>
+    private async Task<string> ResolveUserMentionAsync(long factoryId, long userId)
+    {
+        var raw = await db.Users.AsNoTracking()
+            .Where(u => u.FactoryId == factoryId && u.Id == userId && u.Status == 1 && u.WecomUserId != null && u.WecomUserId != "")
+            .Select(u => u.WecomUserId)
+            .FirstOrDefaultAsync();
+        if (string.IsNullOrWhiteSpace(raw)) return "";
+        try
+        {
+            return WechatMessageSender.NormalizeGroupUsers(raw.Trim());
+        }
+        catch (BusinessException ex)
+        {
+            logger.LogWarning(ex, "异常@人跳过无效企微UserId Factory={Factory} User={User}", factoryId, userId);
+            return "";
+        }
+    }
 
     public static bool TryRecipients(SysWechatAlertRule rule, SysWechatAlertSetting setting, out string users)
     {

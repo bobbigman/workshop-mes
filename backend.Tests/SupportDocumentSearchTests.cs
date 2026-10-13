@@ -150,6 +150,37 @@ public class SupportDocumentSearchTests
     }
 
     [Fact]
+    public void 派工智能推荐怎么用_截断时仍带回总地图()
+    {
+        var r = Build(FindRepoSupportDocs()).Search("演示一下\"派工智能推荐\"具体怎么用？");
+        Assert.Equal("ready", r.State);
+        Assert.True(r.Truncated);
+        var howTo = r.Sources.Single(s => s.Title == "系统能力总地图" && (s.Chapter ?? "").Contains("派工智能推荐怎么用"));
+        Assert.Contains("推荐派给谁", howTo.Excerpt);
+        Assert.Contains("保存派工", howTo.Excerpt);
+        Assert.Contains("系统能力总地图", r.Message);
+        Assert.Contains("不要因为截断就说没查到", r.Message);
+    }
+
+    [Fact]
+    public void 其它问题_截断时也带回总地图()
+    {
+        var dir = TempDir();
+        try
+        {
+            Write(dir, "00.md", "---\ntitle: 系统能力总地图\n---\n# 能力总览\n色码汇总在报表菜单，全员可读。");
+            for (var i = 0; i < 4; i++)
+                Write(dir, $"f{i}.md", $"---\ntitle: 手册{i}\n---\n# 色码\n色码汇总说明 {i}");
+            var opt = new SupportDocsOptions { MaxResults = 2 };
+            var r = Build(dir, opt).Search("色码汇总在哪");
+            Assert.True(r.Truncated);
+            Assert.Contains(r.Sources, s => s.Title == "系统能力总地图" && s.Excerpt.Contains("报表菜单"));
+            Assert.Contains("系统能力总地图", r.Message);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
     public void ManyMatches_Truncated_FlagSet()
     {
         var dir = TempDir();

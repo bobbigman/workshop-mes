@@ -10,7 +10,7 @@
 
 | 项 | 值 |
 |---|---|
-| 后端 MCP 本地地址 | `http://localhost:8080/mcp` |
+| 后端 MCP 本地地址 | `https://localhost:8080/mcp` |
 | 当前 cpolar 域名 | `https://789105f9.r16.cpolar.top`（**重启后必变**，以下方新域名为准） |
 | 入口 Token | `laohu-demo-2026` |
 | 扣子鉴权方式 | **Header**：`Authorization: Bearer laohu-demo-2026`（禁止 `?token=` 拼 URL） |
@@ -24,12 +24,12 @@
 
 ### 1. 启动后端程序（.NET 8 MCP）
 
-- 启动后端，确认本地 `http://localhost:8080/mcp` 可访问。
+- 启动后端，确认本地 `https://localhost:8080/mcp` 可访问。
 - 配置在 `backend/appsettings.json`：`DemoSkipAuth=true` 时查工单/查报工免授权，查工资仍需 start_auth 授权。
 
 ### 2. 重开 cpolar 隧道（拿新域名）
 
-- 命令：`cpolar http 8080`
+- 命令：`cpolar http https://localhost:8080`
 - 等 `Tunnel Status: online`。
 - 复制 **https:// 开头的新域名**（免费版随机，形如 `https://xxxx.cpolar.top`）。
 - ⚠️ **窗口别关**：隧道掉线 = 微信端全挂（后端 + cpolar 必须一直开着）。
@@ -84,7 +84,7 @@
 | 聊天只回文字、不调工具 | MCP 没挂到 Agent | 回第 5 步，确认勾选且 5 工具可见 |
 | 浏览器开 MCP 返回 405 | MCP 只支持 POST | 正常；以扣子读工具为准 |
 | 扣子调试通、微信调失败 | 本机关机 / cpolar 掉线 | 确认后端 + cpolar online |
-| 公网打不开授权页 | 隧道地址变了 | 重跑 `cpolar http 8080`，重填 `AuthBaseUrl` 再重启 |
+| 公网打不开授权页 | 隧道地址变了 | 重跑 `cpolar http https://localhost:8080`，重填 `AuthBaseUrl` 再重启 |
 
 ---
 

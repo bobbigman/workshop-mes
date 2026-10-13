@@ -112,9 +112,11 @@ public class AppDbContext : DbContext
             e.Property(x => x.Account).HasColumnName("account").HasMaxLength(64);
             e.Property(x => x.Phone).HasColumnName("phone").HasMaxLength(20);
             e.Property(x => x.WechatId).HasColumnName("wechat_id").HasMaxLength(64);
+            e.Property(x => x.WecomUserId).HasColumnName("wecom_userid").HasMaxLength(64);
             e.Property(x => x.Name).HasColumnName("name").HasMaxLength(64);
             e.Property(x => x.Role).HasColumnName("role");
             e.Property(x => x.UserType).HasColumnName("user_type");
+            e.Property(x => x.WageCoeff).HasColumnName("wage_coeff").HasPrecision(4, 2);
             e.Property(x => x.Password).HasColumnName("password").HasMaxLength(128);
             e.Property(x => x.Status).HasColumnName("status");
             e.Property(x => x.LoginQrSecret).HasColumnName("login_qr_secret").HasMaxLength(64);
@@ -311,6 +313,7 @@ public class AppDbContext : DbContext
             e.Property(x => x.ImagePath).HasColumnName("image_path").HasMaxLength(512);
             e.Property(x => x.WorkOrderId).HasColumnName("work_order_id");
             e.Property(x => x.ReportedBy).HasColumnName("reported_by");
+            e.Property(x => x.AssignHandlerUserId).HasColumnName("assign_handler_user_id");
             e.Property(x => x.ReportedAt).HasColumnName("reported_at");
             e.Property(x => x.Status).HasColumnName("status");
             e.Property(x => x.HandledBy).HasColumnName("handled_by");
@@ -375,6 +378,7 @@ public class AppDbContext : DbContext
             e.Property(x => x.RuleId).HasColumnName("rule_id");
             e.Property(x => x.CalcQty).HasColumnName("calc_qty");
             e.Property(x => x.UnitPrice).HasColumnName("unit_price").HasPrecision(12, 4);
+            e.Property(x => x.WageCoeff).HasColumnName("wage_coeff").HasPrecision(4, 2);
             e.Property(x => x.Amount).HasColumnName("amount").HasPrecision(12, 2);
             e.Property(x => x.DeductAmount).HasColumnName("deduct_amount").HasPrecision(12, 2);
         });

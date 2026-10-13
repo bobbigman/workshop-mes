@@ -159,6 +159,8 @@ public class SalaryItemDto
     public long? RuleId { get; set; }
     public int CalcQty { get; set; }
     public decimal UnitPrice { get; set; }
+    /// <summary>本行实际乘进金额的工价系数快照（docs/225）</summary>
+    public decimal WageCoeff { get; set; } = 1m;
     public decimal Amount { get; set; }
     public decimal DeductAmount { get; set; }
     public decimal NetAmount { get; set; }
@@ -199,6 +201,8 @@ public class SalaryItemRowDto
     public int GoodQty { get; set; }
     public int DefectQty { get; set; }
     public decimal UnitPrice { get; set; }
+    /// <summary>本行实际乘进金额的工价系数快照（docs/225）</summary>
+    public decimal WageCoeff { get; set; } = 1m;
     public decimal DeductAmount { get; set; }
     /// <summary>小计 = amount（计件/计时毛额）。</summary>
     public decimal Amount { get; set; }
@@ -319,6 +323,7 @@ public class SalaryService : ISalaryService
             throw ThrowHelper.Biz(nameof(GenerateAsync), "部分人员该周期工资单已存在，请先删除草稿后再生成");
 
         var rules = await _db.PriceRules.AsNoTracking().Where(r => r.FactoryId == factoryId).ToListAsync();
+        var coeffMap = await LoadWageCoeffMapAsync(userIds);
         var now = DateTime.Now;
 
         await using var tx = await _db.Database.BeginTransactionAsync();
@@ -342,13 +347,14 @@ public class SalaryService : ISalaryService
                 await _db.SaveChangesAsync(); // 取 Id
 
                 decimal total = 0;
+                var wageCoeff = coeffMap.GetValueOrDefault(group.Key, 1m);
                 foreach (var report in group)
                 {
                     var productId = report.ProductId;
                     var rule = PriceRuleMatcher.Match(
                         rules, factoryId, productId, report.OperationId,
                         report.DepartmentId, report.UserId, report.ReportTime);
-                    var calc = PriceRuleMatcher.Calculate(rule, report.GoodQty, report.DefectQty, report.DurationMinutes);
+                    var calc = PriceRuleMatcher.Calculate(rule, report.GoodQty, report.DefectQty, report.DurationMinutes, wageCoeff);
                     if (!calc.Matched) unmatched++;
 
                     _db.SalaryStatementItems.Add(new SalaryStatementItem
@@ -358,6 +364,7 @@ public class SalaryService : ISalaryService
                         RuleId = calc.RuleId,
                         CalcQty = calc.CalcQty,
                         UnitPrice = calc.UnitPrice,
+                        WageCoeff = calc.WageCoeff,
                         Amount = calc.Amount,
                         DeductAmount = calc.DeductAmount
                     });
@@ -509,6 +516,7 @@ public class SalaryService : ISalaryService
         }
 
         var rules = await _db.PriceRules.AsNoTracking().Where(r => r.FactoryId == factoryId).ToListAsync();
+        var wageCoeff = await LoadWageCoeffAsync(userId);
         decimal reviewedNet = 0, unreviewedNet = 0, deductTotal = 0;
         var matched = 0;
         var unmatched = 0;
@@ -520,7 +528,7 @@ public class SalaryService : ISalaryService
             var rule = PriceRuleMatcher.Match(
                 rules, factoryId, report.ProductId, report.OperationId,
                 report.DepartmentId, report.UserId, report.ReportTime);
-            var calc = PriceRuleMatcher.Calculate(rule, report.GoodQty, report.DefectQty, report.DurationMinutes);
+            var calc = PriceRuleMatcher.Calculate(rule, report.GoodQty, report.DefectQty, report.DurationMinutes, wageCoeff);
             if (calc.Matched) matched++;
             else unmatched++;
 
@@ -604,6 +612,7 @@ public class SalaryService : ISalaryService
                 i.RuleId,
                 i.CalcQty,
                 i.UnitPrice,
+                i.WageCoeff,
                 i.Amount,
                 DeductAmount = i.DeductAmount ?? 0,
                 r.ReportTime
@@ -629,6 +638,7 @@ public class SalaryService : ISalaryService
             RuleId = x.RuleId,
             CalcQty = x.CalcQty,
             UnitPrice = x.UnitPrice,
+            WageCoeff = x.WageCoeff,
             Amount = x.Amount,
             DeductAmount = x.DeductAmount,
             NetAmount = x.Amount - x.DeductAmount,
@@ -706,6 +716,7 @@ public class SalaryService : ISalaryService
 
         var rules = await _db.PriceRules.AsNoTracking()
             .Where(r => r.FactoryId == factoryId).ToListAsync();
+        var wageCoeff = await LoadWageCoeffAsync(statement.UserId);
 
         var unmatched = 0;
         decimal pieceworkSum = 0;
@@ -715,12 +726,13 @@ public class SalaryService : ISalaryService
             var rule = PriceRuleMatcher.Match(
                 rules, factoryId, report.ProductId, report.OperationId,
                 report.DepartmentId, report.UserId, report.ReportTime);
-            var calc = PriceRuleMatcher.Calculate(rule, report.GoodQty, report.DefectQty, report.DurationMinutes);
+            var calc = PriceRuleMatcher.Calculate(rule, report.GoodQty, report.DefectQty, report.DurationMinutes, wageCoeff);
             if (!calc.Matched) unmatched++;
 
             item.RuleId = calc.RuleId;
             item.CalcQty = calc.CalcQty;
             item.UnitPrice = calc.UnitPrice;
+            item.WageCoeff = calc.WageCoeff;
             item.Amount = calc.Amount;
             item.DeductAmount = calc.DeductAmount;
 
@@ -1304,7 +1316,7 @@ public class SalaryService : ISalaryService
     {
         var rows = await LoadItemRowsAsync(query, factoryId, applyPaging: false);
         var sb = new StringBuilder();
-        sb.AppendLine("人员,人员类型,工单,工序,颜色,规格尺码,良品,不良,单价,不良扣款,小计,应发,报工时间");
+        sb.AppendLine("人员,人员类型,工单,工序,颜色,规格尺码,良品,不良,单价,系数,不良扣款,小计,应发,报工时间");
         foreach (var r in rows)
         {
             sb.AppendLine(string.Join(',',
@@ -1317,6 +1329,7 @@ public class SalaryService : ISalaryService
                 r.GoodQty,
                 r.DefectQty,
                 r.UnitPrice,
+                r.WageCoeff,
                 r.DeductAmount,
                 r.Amount,
                 r.NetAmount,
@@ -1418,6 +1431,7 @@ public class SalaryService : ISalaryService
             GoodQty = x.r.GoodQty,
             DefectQty = x.r.DefectQty,
             UnitPrice = x.i.UnitPrice,
+            WageCoeff = x.i.WageCoeff,
             DeductAmount = x.i.DeductAmount ?? 0,
             Amount = x.i.Amount,
             NetAmount = x.i.Amount - (x.i.DeductAmount ?? 0),
@@ -1437,6 +1451,25 @@ public class SalaryService : ISalaryService
 
     /// <summary>应发合计 = Σ(amount − deduct_amount)（docs/136）。</summary>
     internal static decimal CalcTotalAmount(decimal piecework) => Round2(piecework);
+
+    private async Task<decimal> LoadWageCoeffAsync(long userId)
+    {
+        var stored = await _db.Users.AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Select(u => (decimal?)u.WageCoeff)
+            .FirstOrDefaultAsync();
+        return stored is > 0m ? WageCoeffHelper.Coerce(stored.Value) : 1m;
+    }
+
+    private async Task<Dictionary<long, decimal>> LoadWageCoeffMapAsync(List<long> userIds)
+    {
+        if (userIds.Count == 0) return new Dictionary<long, decimal>();
+        var rows = await _db.Users.AsNoTracking()
+            .Where(u => userIds.Contains(u.Id))
+            .Select(u => new { u.Id, u.WageCoeff })
+            .ToListAsync();
+        return rows.ToDictionary(x => x.Id, x => WageCoeffHelper.Coerce(x.WageCoeff));
+    }
 
     private static decimal Round2(decimal v) =>
         Math.Round(v, 2, MidpointRounding.AwayFromZero);

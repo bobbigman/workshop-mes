@@ -1,6 +1,6 @@
 import start from '../../../docs/manual/第一次使用.md?raw'
-import pc from '../../../docs/30-使用手册-管理员（电脑端）.md?raw'
-import mobile from '../../../docs/31-使用手册-工人（手机端）.md?raw'
+import pc from '../../../docs/开发手册和方案/30-使用手册-管理员（电脑端）.md?raw'
+import mobile from '../../../docs/开发手册和方案/31-使用手册-工人（手机端）.md?raw'
 import faq from '../../../docs/manual/遇到问题.md?raw'
 import { parseChapters } from './parser.js'
 

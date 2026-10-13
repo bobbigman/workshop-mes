@@ -1044,6 +1044,12 @@ public class ReportService : IReportService
             var now = DateTime.Now;
             var reportCount = 0;
             var rules = await _db.PriceRules.AsNoTracking().Where(r => r.FactoryId == order.FactoryId).ToListAsync();
+            var coeffUserIds = perOpUsers.Values.SelectMany(v => v.Select(x => x.UserId)).Distinct().ToList();
+            var coeffRows = await _db.Users.AsNoTracking()
+                .Where(u => coeffUserIds.Contains(u.Id))
+                .Select(u => new { u.Id, u.WageCoeff })
+                .ToListAsync();
+            var coeffMap = coeffRows.ToDictionary(x => x.Id, x => WageCoeffHelper.Coerce(x.WageCoeff));
             foreach (var op in pending)
             {
                 if (!perOpUsers.TryGetValue(op.OperationId, out var users))
@@ -1054,7 +1060,8 @@ public class ReportService : IReportService
                     var deptId = await ResolveDeptSnapshotAsync(uid, op.OperationId);
                     var rule = PriceRuleMatcher.Match(
                         rules, order.FactoryId, order.ProductId, op.OperationId, deptId, uid, now);
-                    var calc = PriceRuleMatcher.Calculate(rule, qty, 0, 0);
+                    var wageCoeff = coeffMap.GetValueOrDefault(uid, 1m);
+                    var calc = PriceRuleMatcher.Calculate(rule, qty, 0, 0, wageCoeff);
                     _db.Reports.Add(new ProdReport
                     {
                         FactoryId = order.FactoryId,
@@ -1217,7 +1224,12 @@ public class ReportService : IReportService
     {
         var rules = await _db.PriceRules.AsNoTracking().Where(r => r.FactoryId == factoryId).ToListAsync();
         var rule = PriceRuleMatcher.Match(rules, factoryId, productId, operationId, departmentId, userId, atTime);
-        var calc = PriceRuleMatcher.Calculate(rule, goodQty, defectQty, durationMinutes);
+        var storedCoeff = await _db.Users.AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Select(u => (decimal?)u.WageCoeff)
+            .FirstOrDefaultAsync();
+        var wageCoeff = storedCoeff is > 0m ? WageCoeffHelper.Coerce(storedCoeff.Value) : 1m;
+        var calc = PriceRuleMatcher.Calculate(rule, goodQty, defectQty, durationMinutes, wageCoeff);
         if (!calc.Matched) return (null, null);
         return (calc.UnitPrice, calc.WageAmount);
     }

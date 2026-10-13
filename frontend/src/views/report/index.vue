@@ -78,7 +78,7 @@
     </el-table>
 
     <!-- 新增报工（电脑端） -->
-    <el-dialog v-model="createDlg" title="新增报工" width="480px" @closed="resetCreate">
+    <el-dialog v-model="createDlg" title="新增报工" width="560px" @closed="resetCreate">
       <el-form :model="createForm" label-width="90px">
         <el-form-item label="工单号" required>
           <el-select
@@ -141,6 +141,43 @@
             <span>分钟</span>
           </div>
         </el-form-item>
+        <el-form-item label="多人报工">
+          <el-checkbox v-model="shareEnabled">多人共同报工</el-checkbox>
+        </el-form-item>
+        <template v-if="shareEnabled">
+          <el-form-item label="分摊">
+            <el-radio-group v-model="shareMode">
+              <el-radio :value="1">平均</el-radio>
+              <el-radio :value="2">按工时</el-radio>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item label="参与人">
+            <div class="share-box">
+              <div class="hint">须含自己。按工时填的是分钟；选平均则按上面的良品数平分，每人旁边是分到的个数。分不尽的归当前报工人。</div>
+              <div v-if="candidatesLoadError" class="hint">
+                参与人列表加载失败
+                <el-button link type="primary" @click="reloadCreateCandidates">重试</el-button>
+              </div>
+              <div v-else-if="!createForm.operationId" class="hint">请先选择工序</div>
+              <div v-else-if="!createCandidates.length" class="hint">该工序暂无可选参与人</div>
+              <el-checkbox-group v-else v-model="participantIds">
+                <div v-for="c in createCandidates" :key="c.id" class="share-person">
+                  <el-checkbox :value="c.id">{{ c.name }}</el-checkbox>
+                  <template v-if="participantIds.map(Number).includes(Number(c.id))">
+                    <template v-if="shareMode === 2">
+                      <el-input-number v-model="participantDurations[c.id]" :min="0" :max="1440" size="small" class="share-min" />
+                      <span class="share-unit">分钟</span>
+                    </template>
+                    <span v-else class="share-unit">{{ shareGood(c.id) }} 个</span>
+                  </template>
+                </div>
+              </el-checkbox-group>
+              <div v-if="sharePreview.length" class="share-preview">
+                <div v-for="p in sharePreview" :key="p.userId">{{ p.name }}：良品 {{ p.good }} 个 / 不良 {{ p.defect }} 个</div>
+              </div>
+            </div>
+          </el-form-item>
+        </template>
       </el-form>
       <template #footer>
         <el-button @click="createDlg=false">取消</el-button>
@@ -376,6 +413,13 @@ const createForm = ref({
   orderNo: '', operationId: null, goodQty: 0, defectQty: 0, defectId: null, hours: 0, minutes: 0
 })
 const createClientRequestId = ref('')
+const myUserId = Number(localStorage.getItem('userId') || 0)
+const shareEnabled = ref(false)
+const shareMode = ref(1)
+const createCandidates = ref([])
+const candidatesLoadError = ref(false)
+const participantIds = ref([])
+const participantDurations = ref({})
 
 const proxyDlg = ref(false)
 const proxySubmitting = ref(false)
@@ -412,6 +456,74 @@ const remainNum = computed(() => {
   return typeof r === 'number' ? r : 0
 })
 const locked = computed(() => !!createForm.value.operationId && remainNum.value <= 0)
+
+const sharePreview = computed(() => {
+  if (!shareEnabled.value || !participantIds.value.length) return []
+  const ids = [...new Set(participantIds.value.map(Number))]
+  const n = ids.length
+  if (n < 1) return []
+  const good = Number(createForm.value.goodQty) || 0
+  const defect = Number(createForm.value.defectQty) || 0
+  const goods = new Array(n).fill(0)
+  const defectsArr = new Array(n).fill(0)
+  if (shareMode.value === 2) {
+    const filled = ids.map(id => Number(participantDurations.value[id] || 0)).filter(d => d > 0)
+    if (filled.length === 0) {
+      const goodBase = Math.floor(good / n)
+      const goodRem = good % n
+      const defectBase = Math.floor(defect / n)
+      const defectRem = defect % n
+      ids.forEach((id, i) => {
+        const isMe = id === myUserId
+        goods[i] = goodBase + (isMe ? goodRem : 0)
+        defectsArr[i] = defectBase + (isMe ? defectRem : 0)
+      })
+    } else {
+      const avgFilled = Math.max(1, Math.floor(filled.reduce((s, d) => s + d, 0) / filled.length))
+      const weights = ids.map(id => {
+        const d = Number(participantDurations.value[id] || 0)
+        return d > 0 ? d : avgFilled
+      })
+      const sumW = weights.reduce((s, w) => s + w, 0)
+      let gAlloc = 0
+      let dAlloc = 0
+      let reporterIdx = 0
+      ids.forEach((id, i) => {
+        goods[i] = Math.floor((good * weights[i]) / sumW)
+        defectsArr[i] = Math.floor((defect * weights[i]) / sumW)
+        gAlloc += goods[i]
+        dAlloc += defectsArr[i]
+        if (id === myUserId) reporterIdx = i
+      })
+      goods[reporterIdx] += good - gAlloc
+      defectsArr[reporterIdx] += defect - dAlloc
+    }
+  } else {
+    const goodBase = Math.floor(good / n)
+    const goodRem = good % n
+    const defectBase = Math.floor(defect / n)
+    const defectRem = defect % n
+    ids.forEach((id, i) => {
+      const isMe = id === myUserId
+      goods[i] = goodBase + (isMe ? goodRem : 0)
+      defectsArr[i] = defectBase + (isMe ? defectRem : 0)
+    })
+  }
+  return ids.map((id, i) => {
+    const c = createCandidates.value.find(x => Number(x.id) === id)
+    return {
+      userId: id,
+      name: c?.name || (id === myUserId ? (localStorage.getItem('userName') || '我') : String(id)),
+      good: goods[i],
+      defect: defectsArr[i]
+    }
+  })
+})
+
+function shareGood(id) {
+  const hit = sharePreview.value.find(p => p.userId === Number(id))
+  return hit ? hit.good : 0
+}
 
 const pendingTasks = computed(() => {
   if (!batchDetail.value) return []
@@ -526,6 +638,12 @@ function resetCreate() {
   orderDetail.value = null
   defectOptions.value = []
   createClientRequestId.value = ''
+  shareEnabled.value = false
+  shareMode.value = 1
+  createCandidates.value = []
+  candidatesLoadError.value = false
+  participantIds.value = []
+  participantDurations.value = {}
   createForm.value = {
     orderNo: '', operationId: null, goodQty: 0, defectQty: 0, defectId: null, hours: 0, minutes: 0
   }
@@ -555,14 +673,38 @@ async function loadOrder() {
   }
 }
 
+async function reloadCreateCandidates() {
+  candidatesLoadError.value = false
+  if (!createForm.value.operationId) {
+    createCandidates.value = []
+    return
+  }
+  try {
+    const c = await getReportCandidates(Number(createForm.value.operationId))
+    createCandidates.value = c.data || []
+    if (myUserId && !participantIds.value.map(Number).includes(myUserId)) {
+      participantIds.value = [myUserId]
+    }
+  } catch (error) {
+    createCandidates.value = []
+    candidatesLoadError.value = true
+    console.error('[新增报工] 参与人列表加载失败', error)
+    ElMessage.error('参与人列表加载失败')
+  }
+}
+
 async function onOpChange() {
   createForm.value.defectId = null
+  participantIds.value = myUserId ? [myUserId] : []
+  participantDurations.value = {}
+  createCandidates.value = []
   if (!createForm.value.operationId) {
     defectOptions.value = []
     return
   }
   const res = await getDefectsByOp(createForm.value.operationId)
   defectOptions.value = res.data || []
+  await reloadCreateCandidates()
 }
 
 async function onCreate(keepOpen) {
@@ -587,6 +729,21 @@ async function onCreate(keepOpen) {
     ElMessage.error('单次报工时长不能超过24小时')
     return
   }
+  const shareIds = [...new Set(participantIds.value.map(Number))]
+  if (shareEnabled.value) {
+    if (candidatesLoadError.value) {
+      ElMessage.error('参与人列表加载失败，请重试后再提交')
+      return
+    }
+    if (shareIds.length < 1) {
+      ElMessage.error('请勾选参与人')
+      return
+    }
+    if (myUserId && !shareIds.includes(myUserId)) {
+      ElMessage.error('参与人须包含自己')
+      return
+    }
+  }
   submitting.value = true
   try {
     if (!createClientRequestId.value) createClientRequestId.value = newClientRequestId()
@@ -599,13 +756,26 @@ async function onCreate(keepOpen) {
       durationMinutes,
       clientRequestId: createClientRequestId.value
     }
+    if (shareEnabled.value) {
+      payload.shareMode = shareMode.value === 2 ? 2 : 1
+      if (shareMode.value === 2) {
+        payload.participants = shareIds.map(id => ({
+          userId: id,
+          durationMinutes: Number(participantDurations.value[id] || 0)
+        }))
+      } else {
+        payload.participantUserIds = shareIds
+      }
+    }
     const res = await submitReportWithUpstreamConfirm(payload)
     createClientRequestId.value = ''
-    const item = res?.data?.reports?.[0]
-    const unmatched = (res?.data?.reports || []).some(r => r.unitPrice == null)
-    let tip = item
-      ? `报工成功：良品${item.goodQty} 不良${item.defectQty}`
-      : '报工成功'
+    const reports = res?.data?.reports || []
+    const item = reports[0]
+    const unmatched = reports.some(r => r.unitPrice == null)
+    const goodSum = reports.reduce((s, r) => s + (Number(r.goodQty) || 0), 0)
+    let tip = reports.length > 1
+      ? `已为 ${reports.length} 人分摊，合计良品 ${goodSum}`
+      : (item ? `报工成功：良品${item.goodQty} 不良${item.defectQty}` : '报工成功')
     if (unmatched) tip += '（未配工价）'
     if (unmatched) ElMessage.warning(tip)
     else ElMessage.success(tip)
@@ -949,5 +1119,9 @@ async function onBatchSubmit() {
 .alloc-op{border:1px solid #ebeef5;border-radius:4px;padding:8px}
 .alloc-op-title{display:flex;gap:12px;align-items:center;margin-bottom:6px;font-weight:500}
 .alloc-op-title .bad{color:#f56c6c}
-.alloc-user{display:flex;gap:8px;align-items:center;margin-bottom:4px}
+.share-box { width: 100%; }
+.share-person { display: flex; align-items: center; gap: 8px; margin: 4px 0; flex-wrap: wrap; }
+.share-min { width: 120px; }
+.share-unit { flex: none; font-size: 14px; line-height: 32px; color: #303133; }
+.share-preview { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #ebeef5; color: #606266; font-size: 13px; }
 </style>

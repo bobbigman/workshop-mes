@@ -95,6 +95,8 @@ public class ProdAbnormal
     public string? ImagePath { get; set; }          // 相对路径
     public long? WorkOrderId { get; set; }
     public long ReportedBy { get; set; }
+    /// <summary>上报时指定的处理人（docs/228）。与 HandledBy（实际处理人）分离。</summary>
+    public long? AssignHandlerUserId { get; set; }
     public DateTime ReportedAt { get; set; }
     public byte Status { get; set; }                // 0待处理 1已恢复
     public long? HandledBy { get; set; }

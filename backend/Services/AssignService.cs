@@ -11,6 +11,7 @@ public interface IAssignService
     Task<ApiResult<object?>> AssignAsync(long taskId, AssignDto dto, long factoryId, long currentUserId);
     Task<ApiResult<List<AssignWorkerDto>>> WorkersAsync(long factoryId, long currentUserId);
     Task<ApiResult<List<AssignDepartmentDto>>> DepartmentsAsync(long taskId, long factoryId, long currentUserId);
+    Task<ApiResult<List<AssignSuggestDto>>> SuggestAsync(long taskId, long factoryId, long currentUserId);
 }
 
 public class AssignDto
@@ -34,6 +35,15 @@ public class AssignDepartmentDto
 {
     public long Id { get; set; }
     public string Name { get; set; } = "";
+}
+
+/// <summary>派工推荐（docs/2L）：近 30 天该工序报工次数，其次良品。只读，确认仍走派工。</summary>
+public class AssignSuggestDto
+{
+    public long UserId { get; set; }
+    public string Name { get; set; } = "";
+    public int ReportCount { get; set; }
+    public int GoodQty { get; set; }
 }
 
 public class AssignTaskDto
@@ -230,6 +240,93 @@ public class AssignService : IAssignService
             .Select(d => new AssignDepartmentDto { Id = d.Id, Name = d.Name })
             .ToListAsync();
         return ApiResult<List<AssignDepartmentDto>>.Ok(list);
+    }
+
+    /// <summary>
+    /// 推荐派给谁（docs/2L）。近 30 天该工序有效报工（不含已退回）满 3 次才返回名单。
+    /// 按报工人 user_id 的次数降序，其次良品数。候选人=报工权限部门内在职非管理员 ∩ 当前可派范围。
+    /// </summary>
+    public async Task<ApiResult<List<AssignSuggestDto>>> SuggestAsync(long taskId, long factoryId, long currentUserId)
+    {
+        const int windowDays = 30;
+        const int minReports = 3;
+
+        var me = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == currentUserId && u.FactoryId == factoryId)
+            ?? throw ThrowHelper.Biz(nameof(SuggestAsync), "当前用户不存在");
+        if (me.Role != 1 && me.Role != 3)
+            throw ThrowHelper.BizUser("无派工权限");
+
+        var task = await _db.WorkOrderOperations.AsNoTracking().FirstOrDefaultAsync(t => t.Id == taskId)
+            ?? throw ThrowHelper.Biz(nameof(SuggestAsync), "工序任务不存在");
+        var orderOk = await _db.WorkOrders.AsNoTracking()
+            .AnyAsync(o => o.Id == task.WorkOrderId && o.FactoryId == factoryId);
+        if (!orderOk)
+            throw ThrowHelper.Biz(nameof(SuggestAsync), "工单不存在或不属于本厂");
+
+        var since = DateTime.Now.AddDays(-windowDays);
+        var historyCount = await _db.Reports.AsNoTracking().CountAsync(r =>
+            r.FactoryId == factoryId
+            && r.OperationId == task.OperationId
+            && r.ReviewStatus != 2
+            && r.ReportTime >= since);
+        if (historyCount < minReports)
+            return ApiResult<List<AssignSuggestDto>>.Ok(new List<AssignSuggestDto>());
+
+        var allowedDeptIds = await _db.OperationDepartments.AsNoTracking()
+            .Where(x => x.OperationId == task.OperationId)
+            .Select(x => x.DepartmentId)
+            .ToListAsync();
+        if (allowedDeptIds.Count == 0)
+            return ApiResult<List<AssignSuggestDto>>.Ok(new List<AssignSuggestDto>());
+
+        HashSet<long>? groupUserIds = null;
+        if (me.Role == 3)
+            groupUserIds = await GetGroupUserIdsAsync(currentUserId);
+
+        var candidateQuery = _db.DepartmentUsers.AsNoTracking()
+            .Where(du => allowedDeptIds.Contains(du.DepartmentId))
+            .Join(
+                _db.Users.AsNoTracking().Where(u => u.FactoryId == factoryId && u.Status == 1 && u.Role != 1),
+                du => du.UserId,
+                u => u.Id,
+                (du, u) => u.Id)
+            .Distinct();
+        if (groupUserIds != null)
+            candidateQuery = candidateQuery.Where(id => groupUserIds.Contains(id));
+        var candidateIds = await candidateQuery.ToListAsync();
+        if (candidateIds.Count == 0)
+            return ApiResult<List<AssignSuggestDto>>.Ok(new List<AssignSuggestDto>());
+
+        var ranked = await _db.Reports.AsNoTracking()
+            .Where(r => r.FactoryId == factoryId
+                && r.OperationId == task.OperationId
+                && r.ReviewStatus != 2
+                && r.ReportTime >= since
+                && candidateIds.Contains(r.UserId))
+            .GroupBy(r => r.UserId)
+            .Select(g => new { UserId = g.Key, ReportCount = g.Count(), GoodQty = g.Sum(x => x.GoodQty) })
+            .ToListAsync();
+        if (ranked.Count == 0)
+            return ApiResult<List<AssignSuggestDto>>.Ok(new List<AssignSuggestDto>());
+
+        var rankedIds = ranked.Select(x => x.UserId).ToList();
+        var nameMap = await _db.Users.AsNoTracking()
+            .Where(u => rankedIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u.Name);
+
+        var list = ranked
+            .OrderByDescending(x => x.ReportCount)
+            .ThenByDescending(x => x.GoodQty)
+            .ThenBy(x => nameMap.GetValueOrDefault(x.UserId, ""), StringComparer.Ordinal)
+            .Select(x => new AssignSuggestDto
+            {
+                UserId = x.UserId,
+                Name = nameMap.GetValueOrDefault(x.UserId, ""),
+                ReportCount = x.ReportCount,
+                GoodQty = x.GoodQty
+            })
+            .ToList();
+        return ApiResult<List<AssignSuggestDto>>.Ok(list);
     }
 
     public async Task<ApiResult<object?>> AssignAsync(long taskId, AssignDto dto, long factoryId, long currentUserId)

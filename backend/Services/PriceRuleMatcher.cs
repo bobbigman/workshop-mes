@@ -13,6 +13,8 @@ public static class PriceRuleMatcher
         public int CalcQty { get; init; }
         public decimal Amount { get; init; }
         public decimal DeductAmount { get; init; }
+        /// <summary>本行实际乘进金额的工价系数。计件/计时=用户系数；固定与未匹配=1（不乘）。</summary>
+        public decimal WageCoeff { get; init; } = 1m;
         public decimal WageAmount => Amount - DeductAmount;
         public bool Matched => RuleId.HasValue;
     }
@@ -50,8 +52,11 @@ public static class PriceRuleMatcher
         return candidates?.Rule;
     }
 
-    public static CalcResult Calculate(BasePriceRule? rule, int goodQty, int defectQty, int durationMinutes)
+    /// <param name="wageCoeff">人级工价系数。1 与不传相同。计件/计时乘入金额后再四舍五入到分；固定不乘；扣款始终不乘。</param>
+    public static CalcResult Calculate(BasePriceRule? rule, int goodQty, int defectQty, int durationMinutes, decimal wageCoeff = 1m)
     {
+        if (wageCoeff <= 0m) wageCoeff = 1m;
+
         if (rule == null)
         {
             return new CalcResult
@@ -60,26 +65,35 @@ public static class PriceRuleMatcher
                 UnitPrice = 0,
                 CalcQty = 0,
                 Amount = 0,
-                DeductAmount = 0
+                DeductAmount = 0,
+                WageCoeff = 1m
             };
         }
 
         var deduct = defectQty * (rule.DeductPrice ?? 0m);
         decimal amount;
         int calcQty;
+        decimal applied = 1m;
         switch (rule.PriceType)
         {
             case 2: // 计时
-                amount = Math.Round(durationMinutes / 60m * rule.UnitPrice, 2, MidpointRounding.AwayFromZero);
+                var hourly = durationMinutes / 60m * rule.UnitPrice;
+                if (wageCoeff != 1m) hourly *= wageCoeff;
+                amount = Math.Round(hourly, 2, MidpointRounding.AwayFromZero);
                 calcQty = 0;
+                applied = wageCoeff;
                 break;
-            case 3: // 固定
+            case 3: // 固定：月薪不乘系数
                 amount = rule.UnitPrice;
                 calcQty = 1;
+                applied = 1m;
                 break;
             default: // 计件
-                amount = Math.Round(goodQty * rule.UnitPrice, 2, MidpointRounding.AwayFromZero);
+                var piece = goodQty * rule.UnitPrice;
+                if (wageCoeff != 1m) piece *= wageCoeff;
+                amount = Math.Round(piece, 2, MidpointRounding.AwayFromZero);
                 calcQty = goodQty;
+                applied = wageCoeff;
                 break;
         }
 
@@ -90,7 +104,8 @@ public static class PriceRuleMatcher
             UnitPrice = rule.UnitPrice,
             CalcQty = calcQty,
             Amount = amount,
-            DeductAmount = Math.Round(deduct, 2, MidpointRounding.AwayFromZero)
+            DeductAmount = Math.Round(deduct, 2, MidpointRounding.AwayFromZero),
+            WageCoeff = applied
         };
     }
 }

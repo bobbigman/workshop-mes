@@ -110,6 +110,141 @@ public class AssignServiceTests
         Assert.Null(t.AssigneeDepartmentId);
         Assert.Equal(_fx.WorkerId, t.AssigneeUserId);
     }
+
+    [Fact]
+    public async Task Suggest_Ranks_By_Count_Then_GoodQty()
+    {
+        var (db, svc) = New();
+        var now = DateTime.Now;
+        var stamp = Guid.NewGuid().ToString("N")[..8];
+        var createdUserIds = new List<long>();
+        long dept2Id = 0, opId = 0, thinOpId = 0, bareOpId = 0;
+        var taskIds = new List<long>();
+        try
+        {
+            var workerB = new SysUser { FactoryId = _fx.FactoryId, Account = "asg_sb_" + stamp, Name = "工人乙", Role = 2, Password = "x", Status = 1, CreatedAt = now };
+            var outsider = new SysUser { FactoryId = _fx.FactoryId, Account = "asg_so_" + stamp, Name = "外部门", Role = 2, Password = "x", Status = 1, CreatedAt = now };
+            var admin = new SysUser { FactoryId = _fx.FactoryId, Account = "asg_sa_" + stamp, Name = "管理员测", Role = 1, Password = "x", Status = 1, CreatedAt = now };
+            var ghost = new SysUser { FactoryId = _fx.FactoryId, Account = "asg_sg_" + stamp, Name = "无部门", Role = 2, Password = "x", Status = 1, CreatedAt = now };
+            db.Users.AddRange(workerB, outsider, admin, ghost);
+            await db.SaveChangesAsync();
+            createdUserIds.AddRange(new[] { workerB.Id, outsider.Id, admin.Id, ghost.Id });
+
+            var dept2 = new SysDepartment { FactoryId = _fx.FactoryId, Code = "ASG-D2-" + stamp, Name = "焊工班", CreatedAt = now };
+            db.Departments.Add(dept2);
+            await db.SaveChangesAsync();
+            dept2Id = dept2.Id;
+            db.DepartmentUsers.AddRange(
+                new SysDepartmentUser { DepartmentId = _fx.DeptId, UserId = workerB.Id },
+                new SysDepartmentUser { DepartmentId = dept2.Id, UserId = outsider.Id });
+            await db.SaveChangesAsync();
+
+            var op = new BaseOperation { FactoryId = _fx.FactoryId, Code = "ASG-SG-" + stamp, Name = "推荐工序", CreatedAt = now };
+            var thin = new BaseOperation { FactoryId = _fx.FactoryId, Code = "ASG-TH-" + stamp, Name = "样本不足", CreatedAt = now };
+            var bare = new BaseOperation { FactoryId = _fx.FactoryId, Code = "ASG-BR-" + stamp, Name = "无权限部门", CreatedAt = now };
+            db.Operations.AddRange(op, thin, bare);
+            await db.SaveChangesAsync();
+            opId = op.Id;
+            thinOpId = thin.Id;
+            bareOpId = bare.Id;
+            db.OperationDepartments.AddRange(
+                new BaseOperationDepartment { OperationId = op.Id, DepartmentId = _fx.DeptId },
+                new BaseOperationDepartment { OperationId = op.Id, DepartmentId = dept2.Id },
+                new BaseOperationDepartment { OperationId = thin.Id, DepartmentId = _fx.DeptId });
+            await db.SaveChangesAsync();
+
+            var t1 = new ProdWorkOrderOperation { WorkOrderId = _fx.OrderId, OperationId = op.Id, Seq = 91, PlanQty = 10 };
+            var t2 = new ProdWorkOrderOperation { WorkOrderId = _fx.OrderId, OperationId = thin.Id, Seq = 92, PlanQty = 10 };
+            var t3 = new ProdWorkOrderOperation { WorkOrderId = _fx.OrderId, OperationId = bare.Id, Seq = 93, PlanQty = 10 };
+            db.WorkOrderOperations.AddRange(t1, t2, t3);
+            await db.SaveChangesAsync();
+            taskIds.AddRange(new[] { t1.Id, t2.Id, t3.Id });
+
+            ProdReport Row(long operationId, long userId, int good, byte review, DateTime time, long? operatorId = null) => new()
+            {
+                FactoryId = _fx.FactoryId,
+                OrderId = _fx.OrderId,
+                OperationId = operationId,
+                UserId = userId,
+                GoodQty = good,
+                DefectQty = 0,
+                ReviewStatus = review,
+                ReportTime = time,
+                OperatorUserId = operatorId
+            };
+
+            db.Reports.AddRange(
+                Row(op.Id, _fx.WorkerId, 4, 1, now),
+                Row(op.Id, _fx.WorkerId, 6, 0, now),
+                Row(op.Id, _fx.WorkerId, 1, 0, now, _fx.LeaderId),
+                Row(op.Id, _fx.WorkerId, 99, 2, now),
+                Row(op.Id, workerB.Id, 100, 1, now),
+                Row(op.Id, workerB.Id, 500, 1, now.AddDays(-40)),
+                Row(op.Id, outsider.Id, 1, 1, now),
+                Row(op.Id, outsider.Id, 1, 1, now),
+                Row(op.Id, outsider.Id, 1, 0, now),
+                Row(thin.Id, _fx.WorkerId, 2, 1, now),
+                Row(thin.Id, _fx.WorkerId, 2, 1, now),
+                Row(thin.Id, _fx.WorkerId, 8, 2, now),
+                Row(thin.Id, _fx.WorkerId, 8, 1, now.AddDays(-40)),
+                Row(bare.Id, ghost.Id, 1, 1, now),
+                Row(bare.Id, ghost.Id, 1, 1, now),
+                Row(bare.Id, ghost.Id, 1, 1, now));
+            await db.SaveChangesAsync();
+
+            var leader = await svc.SuggestAsync(t1.Id, _fx.FactoryId, _fx.LeaderId);
+            Assert.Equal(2, leader.Data!.Count);
+            Assert.Equal(_fx.WorkerId, leader.Data[0].UserId);
+            Assert.Equal("工人甲", leader.Data[0].Name);
+            Assert.Equal(3, leader.Data[0].ReportCount);
+            Assert.Equal(11, leader.Data[0].GoodQty);
+            Assert.Equal(workerB.Id, leader.Data[1].UserId);
+            Assert.Equal(1, leader.Data[1].ReportCount);
+            Assert.Equal(100, leader.Data[1].GoodQty);
+
+            var asAdmin = await svc.SuggestAsync(t1.Id, _fx.FactoryId, admin.Id);
+            Assert.Equal(3, asAdmin.Data!.Count);
+            Assert.Equal(_fx.WorkerId, asAdmin.Data[0].UserId);
+            Assert.Equal(outsider.Id, asAdmin.Data[1].UserId);
+            Assert.Equal(3, asAdmin.Data[1].ReportCount);
+            Assert.Equal(3, asAdmin.Data[1].GoodQty);
+            Assert.Equal(workerB.Id, asAdmin.Data[2].UserId);
+
+            var thinRes = await svc.SuggestAsync(t2.Id, _fx.FactoryId, _fx.LeaderId);
+            Assert.Empty(thinRes.Data!);
+            var bareRes = await svc.SuggestAsync(t3.Id, _fx.FactoryId, admin.Id);
+            Assert.Empty(bareRes.Data!);
+
+            await Assert.ThrowsAsync<BusinessException>(() =>
+                svc.SuggestAsync(t1.Id, _fx.FactoryId, _fx.WorkerId));
+            await Assert.ThrowsAsync<BusinessException>(() =>
+                svc.SuggestAsync(_fx.OtherFactoryTaskId, _fx.FactoryId, _fx.LeaderId));
+        }
+        finally
+        {
+            var opIds = new[] { opId, thinOpId, bareOpId }.Where(id => id > 0).ToList();
+            if (opIds.Count > 0)
+                db.Reports.RemoveRange(db.Reports.Where(r => opIds.Contains(r.OperationId)));
+            if (taskIds.Count > 0)
+            {
+                db.WorkOrderOperationAssignees.RemoveRange(
+                    db.WorkOrderOperationAssignees.Where(a => taskIds.Contains(a.WorkOrderOperationId)));
+                db.WorkOrderOperations.RemoveRange(db.WorkOrderOperations.Where(t => taskIds.Contains(t.Id)));
+            }
+            if (opIds.Count > 0)
+            {
+                db.OperationDepartments.RemoveRange(db.OperationDepartments.Where(x => opIds.Contains(x.OperationId)));
+                db.Operations.RemoveRange(db.Operations.Where(o => opIds.Contains(o.Id)));
+            }
+            if (createdUserIds.Count > 0)
+                db.DepartmentUsers.RemoveRange(db.DepartmentUsers.Where(x => createdUserIds.Contains(x.UserId)));
+            if (dept2Id > 0)
+                db.Departments.RemoveRange(db.Departments.Where(d => d.Id == dept2Id));
+            if (createdUserIds.Count > 0)
+                db.Users.RemoveRange(db.Users.Where(u => createdUserIds.Contains(u.Id)));
+            await db.SaveChangesAsync();
+        }
+    }
 }
 
 [CollectionDefinition("assign_db", DisableParallelization = true)]
