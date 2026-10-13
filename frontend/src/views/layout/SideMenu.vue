@@ -31,6 +31,7 @@
       <el-menu-item v-if="canWechat" index="/wechat-alert">微信预警</el-menu-item>
       <el-menu-item index="/worker-view">工人手机视角</el-menu-item>
       <el-menu-item index="/report-upstream">报工上级校验</el-menu-item>
+      <el-menu-item index="/report-qty">报工数量设置</el-menu-item>
       <el-menu-item index="/ai-assistant">AI 助手</el-menu-item>
       <el-menu-item index="/login-setting">登录页图片</el-menu-item>
       <el-menu-item index="/mcp-key">MCP 钥匙</el-menu-item>

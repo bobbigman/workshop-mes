@@ -608,6 +608,20 @@ BEGIN
     CONSTRAINT UQ_sys_report_upstream_setting_factory UNIQUE (factory_id)
   );
 END");
+
+        // 报工数量口径（docs/230）：每工厂一条；默认比例 0、不良不计入
+        await db.Database.ExecuteSqlRawAsync(@"
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'sys_report_qty_setting')
+BEGIN
+  CREATE TABLE sys_report_qty_setting (
+    id             BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_sys_report_qty_setting PRIMARY KEY,
+    factory_id     BIGINT NOT NULL,
+    overrun_ratio  INT NOT NULL CONSTRAINT DF_sys_report_qty_ratio DEFAULT 0,
+    count_defect   BIT NOT NULL CONSTRAINT DF_sys_report_qty_defect DEFAULT 0,
+    updated_at     DATETIME2 NOT NULL CONSTRAINT DF_sys_report_qty_ua DEFAULT SYSDATETIME(),
+    CONSTRAINT UQ_sys_report_qty_setting_factory UNIQUE (factory_id)
+  );
+END");
     }
 
     /// <summary>docs/133 回滚：去掉 Pushplus 升表字段与规则扩展列；列不存在则跳过。</summary>

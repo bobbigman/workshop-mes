@@ -49,11 +49,11 @@ public class ReviewListDto
     public DateTime ReportTime { get; set; }
     public decimal? UnitPrice { get; set; }
     public decimal? WageAmount { get; set; }
-    /// <summary>上工序合格库存/可报上限；首道=工单计划数；无法判定工序顺序时为 null。</summary>
+    /// <summary>可报上限。首道=工序计划按超报比例向上取整；非首道=紧邻上一道已复核通过量（默认良品，计入时含不良）。无法判定工序顺序时为 null。</summary>
     public int? UpstreamLimit { get; set; }
     /// <summary>同工单同工序已通过+待复核良品合计（含本笔）。</summary>
     public int SameOpOccupiedQty { get; set; }
-    /// <summary>同工序累计占用 &gt; 可报上限。</summary>
+    /// <summary>超过上道上限，或超过本道允许件数。</summary>
     public bool QtyAbnormal { get; set; }
 }
 
@@ -68,7 +68,13 @@ public class ReviewService : IReviewService
 {
     private readonly AppDbContext _db;
     private readonly WechatEventService? _events;
-    public ReviewService(AppDbContext db, WechatEventService? events = null) { _db = db; _events = events; }
+    private readonly IReportQtySettingService _qtySetting;
+    public ReviewService(AppDbContext db, IReportQtySettingService qtySetting, WechatEventService? events = null)
+    {
+        _db = db;
+        _qtySetting = qtySetting;
+        _events = events;
+    }
 
     public async Task<ApiResult<PageResult<ReviewListDto>>> PendingAsync(ReviewQueryDto query, long factoryId, long currentUserId)
     {
@@ -148,28 +154,30 @@ public class ReviewService : IReviewService
             WageAmount = x.WageAmount
         }).ToList();
 
-        await FillQtyCheckAsync(list, rows.Select(x => (x.Id, x.OrderId, x.OrderQty, x.ProductId, x.OperationId)).ToList());
+        await FillQtyCheckAsync(factoryId, list, rows.Select(x => (x.Id, x.OrderId, x.OrderQty, x.ProductId, x.OperationId)).ToList());
 
         return ApiResult<PageResult<ReviewListDto>>.Ok(new PageResult<ReviewListDto> { List = list, Total = total });
     }
 
     /// <summary>
-    /// 可报上限：首道=工单计划数；非首道=紧邻上一道已复核通过良品合计。
-    /// 异常：同工单同工序已通过+待复核良品合计（含本笔）&gt; 可报上限。
+    /// 尺子②：首道=工序计划按超报比例向上取整；非首道=紧邻上一道已复核通过量（默认良品，计入时含不良）。
+    /// 尺子①：同工序已通过+待复核良品 &gt; 本道允许件数，也标异常。两条并存。
     /// </summary>
     private async Task FillQtyCheckAsync(
+        long factoryId,
         List<ReviewListDto> list,
         List<(long Id, long OrderId, int OrderQty, long ProductId, long OperationId)> keys)
     {
         if (list.Count == 0) return;
 
+        var qtyCfg = await _qtySetting.GetOrDefaultAsync(factoryId);
         var byId = keys.ToDictionary(x => x.Id);
         var orderIds = keys.Select(x => x.OrderId).Distinct().ToList();
 
         // 工序顺序：优先工单任务行，否则产品工艺路线
         var taskRows = await _db.WorkOrderOperations.AsNoTracking()
             .Where(t => orderIds.Contains(t.WorkOrderId))
-            .Select(t => new { t.WorkOrderId, t.OperationId, t.Seq })
+            .Select(t => new { t.WorkOrderId, t.OperationId, t.Seq, t.PlanQty })
             .ToListAsync();
         var tasksByOrder = taskRows.GroupBy(t => t.WorkOrderId)
             .ToDictionary(g => g.Key, g => g.OrderBy(x => x.Seq).ToList());
@@ -214,10 +222,15 @@ public class ReviewService : IReviewService
                 g.Key.OrderId,
                 g.Key.OperationId,
                 ApprovedGood = g.Sum(x => x.ReviewStatus == 1 ? x.GoodQty : 0),
+                ApprovedDefect = g.Sum(x => x.ReviewStatus == 1 ? x.DefectQty : 0),
                 OccupiedGood = g.Sum(x => x.GoodQty)
             }).ToListAsync();
         var approvedMap = reportAgg.ToDictionary(x => (x.OrderId, x.OperationId), x => x.ApprovedGood);
+        var approvedDefectMap = reportAgg.ToDictionary(x => (x.OrderId, x.OperationId), x => x.ApprovedDefect);
         var occupiedMap = reportAgg.ToDictionary(x => (x.OrderId, x.OperationId), x => x.OccupiedGood);
+        var planMap = new Dictionary<(long OrderId, long OperationId), int>();
+        foreach (var t in taskRows)
+            planMap[(t.WorkOrderId, t.OperationId)] = t.PlanQty;
 
         foreach (var dto in list)
         {
@@ -229,24 +242,37 @@ public class ReviewService : IReviewService
             else if (routeOpsByOrder.TryGetValue(key.OrderId, out var routeOps))
                 ops = routeOps;
 
+            var planBase = planMap.TryGetValue((key.OrderId, key.OperationId), out var planQty)
+                ? planQty
+                : key.OrderQty;
+            var allowed = ReportQtySettingService.AllowedQty(planBase, qtyCfg.OverrunRatio);
+
             int? limit = null;
             if (ops != null && ops.Count > 0 && ops.Any(o => o.OperationId == key.OperationId))
             {
                 var curSeq = ops.Where(o => o.OperationId == key.OperationId).Min(o => o.Seq);
                 var prev = ops.Where(o => o.Seq < curSeq).OrderByDescending(o => o.Seq).FirstOrDefault();
                 if (!ops.Any(o => o.Seq < curSeq))
-                    limit = key.OrderQty; // 首道：工单计划数
+                    limit = allowed; // 首道：工序计划按超报比例
                 else
                 {
                     approvedMap.TryGetValue((key.OrderId, prev.OperationId), out var approved);
-                    limit = approved;
+                    if (qtyCfg.CountDefect)
+                    {
+                        approvedDefectMap.TryGetValue((key.OrderId, prev.OperationId), out var defect);
+                        limit = approved + defect;
+                    }
+                    else
+                        limit = approved;
                 }
             }
 
             occupiedMap.TryGetValue((key.OrderId, key.OperationId), out var occupied);
             dto.UpstreamLimit = limit;
             dto.SameOpOccupiedQty = occupied;
-            dto.QtyAbnormal = limit != null && occupied > limit.Value;
+            var overUpstream = limit != null && occupied > limit.Value;
+            var overPlan = occupied > allowed;
+            dto.QtyAbnormal = overUpstream || overPlan;
         }
     }
 

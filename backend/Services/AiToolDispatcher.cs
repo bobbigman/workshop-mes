@@ -395,6 +395,8 @@ public class AiToolDispatcher
             message = result.Message,
             truncated = result.Truncated,
             totalMatched = result.TotalMatched,
+            retrievalVersion = result.RetrievalVersion,
+            retrievalSource = result.RetrievalSource,
             warnings = result.Warnings,
             sources
         });

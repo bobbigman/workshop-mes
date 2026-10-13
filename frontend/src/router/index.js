@@ -29,6 +29,7 @@ const routes = [
       { path: 'wechat-alert', name: 'WechatAlert', component: () => import('@/views/wechat-alert/index.vue'), meta: { title: '微信预警', adminOnly: true, feature: FEATURE.WechatDueAlert } },
       { path: 'worker-view', name: 'WorkerView', component: () => import('@/views/worker-view/index.vue'), meta: { title: '工人手机视角', adminOnly: true } },
       { path: 'report-upstream', name: 'ReportUpstream', component: () => import('@/views/report-upstream/index.vue'), meta: { title: '报工上级校验', adminOnly: true } },
+      { path: 'report-qty', name: 'ReportQty', component: () => import('@/views/report-qty/index.vue'), meta: { title: '报工数量设置', adminOnly: true } },
       { path: 'stat', name: 'Stat', component: () => import('@/views/stat/index.vue'), meta: { title: '生产报表' } },
       { path: 'defect-stat', name: 'DefectStat', component: () => import('@/views/defect-stat/index.vue'), meta: { title: '不良品报表' } },
       { path: 'sku-stat', name: 'SkuStat', component: () => import('@/views/sku-stat/index.vue'), meta: { title: '色码汇总' } },
