@@ -169,7 +169,7 @@ function backToCredentials() {
   selectingCode.value = ''
 }
 
-const DEFAULT_BANNER = '/login-banner-premium-v1.webp'
+const DEFAULT_BANNER = '/login-banner-premium-v2.webp'
 const narrow = ref(window.matchMedia('(max-width: 768px)').matches)
 const bannerReady = ref(false)
 const bannerUrl = ref('')
