@@ -87,6 +87,24 @@
             <label><input type="radio" value="dept" v-model="assignMode" /> 班组</label>
           </div>
           <template v-if="assignMode === 'person'">
+            <div v-if="assignSuggestList.length" class="assign-suggest">
+              <div class="assign-suggest-title">推荐派给谁</div>
+              <button
+                v-for="(s, i) in assignSuggestList"
+                :key="s.userId"
+                type="button"
+                class="assign-suggest-item"
+                :class="{ top: i === 0 }"
+                @click="pickSuggest(s.userId)"
+              >
+                <span class="name">{{ s.name }}<template v-if="isSuggestPicked(s.userId)"> · 已选</template></span>
+                <span class="meta">近30天 {{ s.reportCount }} 次 · 良品 {{ s.goodQty }}</span>
+              </button>
+            </div>
+            <p v-if="assignSuggestError" class="share-hint err">
+              推荐名单加载失败
+              <button type="button" class="link-btn" @click="loadAssignSuggest">重试</button>
+            </p>
             <label v-for="w in assignWorkersList" :key="w.id" class="share-person">
               <input type="checkbox" :value="w.id" v-model="assignSelectedIds" />
               {{ w.name }}
@@ -110,6 +128,45 @@
           <button type="button" class="btn btn-primary assign-save" :disabled="assignSaving" @click="saveAssign">
             保存派工
           </button>
+        </div>
+      </div>
+
+      <label class="share-toggle">
+        <input v-model="shareEnabled" type="checkbox" />
+        多人共同报工
+      </label>
+      <div v-if="shareEnabled" class="share-box">
+        <p class="share-hint">勾选参与人（须含自己）。按工时填分钟；选平均按良品数平分，旁边是分到的个数。</p>
+        <div class="share-mode">
+          <label><input type="radio" :value="1" v-model.number="shareMode" /> 平均</label>
+          <label><input type="radio" :value="2" v-model.number="shareMode" /> 按工时</label>
+        </div>
+        <label v-for="c in candidates" :key="c.id" class="share-person">
+          <input type="checkbox" :value="c.id" v-model="participantIds" />
+          <span class="share-name">{{ c.name }}</span>
+          <template v-if="participantIds.map(Number).includes(Number(c.id))">
+            <template v-if="shareMode === 2">
+              <input
+                v-model.number="participantDurations[c.id]"
+                class="share-dur"
+                type="number"
+                min="0"
+                max="1440"
+              />
+              <span class="share-dur-unit">分钟</span>
+            </template>
+            <span v-else class="share-dur-unit">{{ shareGood(c.id) }} 个</span>
+          </template>
+        </label>
+        <p v-if="candidatesLoadError" class="share-hint err">
+          参与人列表加载失败
+          <button type="button" class="link-btn" @click="reloadCandidates">重试</button>
+        </p>
+        <p v-else-if="candidates.length === 0" class="share-hint">该工序暂无可选参与人</p>
+        <div v-if="sharePreview.length" class="share-preview">
+          <div v-for="p in sharePreview" :key="p.userId" class="share-preview-row">
+            {{ p.name }}：良品 {{ p.good }} 个 / 不良 {{ p.defect }} 个
+          </div>
         </div>
       </div>
 
@@ -169,43 +226,6 @@
         <span>分钟</span>
       </div>
 
-      <label class="share-toggle">
-        <input v-model="shareEnabled" type="checkbox" />
-        多人共同报工
-      </label>
-      <div v-if="shareEnabled" class="share-box">
-        <p class="share-hint">勾选参与人（须含自己）；合计=总良品，尾差归你</p>
-        <div class="share-mode">
-          <label><input type="radio" :value="1" v-model.number="shareMode" /> 平均</label>
-          <label><input type="radio" :value="2" v-model.number="shareMode" /> 按工时</label>
-        </div>
-        <label v-for="c in candidates" :key="c.id" class="share-person">
-          <input type="checkbox" :value="c.id" v-model="participantIds" />
-          <span class="share-name">{{ c.name }}</span>
-          <template v-if="shareMode === 2 && participantIds.map(Number).includes(c.id)">
-            <input
-              v-model.number="participantDurations[c.id]"
-              class="share-dur"
-              type="number"
-              min="0"
-              max="1440"
-              placeholder="分钟"
-            />
-            <span class="share-dur-unit">分</span>
-          </template>
-        </label>
-        <p v-if="candidatesLoadError" class="share-hint err">
-          参与人列表加载失败
-          <button type="button" class="link-btn" @click="reloadCandidates">重试</button>
-        </p>
-        <p v-else-if="candidates.length === 0" class="share-hint">该工序暂无可选参与人</p>
-        <div v-if="sharePreview.length" class="share-preview">
-          <div v-for="p in sharePreview" :key="p.userId" class="share-preview-row">
-            {{ p.name }}：良品 {{ p.good }} / 不良 {{ p.defect }}
-          </div>
-        </div>
-      </div>
-
       <p v-if="locked" class="full-tip">该工序已报满，不可继续报工</p>
     </div>
 
@@ -235,7 +255,7 @@ import 'vant/es/image-preview/style'
 import 'vant/es/dialog/style'
 import { getOrderByNo, submitReport, getDefectsByOp, getCustomFields, getReportCandidates, getTodayPieceSummary } from '@/api/prod'
 import { isUpstreamSoftConfirm } from '@/utils/upstreamConfirm'
-import { assign, assignWorkers, assignDepartments } from '@/api/assign'
+import { assign, assignWorkers, assignDepartments, assignSuggest } from '@/api/assign'
 import { getKnowledgeFileByOrder, getKnowledgeFileRaw } from '@/api/knowledge'
 import TabBar from './TabBar.vue'
 import FactoryBadge from '@/components/FactoryBadge.vue'
@@ -292,6 +312,8 @@ const assignMode = ref('person')
 const assignWorkersList = ref([])
 const assignWorkersError = ref(false)
 const assignSelectedIds = ref([])
+const assignSuggestList = ref([])
+const assignSuggestError = ref(false)
 const assignDeptList = ref([])
 const assignDeptError = ref(false)
 const assignSelectedDeptId = ref(null)
@@ -416,12 +438,17 @@ const sharePreview = computed(() => {
     const c = candidates.value.find(x => x.id === id)
     return {
       userId: id,
-      name: c?.name || String(id),
+      name: c?.name || (id === myUserId ? (localStorage.getItem('userName') || '我') : String(id)),
       good: goods[i],
       defect: defectsArr[i]
     }
   })
 })
+
+function shareGood(id) {
+  const hit = sharePreview.value.find(p => p.userId === Number(id))
+  return hit ? hit.good : 0
+}
 
 watch(() => form.value.defectQty, (n) => {
   if (!(Number(n) > 0)) form.value.defectId = null
@@ -484,6 +511,7 @@ async function tryOpenAssignFromQuery() {
     syncAssignSelection()
     assignPanelOpen.value = true
     await loadAssignDepts()
+    await loadAssignSuggest()
   }
 }
 
@@ -591,6 +619,8 @@ async function onOpChange() {
   assignPanelOpen.value = false
   syncAssignSelection()
   assignDeptList.value = []
+  assignSuggestList.value = []
+  assignSuggestError.value = false
   if (!form.value.operationId) { defects.value = []; return }
   const res = await getDefectsByOp(Number(form.value.operationId))
   defects.value = res.data || []
@@ -628,6 +658,35 @@ async function toggleAssignPanel() {
   if (assignPanelOpen.value) {
     await loadAssignWorkers()
     await loadAssignDepts()
+    await loadAssignSuggest()
+  }
+}
+
+function isSuggestPicked(userId) {
+  return assignSelectedIds.value.map(Number).includes(Number(userId))
+}
+
+function pickSuggest(userId) {
+  const worker = assignWorkersList.value.find(w => Number(w.id) === Number(userId))
+  const id = worker ? worker.id : Number(userId)
+  if (isSuggestPicked(id)) return
+  assignSelectedIds.value = [...assignSelectedIds.value, id]
+}
+
+async function loadAssignSuggest() {
+  if (!canAssign) return
+  const t = currentTask.value
+  if (!t?.id) {
+    assignSuggestList.value = []
+    return
+  }
+  assignSuggestError.value = false
+  try {
+    const res = await assignSuggest(t.id)
+    assignSuggestList.value = res.data || []
+  } catch {
+    assignSuggestList.value = []
+    assignSuggestError.value = true
   }
 }
 
@@ -876,10 +935,16 @@ async function onSubmit() {
   margin-top: 2px; font-size: 40px; font-weight: 700; line-height: 1.1; color: var(--app-primary);
 }
 .form label { display: block; margin: 14px 0 6px; font-size: 13px; color: var(--app-text-2); }
-.form input, .form select {
+.form input:not([type="checkbox"]):not([type="radio"]),
+.form select {
   width: 100%; height: var(--h5-control-height); border: 1px solid var(--app-border);
   border-radius: var(--app-radius-sm); padding: 0 12px; font-size: 16px;
   box-sizing: border-box; background: var(--app-card); color: var(--app-text-1);
+}
+.form input[type="checkbox"],
+.form input[type="radio"] {
+  width: 20px; height: 20px; min-width: 20px; margin: 0; padding: 0; flex: none;
+  accent-color: var(--app-primary);
 }
 .form input.qty-input {
   height: var(--h5-qty-height); font-size: var(--h5-qty-font); font-weight: 700; text-align: center;
@@ -911,17 +976,18 @@ async function onSubmit() {
 .btn-outline { background: var(--app-card); color: var(--app-primary); border: 1.5px solid var(--app-primary); }
 .btn-primary { background: var(--app-primary); color: var(--app-card); }
 .full-tip { margin: 12px 0 0; font-size: 13px; color: var(--app-warning); text-align: center; }
-.share-toggle { display: flex; align-items: center; gap: 8px; margin-top: 4px; font-weight: 600; }
+.form label.share-toggle { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 16px; font-weight: 600; color: var(--app-text-1); }
+.form input.share-dur { width: 72px; height: 32px; flex: none; padding: 0 6px; }
 .share-box {
   background: var(--app-bg); border-radius: var(--app-radius-sm); padding: 10px 12px; margin-top: 8px;
 }
 .share-mode { display: flex; gap: 16px; margin-bottom: 8px; font-size: 14px; }
-.share-mode label { display: flex; align-items: center; gap: 4px; font-weight: 400; }
+.form .share-mode label { display: flex; align-items: center; gap: 4px; margin: 0; font-size: 14px; font-weight: 400; color: var(--app-text-1); }
 .share-hint { margin: 0 0 8px; font-size: 12px; color: var(--app-text-3); }
-.share-person { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 15px; font-weight: 400; flex-wrap: wrap; }
+.form label.share-person { display: flex; align-items: center; gap: 8px; margin: 0; padding: 6px 0; font-size: 15px; font-weight: 400; color: var(--app-text-1); flex-wrap: wrap; }
 .share-name { flex: 1; min-width: 4em; }
 .share-dur { width: 72px; height: 32px; padding: 0 6px; border: 1px solid var(--app-border); border-radius: 6px; }
-.share-dur-unit { font-size: 12px; color: var(--app-text-3); }
+.share-dur-unit { flex: none; font-size: 15px; color: var(--app-text-1); }
 .share-preview { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--app-border); }
 .share-preview-row { font-size: 13px; color: var(--app-text-2); padding: 2px 0; }
 .assign-box {
@@ -929,6 +995,17 @@ async function onSubmit() {
 }
 .assign-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 14px; }
 .assign-panel { margin-top: 8px; }
+.assign-suggest { margin: 0 0 8px; }
+.assign-suggest-title { font-size: 12px; color: var(--app-text-3); margin-bottom: 4px; }
+.assign-suggest-item {
+  display: block; width: 100%; text-align: left; margin: 0 0 6px; padding: 8px 10px;
+  border: 1px solid var(--app-border); border-radius: 8px; background: var(--app-card);
+  color: inherit; font: inherit;
+}
+.assign-suggest-item.top { border-color: var(--app-primary); background: var(--app-primary-light); }
+.assign-suggest-item .name { display: block; font-size: 15px; font-weight: 600; }
+.assign-suggest-item.top .name { color: var(--app-primary); }
+.assign-suggest-item .meta { display: block; margin-top: 2px; font-size: 12px; color: var(--app-text-3); }
 .assign-mode { display: flex; gap: 16px; margin-bottom: 8px; font-size: 14px; color: var(--app-text-2); }
 .assign-save { width: 100%; height: 40px; margin-top: 8px; }
 .guide-block {

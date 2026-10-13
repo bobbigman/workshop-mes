@@ -27,6 +27,11 @@ public class AssignController : ControllerBase
     public Task<ApiResult<List<AssignDepartmentDto>>> Departments(long taskId) =>
         _svc.DepartmentsAsync(taskId, JwtHelper.GetFactoryId(User), JwtHelper.GetUserId(User));
 
+    /// <summary>推荐派给谁（docs/2L）：只读。样本不足时 data 为空列表。</summary>
+    [HttpGet("suggest/{taskId:long}")]
+    public Task<ApiResult<List<AssignSuggestDto>>> Suggest(long taskId) =>
+        _svc.SuggestAsync(taskId, JwtHelper.GetFactoryId(User), JwtHelper.GetUserId(User));
+
     [HttpPut("{taskId:long}")]
     public Task<ApiResult<object?>> Assign(long taskId, [FromBody] AssignDto dto) =>
         _svc.AssignAsync(taskId, dto ?? new AssignDto(), JwtHelper.GetFactoryId(User), JwtHelper.GetUserId(User));

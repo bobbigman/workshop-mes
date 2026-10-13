@@ -80,6 +80,28 @@ public class AbnormalServiceTests
             WorkOrderId = _fx.OtherFactoryOrderId
         }, _fx.WorkerId, _fx.FactoryId));
     }
+
+    [Fact]
+    public async Task Create_Stores_AssignHandler_And_Rejects_Unknown()
+    {
+        var (db, svc, _) = New();
+        await svc.CreateAsync(new AbnormalCreateForm
+        {
+            Type = 2,
+            Description = "缺螺丝指定管理员",
+            HandlerUserId = _fx.AdminId
+        }, _fx.WorkerId, _fx.FactoryId);
+
+        var row = await db.Abnormals.AsNoTracking().FirstAsync(a => a.Description == "缺螺丝指定管理员");
+        Assert.Equal(_fx.AdminId, row.AssignHandlerUserId);
+
+        await Assert.ThrowsAsync<BusinessException>(() => svc.CreateAsync(new AbnormalCreateForm
+        {
+            Type = 2,
+            Description = "指定不存在",
+            HandlerUserId = 999999999
+        }, _fx.WorkerId, _fx.FactoryId));
+    }
 }
 
 [CollectionDefinition("abnormal_db", DisableParallelization = true)]

@@ -32,6 +32,14 @@
     </label>
 
     <label class="field">
+      <span>指定处理人（可选）</span>
+      <select v-model="handlerUserId">
+        <option value="">不指定</option>
+        <option v-for="u in handlers" :key="u.id" :value="String(u.id)">{{ u.name }}</option>
+      </select>
+    </label>
+
+    <label class="field">
       <span>拍照（可选）</span>
       <input type="file" accept="image/*" capture="environment" @change="onFile" />
       <div v-if="preview" class="preview"><img :src="preview" alt="预览" /></div>
@@ -46,10 +54,10 @@
 </template>
 
 <script setup>
-import { reactive, ref, computed } from 'vue'
+import { reactive, ref, computed, onMounted } from 'vue'
 import { showToast, showSuccessToast } from 'vant'
 import 'vant/es/toast/style'
-import { createAbnormal, getOrderByNo } from '@/api/prod'
+import { createAbnormal, getOrderByNo, getAbnormalHandlers } from '@/api/prod'
 import TabBar from './TabBar.vue'
 import FactoryBadge from '@/components/FactoryBadge.vue'
 import H5LogoutBtn from '@/components/H5LogoutBtn.vue'
@@ -62,13 +70,20 @@ const types = [
 
 const form = reactive({ type: 1, description: '' })
 const orderNo = ref('')
+const handlerUserId = ref('')
+const handlers = ref([])
 const file = ref(null)
 const preview = ref('')
 const submitting = ref(false)
 
 const isDirty = computed(() =>
-  !!(form.description.trim() || orderNo.value.trim() || file.value)
+  !!(form.description.trim() || orderNo.value.trim() || handlerUserId.value || file.value)
 )
+
+onMounted(async () => {
+  const res = await getAbnormalHandlers()
+  handlers.value = res.data || []
+})
 
 function onFile(e) {
   const f = e.target.files?.[0]
@@ -95,11 +110,13 @@ async function onSubmit() {
     fd.append('type', String(form.type))
     fd.append('description', form.description.trim())
     if (workOrderId) fd.append('workOrderId', String(workOrderId))
+    if (handlerUserId.value) fd.append('handlerUserId', handlerUserId.value)
     if (file.value) fd.append('image', file.value)
     await createAbnormal(fd)
     showSuccessToast('上报成功')
     form.description = ''
     orderNo.value = ''
+    handlerUserId.value = ''
     file.value = null
     if (preview.value) URL.revokeObjectURL(preview.value)
     preview.value = ''
@@ -132,7 +149,7 @@ async function onSubmit() {
 }
 .field { display: block; margin-bottom: 14px; }
 .field span { display: block; margin-bottom: 6px; font-size: 13px; color: var(--app-text-2); }
-.field textarea, .field input[type="text"] {
+.field textarea, .field input[type="text"], .field select {
   width: 100%; box-sizing: border-box; padding: 10px 12px;
   border: 1px solid var(--app-border); border-radius: 8px; font-size: 15px;
   background: var(--app-card); color: var(--app-text-1);

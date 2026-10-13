@@ -34,10 +34,14 @@ public class UserCreateDto
     public string Account { get; set; } = "";
     public string? Phone { get; set; }
     public string? WechatId { get; set; }
+    /// <summary>企微通讯录账号；空=不 @（docs/226）</summary>
+    public string? WecomUserId { get; set; }
     public string Name { get; set; } = "";
     public byte Role { get; set; }
     /// <summary>0内部员工 1临时用工 2外部供应商；默认 0</summary>
     public byte UserType { get; set; }
+    /// <summary>工价系数；不传=新建当 1，编辑则保持原值（docs/225）</summary>
+    public decimal? WageCoeff { get; set; }
     public string Password { get; set; } = "";
     /// <summary>所属部门 Id 列表（写 sys_department_user，与部门弹窗同源）</summary>
     public List<long> DeptIds { get; set; } = new();
@@ -49,9 +53,11 @@ public class UserListDto
     public string Account { get; set; } = "";
     public string? Phone { get; set; }
     public string? WechatId { get; set; }
+    public string? WecomUserId { get; set; }
     public string Name { get; set; } = "";
     public byte Role { get; set; }
     public byte UserType { get; set; }
+    public decimal WageCoeff { get; set; }
     public byte Status { get; set; }
     public List<long> DeptIds { get; set; } = new();
     /// <summary>部门名顿号分隔，供列表展示</summary>
@@ -96,8 +102,8 @@ public class UserService : IUserService
             .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
             .Select(u => new UserListDto
             {
-                Id = u.Id, Account = u.Account, Phone = u.Phone, WechatId = u.WechatId,
-                Name = u.Name, Role = u.Role, UserType = u.UserType, Status = u.Status
+                Id = u.Id, Account = u.Account, Phone = u.Phone, WechatId = u.WechatId, WecomUserId = u.WecomUserId,
+                Name = u.Name, Role = u.Role, UserType = u.UserType, WageCoeff = u.WageCoeff, Status = u.Status
             }).ToListAsync();
 
         await FillDeptFieldsAsync(list);
@@ -122,9 +128,11 @@ public class UserService : IUserService
             Account = dto.Account.Trim(),
             Phone = dto.Phone,
             WechatId = NormalizeWechatId(dto.WechatId),
+            WecomUserId = NormalizeWecomUserId(dto.WecomUserId, nameof(CreateAsync)),
             Name = dto.Name.Trim(),
             Role = dto.Role,
             UserType = dto.UserType,
+            WageCoeff = WageCoeffHelper.Normalize(dto.WageCoeff, nameof(CreateAsync)),
             Password = PasswordHelper.Hash(dto.Password),
             Status = 1,
             CreatedAt = DateTime.Now
@@ -150,9 +158,12 @@ public class UserService : IUserService
         user.Account = dto.Account.Trim();
         user.Phone = dto.Phone;
         user.WechatId = NormalizeWechatId(dto.WechatId);
+        user.WecomUserId = NormalizeWecomUserId(dto.WecomUserId, nameof(UpdateAsync));
         user.Name = dto.Name.Trim();
         user.Role = dto.Role;
         user.UserType = dto.UserType;
+        if (dto.WageCoeff.HasValue)
+            user.WageCoeff = WageCoeffHelper.Normalize(dto.WageCoeff, nameof(UpdateAsync));
         if (!string.IsNullOrWhiteSpace(dto.Password))
         {
             PasswordHelper.EnsureComplexity(dto.Password, nameof(UpdateAsync));
@@ -266,6 +277,18 @@ public class UserService : IUserService
     /// <summary>空/空白存 null，有值则 Trim；不做格式硬校验。</summary>
     private static string? NormalizeWechatId(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>空存 null。有值须是单个企微通讯录账号，不带 @ 和分隔符。</summary>
+    private static string? NormalizeWecomUserId(string? value, string where)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var v = value.Trim();
+        if (v.Length > 64)
+            throw ThrowHelper.Biz(where, "企微UserId最长 64 字符");
+        if (v.Contains('@') || v.Any(char.IsWhiteSpace) || v.IndexOfAny([',', '，', '|', ';', '；']) >= 0)
+            throw ThrowHelper.Biz(where, "企微UserId请填通讯录账号，不要带 @ 或分隔符");
+        return v;
+    }
 
     private async Task FillDeptFieldsAsync(List<UserListDto> list)
     {

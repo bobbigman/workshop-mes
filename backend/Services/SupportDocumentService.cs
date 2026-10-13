@@ -341,11 +341,13 @@ public class SupportDocumentService
                 return result;
             }
 
-            // 预算：top 片段 + 证据正文总量，超出标明还有未展示内容
+            // 预算：具体手册占满前 N 条；总地图不占名额，截断后另附最贴题的一节。
             var budget = Math.Max(1, _opt.MaxEvidenceChars);
             var used = 0;
             var taken = 0;
-            foreach (var m in matched.Take(_opt.MaxResults))
+            var specific = matched.Where(m => !IsCapabilityMap(m.Chapter)).ToList();
+            var ranked = specific.Count > 0 ? specific : matched;
+            foreach (var m in ranked.Take(_opt.MaxResults))
             {
                 if (used >= budget) { result.Truncated = true; break; }
                 var excerpt = m.Chapter.Content.Length <= ExcerptMaxChars
@@ -366,7 +368,11 @@ public class SupportDocumentService
             }
             if (result.TotalMatched > taken) result.Truncated = true;
 
-            if (result.Truncated)
+            var pinnedMap = PinCapabilityMap(query, matched, result);
+
+            if (result.Truncated && pinnedMap)
+                result.Message = "检索命中较多，正文已截断。来源里《系统能力总地图》用来兜底：写了操作步骤就按该节回答；只问有没有、在哪、谁能用，也按总地图回答。不要编菜单，不要因为截断就说没查到。";
+            else if (result.Truncated)
                 result.Message = "检索命中较多，正文已截断；如需完整内容，可缩小问题或追问具体章节。";
 
             AddConflictWarning(result.Sources, idx.Chapters, result.Warnings);
@@ -380,6 +386,75 @@ public class SupportDocumentService
             result.Message = $"客服检索失败：{ex.Message}";
             return result;
         }
+    }
+
+    private static bool IsCapabilityMap(SupportChapter chapter) =>
+        chapter.FileTitle.Contains("系统能力总地图", StringComparison.Ordinal);
+
+    /// <summary>
+    /// 其它文档占满前 N 条时，仍带回《系统能力总地图》里最贴题的一节，不占 MaxResults 名额。
+    /// 问怎么用/演示时，优先标题含「怎么用」的节。
+    /// </summary>
+    private static bool PinCapabilityMap(
+        string query,
+        List<(SupportChapter Chapter, int Score)> matched,
+        SupportSearchResult result)
+    {
+        var map = matched
+            .Where(m => m.Score > 0 && IsCapabilityMap(m.Chapter))
+            .ToList();
+        if (map.Count == 0) return false;
+
+        var pool = map;
+        if (QueryWantsSteps(query))
+        {
+            var howTo = map.Where(m => (m.Chapter.Chapter ?? "").Contains("怎么用", StringComparison.Ordinal)).ToList();
+            if (howTo.Count > 0) pool = howTo;
+        }
+
+        var best = pool
+            .OrderByDescending(m => m.Score)
+            .ThenBy(m => m.Chapter.Chapter)
+            .First();
+        if (result.Sources.Any(s => s.SourceId == best.Chapter.SourceId)) return true;
+
+        result.Sources.Add(new SupportSourceDto
+        {
+            SourceId = best.Chapter.SourceId,
+            Title = best.Chapter.FileTitle,
+            Chapter = best.Chapter.Chapter,
+            Version = best.Chapter.Version,
+            UpdatedAt = best.Chapter.UpdatedAt,
+            Excerpt = ExcerptAround(best.Chapter.Content, query)
+        });
+        return true;
+    }
+
+    private static bool QueryWantsSteps(string query) =>
+        query.Contains("怎么用", StringComparison.Ordinal)
+        || query.Contains("演示", StringComparison.Ordinal)
+        || query.Contains("怎么点", StringComparison.Ordinal)
+        || query.Contains("哪个按钮", StringComparison.Ordinal)
+        || query.Contains("哪个菜单", StringComparison.Ordinal);
+
+    /// <summary>长章节摘录从问句里的关键词附近截，避免只看到表格开头。</summary>
+    private static string ExcerptAround(string content, string query)
+    {
+        if (content.Length <= ExcerptMaxChars) return content;
+        var idx = -1;
+        foreach (var kp in KeyPhrases)
+        {
+            if (!query.Contains(kp, StringComparison.OrdinalIgnoreCase)) continue;
+            var at = content.IndexOf(kp, StringComparison.OrdinalIgnoreCase);
+            if (at >= 0 && (idx < 0 || at < idx)) idx = at;
+        }
+        if (idx < 0) idx = 0;
+        var start = Math.Max(0, idx - 120);
+        var len = Math.Min(ExcerptMaxChars, content.Length - start);
+        var slice = content.Substring(start, len);
+        if (start > 0) slice = "..." + slice;
+        if (start + len < content.Length) slice += "...";
+        return slice;
     }
 
     /// <summary>确保索引与目录一致：文件列表/长度/修改时间变化即重建；并发下不返回半成品。</summary>
@@ -523,7 +598,8 @@ public class SupportDocumentService
         "一键补报", "批量补报", "补报", "删不掉", "删除", "报工权限", "权限", "复核", "退回",
         "下工单", "下单", "创建工单", "打印", "二维码", "流转卡", "账号", "用户", "完成数",
         "生产报表", "入账", "报表", "交期", "状态", "工序", "工艺路线", "产品", "工单", "单位",
-        "不良品项", "部门", "登录", "密码", "看板", "扫码", "报工", "PDA"
+        "不良品项", "部门", "登录", "密码", "看板", "扫码", "报工", "PDA",
+        "自动派工", "派工", "排产", "排程", "按工时", "工时", "分摊", "多人", "约定比例", "无人派工"
     };
 
     private static readonly Dictionary<string, string[]> Synonyms = new(StringComparer.OrdinalIgnoreCase)
@@ -546,7 +622,12 @@ public class SupportDocumentService
         ["工单"] = new[] { "工单", "下单", "创建工单" },
         ["扫码"] = new[] { "扫码", "报工", "PDA", "二维码" },
         ["报工"] = new[] { "报工", "扫码", "提交报工" },
-        ["PDA"] = new[] { "PDA", "扫码", "扫码头" }
+        ["PDA"] = new[] { "PDA", "扫码", "扫码头" },
+        ["自动派工"] = new[] { "自动派工", "派工", "无人派工", "自动分派", "班组长不用派工" },
+        ["派工"] = new[] { "派工", "自动派工", "无人派工", "手动派工", "派给" },
+        ["排产"] = new[] { "排产", "排程", "排优先级", "建议开工顺序", "排顺序" },
+        ["工时"] = new[] { "工时", "按工时", "时长", "报工时长" },
+        ["分摊"] = new[] { "分摊", "分账", "按工时加权", "平均分摊", "多人分摊" }
     };
 
     private static readonly HashSet<string> StopBigrams = new(StringComparer.Ordinal)

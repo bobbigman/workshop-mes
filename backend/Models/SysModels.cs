@@ -33,10 +33,14 @@ public class SysUser
     public string Account { get; set; } = "";       // 账号(可填手机号)
     public string? Phone { get; set; }              // 手机号
     public string? WechatId { get; set; }           // 微信号（可空，仅记录；不做登录/推送）
+    /// <summary>企业微信通讯录账号（docs/226）。派工群消息只 @ 这个值；空=只发群不 @。</summary>
+    public string? WecomUserId { get; set; }
     public string Name { get; set; } = "";          // 姓名
     public byte Role { get; set; }                  // 角色: 1管理员 2生产人员 3班组长
     /// <summary>人员类型：0内部员工 1临时用工 2外部供应商（docs/161）</summary>
     public byte UserType { get; set; } = 0;
+    /// <summary>人级工价系数（docs/225）。1=原价；计件/计时乘，固定与不良扣款不乘。</summary>
+    public decimal WageCoeff { get; set; } = 1m;
     public string Password { get; set; } = "";      // 加密密码(BCrypt)
     public byte Status { get; set; } = 1;           // 1启用 0停用
     /// <summary>个人免密登录码密钥（docs/150）；可轮换，空=未生成</summary>

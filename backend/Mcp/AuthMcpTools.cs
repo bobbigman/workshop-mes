@@ -28,7 +28,7 @@ public class AuthMcpTools
         var baseUrl = (_config["Mcp:AuthBaseUrl"] ?? "").TrimEnd('/');
         var localFallback = string.IsNullOrEmpty(baseUrl);
         if (localFallback)
-            baseUrl = (_config["Mcp:AuthLocalBaseUrl"] ?? "http://localhost:8080").TrimEnd('/');
+            baseUrl = (_config["Mcp:AuthLocalBaseUrl"] ?? "https://localhost:8080").TrimEnd('/');
 
         var link = $"{baseUrl}/mcp-auth?code={code}";
         return JsonSerializer.Serialize(new

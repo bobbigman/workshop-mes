@@ -147,6 +147,7 @@
         <el-table-column prop="goodQty" label="良品" width="60" />
         <el-table-column prop="defectQty" label="不良" width="60" />
         <el-table-column prop="unitPrice" label="单价" width="70" />
+        <el-table-column prop="wageCoeff" label="系数" width="70" />
         <el-table-column prop="deductAmount" label="不良扣款" width="80" />
         <el-table-column prop="amount" label="小计" width="70" />
         <el-table-column prop="netAmount" label="应发" width="70" />
@@ -203,6 +204,7 @@
         <el-table-column prop="goodQty" label="良品" width="60" />
         <el-table-column prop="defectQty" label="不良" width="60" />
         <el-table-column prop="unitPrice" label="单价" width="70" />
+        <el-table-column prop="wageCoeff" label="系数" width="70" />
         <el-table-column prop="amount" label="小计" width="70" />
         <el-table-column prop="deductAmount" label="扣款" width="70" />
         <el-table-column prop="netAmount" label="应发" width="70" />

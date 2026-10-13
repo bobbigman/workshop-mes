@@ -14,6 +14,7 @@
       <el-table-column prop="name" label="姓名" />
       <el-table-column prop="phone" label="手机号" />
       <el-table-column prop="wechatId" label="微信号" />
+      <el-table-column prop="wecomUserId" label="企微UserId" min-width="120" show-overflow-tooltip />
       <el-table-column label="所属部门" min-width="140" show-overflow-tooltip>
         <template #default="{ row }">{{ row.deptNames || '—' }}</template>
       </el-table-column>
@@ -21,6 +22,9 @@
         <template #default="{ row }">
           <el-tag :type="userTypeTagType(row.userType)" size="small">{{ userTypeLabel(row.userType) }}</el-tag>
         </template>
+      </el-table-column>
+      <el-table-column label="工价系数" width="90">
+        <template #default="{ row }">{{ formatCoeff(row.wageCoeff) }}</template>
       </el-table-column>
       <el-table-column label="角色">
         <template #default="{ row }">
@@ -51,10 +55,14 @@
     </el-table>
 
     <el-dialog v-model="dlg" :title="editingId ? '编辑用户' : '创建用户'" width="480px">
-      <el-form :model="form" label-width="90px">
+      <el-form :model="form" label-width="110px">
         <el-form-item label="账号"><el-input v-model="form.account" /></el-form-item>
         <el-form-item label="手机号"><el-input v-model="form.phone" /></el-form-item>
         <el-form-item label="微信号"><el-input v-model="form.wechatId" placeholder="选填" /></el-form-item>
+        <el-form-item label="企微UserId">
+          <el-input v-model="form.wecomUserId" maxlength="64" placeholder="选填，通讯录账号，如 HuZhongQian" clearable />
+          <div class="form-hint">派工通知只 @ 这个账号。留空则只发群，不 @。</div>
+        </el-form-item>
         <el-form-item label="姓名"><el-input v-model="form.name" /></el-form-item>
         <el-form-item label="所属部门">
           <el-select v-model="form.deptIds" multiple filterable style="width:100%" placeholder="可多选，与部门成员双向同步">
@@ -69,10 +77,14 @@
           </el-select>
         </el-form-item>
         <el-form-item label="人员类型">
-          <el-select v-model="form.userType" style="width:100%">
+          <el-select v-model="form.userType" style="width:100%" @change="onUserTypeChange">
             <el-option v-for="o in USER_TYPE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
           <div v-if="form.userType === 2" class="form-hint">外部供应商不能登录，由管理员在报工页代报工</div>
+        </el-form-item>
+        <el-form-item label="工价系数">
+          <el-input-number v-model="form.wageCoeff" :min="0.1" :max="9.99" :step="0.1" :precision="2" style="width:160px" />
+          <div class="form-hint">1 为原价。计件、计时按此相乘；月薪和不良扣款不乘。选「临时用工」且当前是 1 时，自动带出 0.8，可改。</div>
         </el-form-item>
         <el-form-item :label="editingId ? '新密码' : '初始密码'">
           <el-input v-model="form.password" :placeholder="editingId ? '不填则保持原密码' : '至少 6 位，无其它限制'" />
@@ -120,7 +132,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { USER_TYPE_OPTIONS, userTypeLabel, userTypeTagType } from '@/constants/userType'
 
 const list = ref([]), keyword = ref(''), userTypeFilter = ref(null), dlg = ref(false), editingId = ref(null)
-const emptyForm = () => ({ account: '', phone: '', wechatId: '', name: '', role: 1, userType: 0, password: '', deptIds: [] })
+const emptyForm = () => ({ account: '', phone: '', wechatId: '', wecomUserId: '', name: '', role: 1, userType: 0, wageCoeff: 1, password: '', deptIds: [] })
 const form = ref(emptyForm())
 const deptOptions = ref([])
 const currentUserId = Number(localStorage.getItem('userId') || 0)
@@ -148,6 +160,16 @@ async function load() {
   list.value = res.data.list || []
 }
 
+function formatCoeff(v) {
+  const n = Number(v)
+  return Number.isFinite(n) ? n.toFixed(2) : '1.00'
+}
+
+function onUserTypeChange(val) {
+  if (val === 1 && Number(form.value.wageCoeff) === 1)
+    form.value.wageCoeff = 0.8
+}
+
 function openCreate() {
   editingId.value = null
   form.value = { ...emptyForm(), password: 'Admin123' }
@@ -160,9 +182,11 @@ function openEdit(row) {
     account: row.account,
     phone: row.phone,
     wechatId: row.wechatId || '',
+    wecomUserId: row.wecomUserId || '',
     name: row.name,
     role: row.role,
     userType: row.userType ?? 0,
+    wageCoeff: row.wageCoeff ?? 1,
     password: '',
     deptIds: [...(row.deptIds || [])]
   }
@@ -170,6 +194,12 @@ function openEdit(row) {
 }
 
 async function onSave() {
+  const coeff = Number(form.value.wageCoeff)
+  if (!Number.isFinite(coeff) || coeff < 0.1 || coeff > 9.99) {
+    ElMessage.error('工价系数须在 0.10～9.99 之间')
+    return
+  }
+  form.value.wageCoeff = Math.round(coeff * 100) / 100
   if (form.value.password && form.value.password.length < 6) {
     ElMessage.error('密码至少 6 位')
     return

@@ -57,6 +57,8 @@ public class RoleGuardMiddleware
             return true;
         if (path.Equals("/api/Abnormal", StringComparison.OrdinalIgnoreCase) && method == "GET")
             return true;
+        if (path.Equals("/api/Abnormal/handlers", StringComparison.OrdinalIgnoreCase) && method == "GET")
+            return true;
         // 工人改自己的待复核/退回报工（docs/22）
         if (method.Equals("PUT", StringComparison.OrdinalIgnoreCase)
             && path.StartsWith("/api/Report/", StringComparison.OrdinalIgnoreCase))
@@ -175,6 +177,12 @@ public class RoleGuardMiddleware
         if (method.Equals("GET", StringComparison.OrdinalIgnoreCase)
             && path.StartsWith("/api/Assign/departments/", StringComparison.OrdinalIgnoreCase))
             return true;
+        if (method.Equals("GET", StringComparison.OrdinalIgnoreCase)
+            && path.StartsWith("/api/Assign/suggest/", StringComparison.OrdinalIgnoreCase))
+        {
+            var rest = path["/api/Assign/suggest/".Length..];
+            if (long.TryParse(rest, out _)) return true;
+        }
         if (method.Equals("PUT", StringComparison.OrdinalIgnoreCase)
             && path.StartsWith("/api/Assign/", StringComparison.OrdinalIgnoreCase))
         {

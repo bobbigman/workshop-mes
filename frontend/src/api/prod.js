@@ -28,6 +28,7 @@ export const getDefectStat = (params) => http.get('/ReportStat/defect', { params
 export const getBoard = () => http.get('/ReportStat/board')
 
 export const getAbnormalList = (params) => http.get('/Abnormal', { params })
+export const getAbnormalHandlers = () => http.get('/Abnormal/handlers')
 export const createAbnormal = (formData) => http.post('/Abnormal', formData)
 export const resolveAbnormal = (id, data) => http.post(`/Abnormal/${id}/resolve`, data)
 
