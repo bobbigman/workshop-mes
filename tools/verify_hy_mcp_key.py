@@ -1,10 +1,25 @@
 # -*- coding: utf-8 -*-
-"""用新 Key 对 /mcp 做 initialize + tools/list 握手验证。"""
-import json, ssl, urllib.request, sys
+"""用 Key 对 /mcp 做 initialize + tools/list 握手验证。
+
+令牌从环境变量 HY_MCP_KEY 或参数 --key 读取，不写进本文件。
+"""
+import argparse, json, os, ssl, urllib.request, sys
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
+def parse_args():
+    p = argparse.ArgumentParser(description="用 Key 对 /mcp 做 initialize + tools/list 握手验证。")
+    p.add_argument("--key", default=os.environ.get("HY_MCP_KEY", ""), help="MCP Bearer 令牌，也可设环境变量 HY_MCP_KEY")
+    p.add_argument("--base", default=os.environ.get("HY_MCP_BASE", "https://mes.webok.net:11302/mcp"), help="MCP 地址，也可设环境变量 HY_MCP_BASE")
+    args = p.parse_args()
+    if not str(args.key).strip():
+        print("缺少令牌：请设置环境变量 HY_MCP_KEY，或传入 --key", file=sys.stderr)
+        sys.exit(2)
+    return args
+
+args = parse_args()
 ctx = ssl.create_default_context(); ctx.check_hostname=False; ctx.verify_mode=ssl.CERT_NONE
-KEY="REDACTED_MCP_TOKEN"
-BASE="https://mes.webok.net:11302/mcp"
+KEY = args.key
+BASE = args.base
 def rpc(method, params=None, ident=1):
     body=json.dumps({"jsonrpc":"2.0","id":ident,"method":method,"params":params or {}}).encode("utf-8")
     req=urllib.request.Request(BASE,data=body,method="POST")
