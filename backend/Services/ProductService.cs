@@ -23,6 +23,8 @@ public class ProductQueryDto
 
 public class ProductCreateDto
 {
+    public long? CopyFromId { get; set; }
+    public RoutingCreateDto? NewRouting { get; set; }
     public string Code { get; set; } = "";
     public string Name { get; set; } = "";
     public long? UnitId { get; set; }
@@ -102,6 +104,10 @@ public class ProductService : IProductService
 
     public async Task<ApiResult<object?>> CreateAsync(ProductCreateDto dto, long factoryId)
     {
+        await using var tx = await _db.Database.BeginTransactionAsync();
+        if (dto.CopyFromId.HasValue && !await _db.Products.AnyAsync(p => p.Id == dto.CopyFromId && p.FactoryId == factoryId))
+            throw ThrowHelper.Biz(nameof(CreateAsync), "复制来源产品不存在或不属于本厂");
+        await ValidateReferencesAsync(dto, factoryId);
         if (string.IsNullOrWhiteSpace(dto.Code) || string.IsNullOrWhiteSpace(dto.Name))
             throw ThrowHelper.Biz(nameof(CreateAsync), "产品编号和名称不能为空");
 
@@ -109,23 +115,41 @@ public class ProductService : IProductService
         if (await _db.Products.AnyAsync(p => p.FactoryId == factoryId && p.Code == dto.Code.Trim()))
             throw ThrowHelper.Biz(nameof(CreateAsync), "产品编号不可重复");
 
+        var routingId = dto.RoutingId;
+        if (dto.NewRouting != null)
+        {
+            var result = await new RoutingService(_db).CreateAsync(dto.NewRouting, factoryId);
+            routingId = (long)result.Data!;
+        }
         _db.Products.Add(new BaseProduct
         {
             FactoryId = factoryId,
             Code = dto.Code.Trim(),
             Name = dto.Name.Trim(),
             UnitId = dto.UnitId,
-            RoutingId = dto.RoutingId,
+            RoutingId = routingId,
             Supplier = dto.Supplier,
             Price = dto.Price,
             CreatedAt = DateTime.Now
         });
         await _db.SaveChangesAsync();
+        await tx.CommitAsync();
         return ApiResult<object?>.OkMsg();
+    }
+
+    private async Task ValidateReferencesAsync(ProductCreateDto dto, long factoryId)
+    {
+        if (dto.UnitId.HasValue && !await _db.Units.AnyAsync(x => x.Id == dto.UnitId && x.FactoryId == factoryId))
+            throw ThrowHelper.Biz(nameof(ValidateReferencesAsync), "单位不存在或不属于本厂");
+        if (dto.RoutingId.HasValue && !await _db.Routings.AnyAsync(x => x.Id == dto.RoutingId && x.FactoryId == factoryId))
+            throw ThrowHelper.Biz(nameof(ValidateReferencesAsync), "工艺路线不存在或不属于本厂");
     }
 
     public async Task<ApiResult<object?>> UpdateAsync(long id, ProductCreateDto dto, long factoryId)
     {
+        await ValidateReferencesAsync(dto, factoryId);
+        if (dto.NewRouting != null)
+            throw ThrowHelper.Biz(nameof(UpdateAsync), "复制工艺并修改仅用于新建产品");
         var product = await _db.Products.FirstOrDefaultAsync(p => p.Id == id && p.FactoryId == factoryId)
             ?? throw ThrowHelper.Biz(nameof(UpdateAsync), "产品不存在");
 

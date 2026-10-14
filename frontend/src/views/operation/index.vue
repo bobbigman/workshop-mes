@@ -11,16 +11,18 @@
       <el-table-column prop="name" label="工序名称" />
       <el-table-column prop="deptNames" label="报工权限(部门)" />
       <el-table-column prop="defectNames" label="不良品项" />
-      <el-table-column label="操作" width="160">
+      <el-table-column label="操作" width="220">
         <template #default="{ row }">
           <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
+          <el-button v-if="isAdmin" link type="primary" @click="openCopy(row)">复制</el-button>
           <el-button link type="danger" @click="onDelete(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
 
-    <el-dialog v-model="dlg" :title="editingId ? '编辑工序' : '创建工序'" width="520px">
-      <el-form :model="form" label-width="110px">
+    <el-dialog v-model="dlg" :title="editingId ? '编辑工序' : copyFromId ? '复制工序' : '创建工序'" :close-on-click-modal="!saving" :close-on-press-escape="!saving" :show-close="!saving" width="520px">
+      <el-alert v-if="copyFromId" title="请填写新编号；作业指导书、图纸及独立计价规则未复制。" type="info" :closable="false" show-icon style="margin-bottom:12px" />
+      <el-form :model="form" :disabled="saving" label-width="110px">
         <el-form-item label="工序编号" required><el-input v-model="form.code" /></el-form-item>
         <el-form-item label="工序名称" required><el-input v-model="form.name" /></el-form-item>
         <el-form-item label="报工权限">
@@ -39,8 +41,8 @@
         <KnowledgeFiles ref-type="operation" :ref-id="editingId" />
       </div>
       <template #footer>
-        <el-button @click="dlg=false">取消</el-button>
-        <el-button type="primary" @click="onSave">保存</el-button>
+        <el-button :disabled="saving" @click="dlg=false">取消</el-button>
+        <el-button type="primary" :loading="saving" @click="onSave">保存</el-button>
       </template>
     </el-dialog>
   </div>
@@ -54,6 +56,8 @@ import ImportDialog from '@/components/ImportDialog.vue'
 import KnowledgeFiles from '@/components/KnowledgeFiles.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
+const isAdmin = Number(localStorage.getItem('role')) === 1
+const copyFromId = ref(null), saving = ref(false)
 const list = ref([]), keyword = ref(''), dlg = ref(false), editingId = ref(null)
 const form = ref({ code: '', name: '', deptIds: [], defectIds: [] })
 const deptOptions = ref([]), defectOptions = ref([])
@@ -70,12 +74,14 @@ async function load() {
 }
 
 function openCreate() {
+  copyFromId.value = null
   editingId.value = null
   form.value = { code: '', name: '', deptIds: [], defectIds: [] }
   dlg.value = true
 }
 
 async function openEdit(row) {
+  copyFromId.value = null
   const res = await getOperation(row.id)
   editingId.value = row.id
   const d = res.data
@@ -83,16 +89,27 @@ async function openEdit(row) {
   dlg.value = true
 }
 
+async function openCopy(row) {
+  await openEdit(row)
+  editingId.value = null
+  copyFromId.value = row.id
+  form.value.code = ''
+}
+
 async function onSave() {
+  if (saving.value) return
   if (!form.value.code || !form.value.name) {
     ElMessage.error('请填写工序编号和名称')
     return
   }
-  if (editingId.value) await updateOperation(editingId.value, form.value)
-  else await createOperation(form.value)
-  ElMessage.success('保存成功')
-  dlg.value = false
-  await load()
+  saving.value = true
+  try {
+    if (editingId.value) await updateOperation(editingId.value, form.value)
+    else await createOperation({ ...form.value, copyFromId: copyFromId.value })
+    ElMessage.success('保存成功')
+    dlg.value = false
+    await load()
+  } finally { saving.value = false }
 }
 
 async function onDelete(row) {

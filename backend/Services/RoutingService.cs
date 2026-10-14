@@ -29,6 +29,7 @@ public class RoutingStepDto
 
 public class RoutingCreateDto
 {
+    public long? CopyFromId { get; set; }
     public string Code { get; set; } = "";
     public string Name { get; set; } = "";
     public List<RoutingStepDto> Steps { get; set; } = new();
@@ -100,10 +101,14 @@ public class RoutingService : IRoutingService
 
     public async Task<ApiResult<object?>> CreateAsync(RoutingCreateDto dto, long factoryId)
     {
+        await using var ownedTx = _db.Database.CurrentTransaction == null ? await _db.Database.BeginTransactionAsync() : null;
+        if (dto.CopyFromId.HasValue && !await _db.Routings.AnyAsync(r => r.Id == dto.CopyFromId && r.FactoryId == factoryId))
+            throw ThrowHelper.Biz(nameof(CreateAsync), "复制来源工艺路线不存在或不属于本厂");
         if (string.IsNullOrWhiteSpace(dto.Code) || string.IsNullOrWhiteSpace(dto.Name))
             throw ThrowHelper.Biz(nameof(CreateAsync), "路线编号和名称不能为空");
         if (dto.Steps == null || dto.Steps.Count == 0)
             throw ThrowHelper.Biz(nameof(CreateAsync), "请至少添加一道工序");
+        await ValidateStepsAsync(dto.Steps, factoryId);
 
         var routing = new BaseRouting
         {
@@ -115,21 +120,34 @@ public class RoutingService : IRoutingService
         _db.Routings.Add(routing);
         await _db.SaveChangesAsync();
         await SaveSteps(routing.Id, dto.Steps);
-        return ApiResult<object?>.OkMsg();
+        if (ownedTx != null) await ownedTx.CommitAsync();
+        return ApiResult<object?>.Ok(routing.Id);
+    }
+
+    private async Task ValidateStepsAsync(List<RoutingStepDto> steps, long factoryId)
+    {
+        var ids = steps.Select(s => s.OperationId).Distinct().ToList();
+        if (ids.Count != steps.Count)
+            throw ThrowHelper.Biz(nameof(ValidateStepsAsync), "同一路线不能重复选择同一道工序");
+        if (await _db.Operations.CountAsync(o => o.FactoryId == factoryId && ids.Contains(o.Id)) != ids.Count)
+            throw ThrowHelper.Biz(nameof(ValidateStepsAsync), "工序不存在或不属于本厂");
     }
 
     public async Task<ApiResult<object?>> UpdateAsync(long id, RoutingCreateDto dto, long factoryId)
     {
+        await using var tx = await _db.Database.BeginTransactionAsync();
         var routing = await _db.Routings.FirstOrDefaultAsync(r => r.Id == id && r.FactoryId == factoryId)
             ?? throw ThrowHelper.Biz(nameof(UpdateAsync), "工艺路线不存在");
         if (dto.Steps == null || dto.Steps.Count == 0)
             throw ThrowHelper.Biz(nameof(UpdateAsync), "请至少添加一道工序");
+        await ValidateStepsAsync(dto.Steps, factoryId);
 
         routing.Code = dto.Code.Trim();
         routing.Name = dto.Name.Trim();
         _db.RoutingSteps.RemoveRange(_db.RoutingSteps.Where(s => s.RoutingId == id));
         await _db.SaveChangesAsync();
         await SaveSteps(id, dto.Steps);
+        await tx.CommitAsync();
         return ApiResult<object?>.OkMsg();
     }
 

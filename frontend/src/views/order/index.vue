@@ -141,8 +141,9 @@
     </div>
 
     <!-- 创建/编辑 -->
-    <el-dialog v-model="dlg" :title="editingId ? '编辑工单' : '创建工单'" width="620px">
-      <el-form :model="form" label-width="90px">
+    <el-dialog v-model="dlg" :title="editingId ? '编辑工单' : copyFromId ? '复制工单' : '创建工单'" :close-on-click-modal="!saving" :close-on-press-escape="!saving" :show-close="!saving" width="620px">
+      <el-alert v-if="copyFromId" title="请核对数量并填写本次交期。工序计划按当前产品工艺重新生成，历史报工与派工不复制。" type="info" :closable="false" style="margin-bottom:12px" />
+      <el-form :disabled="saving" :model="form" label-width="90px">
         <el-form-item label="工单号">
           <el-input v-model="form.orderNo" placeholder="留空自动生成" />
         </el-form-item>
@@ -172,8 +173,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dlg = false">取消</el-button>
-        <el-button type="primary" @click="onSave">保存</el-button>
+        <el-button :disabled="saving" @click="dlg = false">取消</el-button>
+        <el-button type="primary" :loading="saving" @click="onSave">保存</el-button>
       </template>
     </el-dialog>
 
@@ -297,7 +298,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { getOrderList, getOrder, getOrderStatusCounts, createOrder, updateOrder, transitionOrder, copyOrder, deleteOrder, getCustomFields } from '@/api/prod'
+import { getOrderList, getOrder, getOrderStatusCounts, createOrder, updateOrder, transitionOrder, deleteOrder, getCustomFields } from '@/api/prod'
 import { getProductList } from '@/api/base'
 import { assign, assignWorkers, assignDepartments, assignSuggest } from '@/api/assign'
 import { getKnowledgeFileByOrder, getKnowledgeFileRaw } from '@/api/knowledge'
@@ -326,6 +327,7 @@ const statusTabs = computed(() => [
   { key: '3', label: '已取消', count: counts.value.cancelled }
 ])
 const dlg = ref(false), editingId = ref(null), detailDlg = ref(false)
+const copyFromId = ref(null), saving = ref(false)
 const printSettingDlg = ref(false), printLabelDlg = ref(false), printOrderId = ref(null)
 const form = ref({ orderNo: '', productId: null, qty: 1, dueDate: null, ext: {}, tasks: [] })
 const detail = ref({ orderNo: '', productName: '', qty: 0, status: 0, tasks: [] })
@@ -484,12 +486,14 @@ function onReset() {
 }
 
 function openCreate() {
+  copyFromId.value = null
   editingId.value = null
   form.value = { orderNo: '', productId: null, qty: 1, dueDate: null, ext: {}, tasks: [] }
   dlg.value = true
 }
 
 async function openEdit(row) {
+  copyFromId.value = null
   const res = await getOrder(row.id)
   const d = res.data
   editingId.value = row.id
@@ -510,27 +514,31 @@ function onProductChange() {
 }
 
 async function onSave() {
+  if (saving.value) return
   if (!form.value.productId || form.value.qty <= 0) {
     ElMessage.error('请选择产品并填写数量')
     return
   }
-  if (editingId.value) {
-    const payload = {
-      orderNo: form.value.orderNo || undefined,
-      productId: form.value.productId,
-      qty: form.value.qty,
-      dueDate: form.value.dueDate || null,
-      ext: form.value.ext,
-      planQty: form.value.tasks.length ? form.value.tasks.map(t => ({ operationId: t.operationId, planQty: t.planQty })) : undefined
+  saving.value = true
+  try {
+    if (editingId.value) {
+      const payload = {
+        orderNo: form.value.orderNo || undefined,
+        productId: form.value.productId,
+        qty: form.value.qty,
+        dueDate: form.value.dueDate || null,
+        ext: form.value.ext,
+        planQty: form.value.tasks.length ? form.value.tasks.map(t => ({ operationId: t.operationId, planQty: t.planQty })) : undefined
+      }
+      await updateOrder(editingId.value, payload)
+      ElMessage.success('已保存')
+    } else {
+      await createOrder({ copyFromId: copyFromId.value, orderNo: form.value.orderNo || undefined, productId: form.value.productId, qty: form.value.qty, dueDate: form.value.dueDate || null, ext: form.value.ext })
+      ElMessage.success('创建成功')
     }
-    await updateOrder(editingId.value, payload)
-    ElMessage.success('已保存')
-  } else {
-    await createOrder({ orderNo: form.value.orderNo || undefined, productId: form.value.productId, qty: form.value.qty, dueDate: form.value.dueDate || null, ext: form.value.ext })
-    ElMessage.success('创建成功')
-  }
-  dlg.value = false
-  await load()
+    dlg.value = false
+    await load()
+  } finally { saving.value = false }
 }
 
 async function onTransition(row, action) {
@@ -542,10 +550,13 @@ async function onTransition(row, action) {
 }
 
 async function onCopy(row) {
-  await ElMessageBox.confirm(`确认复制工单 ${row.orderNo}（生成一张同产品同数量的未开始工单）？`, '提示', { type: 'info' })
-  await copyOrder(row.id)
-  ElMessage.success('复制成功')
-  await load()
+  const res = await getOrder(row.id)
+  const d = res.data
+  editingId.value = null
+  copyFromId.value = row.id
+  form.value = { orderNo: '', productId: d.productId, qty: d.qty, dueDate: null,
+    ext: Object.fromEntries(customFields.value.filter(f => Object.hasOwn(d.ext || {}, f.id)).map(f => [f.id, d.ext[f.id]])), tasks: [] }
+  dlg.value = true
 }
 
 function isSuggestedPicked(taskRow, userId) {

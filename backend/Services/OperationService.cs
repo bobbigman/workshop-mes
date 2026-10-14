@@ -23,6 +23,7 @@ public class OperationQueryDto
 
 public class OperationCreateDto
 {
+    public long? CopyFromId { get; set; }
     public string Code { get; set; } = "";
     public string Name { get; set; } = "";
     public List<long> DeptIds { get; set; } = new();
@@ -100,6 +101,10 @@ public class OperationService : IOperationService
 
     public async Task<ApiResult<object?>> CreateAsync(OperationCreateDto dto, long factoryId)
     {
+        await using var tx = await _db.Database.BeginTransactionAsync();
+        if (dto.CopyFromId.HasValue && !await _db.Operations.AnyAsync(o => o.Id == dto.CopyFromId && o.FactoryId == factoryId))
+            throw ThrowHelper.Biz(nameof(CreateAsync), "复制来源工序不存在或不属于本厂");
+        await ValidateLinksAsync(dto, factoryId);
         if (string.IsNullOrWhiteSpace(dto.Code) || string.IsNullOrWhiteSpace(dto.Name))
             throw ThrowHelper.Biz(nameof(CreateAsync), "工序编号和名称不能为空");
 
@@ -113,11 +118,26 @@ public class OperationService : IOperationService
         _db.Operations.Add(op);
         await _db.SaveChangesAsync();
         await SaveLinks(op.Id, dto);
+        await tx.CommitAsync();
         return ApiResult<object?>.OkMsg();
+    }
+
+    private async Task ValidateLinksAsync(OperationCreateDto dto, long factoryId)
+    {
+        var depts = (dto.DeptIds ?? new()).Distinct().ToList();
+        var defects = (dto.DefectIds ?? new()).Distinct().ToList();
+        if (await _db.Departments.CountAsync(d => d.FactoryId == factoryId && depts.Contains(d.Id)) != depts.Count)
+            throw ThrowHelper.Biz(nameof(ValidateLinksAsync), "权限部门不存在或不属于本厂");
+        if (await _db.DefectItems.CountAsync(d => d.FactoryId == factoryId && defects.Contains(d.Id)) != defects.Count)
+            throw ThrowHelper.Biz(nameof(ValidateLinksAsync), "不良品项不存在或不属于本厂");
+        dto.DeptIds = depts;
+        dto.DefectIds = defects;
     }
 
     public async Task<ApiResult<object?>> UpdateAsync(long id, OperationCreateDto dto, long factoryId)
     {
+        await using var tx = await _db.Database.BeginTransactionAsync();
+        await ValidateLinksAsync(dto, factoryId);
         var op = await _db.Operations.FirstOrDefaultAsync(o => o.Id == id && o.FactoryId == factoryId)
             ?? throw ThrowHelper.Biz(nameof(UpdateAsync), "工序不存在");
         op.Code = dto.Code.Trim();
@@ -126,6 +146,7 @@ public class OperationService : IOperationService
         _db.OperationDefects.RemoveRange(_db.OperationDefects.Where(x => x.OperationId == id));
         await _db.SaveChangesAsync();
         await SaveLinks(id, dto);
+        await tx.CommitAsync();
         return ApiResult<object?>.OkMsg();
     }
 

@@ -13,7 +13,7 @@ public interface IWorkOrderService
     Task<ApiResult<object?>> CreateAsync(WorkOrderCreateDto dto, long currentUserId, long factoryId);
     Task<ApiResult<object?>> UpdateAsync(long id, WorkOrderUpdateDto dto, long factoryId);
     Task<ApiResult<object?>> TransitionAsync(long id, string action, long factoryId);
-    Task<ApiResult<object?>> CopyAsync(long id, long factoryId);
+    Task<ApiResult<object?>> CopyAsync(long id, long currentUserId, long factoryId);
     Task<ApiResult<object?>> DeleteAsync(long id);
     Task<ApiResult<string>> GetQrContentAsync(long id, long factoryId);
     /// <param name="reportPermissionUserId">非空时按该用户报工权限过滤 tasks；空则不过滤（PC/AI 查进度用）。</param>
@@ -48,6 +48,7 @@ public class WorkOrderStatusCountsDto
 
 public class WorkOrderCreateDto
 {
+    public long? CopyFromId { get; set; }
     public string? OrderNo { get; set; }             // 可自定义，空则自动生成
     public long ProductId { get; set; }
     public int Qty { get; set; }
@@ -376,11 +377,12 @@ public class WorkOrderService : IWorkOrderService
 
     private async Task<WorkOrderDetailDto> BuildDetailAsync(ProdWorkOrder order, long? filterUserId = null, byte? filterRole = null)
     {
-        var product = await _db.Products.AsNoTracking().FirstOrDefaultAsync(p => p.Id == order.ProductId)
+        var product = await _db.Products.AsNoTracking().FirstOrDefaultAsync(p => p.Id == order.ProductId && p.FactoryId == order.FactoryId)
             ?? throw ThrowHelper.Biz(nameof(BuildDetailAsync), "工单关联产品不存在");
 
+        var fieldIds = _db.CustomFields.Where(f => f.FactoryId == order.FactoryId && f.Target == "work_order").Select(f => f.Id);
         var ext = await _db.CustomFieldValues.AsNoTracking()
-            .Where(v => v.TargetId == order.Id)
+            .Where(v => v.TargetId == order.Id && fieldIds.Contains(v.FieldId))
             .ToDictionaryAsync(v => v.FieldId, v => v.Value ?? "");
 
         var tasks = await LoadTasksAsync(order);
@@ -511,10 +513,24 @@ public class WorkOrderService : IWorkOrderService
 
     public async Task<ApiResult<object?>> CreateAsync(WorkOrderCreateDto dto, long currentUserId, long factoryId)
     {
+        await using var tx = await _db.Database.BeginTransactionAsync();
+        if (dto.CopyFromId.HasValue && !await _db.WorkOrders.AnyAsync(o => o.Id == dto.CopyFromId && o.FactoryId == factoryId))
+            throw ThrowHelper.Biz(nameof(CreateAsync), "复制来源工单不存在或不属于本厂");
         var product = await _db.Products.FirstOrDefaultAsync(p => p.Id == dto.ProductId && p.FactoryId == factoryId)
             ?? throw ThrowHelper.Biz(nameof(CreateAsync), "产品不存在");
         if (dto.Qty <= 0)
             throw ThrowHelper.Biz(nameof(CreateAsync), "数量必须大于0");
+        var extIds = (dto.Ext ?? new()).Keys.ToList();
+        if (await _db.CustomFields.CountAsync(f => f.FactoryId == factoryId && f.Target == "work_order" && extIds.Contains(f.Id)) != extIds.Count)
+            throw ThrowHelper.Biz(nameof(CreateAsync), "自定义字段不存在、不属于本厂或不是工单字段");
+        if (product.RoutingId.HasValue)
+        {
+            if (!await _db.Routings.AnyAsync(r => r.Id == product.RoutingId && r.FactoryId == factoryId))
+                throw ThrowHelper.Biz(nameof(CreateAsync), "产品工艺路线不存在或不属于本厂");
+            var steps = await _db.RoutingSteps.Where(s => s.RoutingId == product.RoutingId).Select(s => s.OperationId).ToListAsync();
+            if (steps.Distinct().Count() != steps.Count || await _db.Operations.CountAsync(o => o.FactoryId == factoryId && steps.Contains(o.Id)) != steps.Count)
+                throw ThrowHelper.Biz(nameof(CreateAsync), "产品工艺包含重复、失效或非本厂工序，请先修正工艺路线");
+        }
 
         var orderNo = await NextOrderNoAsync(dto.OrderNo, factoryId);
 
@@ -534,7 +550,7 @@ public class WorkOrderService : IWorkOrderService
 
         await SyncTasksAsync(order, product.RoutingId, dto.Qty, null);
         await SaveExtAsync(order.Id, dto.Ext);
-
+        await tx.CommitAsync();
         return ApiResult<object?>.OkMsg();
     }
 
@@ -663,47 +679,19 @@ public class WorkOrderService : IWorkOrderService
         return ApiResult<object?>.OkMsg();
     }
 
-    public async Task<ApiResult<object?>> CopyAsync(long id, long factoryId)
+    public async Task<ApiResult<object?>> CopyAsync(long id, long currentUserId, long factoryId)
     {
         var src = await _db.WorkOrders.AsNoTracking().FirstOrDefaultAsync(o => o.Id == id && o.FactoryId == factoryId)
             ?? throw ThrowHelper.Biz(nameof(CopyAsync), "工单不存在");
 
-        var orderNo = await NextOrderNoAsync(null, factoryId);
-        var order = new ProdWorkOrder
+        var fields = _db.CustomFields.Where(f => f.FactoryId == factoryId && f.Target == "work_order").Select(f => f.Id);
+        var ext = await _db.CustomFieldValues.AsNoTracking()
+            .Where(v => v.TargetId == id && fields.Contains(v.FieldId))
+            .ToDictionaryAsync(v => v.FieldId, v => v.Value ?? "");
+        return await CreateAsync(new WorkOrderCreateDto
         {
-            FactoryId = factoryId,
-            OrderNo = orderNo,
-            ProductId = src.ProductId,
-            Qty = src.Qty,
-            Status = 0,
-            // 注意：不复制交期（DueDate 保持 null，交期是新单的事）
-            CreatedBy = src.CreatedBy,
-            CreatedAt = DateTime.Now
-        };
-        _db.WorkOrders.Add(order);
-        await _db.SaveChangesAsync();
-
-        var srcTasks = await _db.WorkOrderOperations.AsNoTracking().Where(t => t.WorkOrderId == id).ToListAsync();
-        foreach (var t in srcTasks)
-            _db.WorkOrderOperations.Add(new ProdWorkOrderOperation
-            {
-                WorkOrderId = order.Id,
-                OperationId = t.OperationId,
-                Seq = t.Seq,
-                PlanQty = t.PlanQty
-            });
-
-        var srcExt = await _db.CustomFieldValues.AsNoTracking().Where(v => v.TargetId == id).ToListAsync();
-        foreach (var v in srcExt)
-            _db.CustomFieldValues.Add(new SysCustomFieldValue
-            {
-                FieldId = v.FieldId,
-                TargetId = order.Id,
-                Value = v.Value
-            });
-
-        await _db.SaveChangesAsync();
-        return ApiResult<object?>.OkMsg();
+            CopyFromId = id, ProductId = src.ProductId, Qty = src.Qty, Ext = ext
+        }, currentUserId, factoryId);
     }
 
     public async Task<ApiResult<object?>> DeleteAsync(long id)

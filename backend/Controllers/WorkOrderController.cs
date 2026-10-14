@@ -43,7 +43,7 @@ public class WorkOrderController : ControllerBase
 
     [HttpPost("{id:long}/copy")]
     public Task<ApiResult<object?>> Copy(long id) =>
-        _svc.CopyAsync(id, JwtHelper.GetFactoryId(User));
+        _svc.CopyAsync(id, JwtHelper.GetUserId(User), JwtHelper.GetFactoryId(User));
 
     [HttpDelete("{id:long}")]
     public Task<ApiResult<object?>> Delete(long id) => _svc.DeleteAsync(id);
