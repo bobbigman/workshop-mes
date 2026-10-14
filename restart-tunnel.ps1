@@ -163,7 +163,14 @@ Write-Host '[4/5] 更新 appsettings.json 的 Mcp:AuthBaseUrl ...' -ForegroundCo
 $raw = Get-Content $cfgPath -Raw -Encoding UTF8
 
 $tokenMatch = [regex]::Match($raw, '"Token"\s*:\s*"([^"]+)"')
-$mcpToken = if ($tokenMatch.Success) { $tokenMatch.Groups[1].Value } else { 'laohu-demo-2026' }
+if ($tokenMatch.Success) {
+    $mcpToken = $tokenMatch.Groups[1].Value
+} elseif ($env:MCP_TOKEN) {
+    $mcpToken = $env:MCP_TOKEN
+} else {
+    $mcpToken = ''
+    Write-Host '  警告：appsettings.json 未找到 Token，且未设置环境变量 MCP_TOKEN，将跳过 MCP 就绪验证。' -ForegroundColor Yellow
+}
 
 $m = [regex]::Match($raw, '"AuthBaseUrl"\s*:\s*"([^"]+)"')
 if (-not $m.Success) { throw 'appsettings.json 里没找到 AuthBaseUrl，请手动检查该文件。' }
@@ -197,16 +204,20 @@ Start-Process -FilePath 'cmd.exe' `
     -WindowStyle Minimized
 
 $mcpOk = $false
-for ($i = 0; $i -lt 60; $i++) {
-    Start-Sleep -Seconds 1
-    try {
-        $code = curl.exe -sk -o NUL -w "%{http_code}" -X POST "https://localhost:8080/mcp" `
-            -H "Authorization: Bearer $mcpToken" -H "Content-Type: application/json" `
-            -d "{}" --max-time 3
-        $code = "$code".Trim()
-        if ($code -eq '400' -or $code -eq '401') { $mcpOk = $true; break }
-    } catch {
-        # 后端还在启动，继续等
+if (-not $mcpToken) {
+    Write-Host '  未设置 MCP Token，跳过 MCP 就绪自检（地址仍已更新）。' -ForegroundColor DarkGray
+} else {
+    for ($i = 0; $i -lt 60; $i++) {
+        Start-Sleep -Seconds 1
+        try {
+            $code = curl.exe -sk -o NUL -w "%{http_code}" -X POST "https://localhost:8080/mcp" `
+                -H "Authorization: Bearer $mcpToken" -H "Content-Type: application/json" `
+                -d "{}" --max-time 3
+            $code = "$code".Trim()
+            if ($code -eq '400' -or $code -eq '401') { $mcpOk = $true; break }
+        } catch {
+            # 后端还在启动，继续等
+        }
     }
 }
 

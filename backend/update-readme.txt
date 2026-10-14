@@ -13,17 +13,18 @@
 
 （exe / runtimeconfig / deps 若被覆盖，会提示 You must install .NET）
 
-【本包功能 · 2026-10-05】
-- 工作区当前代码整体构建（含未提交改动）；没有部署到客户服务器。
-- 出品署名：服务器 appsettings 可加可选键 Instance:CreditPartner（伙伴名）。缺该键或为空，署名仍是「小蜜蜂报工・胡工」，不必改也能启动。
-- 微信预警（141）：正常推送仅群机器人 Webhook；交期临期+超期每天汇总一条；启动幂等升级 129→131→141。库账号须有 ALTER/CREATE INDEX/UPDATE。保留原 CronToken；服务器需能出站访问 qyapi.weixin.qq.com。
+【本包功能 · 2026-10-14 · 版本 1.1.317】
+- 登录背景：加入微聚轻 MES 生产看板背景并压缩至 132KB；登录页记住所选工厂背景，减少手机端图片加载（前端增量）。
+- 报工复核·工序前置数量校验（docs/230）：复核页按工艺路线上工序已复核良品算出本工序可报上限，列表新增「上工序合格库存/可报上限」列；报工数量超上限的行浅黄高亮并挂橙色【数量异常】标签；批量通过自动跳过异常单据；单点通过弹出特批确认弹窗（备注不落库）。PC 端与 H5 端一次做完，全厂通用、所有账套开启。
+- 报工数量口径设置（docs/230）：新增工厂级配置 sys_report_qty_setting（每工厂一条），允许超报比例 0～999%（默认 0）、上道不良是否计入下道可报（默认不计入）；仅管理员可改。首次启动 DbCompat 自动幂等建表，无需手工执行 SQL。
+- SupportDocs 支持文档/FAQ 同步更新（系统能力总图、常见问题、扫码报工问答、50问等）。
 - scripts 目录不由 apply-update 复制；任务脚本/SQL 按需单独复制。
 - 无强制新配置项。勿整文件覆盖 appsettings。
 
 【更新步骤】（一键）
 1. 把本文件夹拷到服务器任意位置（如 D:\WorkShop\publish-update）
 2. 双击 apply-update.bat（自动：停进程 → 更新 wwwroot/dll → 用安装目录原有 start.bat 拉起）
-3. 浏览器 Ctrl+F5，看登录页版本号与页脚署名
+3. 浏览器 Ctrl+F5，看登录页版本号
 
 目标目录写死：D:\WorkShop\backend\publish-win64（不覆盖 appsettings / start.bat）
 

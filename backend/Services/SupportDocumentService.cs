@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using System.Security.Cryptography;
 using ahu.MicrosoftMes.Common;
 using Microsoft.Extensions.Options;
@@ -58,6 +59,10 @@ public class SupportSearchResult
     public List<string> Warnings { get; set; } = new();
     public bool Truncated { get; set; }
     public int TotalMatched { get; set; }
+    /// <summary>_retrieval.json 的 version；缺文件/坏 JSON 用内置时为 builtin。</summary>
+    public string RetrievalVersion { get; set; } = "";
+    /// <summary>file = 读到外置规则；builtin = 回落代码默认。</summary>
+    public string RetrievalSource { get; set; } = "";
 }
 
 /// <summary>FAQ 分组（docs/113：## = 分组）。</summary>
@@ -84,6 +89,14 @@ public class SupportDocumentService
     private const int ExcerptMaxChars = 800;  // 单个来源摘录上限（300→800，减少截断逼模型脑补）
     private const string FaqFileName = "10-系统能力50问.md";
     private const string FaqEmptyHint = "常见问题暂未收录";
+    private const string RetrievalFileName = "_retrieval.json"; // docs/2J：与手册同目录，改文件热加载
+
+    private static readonly JsonSerializerOptions RetrievalJsonOpts = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        ReadCommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true
+    };
 
     private sealed class SupportChapter
     {
@@ -95,10 +108,46 @@ public class SupportDocumentService
         public string Content { get; set; } = "";
     }
 
+    private sealed class BoostRule
+    {
+        public string[] QueryContains { get; set; } = Array.Empty<string>();
+        public string[] ChapterContains { get; set; } = Array.Empty<string>();
+        public int Bonus { get; set; }
+    }
+
+    /// <summary>可外置检索规则（SupportDocs/_retrieval.json）；缺文件时用代码默认。</summary>
+    private sealed class RetrievalRules
+    {
+        public string Version { get; set; } = "builtin";
+        public string Source { get; set; } = "builtin"; // file | builtin
+        public string[] KeyPhrases { get; set; } = Array.Empty<string>();
+        public Dictionary<string, string[]> Synonyms { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+        public HashSet<string> ExcludeTitles { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+        public List<BoostRule> Boosts { get; set; } = new();
+    }
+
+    private sealed class RetrievalRulesFile
+    {
+        public string? Version { get; set; }
+        public string? UpdatedAt { get; set; }
+        public string[]? KeyPhrases { get; set; }
+        public Dictionary<string, string[]>? Synonyms { get; set; }
+        public string[]? ExcludeTitles { get; set; }
+        public List<BoostRuleFile>? Boosts { get; set; }
+    }
+
+    private sealed class BoostRuleFile
+    {
+        public string[]? QueryContains { get; set; }
+        public string[]? ChapterContains { get; set; }
+        public int Bonus { get; set; }
+    }
+
     private sealed class SupportIndex
     {
         public string Fingerprint { get; set; } = "";
         public List<SupportChapter> Chapters { get; set; } = new();
+        public RetrievalRules Rules { get; set; } = BuildDefaultRules();
     }
 
     private readonly SupportDocsOptions _opt;
@@ -329,8 +378,11 @@ public class SupportDocumentService
             var idx = EnsureIndex();
             if (idx.Chapters.Count == 0) { result.State = "empty"; result.Message = "客服知识目录为空"; return result; }
 
-            var terms = ExtractTerms(query);
-            var scored = Score(idx.Chapters, terms);
+            var rules = idx.Rules;
+            result.RetrievalVersion = rules.Version;
+            result.RetrievalSource = rules.Source;
+            var terms = ExtractTerms(query, rules);
+            var scored = Score(idx.Chapters, terms, query, rules);
             var matched = scored.Where(s => s.Score > 0).ToList();
             result.TotalMatched = matched.Count;
 
@@ -341,18 +393,17 @@ public class SupportDocumentService
                 return result;
             }
 
-            // 预算：具体手册占满前 N 条；总地图不占名额，截断后另附最贴题的一节。
+            // 预算：具体手册占满前 N 条；排除标题（默认 README）不进证据；总地图不占名额，截断后另附最贴题的一节。
             var budget = Math.Max(1, _opt.MaxEvidenceChars);
             var used = 0;
             var taken = 0;
-            var specific = matched.Where(m => !IsCapabilityMap(m.Chapter)).ToList();
-            var ranked = specific.Count > 0 ? specific : matched;
+            var specific = matched.Where(m => !IsCapabilityMap(m.Chapter) && !IsExcludedTitle(m.Chapter, rules)).ToList();
+            var ranked = specific.Count > 0 ? specific : matched.Where(m => !IsExcludedTitle(m.Chapter, rules)).ToList();
+            if (ranked.Count == 0) ranked = matched;
             foreach (var m in ranked.Take(_opt.MaxResults))
             {
                 if (used >= budget) { result.Truncated = true; break; }
-                var excerpt = m.Chapter.Content.Length <= ExcerptMaxChars
-                    ? m.Chapter.Content
-                    : m.Chapter.Content[..ExcerptMaxChars] + "...";
+                var excerpt = ExcerptAround(m.Chapter.Content, query, rules);
                 if (used + excerpt.Length > budget && taken > 0) { result.Truncated = true; break; }
                 used += excerpt.Length;
                 result.Sources.Add(new SupportSourceDto
@@ -368,7 +419,7 @@ public class SupportDocumentService
             }
             if (result.TotalMatched > taken) result.Truncated = true;
 
-            var pinnedMap = PinCapabilityMap(query, matched, result);
+            var pinnedMap = PinCapabilityMap(query, matched, result, rules);
 
             if (result.Truncated && pinnedMap)
                 result.Message = "检索命中较多，正文已截断。来源里《系统能力总地图》用来兜底：写了操作步骤就按该节回答；只问有没有、在哪、谁能用，也按总地图回答。不要编菜单，不要因为截断就说没查到。";
@@ -391,6 +442,10 @@ public class SupportDocumentService
     private static bool IsCapabilityMap(SupportChapter chapter) =>
         chapter.FileTitle.Contains("系统能力总地图", StringComparison.Ordinal);
 
+    /// <summary>排除标题（默认 README）不占证据名额，避免目录行挤掉真正答案章节。</summary>
+    private static bool IsExcludedTitle(SupportChapter chapter, RetrievalRules rules) =>
+        rules.ExcludeTitles.Contains(chapter.FileTitle);
+
     /// <summary>
     /// 其它文档占满前 N 条时，仍带回《系统能力总地图》里最贴题的一节，不占 MaxResults 名额。
     /// 问怎么用/演示时，优先标题含「怎么用」的节。
@@ -398,7 +453,8 @@ public class SupportDocumentService
     private static bool PinCapabilityMap(
         string query,
         List<(SupportChapter Chapter, int Score)> matched,
-        SupportSearchResult result)
+        SupportSearchResult result,
+        RetrievalRules rules)
     {
         var map = matched
             .Where(m => m.Score > 0 && IsCapabilityMap(m.Chapter))
@@ -425,7 +481,7 @@ public class SupportDocumentService
             Chapter = best.Chapter.Chapter,
             Version = best.Chapter.Version,
             UpdatedAt = best.Chapter.UpdatedAt,
-            Excerpt = ExcerptAround(best.Chapter.Content, query)
+            Excerpt = ExcerptAround(best.Chapter.Content, query, rules)
         });
         return true;
     }
@@ -437,16 +493,23 @@ public class SupportDocumentService
         || query.Contains("哪个按钮", StringComparison.Ordinal)
         || query.Contains("哪个菜单", StringComparison.Ordinal);
 
-    /// <summary>长章节摘录从问句里的关键词附近截，避免只看到表格开头。</summary>
-    private static string ExcerptAround(string content, string query)
+    /// <summary>长章节摘录从问句里最长的关键词附近截，避免只看到节首/表格开头。</summary>
+    private static string ExcerptAround(string content, string query, RetrievalRules rules)
     {
         if (content.Length <= ExcerptMaxChars) return content;
         var idx = -1;
-        foreach (var kp in KeyPhrases)
+        var hitLen = 0;
+        foreach (var kp in rules.KeyPhrases.OrderByDescending(k => k.Length))
         {
             if (!query.Contains(kp, StringComparison.OrdinalIgnoreCase)) continue;
             var at = content.IndexOf(kp, StringComparison.OrdinalIgnoreCase);
-            if (at >= 0 && (idx < 0 || at < idx)) idx = at;
+            if (at < 0) continue;
+            // 更长短语优先；同长度取更靠前出现处
+            if (kp.Length > hitLen || (kp.Length == hitLen && (idx < 0 || at < idx)))
+            {
+                idx = at;
+                hitLen = kp.Length;
+            }
         }
         if (idx < 0) idx = 0;
         var start = Math.Max(0, idx - 120);
@@ -474,7 +537,8 @@ public class SupportDocumentService
                 foreach (var ch in SplitChapters(doc))
                     chapters.Add(ch);
             }
-            var idx = new SupportIndex { Fingerprint = fingerprint, Chapters = chapters };
+            var rules = LoadRetrievalRules(root);
+            var idx = new SupportIndex { Fingerprint = fingerprint, Chapters = chapters, Rules = rules };
             _index = idx;
             return idx;
         }
@@ -492,7 +556,88 @@ public class SupportDocumentService
             var info = new FileInfo(fullPath);
             sb.Append(rel).Append('|').Append(info.Length).Append('|').Append(info.LastWriteTimeUtc.Ticks).Append('\n');
         }
+        // _retrieval.json 不进 md 索引，但必须参与指纹，否则改规则不会热加载
+        AppendFileFingerprint(sb, root, RetrievalFileName);
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString())));
+    }
+
+    private static void AppendFileFingerprint(StringBuilder sb, string root, string fileName)
+    {
+        var path = Path.Combine(root, fileName);
+        if (!File.Exists(path))
+        {
+            sb.Append(fileName).Append("|missing\n");
+            return;
+        }
+        var info = new FileInfo(path);
+        sb.Append(fileName).Append('|').Append(info.Length).Append('|').Append(info.LastWriteTimeUtc.Ticks).Append('\n');
+    }
+
+    private RetrievalRules LoadRetrievalRules(string root)
+    {
+        var path = Path.Combine(root, RetrievalFileName);
+        if (!File.Exists(path))
+            return BuildDefaultRules();
+
+        try
+        {
+            var json = File.ReadAllText(path, Encoding.UTF8);
+            var dto = JsonSerializer.Deserialize<RetrievalRulesFile>(json, RetrievalJsonOpts);
+            if (dto == null)
+            {
+                _logger.LogWarning("客服检索规则文件为空，使用默认规则 file={File}", RetrievalFileName);
+                return BuildDefaultRules();
+            }
+            return MergeRules(dto);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "客服检索规则解析失败，使用默认规则 file={File}", RetrievalFileName);
+            return BuildDefaultRules();
+        }
+    }
+
+    private static RetrievalRules MergeRules(RetrievalRulesFile dto)
+    {
+        var rules = BuildDefaultRules();
+        rules.Source = "file";
+        rules.Version = string.IsNullOrWhiteSpace(dto.Version) ? "file-unversioned" : dto.Version.Trim();
+        if (dto.KeyPhrases is { Length: > 0 })
+            rules.KeyPhrases = dto.KeyPhrases.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()).ToArray();
+        if (dto.Synonyms is { Count: > 0 })
+        {
+            rules.Synonyms = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kv in dto.Synonyms)
+            {
+                if (string.IsNullOrWhiteSpace(kv.Key) || kv.Value == null) continue;
+                rules.Synonyms[kv.Key.Trim()] = kv.Value
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .Select(s => s.Trim())
+                    .ToArray();
+            }
+        }
+        if (dto.ExcludeTitles != null)
+        {
+            rules.ExcludeTitles = new HashSet<string>(
+                dto.ExcludeTitles.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()),
+                StringComparer.OrdinalIgnoreCase);
+        }
+        if (dto.Boosts != null)
+        {
+            rules.Boosts = dto.Boosts
+                .Where(b => b != null && b.Bonus != 0)
+                .Select(b => new BoostRule
+                {
+                    QueryContains = (b.QueryContains ?? Array.Empty<string>())
+                        .Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()).ToArray(),
+                    ChapterContains = (b.ChapterContains ?? Array.Empty<string>())
+                        .Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()).ToArray(),
+                    Bonus = b.Bonus
+                })
+                .Where(b => b.QueryContains.Length > 0 && b.ChapterContains.Length > 0)
+                .ToList();
+        }
+        return rules;
     }
 
     private static List<SupportChapter> SplitChapters(SupportDocFile doc)
@@ -591,57 +736,76 @@ public class SupportDocumentService
         return $"{s}_{seq}";
     }
 
-    // ---- 检索：关键词提取 + 同义词 + 加权评分 ----
-
-    private static readonly string[] KeyPhrases =
-    {
-        "一键补报", "批量补报", "补报", "删不掉", "删除", "报工权限", "权限", "复核", "退回",
-        "下工单", "下单", "创建工单", "打印", "二维码", "流转卡", "账号", "用户", "完成数",
-        "生产报表", "入账", "报表", "交期", "状态", "工序", "工艺路线", "产品", "工单", "单位",
-        "不良品项", "部门", "登录", "密码", "看板", "扫码", "报工", "PDA",
-        "自动派工", "派工", "排产", "排程", "按工时", "工时", "分摊", "多人", "约定比例", "无人派工"
-    };
-
-    private static readonly Dictionary<string, string[]> Synonyms = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["补报"] = new[] { "补报", "批量补报", "一键补报" },
-        ["删不掉"] = new[] { "删除", "删" },
-        ["删除"] = new[] { "删除", "删" },
-        ["权限"] = new[] { "权限", "报工权限" },
-        ["复核"] = new[] { "复核", "审核", "通过", "退回" },
-        ["退回"] = new[] { "退回", "复核" },
-        ["下工单"] = new[] { "下单", "创建工单", "工单" },
-        ["下单"] = new[] { "下单", "创建工单", "工单" },
-        ["创建工单"] = new[] { "创建工单", "下单", "工单" },
-        ["打印"] = new[] { "打印", "二维码", "流转卡" },
-        ["账号"] = new[] { "账号", "用户" },
-        ["用户"] = new[] { "用户", "账号" },
-        ["完成数"] = new[] { "完成", "完成数", "进度" },
-        ["报表"] = new[] { "报表", "生产报表", "入账" },
-        ["入账"] = new[] { "入账", "报表", "生产报表" },
-        ["工单"] = new[] { "工单", "下单", "创建工单" },
-        ["扫码"] = new[] { "扫码", "报工", "PDA", "二维码" },
-        ["报工"] = new[] { "报工", "扫码", "提交报工" },
-        ["PDA"] = new[] { "PDA", "扫码", "扫码头" },
-        ["自动派工"] = new[] { "自动派工", "派工", "无人派工", "自动分派", "班组长不用派工" },
-        ["派工"] = new[] { "派工", "自动派工", "无人派工", "手动派工", "派给" },
-        ["排产"] = new[] { "排产", "排程", "排优先级", "建议开工顺序", "排顺序" },
-        ["工时"] = new[] { "工时", "按工时", "时长", "报工时长" },
-        ["分摊"] = new[] { "分摊", "分账", "按工时加权", "平均分摊", "多人分摊" }
-    };
+    // ---- 检索：关键词提取 + 同义词 + 加权评分（可调数据见 SupportDocs/_retrieval.json）----
 
     private static readonly HashSet<string> StopBigrams = new(StringComparer.Ordinal)
     {
         "怎么", "如何", "什么", "为什", "什么", "一个", "一下", "在哪", "哪里", "哪些", "这个", "那个", "是不是"
     };
 
-    private static List<string> ExtractTerms(string query)
+    private static RetrievalRules BuildDefaultRules() => new()
+    {
+        Version = "builtin",
+        Source = "builtin",
+        KeyPhrases = new[]
+        {
+            "一键补报", "批量补报", "补报", "删不掉", "删除", "报工权限", "权限", "复核", "退回",
+            "下工单", "下单", "创建工单", "打印", "二维码", "流转卡", "账号", "用户", "完成数",
+            "生产报表", "入账", "报表", "交期", "状态", "工序", "工艺路线", "产品", "工单", "单位",
+            "不良品项", "部门", "登录", "密码", "看板", "扫码", "报工", "PDA",
+            "自动派工", "派工", "排产", "排程", "按工时比例", "工时比例", "按工时", "工时", "分摊", "多人",
+            "约定比例", "无人派工", "共同报工", "自动分账"
+        },
+        Synonyms = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["补报"] = new[] { "补报", "批量补报", "一键补报" },
+            ["删不掉"] = new[] { "删除", "删" },
+            ["删除"] = new[] { "删除", "删" },
+            ["权限"] = new[] { "权限", "报工权限" },
+            ["复核"] = new[] { "复核", "审核", "通过", "退回" },
+            ["退回"] = new[] { "退回", "复核" },
+            ["下工单"] = new[] { "下单", "创建工单", "工单" },
+            ["下单"] = new[] { "下单", "创建工单", "工单" },
+            ["创建工单"] = new[] { "创建工单", "下单", "工单" },
+            ["打印"] = new[] { "打印", "二维码", "流转卡" },
+            ["账号"] = new[] { "账号", "用户" },
+            ["用户"] = new[] { "用户", "账号" },
+            ["完成数"] = new[] { "完成", "完成数", "进度" },
+            ["报表"] = new[] { "报表", "生产报表", "入账" },
+            ["入账"] = new[] { "入账", "报表", "生产报表" },
+            ["工单"] = new[] { "工单", "下单", "创建工单" },
+            ["扫码"] = new[] { "扫码", "报工", "PDA", "二维码" },
+            ["报工"] = new[] { "报工", "扫码", "提交报工" },
+            ["PDA"] = new[] { "PDA", "扫码", "扫码头" },
+            ["自动派工"] = new[] { "自动派工", "派工", "无人派工", "自动分派", "班组长不用派工" },
+            ["派工"] = new[] { "派工", "自动派工", "无人派工", "手动派工", "派给" },
+            ["排产"] = new[] { "排产", "排程", "排优先级", "建议开工顺序", "排顺序" },
+            ["工时"] = new[] { "工时", "按工时", "时长", "报工时长" },
+            ["按工时"] = new[] { "按工时", "按工时比例", "工时比例", "按报工时长", "按工时加权" },
+            ["工时比例"] = new[] { "工时比例", "按工时比例", "按工时", "按报工时长加权" },
+            ["按工时比例"] = new[] { "按工时比例", "工时比例", "按工时", "按报工时长加权" },
+            ["分摊"] = new[] { "分摊", "分账", "按工时加权", "平均分摊", "多人分摊" },
+            ["共同报工"] = new[] { "共同报工", "多人共同报工", "多人分摊" }
+        },
+        ExcludeTitles = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "README" },
+        Boosts = new List<BoostRule>
+        {
+            new()
+            {
+                QueryContains = new[] { "工时比例", "按工时比例", "按工时分摊", "自动分配报工" },
+                ChapterContains = new[] { "按工时比例", "多人分摊", "Q13", "两人协作的产量" },
+                Bonus = 80
+            }
+        }
+    };
+
+    private static List<string> ExtractTerms(string query, RetrievalRules rules)
     {
         var terms = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var q = query.Trim();
 
         // 1) 已知关键短语命中（语义最强）
-        foreach (var kp in KeyPhrases)
+        foreach (var kp in rules.KeyPhrases)
             if (q.Contains(kp, StringComparison.OrdinalIgnoreCase))
                 terms.Add(kp);
 
@@ -666,7 +830,7 @@ public class SupportDocumentService
         foreach (var t in terms)
         {
             expanded.Add(t);
-            if (Synonyms.TryGetValue(t, out var syns))
+            if (rules.Synonyms.TryGetValue(t, out var syns))
                 foreach (var s in syns) expanded.Add(s);
         }
 
@@ -677,7 +841,11 @@ public class SupportDocumentService
 
     private static bool IsCjk(char c) => c >= 0x4e00 && c <= 0x9fff;
 
-    private static List<(SupportChapter Chapter, int Score)> Score(List<SupportChapter> chapters, List<string> terms)
+    private static List<(SupportChapter Chapter, int Score)> Score(
+        List<SupportChapter> chapters,
+        List<string> terms,
+        string query,
+        RetrievalRules rules)
     {
         var scored = new List<(SupportChapter Chapter, int Score)>();
         foreach (var ch in chapters)
@@ -690,11 +858,26 @@ public class SupportDocumentService
                 var bodyHits = CountOccurrences(ch.Content, t);
                 score += titleHits * 3 + bodyHits;
             }
+            score += ApplyBoosts(query, titleText, rules);
             if (score > 0) scored.Add((ch, score));
         }
         return scored.OrderByDescending(s => s.Score)
                      .ThenBy(s => s.Chapter.FileTitle)
                      .ToList();
+    }
+
+    private static int ApplyBoosts(string query, string titleText, RetrievalRules rules)
+    {
+        var bonus = 0;
+        foreach (var b in rules.Boosts)
+        {
+            if (!b.QueryContains.Any(q => query.Contains(q, StringComparison.OrdinalIgnoreCase)))
+                continue;
+            if (!b.ChapterContains.Any(c => titleText.Contains(c, StringComparison.OrdinalIgnoreCase)))
+                continue;
+            bonus += b.Bonus;
+        }
+        return bonus;
     }
 
     private static int CountOccurrences(string haystack, string needle)

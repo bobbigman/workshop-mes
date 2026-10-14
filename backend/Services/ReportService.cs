@@ -195,11 +195,31 @@ public class ReportService : IReportService
     private readonly AppDbContext _db;
     private readonly WechatEventService? _events;
     private readonly IReportUpstreamSettingService _upstreamSetting;
-    public ReportService(AppDbContext db, IReportUpstreamSettingService upstreamSetting, WechatEventService? events = null)
+    private readonly IReportQtySettingService? _qtySetting;
+    public ReportService(
+        AppDbContext db,
+        IReportUpstreamSettingService upstreamSetting,
+        WechatEventService? events = null,
+        IReportQtySettingService? qtySetting = null)
     {
         _db = db;
         _upstreamSetting = upstreamSetting;
         _events = events;
+        _qtySetting = qtySetting;
+    }
+
+    private async Task<ReportQtySettingDto> QtyCfgAsync(long factoryId) =>
+        _qtySetting == null ? new ReportQtySettingDto() : await _qtySetting.GetOrDefaultAsync(factoryId);
+
+    private static void EnsureWithinPlan(int alreadyGood, int addGood, int planQty, int ratio, string alreadyLabel, string where)
+    {
+        var allowed = ReportQtySettingService.AllowedQty(planQty, ratio);
+        if (alreadyGood + addGood <= allowed) return;
+        if (ratio > 0)
+            throw ThrowHelper.Biz(where,
+                $"超出允许超报比例：该工序允许 {allowed}（计划 {planQty}，超报 {ratio}%），{alreadyLabel} {alreadyGood}，本次 {addGood}");
+        throw ThrowHelper.Biz(where,
+            $"超出计划数：该工序计划 {planQty}，{alreadyLabel} {alreadyGood}，本次 {addGood}");
     }
 
     public async Task<ApiResult<object?>> SubmitAsync(ReportDto dto, long currentUserId)
@@ -324,9 +344,8 @@ public class ReportService : IReportService
             var alreadyGood = await _db.Reports
                 .Where(r => r.OrderId == order.Id && r.OperationId == dto.OperationId && r.ReviewStatus != 2)
                 .SumAsync(r => (int?)r.GoodQty) ?? 0;
-            if (alreadyGood + totalGood > planQty)
-                throw ThrowHelper.Biz(nameof(SubmitAsync),
-                    $"超出计划数：该工序计划 {planQty}，已报良品 {alreadyGood}，本次 {totalGood}");
+            var ratio = (await QtyCfgAsync(order.FactoryId)).OverrunRatio;
+            EnsureWithinPlan(alreadyGood, totalGood, planQty, ratio, "已报良品", nameof(SubmitAsync));
 
             var created = new List<ProdReport>();
             foreach (var line in lines)
@@ -852,9 +871,8 @@ public class ReportService : IReportService
             .Where(r => r.OrderId == report.OrderId && r.OperationId == report.OperationId
                         && r.Id != report.Id && r.ReviewStatus != 2)
             .SumAsync(r => (int?)r.GoodQty) ?? 0;
-        if (othersGood + dto.GoodQty > planQty)
-            throw ThrowHelper.Biz(nameof(UpdateAsync),
-                $"超出计划数：该工序计划 {planQty}，其它记录已报良品 {othersGood}，本次 {dto.GoodQty}");
+        var ratio = (await QtyCfgAsync(order.FactoryId)).OverrunRatio;
+        EnsureWithinPlan(othersGood, dto.GoodQty, planQty, ratio, "其它记录已报良品", nameof(UpdateAsync));
 
         var oldGood = report.GoodQty;
         var oldDefect = report.DefectQty;
@@ -1005,11 +1023,12 @@ public class ReportService : IReportService
             throw ThrowHelper.Biz(nameof(BatchReportAsync), "工单已取消，不可补报");
 
         // 事务外先算待报工序，给拆分校验用；锁内再重查防并发
-        var pending = await CollectPendingOpsAsync(order);
+        var ratio = (await QtyCfgAsync(order.FactoryId)).OverrunRatio;
+        var pending = await CollectPendingOpsAsync(order, ratio);
         if (pending.Count == 0)
             throw ThrowHelper.Biz(nameof(BatchReportAsync), "所有工序已报满");
 
-        EnsureQtyWithinRemain(pending, dto.GoodQty, nameof(BatchReportAsync));
+        EnsureQtyWithinRemain(pending, dto.GoodQty, nameof(BatchReportAsync), ratio > 0);
         var perOpUsers = BuildPerOpUsers(pending, dto.Allocations, dto.GoodQty, currentUserId, nameof(BatchReportAsync));
 
         // docs/150：批量补报同样走上级校验（含 soft/hard）
@@ -1035,10 +1054,11 @@ public class ReportService : IReportService
             }
 
             // 锁内重查剩余
-            pending = await CollectPendingOpsAsync(order);
+            ratio = (await QtyCfgAsync(order.FactoryId)).OverrunRatio;
+            pending = await CollectPendingOpsAsync(order, ratio);
             if (pending.Count == 0)
                 throw ThrowHelper.Biz(nameof(BatchReportAsync), "所有工序已报满");
-            EnsureQtyWithinRemain(pending, dto.GoodQty, nameof(BatchReportAsync));
+            EnsureQtyWithinRemain(pending, dto.GoodQty, nameof(BatchReportAsync), ratio > 0);
 
             if (order.Status >= 2) throw ThrowHelper.BizUser("工单已结束或取消，不可补报");
             var now = DateTime.Now;
@@ -1107,7 +1127,7 @@ public class ReportService : IReportService
     }
 
     /// <summary>待报工序：有任务行用任务行；无任务行兜底产品路线 + 工单 qty（与 LoadTasksAsync 同口径）。</summary>
-    private async Task<List<(long OperationId, string OperationName, int PlanQty, int Remain)>> CollectPendingOpsAsync(ProdWorkOrder order)
+    private async Task<List<(long OperationId, string OperationName, int PlanQty, int Remain)>> CollectPendingOpsAsync(ProdWorkOrder order, int overrunRatio)
     {
         var goodMap = await (from r in _db.Reports.AsNoTracking()
                              where r.OrderId == order.Id && r.ReviewStatus != 2
@@ -1142,7 +1162,7 @@ public class ReportService : IReportService
         foreach (var (operationId, planQty, _) in plans)
         {
             var done = goodMap.GetValueOrDefault(operationId, 0);
-            var remain = planQty - done;
+            var remain = ReportQtySettingService.AllowedQty(planQty, overrunRatio) - done;
             if (remain <= 0) continue;
             pending.Add((operationId, names.GetValueOrDefault(operationId, ""), planQty, remain));
         }
@@ -1152,12 +1172,16 @@ public class ReportService : IReportService
     private static void EnsureQtyWithinRemain(
         List<(long OperationId, string OperationName, int PlanQty, int Remain)> pending,
         int goodQty,
-        string loc)
+        string loc,
+        bool overrunOn)
     {
         var bottleneck = pending.OrderBy(p => p.Remain).First();
-        if (goodQty > bottleneck.Remain)
+        if (goodQty <= bottleneck.Remain) return;
+        if (overrunOn)
             throw ThrowHelper.Biz(loc,
-                $"本次数量超过工序【{bottleneck.OperationName}】剩余可报 {bottleneck.Remain}");
+                $"超出允许超报比例：工序【{bottleneck.OperationName}】剩余可报 {bottleneck.Remain}");
+        throw ThrowHelper.Biz(loc,
+            $"本次数量超过工序【{bottleneck.OperationName}】剩余可报 {bottleneck.Remain}");
     }
 
     /// <summary>每道待报工序 → 若干 (userId, qty)；未指定挂当前管理员；指定则合计必须 = N。</summary>
@@ -1409,9 +1433,12 @@ public class ReportService : IReportService
         if (!ops.Any(o => o.Seq < curSeq))
             return null; // 首道：不校验上级
 
-        var limit = await _db.Reports.AsNoTracking()
-            .Where(r => r.OrderId == order.Id && r.OperationId == prev.OperationId && r.ReviewStatus == 1)
-            .SumAsync(r => (int?)r.GoodQty) ?? 0;
+        var countDefect = (await QtyCfgAsync(order.FactoryId)).CountDefect;
+        var approved = _db.Reports.AsNoTracking()
+            .Where(r => r.OrderId == order.Id && r.OperationId == prev.OperationId && r.ReviewStatus == 1);
+        var limit = countDefect
+            ? await approved.SumAsync(r => (int?)(r.GoodQty + r.DefectQty)) ?? 0
+            : await approved.SumAsync(r => (int?)r.GoodQty) ?? 0;
         var occupied = await _db.Reports.AsNoTracking()
             .Where(r => r.OrderId == order.Id && r.OperationId == operationId
                         && (r.ReviewStatus == 0 || r.ReviewStatus == 1))

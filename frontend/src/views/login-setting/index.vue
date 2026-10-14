@@ -5,7 +5,7 @@
         <span class="card-title">登录页图片</span>
       </template>
 
-      <div class="tip">登录页左侧大图，建议尺寸 2:1 或 4:3 横图，支持 png / jpg / jpeg / webp，≤5MB。</div>
+      <div class="tip">电脑登录背景，建议主体放在横图左侧，支持 PNG / JPG / WebP，≤5MB。上传时自动缩小并压缩；手机使用简洁渐变，不加载大图。</div>
 
       <div class="preview">
         <img v-if="bannerUrl" :src="bannerUrl" class="preview-img" alt="当前登录页图片" />
@@ -20,7 +20,7 @@
         <el-upload :show-file-list="false" :http-request="doUpload" accept=".png,.jpg,.jpeg,.webp">
           <el-button type="primary" :loading="uploading">{{ bannerUrl ? '替换图片' : '上传图片' }}</el-button>
         </el-upload>
-        <span v-if="bannerUrl" class="hint">上传成功后登录页刷新即可看到新图</span>
+        <span v-if="bannerUrl" class="hint">本浏览器重新打开登录页即可看到本厂背景；新设备首次使用默认图，成功登录后记住本厂。</span>
       </div>
     </el-card>
   </div>
@@ -30,6 +30,7 @@
 import { ref, onMounted } from 'vue'
 import { getLoginSetting, uploadLoginBanner } from '@/api/auth'
 import { ElMessage } from 'element-plus'
+import { compressLoginBanner, rememberLoginFactory } from '@/utils/loginAppearance'
 
 const bannerUrl = ref('')
 const uploading = ref(false)
@@ -50,13 +51,18 @@ async function load() {
 }
 
 async function doUpload({ file }) {
-  const fd = new FormData()
-  fd.append('file', file)
   uploading.value = true
   try {
+    const compressed = await compressLoginBanner(file)
+    const fd = new FormData()
+    fd.append('file', compressed)
     const res = await uploadLoginBanner(fd)
+    rememberLoginFactory(factoryCode)
     bannerUrl.value = res.data?.bannerUrl || ''
-    ElMessage.success('上传成功')
+    ElMessage.success(`上传成功，图片大小 ${Math.ceil(compressed.size / 1024)} KB`)
+  } catch (error) {
+    console.error('[登录页图片] 压缩或上传失败', error)
+    ElMessage.error(error?.message || '登录页图片上传失败，请重试')
   } finally {
     uploading.value = false
   }

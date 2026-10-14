@@ -177,6 +177,7 @@ try
     builder.Services.AddScoped<WechatEventService>();
     builder.Services.AddScoped<IWorkerViewService, WorkerViewService>();
     builder.Services.AddScoped<IReportUpstreamSettingService, ReportUpstreamSettingService>();
+    builder.Services.AddScoped<IReportQtySettingService, ReportQtySettingService>();
     builder.Services.AddScoped<IKingdeeAuthService, FakeKingdeeAuthService>();
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddScoped<IMcpRequestContext, McpRequestContext>();

@@ -33,7 +33,7 @@ public class SupportDocsMcpTools
         _config = config;
     }
 
-    [McpServerTool, Description("search_support_docs：检索服务器上的操作说明/常见问题/数据口径（怎么扫码报工、怎么补报、无报工权限等）。只传 query，不要传任何文件路径。演示模式下无需授权码；正式模式需钥匙定厂及手机号绑定，不需金蝶授权码。返回 state/message/sources 摘录，据此回答，禁止另开微信小程序等方案。")]
+    [McpServerTool, Description("search_support_docs：检索服务器上的操作说明/常见问题/数据口径（怎么扫码报工、怎么补报、无报工权限等）。只传 query，不要传任何文件路径。演示模式下无需授权码；正式模式需钥匙定厂及手机号绑定，不需金蝶授权码。返回 state/message/retrievalVersion/retrievalSource/sources 摘录；retrievalVersion 为手册目录 _retrieval.json 的版本，据此核对是否最新规则。禁止另开微信小程序等方案。")]
     public async Task<string> SearchSupportDocs(
         [Description("用户问题或关键词，必填，最多 500 字")] string query,
         [Description("兼容旧调用保留的参数；车间查询不使用金蝶授权码")] string? authToken = null,
@@ -56,6 +56,8 @@ public class SupportDocsMcpTools
             message = result.Message,
             truncated = result.Truncated,
             totalMatched = result.TotalMatched,
+            retrievalVersion = result.RetrievalVersion,
+            retrievalSource = result.RetrievalSource,
             warnings = result.Warnings,
             sources = result.Sources.Select(s => new
             {

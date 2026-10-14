@@ -41,6 +41,7 @@ public class AppDbContext : DbContext
     public DbSet<LoginSetting> LoginSettings => Set<LoginSetting>();
     public DbSet<SysWorkerViewSetting> WorkerViewSettings => Set<SysWorkerViewSetting>();
     public DbSet<SysReportUpstreamSetting> ReportUpstreamSettings => Set<SysReportUpstreamSetting>();
+    public DbSet<SysReportQtySetting> ReportQtySettings => Set<SysReportQtySetting>();
     public DbSet<SysWechatAlertSetting> WechatAlertSettings => Set<SysWechatAlertSetting>();
     public DbSet<SysWechatAlertLog> WechatAlertLogs => Set<SysWechatAlertLog>();
     public DbSet<SysMcpAuth> McpAuths => Set<SysMcpAuth>();
@@ -443,6 +444,16 @@ public class AppDbContext : DbContext
             e.HasIndex(x => x.FactoryId).IsUnique();
             e.Property(x => x.FactoryId).HasColumnName("factory_id");
             e.Property(x => x.WorkerViewMode).HasColumnName("worker_view_mode");
+            e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+        });
+
+        modelBuilder.Entity<SysReportQtySetting>(e =>
+        {
+            e.ToTable("sys_report_qty_setting");
+            e.HasIndex(x => x.FactoryId).IsUnique();
+            e.Property(x => x.FactoryId).HasColumnName("factory_id");
+            e.Property(x => x.OverrunRatio).HasColumnName("overrun_ratio");
+            e.Property(x => x.CountDefect).HasColumnName("count_defect");
             e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
         });
 

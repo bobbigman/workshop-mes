@@ -104,6 +104,18 @@ public class SysWorkerViewSetting
     public DateTime UpdatedAt { get; set; }
 }
 
+/// <summary>报工数量口径（每工厂一条；默认不超报、不良不计入下道，docs/230）</summary>
+public class SysReportQtySetting
+{
+    public long Id { get; set; }
+    public long FactoryId { get; set; }
+    /// <summary>允许超报比例%，0=不能超过工序计划。上限件数向上取整。</summary>
+    public int OverrunRatio { get; set; }
+    /// <summary>true=上道已复核不良计入下道可报</summary>
+    public bool CountDefect { get; set; }
+    public DateTime UpdatedAt { get; set; }
+}
+
 /// <summary>报工上级工序校验（每工厂一条；默认 soft，docs/150）</summary>
 public class SysReportUpstreamSetting
 {
