@@ -5,6 +5,7 @@
 已上线机禁止用整包 publish-win64 覆盖安装目录（会冲掉 HTTPS/连接串）。
 
 本包更新内容：wwwroot、*.dll（及明确需要的web.config）；另附apply-update、说明和scripts供部署使用。
+本包另附 **SupportDocs 智能客服知识库**（含 _retrieval.json）：apply-update.bat 已内置自动拷贝，双击即自动更新到 `D:\WorkShop\SupportDocs`（脚本顶部 KNOWLEDGE 变量，路径不同先改这行）。
 本包不含且 apply-update 绝不覆盖：
 - appsettings*.json
 - start.bat / stop.bat

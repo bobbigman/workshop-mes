@@ -1,9 +1,9 @@
 ---
 title: MCP 配置说明（需暗语接头）
 role: 管理员
-version: 1.2
-systemVersion: 2026-10-03
-updatedAt: 2026-10-09
+version: 1.3
+systemVersion: 2026-10-14
+updatedAt: 2026-10-14
 source: docs/101-使用说明-怎么配置MCP-Server.md
 ---
 

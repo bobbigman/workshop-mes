@@ -5,6 +5,9 @@ title WorkshopMes apply-update
 
 set TARGET=D:\WorkShop\backend\publish-win64
 
+REM 智能客服知识库目标目录（服务器 Ai:SupportDocs:RootPath）。若本包带 SupportDocs 则自动拷过去。
+set KNOWLEDGE=D:\WorkShop\SupportDocs
+
 echo ========================================
 echo   WorkshopMes apply-update（一键）
 echo ========================================
@@ -42,6 +45,25 @@ if errorlevel 1 goto FAILCOPY
 if exist "%~dp0web.config" copy /Y "%~dp0web.config" "%TARGET%\" >nul
 
 echo [OK] 文件已更新: %TARGET%
+echo.
+
+echo [2b/3] 若本包带 SupportDocs 知识库，则自动拷贝到 %KNOWLEDGE% ...
+if exist "%~dp0SupportDocs" goto KBDIR
+echo [OK] 本包无 SupportDocs，跳过知识库更新
+goto KBEND
+
+:KBDIR
+if not exist "%KNOWLEDGE%" mkdir "%KNOWLEDGE%"
+robocopy "%~dp0SupportDocs" "%KNOWLEDGE%" /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NC /NS
+if errorlevel 8 goto FAILKB
+echo [OK] 知识库已更新: %KNOWLEDGE%
+goto KBEND
+
+:FAILKB
+echo [FAIL] 知识库拷贝失败
+goto KBEND
+
+:KBEND
 echo.
 
 echo [3/3] 用安装目录原有 start.bat 启动（新窗口）...

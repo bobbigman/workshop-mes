@@ -17,4 +17,5 @@
 - `DEPLOYMENT_NOTES.md`
 - `docs/59-执行指令-部署更新铁律-appsettings不覆盖.md`
 - 脚本：`backend/pack-update.ps1`、`backend/apply-update.bat`
-- 技能：`workshop-mes-deploy`
+- 技能：`workshop-mes-deploy`（程序增量包）
+- 知识库随包：`workshop-mes-knowledge-deploy`（整理 SupportDocs + 打进增量包 + apply-update 自动拷贝）

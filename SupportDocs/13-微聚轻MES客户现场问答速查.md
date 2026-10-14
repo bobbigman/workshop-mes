@@ -1,9 +1,9 @@
 ---
 title: 微聚轻MES客户现场问答速查
 role: 销售
-version: 1.0
-systemVersion: 微聚轻MES
-updatedAt: 2026-10-05
+version: 1.1
+systemVersion: 2026-10-14
+updatedAt: 2026-10-14
 ---
 
 # 微聚轻MES · 客户现场提问速查（即问即答）

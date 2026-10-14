@@ -6,7 +6,7 @@
 ## 项目
 WorkshopMes 车间 MES——**已上线机日常更新铁律**
 
-权威摘要也见仓库根 `DEPLOYMENT_NOTES.md`；脚本闸门：`backend/pack-update.ps1`、`backend/apply-update.bat`；AI 部署走 `.cursor/skills/workshop-mes-deploy`。
+权威摘要也见仓库根 `DEPLOYMENT_NOTES.md`；脚本闸门：`backend/pack-update.ps1`、`backend/apply-update.bat`；AI 部署走 `.cursor/skills/workshop-mes-deploy`；知识库整理与随包部署走 `.cursor/skills/workshop-mes-knowledge-deploy`。
 
 ---
 
