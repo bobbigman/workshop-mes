@@ -23,7 +23,30 @@ alwaysApply: true
 - `backend/wwwroot/assets/` 哈希 js/css（构建产物，已 ignore；以 `frontend/src` 为准）
 - 不要以整份拷贝文件夹当备份（例如「分析_废弃了」），以远程 `master` 上的提交为准
 
-## 找回
+## Windows 推送已有提交（2026-10-19 用户明确）
+
+- 使用 Windows PowerShell 5.1；不用 bash，不用 `&&` 串命令。不改 `git config`、remote，不在 URL 写 Token，不使用 `push --force`。
+- 先在仓库根执行下列检查；PowerShell 中 `@{u}` 必须用单引号包裹：
+
+```powershell
+Set-Location 'D:\workspace\pkub\bee'
+git status -sb
+git remote -v
+git log -1 --oneline
+git rev-parse --abbrev-ref '@{u}'
+```
+
+- 有上游且已有提交仅为 ahead 时，只推，不重复提交。已与远程对齐则无需再推。仅有本地配置或日志变更不妨碍推已有提交，也不得把它们提交。
+
+```powershell
+git push origin master
+git status -sb
+```
+
+- TLS、Recv failure、连接重置时，换一个已经能用 Git Credential Manager 登录 GitHub 的终端，执行同一条推送命令，最多再试一次。无可用终端则说明限制；第二次仍失败就停止并提供错误原文，不尝试修改远程、TLS配置或强推。
+- `appsettings*.json`、运行日志、密码、连接串、Token 留在本机，不提交、不推送。
+
+## 找回方式
 
 `git clone https://github.com/bobbigman/workshop-mes.git` → `git log --oneline` → `git checkout <提交号>`（先建分支再 checkout，避免改坏 master）。
 
