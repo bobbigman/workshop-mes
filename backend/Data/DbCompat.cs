@@ -11,6 +11,12 @@ public static class DbCompat
     public static async Task EnsureAsync(AppDbContext db)
     {
         // 工单工序任务表（P0 新增）
+        await db.Database.ExecuteSqlRawAsync(@"IF COL_LENGTH('salary_statement_item','price_type') IS NULL
+ ALTER TABLE salary_statement_item ADD price_type TINYINT NOT NULL DEFAULT 0;
+IF COL_LENGTH('salary_statement_item','duration_minutes') IS NULL
+ ALTER TABLE salary_statement_item ADD duration_minutes INT NOT NULL DEFAULT 0;
+ ");
+
         await db.Database.ExecuteSqlRawAsync(@"
 IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'prod_work_order_operation')
 BEGIN

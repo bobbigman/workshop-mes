@@ -15,3 +15,6 @@ export const exportSalaryItems = (params) => http.get('/Salary/items/export', { 
 export const getMyWage = (params) => http.get('/Salary/mine', { params })
 export const getSalarySkuSummary = (params) => http.get('/Salary/sku-summary', { params })
 export const exportSalarySkuSummary = (params) => http.get('/Salary/sku-summary/export', { params, responseType: 'blob' })
+
+export const getMyStatements = (params) => http.get('/Salary/my-statements', { params })
+export const getMyStatementItems = (id) => http.get(`/Salary/my-statements/${id}/items`)

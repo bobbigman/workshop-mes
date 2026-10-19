@@ -25,6 +25,8 @@ public class SalaryStatementItem
     public long ReportId { get; set; }
     public long? RuleId { get; set; }
     public int CalcQty { get; set; }
+    public byte PriceType { get; set; }
+    public int DurationMinutes { get; set; }
     public decimal UnitPrice { get; set; }
     /// <summary>本行实际乘进金额的工价系数快照（docs/225）。计件/计时=当时用户系数；固定=1。</summary>
     public decimal WageCoeff { get; set; } = 1m;

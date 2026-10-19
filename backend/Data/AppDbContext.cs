@@ -372,6 +372,8 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<SalaryStatementItem>(e =>
         {
             e.ToTable("salary_statement_item");
+            e.Property(x => x.PriceType).HasColumnName("price_type").HasDefaultValue((byte)0);
+            e.Property(x => x.DurationMinutes).HasColumnName("duration_minutes").HasDefaultValue(0);
             e.HasIndex(x => x.ReportId).IsUnique();
             e.HasIndex(x => x.StatementId);
             e.Property(x => x.StatementId).HasColumnName("statement_id");

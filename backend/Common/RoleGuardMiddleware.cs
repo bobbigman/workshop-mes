@@ -78,6 +78,12 @@ public class RoleGuardMiddleware
             && path.StartsWith("/api/Report/", StringComparison.OrdinalIgnoreCase)
             && path.EndsWith("/changes", StringComparison.OrdinalIgnoreCase))
             return true;
+        // docs/241：仅放行本人工资单两个只读接口，管理接口保持原权限。
+        const string myStatements = "/api/Salary/my-statements";
+        if (method == "GET" && path.Equals(myStatements, StringComparison.OrdinalIgnoreCase)) return true;
+        if (method == "GET" && path.StartsWith(myStatements + "/", StringComparison.OrdinalIgnoreCase)
+            && path.EndsWith("/items", StringComparison.OrdinalIgnoreCase)
+            && long.TryParse(path[(myStatements.Length + 1)..^"/items".Length], out _)) return true;
         // 本人工资预估（docs/103）；受 PieceWage 控制器特性约束
         if (path.Equals("/api/Salary/mine", StringComparison.OrdinalIgnoreCase) && method == "GET")
             return true;

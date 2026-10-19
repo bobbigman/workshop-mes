@@ -55,6 +55,7 @@
     </div>
 
     <p class="tip">已结算显示工资单固化金额；未结算显示报工快照。待复核/退回不计入合计。</p>
+    <MyStatements />
     <TabBar active="home" />
   </div>
 </template>
@@ -64,6 +65,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getMyWage } from '@/api/salary'
 import TabBar from './TabBar.vue'
+import MyStatements from './MyStatements.vue'
 import H5LogoutBtn from '@/components/H5LogoutBtn.vue'
 
 const router = useRouter()

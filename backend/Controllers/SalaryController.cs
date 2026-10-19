@@ -14,6 +14,23 @@ public class SalaryController : ControllerBase
     private readonly ISalaryService _svc;
     public SalaryController(ISalaryService svc) { _svc = svc; }
 
+    [HttpGet("my-statements")]
+    public Task<IActionResult> MyStatements([FromQuery] byte? periodType, [FromQuery] string? periodValue) =>
+        MyStatementResponse(() => _svc.MyStatementsAsync(periodType, periodValue, JwtHelper.GetFactoryId(User), JwtHelper.GetUserId(User)));
+
+    [HttpGet("my-statements/{id:long}/items")]
+    public Task<IActionResult> MyStatementItems(long id) =>
+        MyStatementResponse(() => _svc.MyStatementItemsAsync(id, JwtHelper.GetFactoryId(User), JwtHelper.GetUserId(User)));
+
+    private async Task<IActionResult> MyStatementResponse<T>(Func<Task<ApiResult<T>>> action)
+    {
+        try { return Ok(await action()); }
+        catch (BusinessException ex) when (ex.Code is 400 or 403)
+        {
+            return StatusCode(ex.Code, ApiResult<T>.Fail(ex.Message, ex.Code));
+        }
+    }
+
     [HttpPost("generate")]
     public Task<ApiResult<object?>> Generate([FromBody] SalaryGenerateDto dto) =>
         _svc.GenerateAsync(dto, JwtHelper.GetFactoryId(User));

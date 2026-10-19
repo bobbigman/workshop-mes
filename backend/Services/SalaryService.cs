@@ -10,6 +10,8 @@ namespace ahu.MicrosoftMes.Services;
 
 public interface ISalaryService
 {
+    Task<ApiResult<List<SalaryItemDto>>> MyStatementItemsAsync(long id, long factoryId, long userId);
+    Task<ApiResult<List<MyStatementDto>>> MyStatementsAsync(byte? periodType, string? periodValue, long factoryId, long userId);
     Task<ApiResult<object?>> GenerateAsync(SalaryGenerateDto dto, long factoryId);
     Task<ApiResult<PageResult<SalaryListDto>>> QueryAsync(SalaryQueryDto query, long factoryId);
     /// <summary>本期工资汇总（docs/222）：已确认/草稿计件额 + 返工扣款，按明细汇总，不受分页截断。</summary>
@@ -156,6 +158,7 @@ public class SalaryItemDto
     public int GoodQty { get; set; }
     public int DefectQty { get; set; }
     public int DurationMinutes { get; set; }
+    public byte PriceType { get; set; }
     public long? RuleId { get; set; }
     public int CalcQty { get; set; }
     public decimal UnitPrice { get; set; }
@@ -281,7 +284,7 @@ public class SalarySkuSummaryItemDto
     public int ReportCount { get; set; }
 }
 
-public class SalaryService : ISalaryService
+public partial class SalaryService : ISalaryService
 {
     private readonly AppDbContext _db;
     private readonly ILogger<SalaryService> _logger;
@@ -363,6 +366,8 @@ public class SalaryService : ISalaryService
                         ReportId = report.Id,
                         RuleId = calc.RuleId,
                         CalcQty = calc.CalcQty,
+                        PriceType = calc.PriceType,
+                        DurationMinutes = report.DurationMinutes,
                         UnitPrice = calc.UnitPrice,
                         WageCoeff = calc.WageCoeff,
                         Amount = calc.Amount,
@@ -608,7 +613,8 @@ public class SalaryService : ISalaryService
                 OperationName = op.Name,
                 r.GoodQty,
                 r.DefectQty,
-                r.DurationMinutes,
+                i.DurationMinutes,
+                i.PriceType,
                 i.RuleId,
                 i.CalcQty,
                 i.UnitPrice,
@@ -635,6 +641,7 @@ public class SalaryService : ISalaryService
             GoodQty = x.GoodQty,
             DefectQty = x.DefectQty,
             DurationMinutes = x.DurationMinutes,
+            PriceType = x.PriceType,
             RuleId = x.RuleId,
             CalcQty = x.CalcQty,
             UnitPrice = x.UnitPrice,
@@ -731,6 +738,8 @@ public class SalaryService : ISalaryService
 
             item.RuleId = calc.RuleId;
             item.CalcQty = calc.CalcQty;
+            item.PriceType = calc.PriceType;
+            item.DurationMinutes = report.DurationMinutes;
             item.UnitPrice = calc.UnitPrice;
             item.WageCoeff = calc.WageCoeff;
             item.Amount = calc.Amount;
