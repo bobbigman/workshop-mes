@@ -6,9 +6,10 @@
       <H5LogoutBtn />
     </div>
 
-    <div v-if="list.length === 0" class="empty">暂无派给我的或本班组任务</div>
+    <p v-if="loadError" role="alert">任务加载失败，请刷新重试，或扫码报工。</p>
+    <div v-if="!loadError && list.length === 0" class="empty">暂无派给我的或本班组任务</div>
     <div
-      v-for="row in list"
+      v-for="(row, index) in list"
       :key="row.taskId"
       class="card"
       @click="goReport(row)"
@@ -16,7 +17,7 @@
       <div class="row1">
         <span class="tag" :class="'s' + row.orderStatus">{{ statusLabel(row.orderStatus) }}</span>
         <span v-if="row.assignSource === 'team' || row.assignSource === 'both'" class="tag team">班组</span>
-        <span class="no">{{ row.orderNo }}</span>
+        <span class="no">{{ index + 1 }}. {{ row.orderNo }}</span>
       </div>
       <div class="product">{{ row.productName }} · {{ row.operationName }}</div>
       <div class="meta">
@@ -40,6 +41,7 @@ import H5LogoutBtn from '@/components/H5LogoutBtn.vue'
 
 const router = useRouter()
 const list = ref([])
+const loadError = ref(false)
 
 const STATUS = { 0: '未开始', 1: '执行中', 2: '已结束', 3: '已取消' }
 function statusLabel(s) { return STATUS[s] ?? s }
@@ -47,15 +49,17 @@ function formatDue(t) { return t ? String(t).replace('T', ' ').slice(0, 16) : '�
 function dueClass(row) { return row.dueState === 'overdue' ? 'due-overdue' : row.dueState === 'warning' ? 'due-warning' : '' }
 
 function goReport(row) {
-  router.push({ path: '/h5/report', query: { order: row.orderNo } })
+  router.push({ path: '/h5/report', query: { order: row.orderNo, task: row.taskId } })
 }
 
 onMounted(load)
 
 async function load() {
-  const res = await myTasks()
-  list.value = res.data || []
+  loadError.value = false
+  try { const res = await myTasks(); list.value = res.data || [] }
+  catch { list.value = []; loadError.value = true }
 }
+
 </script>
 
 <style scoped>

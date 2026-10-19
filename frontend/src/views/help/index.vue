@@ -92,7 +92,7 @@ const article = ref(null)
 const query = ref('')
 const contentsOpen = ref(false)
 const signedIn = !!localStorage.getItem('token')
-const returnPath = signedIn ? (Number(localStorage.getItem('role')) === 2 ? '/h5/home' : '/order') : '/login'
+const returnPath = signedIn ? (Number(localStorage.getItem('role')) === 2 ? '/h5/home' : '/home') : '/login'
 const selected = computed(() => chapters.find(item => item.id === route.query.topic) || chapters[0])
 const invalidTopic = computed(() => !!route.query.topic && !chapters.some(item => item.id === route.query.topic))
 const siblings = computed(() => chapters.filter(item => item.group === selected.value.group))

@@ -68,8 +68,8 @@
       <label>工序</label>
       <select v-model="form.operationId" @change="onOpChange">
         <option value="">请选择工序</option>
-        <option v-for="o in (detail?.tasks || [])" :key="o.operationId" :value="String(o.operationId)">
-          {{ o.seq }} {{ o.operationName }}
+        <option v-for="(o, index) in (detail?.tasks || [])" :key="o.operationId" :value="String(o.operationId)">
+          {{ index + 1 }}. {{ o.operationName }}
         </option>
       </select>
 
@@ -173,11 +173,15 @@
       <label>本次良品</label>
       <input
         ref="goodInput"
-        v-model.number="form.goodQty"
+        :value="form.goodQty || ''"
         class="qty-input"
-        type="number"
-        min="0"
-        :max="remainNum"
+        type="text"
+        inputmode="none"
+        readonly
+        aria-label="本次良品数量，点击打开数字键盘"
+        placeholder="点击输入数量"
+        :disabled="submitting || reviewing || locked"
+        @click="qtyKeyboardVisible = true"
       />
       <div class="stepper">
         <button type="button" :disabled="!canAdjust" @click="bump(-10)">-10</button>
@@ -218,11 +222,17 @@
         </template>
       </template>
 
-      <label>报工时长（选填）</label>
+      <div v-if="form.operationId" class="work-clock">
+        <van-button v-if="!workSession" block type="primary" :loading="clockLoading" @click="startClock">开工</van-button>
+        <p v-else>作业中… {{ elapsedClock }} <small>提交后结束本次计时</small></p>
+        <p v-if="clockError" role="alert">{{ clockError }} <van-button size="mini" @click="refreshClock">重试</van-button></p>
+        <p v-if="clockPriceType === 2 && !workSession">计时工资，请先开工</p>
+      </div>
+      <label>报工时长（未修改则自动计时）</label>
       <div class="duration-row">
-        <input v-model.number="form.hours" type="number" min="0" max="24" />
+        <input v-model.number="form.hours" @input="durationEdited = true" type="number" min="0" max="24" />
         <span>小时</span>
-        <input v-model.number="form.minutes" type="number" min="0" max="59" />
+        <input v-model.number="form.minutes" @input="durationEdited = true" type="number" min="0" max="59" />
         <span>分钟</span>
       </div>
 
@@ -230,9 +240,11 @@
     </div>
 
     <div class="action-bar" v-if="detail && !loadError && !noReportableOps">
-      <button class="btn btn-outline" :disabled="submitting || locked" @click="onContinue">继续报工</button>
-      <button class="btn btn-primary" :disabled="submitting || locked" @click="onSubmit">提交报工</button>
+      <button class="btn btn-outline" :disabled="submitting || reviewing || locked || clockBlocked" @click="onContinue">继续报工</button>
+      <button class="btn btn-primary" :disabled="submitting || reviewing || locked || clockBlocked" @click="onSubmit">提交报工</button>
     </div>
+    <van-number-keyboard :show="qtyKeyboardVisible" title="本次良品数量" close-button-text="完成"
+      @blur="qtyKeyboardVisible = false" @input="appendGoodQty" @delete="deleteGoodQty" />
     <TabBar active="home" />
 
     <!-- 内嵌文档预览（PDF/Word）：全屏遮罩层，不跳新窗口、不触发下载 -->
@@ -247,13 +259,15 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { onUnmounted, ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { showToast, showSuccessToast, showImagePreview, showConfirmDialog } from 'vant'
+import { showToast, showSuccessToast, showImagePreview, showConfirmDialog, NumberKeyboard as VanNumberKeyboard } from 'vant'
 import 'vant/es/toast/style'
 import 'vant/es/image-preview/style'
 import 'vant/es/dialog/style'
+import 'vant/es/number-keyboard/style'
 import { getOrderByNo, submitReport, getDefectsByOp, getCustomFields, getReportCandidates, getTodayPieceSummary } from '@/api/prod'
+import { startWorkSession, getCurrentWorkSession } from '@/api/workSession'
 import { isUpstreamSoftConfirm } from '@/utils/upstreamConfirm'
 import { assign, assignWorkers, assignDepartments, assignSuggest } from '@/api/assign'
 import { getKnowledgeFileByOrder, getKnowledgeFileRaw } from '@/api/knowledge'
@@ -290,6 +304,8 @@ async function loadTodaySummary() {
 }
 const defects = ref([])
 const submitting = ref(false)
+const reviewing = ref(false)
+const qtyKeyboardVisible = ref(false)
 const goodInput = ref(null)
 const guides = ref([])
 const guidesLoadError = ref(false)
@@ -298,6 +314,47 @@ const previewFile = ref(null) // { blob, fileType, fileName }
 const reportFields = ref([])
 const reportFieldsLoadError = ref(false)
 const form = ref({ operationId: '', goodQty: 0, defectQty: 0, defectId: null, hours: 0, minutes: 0, ext: {} })
+const workSession = ref(null)
+const clockPriceType = ref(0)
+const clockLoading = ref(false)
+const clockError = ref('')
+const clockNow = ref(Date.now())
+const clockOffset = ref(0)
+const durationEdited = ref(false)
+const clockBlocked = computed(() => clockLoading.value || !!clockError.value || (clockPriceType.value === 2 && !workSession.value))
+const elapsedClock = computed(() => {
+  const seconds = Math.max(0, Math.floor((clockNow.value + clockOffset.value - new Date(workSession.value?.startTime || clockNow.value).getTime()) / 1000))
+  return `${Math.floor(seconds / 3600)}小时${Math.floor(seconds % 3600 / 60)}分${seconds % 60}秒`
+})
+const clockTimer = setInterval(() => { clockNow.value = Date.now() }, 1000)
+onUnmounted(() => clearInterval(clockTimer))
+let clockRequest = 0
+async function refreshClock() {
+  const version = ++clockRequest
+  workSession.value = null
+  clockPriceType.value = 0
+  clockError.value = ''
+  if (!detail.value?.id || !form.value.operationId) return
+  clockLoading.value = true
+  try {
+    const res = await getCurrentWorkSession({ workOrderId: detail.value.id, operationId: Number(form.value.operationId) })
+    if (version !== clockRequest) return
+    workSession.value = res.data?.session || null
+    clockPriceType.value = res.data?.priceType || 0
+    clockOffset.value = new Date(res.data.serverTime).getTime() - Date.now()
+  } catch (e) {
+    if (version === clockRequest) clockError.value = e?.msg || e?.message || '加载开工记录失败'
+  } finally { if (version === clockRequest) clockLoading.value = false }
+}
+async function startClock() {
+  clockLoading.value = true
+  try {
+    await startWorkSession({ workOrderId: detail.value.id, operationId: Number(form.value.operationId) })
+    await refreshClock()
+  } catch (e) { showToast(e?.msg || e?.message || '开工失败') }
+  finally { clockLoading.value = false }
+}
+watch(() => [detail.value?.id, form.value.operationId], refreshClock)
 const shareEnabled = ref(false)
 const shareMode = ref(1)
 const candidates = ref([])
@@ -454,6 +511,17 @@ watch(() => form.value.defectQty, (n) => {
   if (!(Number(n) > 0)) form.value.defectId = null
 })
 
+function appendGoodQty(key) {
+  if (submitting.value || reviewing.value || locked.value || !/^[0-9]$/.test(String(key))) return
+  const n = Number(`${Number(form.value.goodQty) || ''}${key}`)
+  if (!Number.isSafeInteger(n) || n > 2147483647) { showToast('数量过大，请核对'); return }
+  form.value.goodQty = n
+}
+function deleteGoodQty() {
+  if (submitting.value || reviewing.value) return
+  form.value.goodQty = Number(String(form.value.goodQty || '').slice(0, -1)) || 0
+}
+
 function clampQty(n) {
   const max = remainNum.value
   if (!Number.isFinite(n) || n < 0) return 0
@@ -485,6 +553,13 @@ onMounted(async () => {
 /** 扫工序码带入的 op：合法且在工单工序里 → 预选；否则退回手动选，不报错 */
 async function tryPreselectOp() {
   if (!detail.value || loadError.value) return
+  if (route.query.task != null) {
+    const task = (detail.value.tasks || []).find(t => String(t.id) === String(route.query.task))
+    if (!task) return
+    form.value.operationId = String(task.operationId)
+    await onOpChange()
+    return
+  }
   const raw = route.query.op
   if (raw == null || String(raw).trim() === '') return
   const id = Number(raw)
@@ -786,7 +861,8 @@ function buildPayload() {
     goodQty: form.value.goodQty || 0,
     defectQty: form.value.defectQty || 0,
     defectId: form.value.defectId,
-    durationMinutes: (form.value.hours || 0) * 60 + (form.value.minutes || 0),
+    sessionId: workSession.value?.id || null,
+    durationMinutes: durationEdited.value ? (form.value.hours || 0) * 60 + (form.value.minutes || 0) : null,
     clientRequestId: pendingClientRequestId.value,
     ext: form.value.ext
   }
@@ -796,7 +872,7 @@ function buildPayload() {
     if (shareMode.value === 2) {
       payload.participants = ids.map(id => ({
         userId: id,
-        durationMinutes: Number(participantDurations.value[id] || 0)
+        durationMinutes: participantDurations.value[id] === undefined || participantDurations.value[id] === '' ? null : Number(participantDurations.value[id])
       }))
     } else {
       payload.participantUserIds = ids
@@ -812,6 +888,8 @@ function clearQty() {
   form.value.hours = 0
   form.value.minutes = 0
   pendingClientRequestId.value = ''
+  durationEdited.value = false
+  refreshClock()
 }
 
 function reviewLabel(s) {
@@ -835,7 +913,7 @@ function formatReceipt(data) {
 }
 
 async function doSubmit(confirmUpstream = false) {
-  if (!validate()) return false
+  if (submitting.value || !validate()) return false
   submitting.value = true
   try {
     const res = await submitReport({ ...buildPayload(), confirmUpstream: !!confirmUpstream })
@@ -851,6 +929,17 @@ async function doSubmit(confirmUpstream = false) {
 
 /** docs/150：soft 先提交；code=1002 弹确认后带 confirmUpstream 重提 */
 async function doSubmitWithUpstreamConfirm() {
+  if (submitting.value || reviewing.value) return false
+  qtyKeyboardVisible.value = false
+  {
+    if (!validate()) return false
+    const snapshot = JSON.stringify(form.value)
+    reviewing.value = true
+    try {
+      await showConfirmDialog({ title: '核对本次报工', message: `${detail.value.orderNo} · ${detail.value.productName}\n${currentTask.value?.operationName || ''}\n良品 ${form.value.goodQty} 件，不良 ${form.value.defectQty || 0} 件`, confirmButtonText: '确认提交' })
+      if (snapshot !== JSON.stringify(form.value)) { showToast('内容已变化，请重新核对'); return false }
+    } finally { reviewing.value = false }
+  }
   try {
     return await doSubmit(false)
   } catch (e) {

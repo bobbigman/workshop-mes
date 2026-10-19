@@ -10,7 +10,15 @@ $backend = $PSScriptRoot
 $root = Split-Path $backend -Parent
 $out = Join-Path $backend "publish-update"
 
-Write-Host "== 1/3 frontend build =="
+# 0/4 刷新企微客户问答库（docs/企微客户问答库.docx）：从 SupportDocs 15/19/08 生成并自动 version+1。
+# 幂等：三份源文件没变化则不升版。失败即抛，不交付残缺包。详见 docs/未做指令/239。
+Write-Host "== 0/4 refresh WeCom customer QA docx =="
+$qaScript = Join-Path $root "scripts\build-wecom-qa.ps1"
+if (-not (Test-Path $qaScript)) { throw "build-wecom-qa.ps1 not found: $qaScript" }
+& powershell -NoProfile -ExecutionPolicy Bypass -File $qaScript
+if ($LASTEXITCODE -ne 0) { throw "build-wecom-qa.ps1 failed (exit $LASTEXITCODE)" }
+
+Write-Host "== 1/4 frontend build =="
 Set-Location (Join-Path $root "frontend")
 npm run build
 if ($LASTEXITCODE -ne 0) { throw "frontend build failed" }
@@ -20,7 +28,7 @@ if (Test-Path $wwwSrc) { Remove-Item $wwwSrc -Recurse -Force }
 New-Item -ItemType Directory -Path $wwwSrc | Out-Null
 Copy-Item (Join-Path $root "frontend\dist\*") $wwwSrc -Recurse -Force
 
-Write-Host "== 2/3 dotnet publish (framework-dependent, small) =="
+Write-Host "== 2/4 dotnet publish (framework-dependent, small) =="
 Set-Location $backend
 if (Test-Path $out) { Remove-Item $out -Recurse -Force }
 dotnet publish -c Release -r win-x64 --self-contained false -o $out
@@ -69,7 +77,7 @@ if ($bad) { throw ("update pack must NOT contain: " + (($bad | Sort-Object -Uniq
 if (Test-Path (Join-Path $out "publish-update")) { Remove-Item (Join-Path $out "publish-update") -Recurse -Force }
 if (Test-Path (Join-Path $out "_s10_evidence")) { Remove-Item (Join-Path $out "_s10_evidence") -Recurse -Force }
 
-Write-Host "== 3/3 write apply script + readme =="
+Write-Host "== 3/4 write apply script + readme =="
 Copy-Item (Join-Path $backend "apply-update.bat") (Join-Path $out "apply-update.bat") -Force
 Copy-Item (Join-Path $backend "update-readme.txt") (Join-Path $out "README-update.txt") -Force
 

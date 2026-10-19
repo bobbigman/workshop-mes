@@ -10,13 +10,32 @@ public static class DbCompat
 {
     public static async Task EnsureAsync(AppDbContext db)
     {
+        // docs/240 计时工资：仅补新表与新快照列，保留历史报工时长。
+        await db.Database.ExecuteSqlRawAsync(@"
+IF OBJECT_ID(N'prod_work_session', N'U') IS NULL
+BEGIN
+CREATE TABLE prod_work_session (
+ id BIGINT IDENTITY(1,1) PRIMARY KEY,
+ factory_id BIGINT NOT NULL,
+ work_order_id BIGINT NOT NULL,
+ operation_id BIGINT NOT NULL,
+ user_id BIGINT NOT NULL,
+ start_time DATETIME2 NOT NULL,
+ end_time DATETIME2 NULL,
+ duration_minutes INT NOT NULL DEFAULT 0,
+ status TINYINT NOT NULL DEFAULT 0,
+ source TINYINT NOT NULL DEFAULT 0,
+ operator_user_id BIGINT NULL,
+ report_id BIGINT NULL,
+ created_at DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
+ ended_at DATETIME2 NULL
+);
+CREATE UNIQUE INDEX ux_session_running ON prod_work_session(factory_id,user_id) WHERE status=0;
+CREATE INDEX ix_session_order ON prod_work_session(work_order_id);
+CREATE INDEX ix_session_pending ON prod_work_session(factory_id,status) WHERE status=2;
+END
+");
         // 工单工序任务表（P0 新增）
-        await db.Database.ExecuteSqlRawAsync(@"IF COL_LENGTH('salary_statement_item','price_type') IS NULL
- ALTER TABLE salary_statement_item ADD price_type TINYINT NOT NULL DEFAULT 0;
-IF COL_LENGTH('salary_statement_item','duration_minutes') IS NULL
- ALTER TABLE salary_statement_item ADD duration_minutes INT NOT NULL DEFAULT 0;
- ");
-
         await db.Database.ExecuteSqlRawAsync(@"
 IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'prod_work_order_operation')
 BEGIN
@@ -228,6 +247,14 @@ BEGIN
   CREATE INDEX ix_report_share_batch ON prod_report(share_batch_no)
     WHERE share_batch_no IS NOT NULL;
 END");
+
+        // docs/241：企微对话报工来源 + 确认时间；历史行 source=0、confirmed_at=NULL
+        await db.Database.ExecuteSqlRawAsync(@"
+IF COL_LENGTH('prod_report', 'source') IS NULL
+  ALTER TABLE prod_report ADD source TINYINT NOT NULL CONSTRAINT DF_prod_report_source DEFAULT 0;");
+        await db.Database.ExecuteSqlRawAsync(@"
+IF COL_LENGTH('prod_report', 'confirmed_at') IS NULL
+  ALTER TABLE prod_report ADD confirmed_at DATETIME2 NULL;");
 
         await db.Database.ExecuteSqlRawAsync(@"
 IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'base_price_rule')
@@ -626,6 +653,28 @@ BEGIN
     count_defect   BIT NOT NULL CONSTRAINT DF_sys_report_qty_defect DEFAULT 0,
     updated_at     DATETIME2 NOT NULL CONSTRAINT DF_sys_report_qty_ua DEFAULT SYSDATETIME(),
     CONSTRAINT UQ_sys_report_qty_setting_factory UNIQUE (factory_id)
+  );
+END");
+
+        await db.Database.ExecuteSqlRawAsync(@"IF COL_LENGTH('salary_statement_item','price_type') IS NULL
+ ALTER TABLE salary_statement_item ADD price_type TINYINT NOT NULL DEFAULT 0;
+IF COL_LENGTH('salary_statement_item','duration_minutes') IS NULL
+ ALTER TABLE salary_statement_item ADD duration_minutes INT NOT NULL DEFAULT 0;
+ ");
+
+        // PC 菜单收藏（docs/240）：已有库 EnsureCreated 不会补新表
+        await db.Database.ExecuteSqlRawAsync(@"
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'sys_user_favorite')
+BEGIN
+  CREATE TABLE sys_user_favorite (
+    id         BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_sys_user_favorite PRIMARY KEY,
+    user_id    BIGINT NOT NULL,
+    menu_key   NVARCHAR(128) NOT NULL,
+    menu_title NVARCHAR(128) NOT NULL,
+    icon       NVARCHAR(64) NULL,
+    sort_at    DATETIME2 NOT NULL CONSTRAINT DF_sys_user_favorite_sort DEFAULT SYSDATETIME(),
+    created_at DATETIME2 NOT NULL CONSTRAINT DF_sys_user_favorite_created DEFAULT SYSDATETIME(),
+    CONSTRAINT UQ_sys_user_favorite_user_menu UNIQUE (user_id, menu_key)
   );
 END");
     }

@@ -365,7 +365,7 @@ async function goAfterLogin(data) {
   const role = Number(data.role || 0)
   const failure = typeof redirect === 'string' && redirect.startsWith('/h5/') && !redirect.startsWith('//')
     ? await router.replace(redirect)
-    : await router.push(role === 2 ? workerHomePath() : '/order')
+    : await router.push(role === 2 ? workerHomePath() : '/home')
   if (failure) throw failure
   ElMessage.success('登录成功')
 }

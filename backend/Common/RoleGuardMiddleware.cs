@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Http;
 
 namespace ahu.MicrosoftMes.Common;
 
@@ -50,8 +50,16 @@ public class RoleGuardMiddleware
 
     private static bool IsAllowedForWorker(string path, string method)
     {
+        if ((method == "POST" && path.Equals("/api/work-session/start", StringComparison.OrdinalIgnoreCase))
+            || (method == "GET" && path.Equals("/api/work-session/current", StringComparison.OrdinalIgnoreCase))) return true;
+        if (method == "POST" && (path.Equals("/api/ReportIdentity/inspect", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("/api/ReportIdentity/approve", StringComparison.OrdinalIgnoreCase)))
+            return true; // 仅本人JWT确认短期报工授权；服务再次校验目标员工与工厂。
         if (path.Equals("/api/Report", StringComparison.OrdinalIgnoreCase) && method == "POST")
             return true;
+        if (method == "POST" && path.StartsWith("/api/Report/", StringComparison.OrdinalIgnoreCase)
+            && path.EndsWith("/withdraw", StringComparison.OrdinalIgnoreCase)
+            && long.TryParse(path["/api/Report/".Length..^"/withdraw".Length], out _)) return true;
         // 工人异常上报（docs/28）
         if (path.Equals("/api/Abnormal", StringComparison.OrdinalIgnoreCase) && method == "POST")
             return true;
@@ -88,6 +96,11 @@ public class RoleGuardMiddleware
         if (path.Equals("/api/Salary/mine", StringComparison.OrdinalIgnoreCase) && method == "GET")
             return true;
         if (path.StartsWith("/api/Report/candidates/", StringComparison.OrdinalIgnoreCase) && method == "GET")
+            return true;
+        // 个人菜单收藏（docs/240）：只改自己的星标，不改基础数据
+        if (path.Equals("/api/userfavorite", StringComparison.OrdinalIgnoreCase) && method == "GET")
+            return true;
+        if (path.Equals("/api/userfavorite/toggle", StringComparison.OrdinalIgnoreCase) && method == "POST")
             return true;
         // 报工列表：没有报工权限也可以查
         if (path.Equals("/api/Report", StringComparison.OrdinalIgnoreCase) && method == "GET")

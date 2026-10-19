@@ -21,6 +21,9 @@ public class ReportController : ControllerBase
     public Task<ApiResult<BatchReportResultDto>> Batch([FromBody] BatchReportDto dto) =>
         _reportService.BatchReportAsync(dto, JwtHelper.GetUserId(User));
 
+    [HttpPost("{id:long}/withdraw")]
+    public Task<ApiResult<object?>> Withdraw(long id) => _reportService.WithdrawAsync(id, JwtHelper.GetUserId(User));
+
     [HttpPut("{id:long}")]
     public Task<ApiResult<object?>> Update(long id, [FromBody] ReportDto dto) =>
         _reportService.UpdateAsync(id, dto, JwtHelper.GetUserId(User));

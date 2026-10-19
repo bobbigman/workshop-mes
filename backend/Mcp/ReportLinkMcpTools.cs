@@ -1,9 +1,9 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using ModelContextProtocol.Server;
 
 namespace ahu.MicrosoftMes.Mcp;
 
-/// <summary>MCP 工具：工人自报凭证拿专属免密报工链接（docs/215）。</summary>
+/// <summary>MCP 工具：已核验本人入口或普通H5首页（docs/249）。</summary>
 [McpServerToolType]
 public class ReportLinkMcpTools
 {
@@ -12,8 +12,8 @@ public class ReportLinkMcpTools
     public ReportLinkMcpTools(IMcpReportLinkService svc) => _svc = svc;
 
     [McpServerTool(Name = "get_report_link_by_identity"),
-     Description("工人要报工时：用手机号(11位)、登录账号或姓名换取专属免密报工链接。命中一人返回 link（完整 https 绝对地址）与 cardText。必须把 link 原样发给用户做可点链接，禁止改成 localhost、禁止改域名/协议/路径。查无/停用/重名不返回链接。不需会话绑定、不需金蝶授权码。查工单进度请用其它工具，不要用本工具。")]
+     Description("获取H5报工入口，不提交报工。默认帮我报工/语音报工使用本入口；已有本人个人码或免密链接可直接使用，不强制重新验证。新获取专属链接须可信平台用户身份、管理员核验映射与有效员工绑定一致，identity仅核对本人，姓名/手机号/一句确认不能授予登录权限。未关联时返回use_existing_login_or_personal_code及不含凭证的publicEntryUrl，原样发送普通首页并说明已有H5登录直接进入，或扫描管理员提供的本人个人登录码；不把普通首页称为以某姓名免密登录，不索要密码或8位码，不再反复按姓名重试。成功返回完整link和cardText，原样发送，并说明也可用本人个人登录码。仅原MCP工厂范围，不生成二维码图片、不获取其他员工链接。仅用户明确要在聊天直接完成时才走独立聊天授权工具。")]
     public Task<string> GetReportLinkByIdentity(
-        [Description("工人自报凭证：11位手机号，或本厂登录账号，或姓名（重名时请改用手机号/账号）")] string identity)
+        [Description("可空；仅核对当前已验证本人的准确姓名、账号或完整手机号，不能据此选择其他员工")] string? identity = null)
         => _svc.GetReportLinkByIdentityAsync(identity);
 }

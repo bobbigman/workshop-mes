@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Diagnostics;
 using System.Net;
 using System.Text;
@@ -18,7 +18,8 @@ public static class LogRedactor
     {
         "password", "pwd", "secret", "client_secret", "corpsecret", "token",
         "access_token", "refresh_token", "authorization", "cookie", "set-cookie",
-        "api_key", "apikey", "api-key", "x-api-key", "webhook_key", "webhookKey"
+        "api_key", "apikey", "api-key", "x-api-key", "webhook_key", "webhookKey",
+        "factorySelectionToken", "lookupToken", "reportAccessToken", "verificationCode", "confirmToken", "candidateListToken"
     };
 
     private static readonly HashSet<string> SensitiveSqlHints = new(StringComparer.OrdinalIgnoreCase)

@@ -10,8 +10,9 @@ const routes = [
   {
     path: '/',
     component: () => import('@/views/layout/index.vue'),
-    redirect: '/order',
+    redirect: '/home',
     children: [
+      { path: 'home', name: 'Home', component: () => import('@/views/home/index.vue'), meta: { title: '首页' } },
       { path: 'order', name: 'Order', component: () => import('@/views/order/index.vue'), meta: { title: '工单' } },
       { path: 'execution-monitor', name: 'ExecutionMonitor', component: () => import('@/views/execution-monitor/index.vue'), meta: { title: '执行监控' } },
       { path: 'report', name: 'Report', component: () => import('@/views/report/index.vue'), meta: { title: '报工' } },
@@ -45,6 +46,7 @@ const routes = [
     ]
   },
   { path: '/h5/home', name: 'H5Home', component: () => import('@/views/h5/home.vue'), meta: { title: '工作台' } },
+  { path: '/h5/report-authorize', name: 'H5ReportAuthorize', component: () => import('@/views/h5/report-authorize.vue'), meta: { title: '对话报工身份验证' } },
   { path: '/h5/orders', name: 'H5Orders', component: () => import('@/views/h5/orders.vue'), meta: { title: '工单' } },
   { path: '/h5/tasks', name: 'H5Tasks', component: () => import('@/views/h5/tasks.vue'), meta: { title: '我的任务' } },
   { path: '/h5/scan', name: 'H5Scan', component: () => import('@/views/h5/scan.vue'), meta: { title: '扫码报工', feature: FEATURE.ScanReport } },
@@ -89,7 +91,7 @@ router.beforeEach((to, from, next) => {
   }
   // 生产人员：电脑端仅工单、报工、生产报表、看板 + H5
   const h5Only = to.path.startsWith('/h5')
-  const workerQuery = to.path === '/order' || to.path === '/execution-monitor' || to.path === '/report' || to.path === '/stat' || to.path === '/defect-stat' || to.path === '/sku-stat' || to.path === '/board' || to.path === '/board/screen' || to.path === '/about' || to.path === '/faq' || to.path === '/help' || to.path === '/advantages' || to.path === '/onboarding'
+  const workerQuery = to.path === '/home' || to.path === '/order' || to.path === '/execution-monitor' || to.path === '/report' || to.path === '/stat' || to.path === '/defect-stat' || to.path === '/sku-stat' || to.path === '/board' || to.path === '/board/screen' || to.path === '/about' || to.path === '/faq' || to.path === '/help' || to.path === '/advantages' || to.path === '/onboarding'
   if (role === 2 && !h5Only && !workerQuery) {
     return next('/order')
   }

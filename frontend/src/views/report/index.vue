@@ -29,6 +29,7 @@
       <el-button type="success" @click="openCreate()">+ 报工</el-button>
       <el-button v-if="canProxy" type="primary" plain @click="openProxy()">代报工</el-button>
       <el-button v-if="isAdmin" type="warning" @click="openBatch()">一键补报未完工序</el-button>
+      <el-button v-if="isAdmin" @click="openPending">待补报开工记录</el-button>
     </div>
     <el-table :data="list">
       <el-table-column prop="orderNo" label="工单编号" />
@@ -141,6 +142,9 @@
             <span>分钟</span>
           </div>
         </el-form-item>
+        <el-form-item v-if="isAdmin && !shareEnabled" label="计时补报">
+          <el-date-picker v-model="createTimes" type="datetimerange" value-format="YYYY-MM-DDTHH:mm:ss" start-placeholder="实际开始" end-placeholder="实际结束" />
+        </el-form-item>
         <el-form-item label="多人报工">
           <el-checkbox v-model="shareEnabled">多人共同报工</el-checkbox>
         </el-form-item>
@@ -169,6 +173,7 @@
                       <span class="share-unit">分钟</span>
                     </template>
                     <span v-else class="share-unit">{{ shareGood(c.id) }} 个</span>
+                    <el-date-picker v-if="isAdmin" v-model="participantTimes[c.id]" type="datetimerange" value-format="YYYY-MM-DDTHH:mm:ss" start-placeholder="未开工：补填开始" end-placeholder="补填结束" size="small" style="width:340px" />
                   </template>
                 </div>
               </el-checkbox-group>
@@ -293,6 +298,7 @@
               >
                 <el-option v-for="d in proxyDefects" :key="d.id" :label="d.name" :value="d.id" />
               </el-select>
+              <el-date-picker v-if="isAdmin" v-model="row.timeRange" type="datetimerange" value-format="YYYY-MM-DDTHH:mm:ss" start-placeholder="计时补报开始" end-placeholder="结束" style="width:340px" />
               <el-button link type="danger" :disabled="proxyForm.rows.length <= 1" @click="proxyForm.rows.splice(idx, 1)">删</el-button>
             </div>
             <el-button link type="primary" @click="addProxyRow">+ 加人</el-button>
@@ -343,8 +349,12 @@
           </el-table>
         </el-form-item>
         <el-form-item v-if="pendingTasks.length" label="统一良品数" required>
-          <el-input-number v-model="batchForm.goodQty" :min="1" :max="minRemain" />
+          <el-input-number v-model="batchForm.goodQty" :min="0" :max="minRemain" />
           <span class="hint">上限 = 各待报工序剩余最小值（{{ minRemain }}）</span>
+        </el-form-item>
+        <el-form-item v-if="pendingTasks.length" label="计时起止">
+          <el-date-picker v-model="batchTimes" type="datetimerange" value-format="YYYY-MM-DDTHH:mm:ss" start-placeholder="计时岗开始" end-placeholder="计时岗结束" />
+          <span class="hint">计时岗必填；多人时间不同时在下方逐人填写</span>
         </el-form-item>
         <el-form-item v-if="pendingTasks.length" label="谁做的">
           <div class="alloc-wrap">
@@ -363,7 +373,8 @@
                   <el-select v-model="u.userId" filterable placeholder="选人" style="width:180px">
                     <el-option v-for="p in people" :key="p.id" :label="`${p.name}（${p.account}）`" :value="p.id" />
                   </el-select>
-                  <el-input-number v-model="u.goodQty" :min="1" />
+                  <el-input-number v-model="u.goodQty" :min="0" />
+                  <el-date-picker v-model="u.timeRange" type="datetimerange" value-format="YYYY-MM-DDTHH:mm:ss" start-placeholder="计时开始" end-placeholder="结束" size="small" style="width:330px" />
                   <el-button link type="danger" :disabled="row.users.length <= 1" @click="row.users.splice(idx, 1)">删</el-button>
                 </div>
               </div>
@@ -381,6 +392,24 @@
         >确认补报</el-button>
       </template>
     </el-dialog>
+    <el-dialog v-model="pendingDlg" title="待补报开工记录" width="920px">
+      <el-table :data="pendingRows" v-loading="pendingLoading">
+        <el-table-column prop="userName" label="人员" />
+        <el-table-column prop="orderNo" label="工单" />
+        <el-table-column prop="productName" label="产品" />
+        <el-table-column prop="operationName" label="工序" />
+        <el-table-column prop="startTime" label="开始" width="175" />
+        <el-table-column prop="endTime" label="收尾" width="175" />
+        <el-table-column label="时长"><template #default="{row}">{{ Math.ceil((new Date(row.endTime)-new Date(row.startTime))/60000) }}分</template></el-table-column>
+        <el-table-column label="操作"><template #default="{row}"><el-button link @click="selectPending(row)">补报</el-button></template></el-table-column>
+      </el-table>
+    </el-dialog>
+    <el-dialog v-model="pendingEditDlg" title="补报开工记录" width="540px">
+      <p>{{ pendingSelected?.userName }} · {{ pendingSelected?.orderNo }} · {{ pendingSelected?.operationName }}</p>
+      <el-date-picker v-model="pendingTimes" type="datetimerange" value-format="YYYY-MM-DDTHH:mm:ss" start-placeholder="开始" end-placeholder="结束" />
+      <p>良品数（计时岗可为0） <el-input-number v-model="pendingGood" :min="0" /></p>
+      <template #footer><el-button type="primary" :loading="pendingSaving" @click="savePending">确认补报</el-button></template>
+    </el-dialog>
   </div>
 </template>
 <script setup>
@@ -389,6 +418,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { getReportList, updateReport, submitReport, batchReport, getDefectsByOp, getOrderByNo, getOrderList, getReportCandidates, getReportChangeLogs } from '@/api/prod'
 import { getUserList } from '@/api/sys'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { getPendingWorkSessions, reportPendingWorkSession } from '@/api/workSession'
 import { isUpstreamSoftConfirm } from '@/utils/upstreamConfirm'
 import ValueTip from '@/components/ValueTip.vue'
 import { VALUE_TIPS } from '@/constants/valueTips'
@@ -435,6 +465,43 @@ const proxyGoodSum = computed(() =>
 )
 
 const batchDlg = ref(false)
+const createTimes = ref(null)
+const participantTimes = ref({})
+const batchTimes = ref(null)
+const pendingDlg = ref(false)
+const pendingLoading = ref(false)
+const pendingRows = ref([])
+const pendingEditDlg = ref(false)
+const pendingSelected = ref(null)
+const pendingTimes = ref(null)
+const pendingGood = ref(0)
+const pendingSaving = ref(false)
+const pendingRequestId = ref('')
+function timeFields(range) { return range?.length === 2 ? { startTime: range[0], endTime: range[1] } : {} }
+async function openPending() {
+  pendingDlg.value = true
+  pendingLoading.value = true
+  try { pendingRows.value = (await getPendingWorkSessions()).data || [] }
+  finally { pendingLoading.value = false }
+}
+function selectPending(row) {
+  pendingSelected.value = row
+  pendingTimes.value = [row.startTime, row.endTime]
+  pendingGood.value = 0
+  pendingRequestId.value = newClientRequestId()
+  pendingEditDlg.value = true
+}
+async function savePending() {
+  if (!pendingTimes.value?.length) { ElMessage.error('请填写起止时间'); return }
+  pendingSaving.value = true
+  try {
+    await reportPendingWorkSession(pendingSelected.value.id, { ...timeFields(pendingTimes.value), goodQty: pendingGood.value, clientRequestId: pendingRequestId.value })
+    ElMessage.success('补报成功')
+    pendingEditDlg.value = false
+    await openPending()
+    await load()
+  } finally { pendingSaving.value = false }
+}
 const batchSubmitting = ref(false)
 const batchDetail = ref(null)
 const people = ref([])
@@ -635,6 +702,8 @@ function newClientRequestId() {
 }
 
 function resetCreate() {
+  createTimes.value = null
+  participantTimes.value = {}
   orderDetail.value = null
   defectOptions.value = []
   createClientRequestId.value = ''
@@ -753,19 +822,15 @@ async function onCreate(keepOpen) {
       goodQty: createForm.value.goodQty || 0,
       defectQty: createForm.value.defectQty || 0,
       defectId: createForm.value.defectId,
-      durationMinutes,
+      durationMinutes: createTimes.value?.length ? null : (durationMinutes || null),
+      ...timeFields(createTimes.value),
       clientRequestId: createClientRequestId.value
     }
     if (shareEnabled.value) {
       payload.shareMode = shareMode.value === 2 ? 2 : 1
-      if (shareMode.value === 2) {
-        payload.participants = shareIds.map(id => ({
-          userId: id,
-          durationMinutes: Number(participantDurations.value[id] || 0)
-        }))
-      } else {
-        payload.participantUserIds = shareIds
-      }
+      payload.participants = shareIds.map(id => ({ userId: id,
+        durationMinutes: participantTimes.value[id]?.length ? null : (participantDurations.value[id] ?? null),
+        ...timeFields(participantTimes.value[id]) }))
     }
     const res = await submitReportWithUpstreamConfirm(payload)
     createClientRequestId.value = ''
@@ -781,6 +846,9 @@ async function onCreate(keepOpen) {
     else ElMessage.success(tip)
     await load()
     if (keepOpen) {
+      createTimes.value = null
+      participantTimes.value = {}
+      participantDurations.value = {}
       createForm.value.goodQty = 0
       createForm.value.defectQty = 0
       createForm.value.defectId = null
@@ -914,7 +982,8 @@ async function onProxySubmit() {
         goodQty: r.goodQty || 0,
         defectQty: r.defectQty || 0,
         defectId: r.defectId,
-        durationMinutes: 0
+        durationMinutes: null,
+        ...timeFields(r.timeRange)
       }))
     })
     proxyClientRequestId.value = ''
@@ -986,6 +1055,7 @@ async function onSave() {
 }
 
 function resetBatch() {
+  batchTimes.value = null
   batchDetail.value = null
   batchForm.value = { orderNo: '', goodQty: 1, split: false, allocRows: [] }
 }
@@ -1056,8 +1126,8 @@ async function onBatchSubmit() {
     return
   }
   const n = batchForm.value.goodQty || 0
-  if (n <= 0) {
-    ElMessage.error('补报良品数必须大于 0')
+  if (n < 0) {
+    ElMessage.error('补报良品数不能为负')
     return
   }
   if (n > minRemain.value) {
@@ -1081,7 +1151,7 @@ async function onBatchSubmit() {
     }
     allocations = batchForm.value.allocRows.map(row => ({
       operationId: row.operationId,
-      users: row.users.map(u => ({ userId: u.userId, goodQty: u.goodQty }))
+      users: row.users.map(u => ({ userId: u.userId, goodQty: u.goodQty, ...timeFields(u.timeRange) }))
     }))
   }
 
@@ -1095,7 +1165,8 @@ async function onBatchSubmit() {
       orderId: batchDetail.value.id,
       goodQty: n,
       batchNo,
-      allocations
+      allocations,
+      ...timeFields(batchTimes.value)
     })
     const data = res.data || {}
     ElMessage.success(`已为 ${data.operationCount || 0} 道工序生成 ${data.reportCount || 0} 条报工`)

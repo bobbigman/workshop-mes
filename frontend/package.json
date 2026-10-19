@@ -1,7 +1,7 @@
 {
   "name": "workshop-mes-frontend",
   "private": true,
-  "version": "1.1.323",
+  "version": "1.1.348",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,6 +11,7 @@
     "manual:sync": "node scripts/sync-manual.mjs",
     "manual:check": "node scripts/check-manual.mjs && node scripts/sync-manual.mjs --check",
     "test:scan": "node --test src/utils/scanPayload.test.mjs src/views/h5/scan.test.mjs",
+    "test:voice": "node --test src/utils/voiceReport.test.mjs",
     "test:cache": "node --test src/utils/clearBrowserCache.test.mjs"
   },
   "dependencies": {

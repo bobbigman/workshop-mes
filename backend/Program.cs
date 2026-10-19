@@ -153,6 +153,7 @@ try
         .AddHttpMessageHandler<OutboundHttpLoggingHandler>();
     builder.Services.AddScoped<IFactoryService, FactoryService>();
     builder.Services.AddScoped<IUserService, UserService>();
+    builder.Services.AddScoped<IUserFavoriteService, UserFavoriteService>();
     builder.Services.AddScoped<IDepartmentService, DepartmentService>();
     builder.Services.AddScoped<IUnitService, UnitService>();
     builder.Services.AddScoped<IDefectItemService, DefectItemService>();
@@ -161,6 +162,13 @@ try
     builder.Services.AddScoped<IProductService, ProductService>();
     builder.Services.AddScoped<IWorkOrderService, WorkOrderService>();
     builder.Services.AddScoped<IReportService, ReportService>();
+    builder.Services.AddScoped<WorkSessionService>();
+    builder.Services.AddScoped<IWecomReportService, WecomReportService>();
+    builder.Services.AddScoped<IReportTaskCandidateSource, ReportTaskCandidateSource>();
+    builder.Services.AddScoped<IWecomReportTaskService, WecomReportTaskService>();
+    builder.Services.AddSingleton<ReportIdentityTickets>();
+    builder.Services.AddScoped<IReportIdentityDirectory, ReportIdentityDirectory>();
+    builder.Services.AddScoped<IReportIdentityService, ReportIdentityService>();
     builder.Services.AddScoped<IReviewService, ReviewService>();
     builder.Services.AddScoped<IAssignService, AssignService>();
     builder.Services.AddScoped<IPriceRuleService, PriceRuleService>();

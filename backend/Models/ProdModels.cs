@@ -63,6 +63,10 @@ public class ProdReport
     public string? ClientRequestId { get; set; }    // 客户端提交去重标识（docs/94）
     public string? ShareBatchNo { get; set; }       // 多人分摊/代报同批号；与 BatchNo 独立
     public long? OperatorUserId { get; set; }       // 代报/分摊操作人；自报为空
+    /// <summary>报工来源（docs/241）：0=常规(PC/H5/JWT) 3=企微对话；历史行默认 0。</summary>
+    public byte Source { get; set; }
+    /// <summary>企微对话确认落库时间（docs/241）；仅 Source=3 有值。</summary>
+    public DateTime? ConfirmedAt { get; set; }
 }
 
 /// <summary>报工修改日志（docs/205）</summary>

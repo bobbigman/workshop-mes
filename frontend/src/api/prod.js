@@ -14,6 +14,7 @@ export const getOrderQr = (id) => http.get(`/WorkOrder/${id}/qr`)
 
 export const submitReport = (data) => http.post('/Report', data)
 export const batchReport = (data) => http.post('/Report/batch', data)
+export const withdrawReport = (id) => http.post(`/Report/${id}/withdraw`)
 export const updateReport = (id, data) => http.put(`/Report/${id}`, data)
 export const getReportList = (params) => http.get('/Report', { params })
 export const getMyReports = (params) => http.get('/Report/mine', { params })

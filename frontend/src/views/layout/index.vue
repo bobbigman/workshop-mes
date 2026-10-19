@@ -1,7 +1,7 @@
 <template>
   <el-container class="layout" :class="{ 'is-mobile': isMobile, 'monitor-shell': $route.path === '/execution-monitor' }">
     <el-aside v-show="!isMobile" width="var(--app-aside-width)" class="aside">
-      <div class="logo">
+      <div class="logo is-link" @click="goHome">
         <div class="logo-title">{{ factoryName || instanceName }}</div>
         <div v-if="factoryName" class="logo-sub">{{ PRODUCT_TITLE }}</div>
       </div>
@@ -9,7 +9,7 @@
     </el-aside>
 
     <el-drawer v-model="drawerOpen" direction="ltr" size="78%" :with-header="false" class="nav-drawer">
-      <div class="logo">
+      <div class="logo is-link" @click="goHome">
         <div class="logo-title">{{ factoryName || instanceName }}</div>
         <div v-if="factoryName" class="logo-sub">{{ PRODUCT_TITLE }}</div>
       </div>
@@ -73,6 +73,7 @@ import PageHelp from '@/components/PageHelp.vue'
 import { getInstanceInfo, getLicenseStatus } from '@/api/auth'
 import { resolveInstanceLabel, PRODUCT_TITLE } from '@/utils/instanceDisplay'
 import { LOGIN_FACTORY_KEY, rememberLoginFactory } from '@/utils/loginAppearance'
+import { resetFavorites } from '@/composables/useFavorites'
 
 const router = useRouter()
 const route = useRoute()
@@ -131,8 +132,13 @@ function toggleTheme() {
   document.body.classList.toggle('theme-legacy', isLegacy.value)
 }
 
+function goHome() {
+  router.push('/home')
+}
+
 function onLogout() {
   const appearanceCode = localStorage.getItem('factoryCode') || localStorage.getItem(LOGIN_FACTORY_KEY)
+  resetFavorites()
   localStorage.clear()
   rememberLoginFactory(appearanceCode)
   router.push('/login')
@@ -183,6 +189,7 @@ onUnmounted(() => {
   scrollbar-width: thin;
   scrollbar-color: var(--app-aside-group-text) transparent;
 }
+.logo.is-link { cursor: pointer; }
 .logo {
   display: flex;
   flex-direction: column;

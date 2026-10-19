@@ -1,15 +1,11 @@
-using System.Text.Json;
-using System.Text.RegularExpressions;
-using Microsoft.EntityFrameworkCore;
+﻿using System.Text.Json;
 using Microsoft.Extensions.Options;
 using ahu.MicrosoftMes.Common;
-using ahu.MicrosoftMes.Data;
-using ahu.MicrosoftMes.Models;
 using ahu.MicrosoftMes.Services;
 
 namespace ahu.MicrosoftMes.Mcp;
 
-/// <summary>MCP：工人自报手机号/账号/姓名 → 专属免密报工链接（docs/215）。</summary>
+/// <summary>MCP：已核验平台身份获取本人入口；未关联返回普通H5首页与个人码指引（docs/249）。</summary>
 public interface IMcpReportLinkService
 {
     Task<string> GetReportLinkByIdentityAsync(string? identity, CancellationToken ct = default);
@@ -17,26 +13,28 @@ public interface IMcpReportLinkService
 
 public class McpReportLinkService : IMcpReportLinkService
 {
-    private static readonly Regex PhoneRe = new(@"^1\d{10}$", RegexOptions.Compiled);
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    private readonly AppDbContext _db;
+    private readonly IMcpWxBindService _binding;
+    private readonly IHttpContextAccessor _http;
     private readonly IMcpRequestContext _ctx;
     private readonly IUserService _users;
     private readonly IConfiguration _config;
     private readonly InstanceOptions _instance;
 
     public McpReportLinkService(
-        AppDbContext db,
+        IMcpWxBindService binding,
+        IHttpContextAccessor http,
         IMcpRequestContext ctx,
         IUserService users,
         IConfiguration config,
         IOptions<InstanceOptions> instance)
     {
-        _db = db;
+        _binding = binding;
+        _http = http;
         _ctx = ctx;
         _users = users;
         _config = config;
@@ -46,58 +44,27 @@ public class McpReportLinkService : IMcpReportLinkService
     public async Task<string> GetReportLinkByIdentityAsync(string? identity, CancellationToken ct = default)
     {
         var factoryId = _ctx.RequireFactoryId(nameof(GetReportLinkByIdentityAsync));
-        var raw = (identity ?? "").Trim();
-        if (string.IsNullOrEmpty(raw))
-            return Fail("请发您的手机号、登录账号或姓名");
-
-        // 与 MCP 授权页同源：优先 Mcp:AuthBaseUrl（cpolar/公网随 MCP 改），勿写死；本机地址绝不发给手机
         var baseUrl = ResolvePhoneReachableBaseUrl();
         if (string.IsNullOrEmpty(baseUrl))
-            return Fail("未配置手机可打开的地址。请把 Mcp:AuthBaseUrl 配成与 MCP 相同的 cpolar/公网地址后重启（勿用 localhost）");
-
-        List<SysUser> hits;
-        string kind;
-        if (PhoneRe.IsMatch(raw))
-        {
-            kind = "手机号";
-            hits = await _db.Users.AsNoTracking()
-                .Where(u => u.FactoryId == factoryId && u.Phone == raw)
-                .OrderBy(u => u.Id)
-                .ToListAsync(ct);
-        }
-        else
-        {
-            var byAccount = await _db.Users.AsNoTracking()
-                .Where(u => u.FactoryId == factoryId && u.Account == raw)
-                .OrderBy(u => u.Id)
-                .ToListAsync(ct);
-            if (byAccount.Count > 0)
-            {
-                kind = "登录账号";
-                hits = byAccount;
-            }
-            else
-            {
-                kind = "姓名";
-                hits = await _db.Users.AsNoTracking()
-                    .Where(u => u.FactoryId == factoryId && u.Name == raw)
-                    .OrderBy(u => u.Id)
-                    .ToListAsync(ct);
-            }
-        }
-
-        if (hits.Count == 0)
-            return Fail($"未找到该{kind}的员工，请核对手机号/登录账号/姓名，或联系管理员在用户管理里录入");
-
-        if (hits.Count > 1)
-        {
-            var list = string.Join("、", hits.Select(u => $"{u.Name}({u.Account})"));
-            return Fail($"找到多人：{list}，请发手机号或登录账号");
-        }
-
-        var user = hits[0];
-        if (user.Status == 0)
-            return Fail("该账号已停用，请联系管理员");
+            return Fail("请管理员配置手机可访问的HTTPS报工地址；已有本人个人码可继续扫码，不需要回传验证码");
+        var publicEntryUrl = $"{baseUrl}/#/h5/home";
+        string UseOwnEntry(string reason) => JsonSerializer.Serialize(new {
+            code = 1, state = "use_existing_login_or_personal_code", publicEntryUrl,
+            msg = reason + "。已有H5登录可打开报工首页；也可使用本人原免密链接或扫描管理员提供的本人个人登录码。首次关联请管理员核验，不用在聊天发密码或8位验证码。普通首页不代表已按聊天姓名登录。"
+        }, JsonOpts);
+        // 249：只读可信请求头和管理员核验映射，模型的identity仅核对本人，不能用于选取账号。
+        var session = _http.HttpContext?.Request.Headers["X-Mcp-Session-Id"].ToString().Trim();
+        if (string.IsNullOrEmpty(session) || session.Length > 256)
+            return UseOwnEntry("当前没有可靠的平台用户身份，不能仅凭姓名或手机号发放个人免密链接");
+        var verifiedId = _config.GetValue<long>($"Mcp:WecomReport:VerifiedUsers:{factoryId}:{McpWxBindService.HashSession(session)}", 0);
+        if (verifiedId <= 0) return UseOwnEntry("当前平台身份尚未由管理员关联核验");
+        var user = await _binding.ResolveBoundUserAsync("wecom", session, ct);
+        if (user == null || user.Id != verifiedId || user.FactoryId != factoryId || user.Status != 1 ||
+            user.UserType == UserTypeHelper.External || user.Role is not (1 or 2 or 3))
+            return UseOwnEntry("当前员工绑定无效或与管理员核验结果不一致");
+        var raw = (identity ?? "").Trim();
+        if (raw.Length > 0 && raw != user.Name && raw != user.Account && raw != user.Phone)
+            return UseOwnEntry("只能获取当前已核验本人的入口，不能按聊天填写的信息替其他员工登录");
 
         var qr = await _users.GetOrCreateLoginQrAsync(user.Id, factoryId);
         if (qr.Code != 0 || qr.Data == null || string.IsNullOrEmpty(qr.Data.Code))
@@ -133,7 +100,9 @@ public class McpReportLinkService : IMcpReportLinkService
                  })
         {
             if (string.IsNullOrEmpty(candidate)) continue;
-            if (IsLoopbackBaseUrl(candidate)) continue;
+            if (!Uri.TryCreate(candidate, UriKind.Absolute, out var uri) || uri.Scheme != "https" ||
+                uri.IsLoopback || !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Query) ||
+                !string.IsNullOrEmpty(uri.Fragment) || IsLoopbackBaseUrl(candidate)) continue;
             return candidate;
         }
         return null;

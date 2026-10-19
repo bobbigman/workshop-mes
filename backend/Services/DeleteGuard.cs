@@ -28,6 +28,8 @@ public static class DeleteGuard
                 break;
 
             case "Operation":
+                if (await db.WorkSessions.AnyAsync(x => x.OperationId == id))
+                    return "该工序已有开工记录，请先处理相关工单";
                 if (await db.RoutingSteps.AnyAsync(s => s.OperationId == id))
                     return "该工序已被工艺路线引用，请先删除相关工艺路线";
                 if (await db.Reports.AnyAsync(r => r.OperationId == id))
@@ -60,6 +62,8 @@ public static class DeleteGuard
                 break;
 
             case "User":
+                if (await db.WorkSessions.AnyAsync(x => x.UserId == id || x.OperatorUserId == id))
+                    return "该用户已有开工或补报操作记录，不可删除，可停用账号";
                 if (await db.DepartmentUsers.AnyAsync(x => x.UserId == id))
                     return "该用户属于部门，请先从部门移除";
                 if (await db.Reports.AnyAsync(r => r.UserId == id))

@@ -46,6 +46,7 @@
       <div v-if="row.reviewStatus === 2 && row.rejectReason" class="reject">退回原因：{{ row.rejectReason }}</div>
       <div v-if="canEdit(row)" class="actions">
         <button type="button" class="btn-sm edit" @click="openEdit(row)">修改</button>
+        <button type="button" class="btn-sm ghost" @click="withdraw(row)">撤回</button>
       </div>
     </div>
 
@@ -85,6 +86,17 @@
 </template>
 
 <script setup>
+import { withdrawReport } from '@/api/prod'
+import { showConfirmDialog } from 'vant'
+async function withdraw(row) {
+  try {
+    await showConfirmDialog({ title: '撤回本次报工', message: '撤回后本次不计入产量和工资，原开工记录保留，可重新开工。' })
+  } catch { return }
+  await withdrawReport(row.id)
+  showSuccessToast('已撤回')
+  await reload()
+}
+
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast } from 'vant'

@@ -699,6 +699,7 @@ public class WorkOrderService : IWorkOrderService
         var order = await _db.WorkOrders.FindAsync(id)
             ?? throw ThrowHelper.Biz(nameof(DeleteAsync), "工单不存在");
 
+        _db.WorkSessions.RemoveRange(_db.WorkSessions.Where(x => x.WorkOrderId == id));
         _db.Reports.RemoveRange(_db.Reports.Where(r => r.OrderId == id));
         _db.WorkOrderOperations.RemoveRange(_db.WorkOrderOperations.Where(t => t.WorkOrderId == id));
         _db.CustomFieldValues.RemoveRange(_db.CustomFieldValues.Where(v => v.TargetId == id));

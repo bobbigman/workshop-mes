@@ -6,70 +6,109 @@
     @open="onOpen"
     @close="onClose"
   >
+    <el-menu-item index="/home">
+      <div class="menu-row">
+        <span class="menu-label"><el-icon><House /></el-icon>首页</span>
+        <MenuStar menu-key="/home" />
+      </div>
+    </el-menu-item>
     <el-sub-menu index="production">
       <template #title>生产管理</template>
-      <el-menu-item index="/order"><el-icon><Tickets /></el-icon>工单</el-menu-item>
-      <el-menu-item index="/execution-monitor"><el-icon><Monitor /></el-icon>执行监控</el-menu-item>
-      <el-menu-item index="/report"><el-icon><EditPen /></el-icon>报工</el-menu-item>
-      <el-menu-item v-if="(role === 1 || role === 3) && canReview" index="/review"><el-icon><CircleCheck /></el-icon>报工复核</el-menu-item>
-      <el-menu-item v-if="role === 1 || role === 3" index="/abnormal"><el-icon><Warning /></el-icon>异常处理</el-menu-item>
+      <el-menu-item index="/order">
+        <div class="menu-row">
+          <span class="menu-label"><el-icon><Tickets /></el-icon>工单</span>
+          <MenuStar menu-key="/order" />
+        </div>
+      </el-menu-item>
+      <el-menu-item index="/execution-monitor">
+        <div class="menu-row">
+          <span class="menu-label"><el-icon><Monitor /></el-icon>执行监控</span>
+          <MenuStar menu-key="/execution-monitor" />
+        </div>
+      </el-menu-item>
+      <el-menu-item index="/report">
+        <div class="menu-row">
+          <span class="menu-label"><el-icon><EditPen /></el-icon>报工</span>
+          <MenuStar menu-key="/report" />
+        </div>
+      </el-menu-item>
+      <el-menu-item v-if="(role === 1 || role === 3) && canReview" index="/review">
+        <div class="menu-row">
+          <span class="menu-label"><el-icon><CircleCheck /></el-icon>报工复核</span>
+          <MenuStar menu-key="/review" />
+        </div>
+      </el-menu-item>
+      <el-menu-item v-if="role === 1 || role === 3" index="/abnormal">
+        <div class="menu-row">
+          <span class="menu-label"><el-icon><Warning /></el-icon>异常处理</span>
+          <MenuStar menu-key="/abnormal" />
+        </div>
+      </el-menu-item>
     </el-sub-menu>
     <el-sub-menu v-if="role === 1" index="base-data">
       <template #title>基础数据</template>
-      <el-menu-item index="/product">产品定义</el-menu-item>
-      <el-menu-item index="/routing">工艺路线</el-menu-item>
-      <el-menu-item index="/operation">工序</el-menu-item>
-      <el-menu-item index="/defect">不良品项</el-menu-item>
-      <el-menu-item index="/unit">单位</el-menu-item>
-      <el-menu-item v-if="canWage" index="/price-rule">工价表</el-menu-item>
+      <el-menu-item index="/product"><div class="menu-row"><span class="menu-label">产品定义</span><MenuStar menu-key="/product" /></div></el-menu-item>
+      <el-menu-item index="/routing"><div class="menu-row"><span class="menu-label">工艺路线</span><MenuStar menu-key="/routing" /></div></el-menu-item>
+      <el-menu-item index="/operation"><div class="menu-row"><span class="menu-label">工序</span><MenuStar menu-key="/operation" /></div></el-menu-item>
+      <el-menu-item index="/defect"><div class="menu-row"><span class="menu-label">不良品项</span><MenuStar menu-key="/defect" /></div></el-menu-item>
+      <el-menu-item index="/unit"><div class="menu-row"><span class="menu-label">单位</span><MenuStar menu-key="/unit" /></div></el-menu-item>
+      <el-menu-item v-if="canWage" index="/price-rule"><div class="menu-row"><span class="menu-label">工价表</span><MenuStar menu-key="/price-rule" /></div></el-menu-item>
     </el-sub-menu>
     <el-sub-menu v-if="role === 1" index="sys-config">
       <template #title>系统配置</template>
-      <el-menu-item index="/user">用户</el-menu-item>
-      <el-menu-item index="/dept">部门</el-menu-item>
-      <el-menu-item index="/custom-field">自定义字段</el-menu-item>
-      <el-menu-item v-if="canWechat" index="/wechat-alert">微信预警</el-menu-item>
-      <el-menu-item index="/worker-view">工人手机视角</el-menu-item>
-      <el-menu-item index="/report-upstream">报工上级校验</el-menu-item>
-      <el-menu-item index="/report-qty">报工数量设置</el-menu-item>
-      <el-menu-item index="/ai-assistant">AI 助手</el-menu-item>
-      <el-menu-item index="/login-setting">登录页图片</el-menu-item>
-      <el-menu-item index="/mcp-key">MCP 钥匙</el-menu-item>
+      <el-menu-item index="/user"><div class="menu-row"><span class="menu-label">用户</span><MenuStar menu-key="/user" /></div></el-menu-item>
+      <el-menu-item index="/dept"><div class="menu-row"><span class="menu-label">部门</span><MenuStar menu-key="/dept" /></div></el-menu-item>
+      <el-menu-item index="/custom-field"><div class="menu-row"><span class="menu-label">自定义字段</span><MenuStar menu-key="/custom-field" /></div></el-menu-item>
+      <el-menu-item v-if="canWechat" index="/wechat-alert"><div class="menu-row"><span class="menu-label">微信预警</span><MenuStar menu-key="/wechat-alert" /></div></el-menu-item>
+      <el-menu-item index="/worker-view"><div class="menu-row"><span class="menu-label">工人手机视角</span><MenuStar menu-key="/worker-view" /></div></el-menu-item>
+      <el-menu-item index="/report-upstream"><div class="menu-row"><span class="menu-label">报工上级校验</span><MenuStar menu-key="/report-upstream" /></div></el-menu-item>
+      <el-menu-item index="/report-qty"><div class="menu-row"><span class="menu-label">报工数量设置</span><MenuStar menu-key="/report-qty" /></div></el-menu-item>
+      <el-menu-item index="/ai-assistant"><div class="menu-row"><span class="menu-label">AI 助手</span><MenuStar menu-key="/ai-assistant" /></div></el-menu-item>
+      <el-menu-item index="/login-setting"><div class="menu-row"><span class="menu-label">登录页图片</span><MenuStar menu-key="/login-setting" /></div></el-menu-item>
+      <el-menu-item index="/mcp-key"><div class="menu-row"><span class="menu-label">MCP 钥匙</span><MenuStar menu-key="/mcp-key" /></div></el-menu-item>
     </el-sub-menu>
     <el-sub-menu v-if="role === 1 && canWage" index="salary">
       <template #title>工资</template>
-      <el-menu-item index="/salary">工资报表</el-menu-item>
-      <el-menu-item index="/salary-sku">工资色码汇总</el-menu-item>
+      <el-menu-item index="/salary"><div class="menu-row"><span class="menu-label">工资报表</span><MenuStar menu-key="/salary" /></div></el-menu-item>
+      <el-menu-item index="/salary-sku"><div class="menu-row"><span class="menu-label">工资色码汇总</span><MenuStar menu-key="/salary-sku" /></div></el-menu-item>
     </el-sub-menu>
     <el-sub-menu index="report">
       <template #title>报表</template>
-      <el-menu-item index="/stat">生产报表</el-menu-item>
-      <el-menu-item index="/defect-stat">不良品报表</el-menu-item>
-      <el-menu-item index="/sku-stat">色码汇总</el-menu-item>
-      <el-menu-item v-if="role === 1 && canKingdee" index="/quote-suggest">建议报价</el-menu-item>
-      <el-menu-item v-if="role === 1" index="/schedule">排产评分</el-menu-item>
-      <el-menu-item index="/board">车间看板</el-menu-item>
+      <el-menu-item index="/stat"><div class="menu-row"><span class="menu-label">生产报表</span><MenuStar menu-key="/stat" /></div></el-menu-item>
+      <el-menu-item index="/defect-stat"><div class="menu-row"><span class="menu-label">不良品报表</span><MenuStar menu-key="/defect-stat" /></div></el-menu-item>
+      <el-menu-item index="/sku-stat"><div class="menu-row"><span class="menu-label">色码汇总</span><MenuStar menu-key="/sku-stat" /></div></el-menu-item>
+      <el-menu-item v-if="role === 1 && canKingdee" index="/quote-suggest"><div class="menu-row"><span class="menu-label">建议报价</span><MenuStar menu-key="/quote-suggest" /></div></el-menu-item>
+      <el-menu-item v-if="role === 1" index="/schedule"><div class="menu-row"><span class="menu-label">排产评分</span><MenuStar menu-key="/schedule" /></div></el-menu-item>
+      <el-menu-item index="/board"><div class="menu-row"><span class="menu-label">车间看板</span><MenuStar menu-key="/board" /></div></el-menu-item>
     </el-sub-menu>
     <el-sub-menu index="help">
       <template #title>帮助</template>
-      <el-menu-item index="/help">操作手册</el-menu-item>
-      <el-menu-item index="/onboarding">新手入门</el-menu-item>
-      <el-menu-item index="/faq">常见问题（系统能力50问）</el-menu-item>
+      <el-menu-item index="/help"><div class="menu-row"><span class="menu-label">操作手册</span><MenuStar menu-key="/help" /></div></el-menu-item>
+      <el-menu-item index="/onboarding"><div class="menu-row"><span class="menu-label">新手入门</span><MenuStar menu-key="/onboarding" /></div></el-menu-item>
+      <el-menu-item index="/faq"><div class="menu-row"><span class="menu-label">常见问题（系统能力50问）</span><MenuStar menu-key="/faq" /></div></el-menu-item>
       <el-menu-item index="/advantages">
-        <el-icon><Trophy /></el-icon>产品优势速览
+        <div class="menu-row">
+          <span class="menu-label"><el-icon><Trophy /></el-icon>产品优势速览</span>
+          <MenuStar menu-key="/advantages" />
+        </div>
       </el-menu-item>
       <el-menu-item index="/about">
-        <el-icon><InfoFilled /></el-icon>关于
+        <div class="menu-row">
+          <span class="menu-label"><el-icon><InfoFilled /></el-icon>关于</span>
+          <MenuStar menu-key="/about" />
+        </div>
       </el-menu-item>
     </el-sub-menu>
   </el-menu>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Tickets, Monitor, EditPen, CircleCheck, Warning, Trophy, InfoFilled } from '@element-plus/icons-vue'
+import { Tickets, Monitor, EditPen, CircleCheck, Warning, Trophy, InfoFilled, House } from '@element-plus/icons-vue'
 import { canUse, FEATURE } from '@/utils/licenseTier'
+import MenuStar from '@/components/MenuStar.vue'
+import { useFavorites } from '@/composables/useFavorites'
 
 const props = defineProps({
   role: { type: Number, required: true },
@@ -78,6 +117,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['navigate'])
 const router = useRouter()
+const { ensure } = useFavorites()
 
 const canReview = computed(() => canUse(props.tier, FEATURE.ReportReview))
 const canWage = computed(() => canUse(props.tier, FEATURE.PieceWage))
@@ -106,7 +146,6 @@ function persist() {
 }
 
 function onSelect(index) {
-  // 不用 el-menu 的 router 属性：它读 globalProperties.$router，偶发拿不到时只高亮不跳转
   if (typeof index === 'string' && index.startsWith('/')) {
     router.push(index)
   }
@@ -122,17 +161,37 @@ function onClose(index) {
   openedGroups.value = openedGroups.value.filter((g) => g !== index)
   persist()
 }
+
+onMounted(() => {
+  ensure().catch(() => {})
+})
 </script>
 
 <style scoped>
 .el-menu { background: transparent; border-right: none; padding: 8px 0 20px; }
+.menu-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+.menu-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 :deep(.el-menu-item) {
   color: var(--app-aside-text);
   border-radius: var(--app-radius-sm);
   margin: 3px 14px;
   height: var(--app-menu-item-height);
   line-height: var(--app-menu-item-height);
-  padding: 0 16px !important;
+  padding: 0 10px 0 16px !important;
   font-size: 14px;
 }
 :deep(.el-menu-item.is-active) {

@@ -14,7 +14,9 @@
 
 （exe / runtimeconfig / deps 若被覆盖，会提示 You must install .NET）
 
-【本包功能 · 2026-10-14 · 版本 1.1.322】
+【本包功能 · 2026-10-16 · 版本 1.1.332】
+- 企微对话报工（docs/241）：新增 `POST /api/WecomReport/preview` + `/confirm`（企微应用 Token 鉴权，不用工人 JWT）；预览回显确认卡+短时一次性 token（不落库），确认后复用 ReportService 校验落库；`prod_report` 增 source/confirmed_at；有不良等复杂报工回退 149 发卡表单。
+- PC 首页常用功能卡片 + 菜单星标收藏（docs/240，对标金蝶云星空）：侧边菜单项旁点☆收藏，登录后进新建 PC 首页「我的工作→常用功能」，只显示自己钉的入口；空收藏按角色给 4 个默认入口（工单/报工/报工复核/执行监控，看不到复核则换生产报表）；新增 sys_user_favorite 表 + /api/userfavorite 两个接口，首次启动 DbCompat 自动建表。
 - 小批量复制（docs/…）：产品、工艺路线、工序支持「复制已有资料 → 改差异 → 保存」，减少小批量建号/建工艺的录入步骤；仍遵守产品编号唯一、工序报工按部门、删除依赖倒序等硬规则。
 - 智能客服检索规则热加载：SupportDocs 检索规则可外置到 `SupportDocs/_retrieval.json`（关键词/同义词/加权/排除），改文件即生效、缺文件回退内置默认。
 - 登录背景：加入微聚轻 MES 生产看板背景并压缩至 132KB；登录页记住所选工厂背景，减少手机端图片加载（前端增量）。
@@ -22,7 +24,7 @@
 - 报工数量口径设置（docs/230）：新增工厂级配置 sys_report_qty_setting（每工厂一条），允许超报比例 0～999%（默认 0）、上道不良是否计入下道可报（默认不计入）；仅管理员可改。首次启动 DbCompat 自动幂等建表，无需手工执行 SQL。
 - SupportDocs 支持文档/FAQ 同步更新（系统能力总图、常见问题、扫码报工问答、50问等）。
 - scripts 目录不由 apply-update 复制；任务脚本/SQL 按需单独复制。
-- 新增配置键：`Instance:CreditPartner`（空=胡工单方版；填伙伴名如「沈工」=胡工、沈工联合出品）、`Instance:Url`（空即可）。服务器 appsettings 只**手工加这两个新键、旧值不动**，勿整文件覆盖。
+- 新增配置键：`Instance:CreditPartner`（空=胡工单方版；填伙伴名如「沈工」=胡工、沈工联合出品）、`Instance:Url`（空即可）、`WecomReport:ApiToken` / `FactoryId` / `ConfirmExpireMinutes`（docs/241 企微对话报工）。服务器 appsettings 只**手工加新键、旧值不动**，勿整文件覆盖。
 
 【更新步骤】（一键）
 1. 把本文件夹拷到服务器任意位置（如 D:\WorkShop\publish-update）
@@ -33,7 +35,7 @@
 
 【若新版本新增了配置项】
 不要整文件覆盖 appsettings.json。对比开发机与服务器键差，只把新键合并进服务器那份，旧值不动。
-本包新增配置键：`Instance:CreditPartner`、`Instance:Url`。仅手工把这两个新键合并进服务器 appsettings（旧值不动），勿整文件覆盖。
+本包新增配置键：`Instance:CreditPartner`、`Instance:Url`、`WecomReport:ApiToken`、`WecomReport:FactoryId`、`WecomReport:ConfirmExpireMinutes`。仅手工把新键合并进服务器 appsettings（旧值不动），勿整文件覆盖。
 
 【若已误覆盖出现 “You must install .NET”】
 用完整包 publish-win64 里的这两个文件盖回去（不要动 appsettings.json / start.bat）：

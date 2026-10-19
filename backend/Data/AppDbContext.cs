@@ -10,6 +10,7 @@ public class AppDbContext : DbContext
 
     public DbSet<SysFactory> Factories => Set<SysFactory>();
     public DbSet<SysUser> Users => Set<SysUser>();
+    public DbSet<SysUserFavorite> UserFavorites => Set<SysUserFavorite>();
     public DbSet<SysDepartment> Departments => Set<SysDepartment>();
     public DbSet<SysDepartmentUser> DepartmentUsers => Set<SysDepartmentUser>();
 
@@ -27,6 +28,7 @@ public class AppDbContext : DbContext
     public DbSet<ProdWorkOrder> WorkOrders => Set<ProdWorkOrder>();
     public DbSet<ProdWorkOrderOperation> WorkOrderOperations => Set<ProdWorkOrderOperation>();
     public DbSet<ProdWorkOrderOperationAssignee> WorkOrderOperationAssignees => Set<ProdWorkOrderOperationAssignee>();
+    public DbSet<ProdWorkSession> WorkSessions => Set<ProdWorkSession>();
     public DbSet<ProdReport> Reports => Set<ProdReport>();
     public DbSet<ProdReportChangeLog> ReportChangeLogs => Set<ProdReportChangeLog>();
     public DbSet<ProdAbnormal> Abnormals => Set<ProdAbnormal>();
@@ -276,6 +278,8 @@ public class AppDbContext : DbContext
             e.Property(x => x.ClientRequestId).HasColumnName("client_request_id").HasMaxLength(64);
             e.Property(x => x.ShareBatchNo).HasColumnName("share_batch_no").HasMaxLength(32);
             e.Property(x => x.OperatorUserId).HasColumnName("operator_user_id");
+            e.Property(x => x.Source).HasColumnName("source");
+            e.Property(x => x.ConfirmedAt).HasColumnName("confirmed_at");
             e.HasIndex(x => new { x.FactoryId, x.ReviewStatus, x.ReportTime });
             e.HasIndex(x => new { x.FactoryId, x.ClientRequestId, x.UserId })
                 .IsUnique()
@@ -367,6 +371,27 @@ public class AppDbContext : DbContext
             e.Property(x => x.Status).HasColumnName("status");
             e.Property(x => x.ConfirmedAt).HasColumnName("confirmed_at");
             e.Property(x => x.CreatedAt).HasColumnName("created_at");
+        });
+
+        modelBuilder.Entity<ProdWorkSession>(e =>
+        {
+            e.ToTable("prod_work_session");
+            e.HasIndex(x => new { x.FactoryId, x.UserId }).IsUnique().HasFilter("[status] = 0").HasDatabaseName("ux_session_running");
+            e.HasIndex(x => x.WorkOrderId).HasDatabaseName("ix_session_order");
+            e.HasIndex(x => new { x.FactoryId, x.Status }).HasFilter("[status] = 2").HasDatabaseName("ix_session_pending");
+            e.Property(x => x.FactoryId).HasColumnName("factory_id");
+            e.Property(x => x.WorkOrderId).HasColumnName("work_order_id");
+            e.Property(x => x.OperationId).HasColumnName("operation_id");
+            e.Property(x => x.UserId).HasColumnName("user_id");
+            e.Property(x => x.StartTime).HasColumnName("start_time");
+            e.Property(x => x.EndTime).HasColumnName("end_time");
+            e.Property(x => x.DurationMinutes).HasColumnName("duration_minutes");
+            e.Property(x => x.Status).HasColumnName("status");
+            e.Property(x => x.Source).HasColumnName("source");
+            e.Property(x => x.OperatorUserId).HasColumnName("operator_user_id");
+            e.Property(x => x.ReportId).HasColumnName("report_id");
+            e.Property(x => x.CreatedAt).HasColumnName("created_at");
+            e.Property(x => x.EndedAt).HasColumnName("ended_at");
         });
 
         modelBuilder.Entity<SalaryStatementItem>(e =>
@@ -545,6 +570,18 @@ public class AppDbContext : DbContext
                 .IsUnique()
                 .HasFilter("[status]=1")
                 .HasDatabaseName("ux_wx_bind_active");
+        });
+
+        modelBuilder.Entity<SysUserFavorite>(e =>
+        {
+            e.ToTable("sys_user_favorite");
+            e.Property(x => x.UserId).HasColumnName("user_id");
+            e.Property(x => x.MenuKey).HasColumnName("menu_key").HasMaxLength(128);
+            e.Property(x => x.MenuTitle).HasColumnName("menu_title").HasMaxLength(128);
+            e.Property(x => x.Icon).HasColumnName("icon").HasMaxLength(64);
+            e.Property(x => x.SortAt).HasColumnName("sort_at").HasDefaultValueSql("SYSDATETIME()");
+            e.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("SYSDATETIME()");
+            e.HasIndex(x => new { x.UserId, x.MenuKey }).IsUnique().HasDatabaseName("UQ_sys_user_favorite_user_menu");
         });
     }
 }

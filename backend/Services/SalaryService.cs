@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -10,8 +10,8 @@ namespace ahu.MicrosoftMes.Services;
 
 public interface ISalaryService
 {
-    Task<ApiResult<List<SalaryItemDto>>> MyStatementItemsAsync(long id, long factoryId, long userId);
     Task<ApiResult<List<MyStatementDto>>> MyStatementsAsync(byte? periodType, string? periodValue, long factoryId, long userId);
+    Task<ApiResult<List<SalaryItemDto>>> MyStatementItemsAsync(long id, long factoryId, long userId);
     Task<ApiResult<object?>> GenerateAsync(SalaryGenerateDto dto, long factoryId);
     Task<ApiResult<PageResult<SalaryListDto>>> QueryAsync(SalaryQueryDto query, long factoryId);
     /// <summary>本期工资汇总（docs/222）：已确认/草稿计件额 + 返工扣款，按明细汇总，不受分页截断。</summary>
@@ -201,6 +201,8 @@ public class SalaryItemRowDto
     public long OrderId { get; set; }
     public long OperationId { get; set; }
     public string OperationName { get; set; } = "";
+    public byte PriceType { get; set; }
+    public int DurationMinutes { get; set; }
     public int GoodQty { get; set; }
     public int DefectQty { get; set; }
     public decimal UnitPrice { get; set; }
@@ -1288,17 +1290,19 @@ public partial class SalaryService : ISalaryService
             .Select(g => new
             {
                 StatementId = g.Key,
-                Piecework = g.Sum(i => i.Amount - (i.DeductAmount ?? 0))
+                Piecework = g.Sum(i => i.PriceType == 1 ? i.Amount : 0),
+                Timed = g.Sum(i => i.PriceType == 2 ? i.Amount : 0)
             })
-            .ToDictionaryAsync(x => x.StatementId, x => Round2(x.Piecework));
+            .ToDictionaryAsync(x => x.StatementId, x => (Piece: Round2(x.Piecework), Timed: Round2(x.Timed)));
 
         var sb = new StringBuilder();
-        sb.AppendLine("姓名,人员类型,周期,计件合计,应发合计,状态");
+        sb.AppendLine("姓名,人员类型,周期,计件合计,计时合计（元）,应发合计,状态");
         foreach (var r in rows)
         {
             var st = r.Status == 1 ? "已确认" : "草稿";
-            var piece = pieceworkMap.GetValueOrDefault(r.Id, 0m);
-            sb.AppendLine($"{EscapeCsv(r.Name)},{EscapeCsv(UserTypeHelper.Label(r.UserType))},{r.PeriodValue},{piece},{r.TotalAmount},{st}");
+            var category = pieceworkMap.GetValueOrDefault(r.Id);
+            var piece = category.Piece;
+            sb.AppendLine($"{EscapeCsv(r.Name)},{EscapeCsv(UserTypeHelper.Label(r.UserType))},{r.PeriodValue},{piece},{category.Timed},{r.TotalAmount},{st}");
         }
         // UTF-8 BOM，Excel 友好
         var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(sb.ToString())).ToArray();
@@ -1325,7 +1329,7 @@ public partial class SalaryService : ISalaryService
     {
         var rows = await LoadItemRowsAsync(query, factoryId, applyPaging: false);
         var sb = new StringBuilder();
-        sb.AppendLine("人员,人员类型,工单,工序,颜色,规格尺码,良品,不良,单价,系数,不良扣款,小计,应发,报工时间");
+        sb.AppendLine("人员,人员类型,工单,工序,颜色,规格尺码,良品,不良,计价方式,时长（分钟）,单价,系数,不良扣款,小计,应发,报工时间");
         foreach (var r in rows)
         {
             sb.AppendLine(string.Join(',',
@@ -1337,6 +1341,8 @@ public partial class SalaryService : ISalaryService
                 EscapeCsv(r.Spec),
                 r.GoodQty,
                 r.DefectQty,
+                r.PriceType == 2 ? "计时" : r.PriceType == 1 ? "计件" : r.PriceType == 3 ? "固定" : "未记录/未匹配",
+                r.DurationMinutes,
                 r.UnitPrice,
                 r.WageCoeff,
                 r.DeductAmount,
@@ -1439,6 +1445,8 @@ public partial class SalaryService : ISalaryService
             OperationName = x.op.Name,
             GoodQty = x.r.GoodQty,
             DefectQty = x.r.DefectQty,
+            PriceType = x.i.PriceType,
+            DurationMinutes = x.i.DurationMinutes,
             UnitPrice = x.i.UnitPrice,
             WageCoeff = x.i.WageCoeff,
             DeductAmount = x.i.DeductAmount ?? 0,

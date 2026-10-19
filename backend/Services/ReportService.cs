@@ -8,6 +8,9 @@ namespace ahu.MicrosoftMes.Services;
 public interface IReportService
 {
     Task<ApiResult<object?>> SubmitAsync(ReportDto dto, long currentUserId);
+    /// <summary>报工提交前校验（不落库）。企微对话预览闸门（docs/241）复用同一套部门/超额/前道规则。</summary>
+    Task ValidateSubmitAsync(ReportDto dto, long currentUserId);
+    Task<ApiResult<object?>> WithdrawAsync(long id, long currentUserId);
     Task<ApiResult<object?>> UpdateAsync(long id, ReportDto dto, long currentUserId);
     Task<ApiResult<PageResult<ReportListDto>>> QueryAsync(ReportQueryDto query, long factoryId, long? userId = null);
     Task<ApiResult<PageResult<ReportListDto>>> QueryMineAsync(ReportMineQueryDto query, long factoryId, long userId);
@@ -18,14 +21,15 @@ public interface IReportService
     Task<ApiResult<BatchReportResultDto>> BatchReportAsync(BatchReportDto dto, long currentUserId);
 }
 
-public class ReportDto
+public class ReportDto : WorkTimeInput
 {
     public long OrderId { get; set; }
     public long OperationId { get; set; }
     public int GoodQty { get; set; }
     public int DefectQty { get; set; }
     public long? DefectId { get; set; }
-    public int DurationMinutes { get; set; }  // 报工时长（分钟），默认 0
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool FromPendingSession { get; set; }
     /// <summary>客户端本次提交唯一标识；同一批重试沿用；不传则跳过去重。</summary>
     public string? ClientRequestId { get; set; }
     /// <summary>多人分摊参与人（含自己）；空=单人。兼容旧端；有 Participants 时以 Participants 为准。</summary>
@@ -38,29 +42,35 @@ public class ReportDto
     public List<ReportAssigneeDto>? Assignees { get; set; }
     /// <summary>报工自定义字段：键=字段 Id，值=填写内容。空则不写值表。</summary>
     public Dictionary<long, string>? Ext { get; set; }
-    /// <summary>修改来源（docs/205）：1=PC（默认）2=H5；仅 Update 使用。</summary>
+    /// <summary>
+    /// 来源：Update 改数日志用 1=PC 2=H5（docs/205）；
+    /// Submit 写入 prod_report.source：0=常规 3=企微对话（docs/241）。
+    /// </summary>
     public byte Source { get; set; } = 1;
+    /// <summary>企微对话确认时间（docs/241）；仅 Source=3 时写入 prod_report.confirmed_at。</summary>
+    public DateTime? ConfirmedAt { get; set; }
     /// <summary>软提示确认后重提：true=跳过 soft 拦截（hard 仍拦）。docs/150。</summary>
     public bool ConfirmUpstream { get; set; }
 }
 
-public class ReportAssigneeDto
+public class ReportAssigneeDto : WorkTimeInput
 {
     public long UserId { get; set; }
     public int GoodQty { get; set; }
     public int DefectQty { get; set; }
     public long? DefectId { get; set; }
-    public int DurationMinutes { get; set; }
 }
 
-public class ReportShareParticipantDto
+public class ReportShareParticipantDto : WorkTimeInput
 {
     public long UserId { get; set; }
-    public int DurationMinutes { get; set; }
 }
 
 public class ReportSubmitItemDto
 {
+    public int DurationMinutes { get; set; }
+    public DateTime? StartTime { get; set; }
+    public byte PriceType { get; set; }
     public long Id { get; set; }
     public long UserId { get; set; }
     public string UserName { get; set; } = "";
@@ -159,7 +169,7 @@ public class ReportMineQueryDto
 }
 
 /// <summary>批量补报（docs/17）：管理员一次补齐未报满工序。</summary>
-public class BatchReportDto
+public class BatchReportDto : WorkTimeInput
 {
     public long OrderId { get; set; }
     public int GoodQty { get; set; }
@@ -175,7 +185,7 @@ public class BatchReportOperationDto
     public List<BatchReportUserDto> Users { get; set; } = new();
 }
 
-public class BatchReportUserDto
+public class BatchReportUserDto : WorkTimeInput
 {
     public long UserId { get; set; }
     public int GoodQty { get; set; }
@@ -231,92 +241,25 @@ public class ReportService : IReportService
         if (hasParticipants && hasAssignees)
             throw ThrowHelper.Biz(nameof(SubmitAsync), "分摊与代报不能同时提交");
 
-        var order = await _db.WorkOrders.FirstOrDefaultAsync(o => o.Id == dto.OrderId)
-            ?? throw ThrowHelper.Biz(nameof(SubmitAsync), "工单不存在");
-
-        var user = await _db.Users.FindAsync(currentUserId)
-            ?? throw ThrowHelper.Biz(nameof(SubmitAsync), "当前用户不存在");
-        if (user.FactoryId != order.FactoryId)
-            throw ThrowHelper.Biz(nameof(SubmitAsync), "无权操作其他厂工单");
-
-        // 去重：已落库则直接回执（工单已结束也可重放成功）
         if (clientReqId != null)
         {
-            var existing = await FindByClientRequestAsync(order.FactoryId, currentUserId, clientReqId);
-            if (existing.Count > 0)
+            var actor = await _db.Users.AsNoTracking().FirstAsync(x => x.Id == currentUserId);
+            var replay = await FindByClientRequestAsync(actor.FactoryId, currentUserId, clientReqId);
+            if (replay.Count > 0)
             {
-                if (!MatchesSubmitContent(existing, dto, currentUserId, hasParticipants, hasAssignees))
-                    throw ThrowHelper.Biz(nameof(SubmitAsync), "同一请求标识内容已变更，请换新标识重新提交");
-                return ApiResult<object?>.Ok(await BuildSubmitResultAsync(existing, idempotent: true));
+                if (!MatchesSubmitContent(replay, dto, currentUserId, hasParticipants, hasAssignees))
+                    throw ThrowHelper.BizUser("同一请求标识内容已变更，请换新标识重新提交");
+                return ApiResult<object?>.Ok(await BuildSubmitResultAsync(replay, idempotent: true));
             }
         }
+        var prepared = await PrepareSubmitAsync(dto, currentUserId, hasParticipants, hasAssignees, nameof(SubmitAsync));
 
-        if (order.Status == 2)
-            throw ThrowHelper.Biz(nameof(SubmitAsync), "工单已结束，不可报工");
-        if (order.Status == 3)
-            throw ThrowHelper.Biz(nameof(SubmitAsync), "工单已取消，不可报工");
-
-        // 校验工序属于该工单任务
-        var taskExists = await _db.WorkOrderOperations.AnyAsync(t => t.WorkOrderId == order.Id && t.OperationId == dto.OperationId);
-        if (taskExists == false)
-        {
-            var product = await _db.Products.AsNoTracking().FirstOrDefaultAsync(p => p.Id == order.ProductId);
-            var inRoute = product?.RoutingId != null && await _db.RoutingSteps.AnyAsync(s => s.RoutingId == product.RoutingId && s.OperationId == dto.OperationId);
-            if (!inRoute)
-                throw ThrowHelper.Biz(nameof(SubmitAsync), "该工序不属于此工单");
-        }
-
-        List<(long UserId, int GoodQty, int DefectQty, long? DefectId, int DurationMinutes)> lines;
-        long? operatorUserId;
-        string? shareBatchNo = null;
-        byte reviewStatus;
-        long? reviewedBy;
-        DateTime? reviewedAt;
-        var now = DateTime.Now;
-
-        if (hasAssignees)
-        {
-            // 代报：仅管理员/班组长
-            if (user.Role != 1 && user.Role != 3)
-                throw ThrowHelper.Biz(nameof(SubmitAsync), "仅管理员或班组长可代报工");
-            lines = await BuildAssigneeLinesAsync(dto, order.FactoryId, currentUserId, user.Role);
-            operatorUserId = currentUserId;
-            shareBatchNo = NewShareBatchNo();
-            reviewStatus = user.Role == 1 ? (byte)1 : (byte)0;
-            reviewedBy = user.Role == 1 ? currentUserId : null;
-            reviewedAt = user.Role == 1 ? now : null;
-        }
-        else if (hasParticipants)
-        {
-            if (!await ReportPermissionHelper.CanReportOperationAsync(_db, currentUserId, user.Role, dto.OperationId))
-                throw ThrowHelper.Biz(nameof(SubmitAsync), "无报工权限：您不在该工序的报工权限部门内");
-            ValidateQty(dto.GoodQty, dto.DefectQty, dto.DefectId, dto.DurationMinutes, nameof(SubmitAsync));
-            lines = await BuildShareLinesAsync(dto, currentUserId);
-            operatorUserId = currentUserId;
-            shareBatchNo = NewShareBatchNo();
-            reviewStatus = user.Role == 1 ? (byte)1 : (byte)0;
-            reviewedBy = user.Role == 1 ? currentUserId : null;
-            reviewedAt = user.Role == 1 ? now : null;
-        }
-        else
-        {
-            if (!await ReportPermissionHelper.CanReportOperationAsync(_db, currentUserId, user.Role, dto.OperationId))
-                throw ThrowHelper.Biz(nameof(SubmitAsync), "无报工权限：您不在该工序的报工权限部门内");
-            ValidateQty(dto.GoodQty, dto.DefectQty, dto.DefectId, dto.DurationMinutes, nameof(SubmitAsync));
-            lines = new List<(long, int, int, long?, int)>
-            {
-                (currentUserId, dto.GoodQty, dto.DefectQty, dto.DefectId, dto.DurationMinutes)
-            };
-            operatorUserId = null;
-            reviewStatus = user.Role == 1 ? (byte)1 : (byte)0;
-            reviewedBy = user.Role == 1 ? currentUserId : null;
-            reviewedAt = user.Role == 1 ? now : null;
-        }
-
+        var order = prepared.Order;
+        var lines = prepared.Lines;
         var totalGood = lines.Sum(x => x.GoodQty);
-
-        // docs/150：上级校验在写库前；soft 可 ConfirmUpstream 跳过，hard 不可
-        await EnsureUpstreamOkAsync(order, dto.OperationId, totalGood, dto.ConfirmUpstream, nameof(SubmitAsync));
+        var now = prepared.Now;
+        var reportSource = NormalizeReportSource(dto.Source);
+        var confirmedAt = reportSource == 3 ? (dto.ConfirmedAt ?? now) : (DateTime?)null;
 
         await using var tx = await _db.Database.BeginTransactionAsync();
         try
@@ -347,13 +290,28 @@ public class ReportService : IReportService
             var ratio = (await QtyCfgAsync(order.FactoryId)).OverrunRatio;
             EnsureWithinPlan(alreadyGood, totalGood, planQty, ratio, "已报良品", nameof(SubmitAsync));
 
+            var clock = new WorkSessionService(_db);
+            var times = new Dictionary<long, ResolvedWorkTime>();
+            foreach (var line in lines)
+            {
+                WorkTimeInput input = dto.Assignees?.FirstOrDefault(x => x.UserId == line.UserId)
+                    as WorkTimeInput ?? dto.Participants?.FirstOrDefault(x => x.UserId == line.UserId)
+                    as WorkTimeInput ?? (line.UserId == currentUserId ? dto : new WorkTimeInput());
+                times[line.UserId] = await clock.ResolveAsync(order, dto.OperationId, line.UserId, currentUserId, input, now, dto.FromPendingSession);
+            }
+            if (hasParticipants && dto.ShareMode == 2)
+            {
+                var parts = lines.Select(x => (x.UserId, DurationMinutes: times[x.UserId].Minutes)).ToList();
+                var (goods, defects) = SplitByDuration(dto.GoodQty, dto.DefectQty, parts, currentUserId);
+                lines = lines.Select((x, i) => (x.UserId, goods[i], defects[i], defects[i] > 0 ? dto.DefectId : null, times[x.UserId].Minutes)).ToList();
+            }
             var created = new List<ProdReport>();
             foreach (var line in lines)
             {
                 var deptId = await ResolveDeptSnapshotAsync(line.UserId, dto.OperationId);
                 var (unitPrice, wageAmount) = await PreviewWageAsync(
                     order.FactoryId, order.ProductId, dto.OperationId, deptId, line.UserId,
-                    line.GoodQty, line.DefectQty, line.DurationMinutes, now);
+                    line.GoodQty, line.DefectQty, times[line.UserId].Minutes, times[line.UserId].ReportTime);
 
                 var report = new ProdReport
                 {
@@ -364,24 +322,29 @@ public class ReportService : IReportService
                     GoodQty = line.GoodQty,
                     DefectQty = line.DefectQty,
                     DefectId = line.DefectId,
-                    DurationMinutes = line.DurationMinutes,
+                    DurationMinutes = times[line.UserId].Minutes,
                     ProductId = order.ProductId,
                     DepartmentId = deptId,
                     UnitPrice = unitPrice,
                     WageAmount = wageAmount,
                     SettledFlag = false,
-                    ReviewStatus = reviewStatus,
-                    ReviewedBy = reviewedBy,
-                    ReviewedAt = reviewedAt,
-                    ReportTime = now,
+                    ReviewStatus = prepared.ReviewStatus,
+                    ReviewedBy = prepared.ReviewedBy,
+                    ReviewedAt = prepared.ReviewedAt,
+                    ReportTime = times[line.UserId].ReportTime,
                     ClientRequestId = clientReqId,
-                    ShareBatchNo = shareBatchNo,
-                    OperatorUserId = operatorUserId
+                    ShareBatchNo = prepared.ShareBatchNo,
+                    OperatorUserId = prepared.OperatorUserId,
+                    Source = reportSource,
+                    ConfirmedAt = confirmedAt
                 };
                 _db.Reports.Add(report);
                 created.Add(report);
             }
 
+            await _db.SaveChangesAsync();
+
+            foreach (var report in created) await clock.CompleteAsync(times[report.UserId], report, currentUserId);
             await _db.SaveChangesAsync();
 
             // 扩展字段只写在「提交人自己的那条」或代报第一条
@@ -408,6 +371,123 @@ public class ReportService : IReportService
             throw;
         }
     }
+
+    /// <summary>docs/241：预览闸门只跑校验，不写库；确认时仍走 SubmitAsync。</summary>
+    public async Task ValidateSubmitAsync(ReportDto dto, long currentUserId)
+    {
+        var hasParticipants = (dto.Participants != null && dto.Participants.Count > 0)
+            || (dto.ParticipantUserIds != null && dto.ParticipantUserIds.Count > 0);
+        var hasAssignees = dto.Assignees != null && dto.Assignees.Count > 0;
+        if (hasParticipants || hasAssignees)
+            throw ThrowHelper.Biz(nameof(ValidateSubmitAsync), "企微对话报工仅支持单人自报，复杂报工请走表单");
+
+        var prepared = await PrepareSubmitAsync(dto, currentUserId, hasParticipants: false, hasAssignees: false, nameof(ValidateSubmitAsync));
+        await new WorkSessionService(_db).ResolveAsync(prepared.Order, dto.OperationId, currentUserId, currentUserId, dto, prepared.Now);
+        var totalGood = prepared.Lines.Sum(x => x.GoodQty);
+
+        var task = await _db.WorkOrderOperations.AsNoTracking()
+            .FirstOrDefaultAsync(t => t.WorkOrderId == prepared.Order.Id && t.OperationId == dto.OperationId);
+        var planQty = task?.PlanQty ?? prepared.Order.Qty;
+        var alreadyGood = await _db.Reports.AsNoTracking()
+            .Where(r => r.OrderId == prepared.Order.Id && r.OperationId == dto.OperationId && r.ReviewStatus != 2)
+            .SumAsync(r => (int?)r.GoodQty) ?? 0;
+        var ratio = (await QtyCfgAsync(prepared.Order.FactoryId)).OverrunRatio;
+        EnsureWithinPlan(alreadyGood, totalGood, planQty, ratio, "已报良品", nameof(ValidateSubmitAsync));
+    }
+
+    private async Task<PreparedSubmit> PrepareSubmitAsync(
+        ReportDto dto,
+        long currentUserId,
+        bool hasParticipants,
+        bool hasAssignees,
+        string where)
+    {
+        var order = await _db.WorkOrders.FirstOrDefaultAsync(o => o.Id == dto.OrderId)
+            ?? throw ThrowHelper.Biz(where, "工单不存在");
+
+        var user = await _db.Users.FindAsync(currentUserId)
+            ?? throw ThrowHelper.Biz(where, "当前用户不存在");
+        if (user.FactoryId != order.FactoryId)
+            throw ThrowHelper.Biz(where, "无权操作其他厂工单");
+
+        if (order.Status == 2)
+            throw ThrowHelper.Biz(where, "工单已结束，不可报工");
+        if (order.Status == 3)
+            throw ThrowHelper.Biz(where, "工单已取消，不可报工");
+
+        var taskExists = await _db.WorkOrderOperations.AnyAsync(t => t.WorkOrderId == order.Id && t.OperationId == dto.OperationId);
+        if (taskExists == false)
+        {
+            var product = await _db.Products.AsNoTracking().FirstOrDefaultAsync(p => p.Id == order.ProductId);
+            var inRoute = product?.RoutingId != null && await _db.RoutingSteps.AnyAsync(s => s.RoutingId == product.RoutingId && s.OperationId == dto.OperationId);
+            if (!inRoute)
+                throw ThrowHelper.Biz(where, "该工序不属于此工单");
+        }
+
+        List<(long UserId, int GoodQty, int DefectQty, long? DefectId, int DurationMinutes)> lines;
+        long? operatorUserId;
+        string? shareBatchNo = null;
+        byte reviewStatus;
+        long? reviewedBy;
+        DateTime? reviewedAt;
+        var now = DateTime.Now;
+
+        if (hasAssignees)
+        {
+            if (user.Role != 1 && user.Role != 3)
+                throw ThrowHelper.Biz(where, "仅管理员或班组长可代报工");
+            lines = await BuildAssigneeLinesAsync(dto, order.FactoryId, currentUserId, user.Role);
+            operatorUserId = currentUserId;
+            shareBatchNo = NewShareBatchNo();
+            reviewStatus = user.Role == 1 ? (byte)1 : (byte)0;
+            reviewedBy = user.Role == 1 ? currentUserId : null;
+            reviewedAt = user.Role == 1 ? now : null;
+        }
+        else if (hasParticipants)
+        {
+            if (!await ReportPermissionHelper.CanReportOperationAsync(_db, currentUserId, user.Role, dto.OperationId))
+                throw ThrowHelper.Biz(where, "无报工权限：您不在该工序的报工权限部门内");
+            ValidateQty(dto.GoodQty, dto.DefectQty, dto.DefectId, (dto.DurationMinutes ?? 0), where);
+            lines = await BuildShareLinesAsync(dto, currentUserId);
+            operatorUserId = currentUserId;
+            shareBatchNo = NewShareBatchNo();
+            reviewStatus = user.Role == 1 ? (byte)1 : (byte)0;
+            reviewedBy = user.Role == 1 ? currentUserId : null;
+            reviewedAt = user.Role == 1 ? now : null;
+        }
+        else
+        {
+            if (!await ReportPermissionHelper.CanReportOperationAsync(_db, currentUserId, user.Role, dto.OperationId))
+                throw ThrowHelper.Biz(where, "无报工权限：您不在该工序的报工权限部门内");
+            ValidateQty(dto.GoodQty, dto.DefectQty, dto.DefectId, (dto.DurationMinutes ?? 0), where);
+            lines = new List<(long, int, int, long?, int)>
+            {
+                (currentUserId, dto.GoodQty, dto.DefectQty, dto.DefectId, (dto.DurationMinutes ?? 0))
+            };
+            operatorUserId = null;
+            reviewStatus = user.Role == 1 ? (byte)1 : (byte)0;
+            reviewedBy = user.Role == 1 ? currentUserId : null;
+            reviewedAt = user.Role == 1 ? now : null;
+        }
+
+        var totalGood = lines.Sum(x => x.GoodQty);
+        await EnsureUpstreamOkAsync(order, dto.OperationId, totalGood, dto.ConfirmUpstream, where);
+
+        return new PreparedSubmit(order, lines, operatorUserId, shareBatchNo, reviewStatus, reviewedBy, reviewedAt, now);
+    }
+
+    /// <summary>prod_report.source：仅认 0/3；其它按 0（常规）。改数日志仍用 dto.Source 的 1/2。</summary>
+    private static byte NormalizeReportSource(byte source) => source == 3 ? (byte)3 : (byte)0;
+
+    private sealed record PreparedSubmit(
+        ProdWorkOrder Order,
+        List<(long UserId, int GoodQty, int DefectQty, long? DefectId, int DurationMinutes)> Lines,
+        long? OperatorUserId,
+        string? ShareBatchNo,
+        byte ReviewStatus,
+        long? ReviewedBy,
+        DateTime? ReviewedAt,
+        DateTime Now);
 
     public async Task<ApiResult<PageResult<ReportListDto>>> QueryMineAsync(ReportMineQueryDto query, long factoryId, long userId)
     {
@@ -596,15 +676,12 @@ public class ReportService : IReportService
 
         if (hasAssignees)
         {
-            var want = (dto.Assignees ?? new())
-                .OrderBy(a => a.UserId)
-                .Select(a => (a.UserId, a.GoodQty, a.DefectQty, a.DefectId, a.DurationMinutes))
-                .ToList();
-            var got = existing
-                .OrderBy(r => r.UserId)
-                .Select(r => (r.UserId, r.GoodQty, r.DefectQty, r.DefectId, r.DurationMinutes))
-                .ToList();
-            return want.SequenceEqual(got);
+            var want = (dto.Assignees ?? new()).OrderBy(x => x.UserId).ToList();
+            var got = existing.OrderBy(x => x.UserId).ToList();
+            return want.Count == got.Count && want.Zip(got).All(pair =>
+                pair.First.UserId == pair.Second.UserId && pair.First.GoodQty == pair.Second.GoodQty
+                && pair.First.DefectQty == pair.Second.DefectQty && pair.First.DefectId == pair.Second.DefectId
+                && (!pair.First.DurationMinutes.HasValue || pair.First.DurationMinutes.Value == pair.Second.DurationMinutes));
         }
 
         if (hasParticipants)
@@ -624,7 +701,7 @@ public class ReportService : IReportService
                && r0.GoodQty == dto.GoodQty
                && r0.DefectQty == dto.DefectQty
                && r0.DefectId == dto.DefectId
-               && r0.DurationMinutes == dto.DurationMinutes;
+               && (!dto.DurationMinutes.HasValue || r0.DurationMinutes == dto.DurationMinutes.Value);
     }
 
     private async Task<object> BuildSubmitResultAsync(List<ProdReport> reports, bool idempotent)
@@ -634,6 +711,15 @@ public class ReportService : IReportService
         var names = await _db.Users.AsNoTracking()
             .Where(u => userIds.Contains(u.Id))
             .ToDictionaryAsync(u => u.Id, u => u.Name);
+        var reportIds = reports.Select(x => x.Id).ToList();
+        var sessions = await _db.WorkSessions.AsNoTracking().Where(x => x.ReportId.HasValue && reportIds.Contains(x.ReportId.Value))
+            .ToDictionaryAsync(x => x.ReportId!.Value);
+        var receiptTypes = new Dictionary<long, byte>();
+        foreach (var report in reports)
+        {
+            var order = await _db.WorkOrders.AsNoTracking().FirstAsync(x => x.Id == report.OrderId);
+            receiptTypes[report.Id] = await new WorkSessionService(_db).PriceTypeAsync(order, report.OperationId, report.UserId, report.ReportTime);
+        }
         var opNames = await _db.Operations.AsNoTracking()
             .Where(o => opIds.Contains(o.Id))
             .ToDictionaryAsync(o => o.Id, o => o.Name);
@@ -645,6 +731,9 @@ public class ReportService : IReportService
             Reports = reports.Select(r => new ReportSubmitItemDto
             {
                 Id = r.Id,
+                DurationMinutes = r.DurationMinutes,
+                StartTime = sessions.GetValueOrDefault(r.Id)?.StartTime,
+                PriceType = receiptTypes[r.Id],
                 UserId = r.UserId,
                 UserName = names.GetValueOrDefault(r.UserId, ""),
                 OperationId = r.OperationId,
@@ -695,10 +784,8 @@ public class ReportService : IReportService
             var p = parts[i];
             var g = goodParts[i];
             var d = defectParts[i];
-            // 时长：按工时模式写各人时长；平均模式仍只记报工人，避免计时工资被放大
-            var dur = shareMode == 2
-                ? p.DurationMinutes
-                : (p.UserId == currentUserId ? dto.DurationMinutes : 0);
+            // 数量分摊与个人工时独立；最终时长由事务内按每人的开工记录或补填时间解析。
+            var dur = p.DurationMinutes;
             var defectId = d > 0 ? dto.DefectId : null;
             lines.Add((p.UserId, g, d, defectId, dur));
         }
@@ -712,7 +799,7 @@ public class ReportService : IReportService
             var list = dto.Participants
                 .Where(p => p.UserId > 0)
                 .GroupBy(p => p.UserId)
-                .Select(g => (g.Key, g.Max(x => x.DurationMinutes)))
+                .Select(g => (g.Key, g.Max(x => x.DurationMinutes ?? 0)))
                 .ToList();
             if (!list.Any(x => x.Item1 == currentUserId))
                 list.Add((currentUserId, 0));
@@ -806,7 +893,7 @@ public class ReportService : IReportService
                 throw ThrowHelper.Biz(nameof(SubmitAsync), "被代报人无效");
             if (!seen.Add(a.UserId))
                 throw ThrowHelper.Biz(nameof(SubmitAsync), "同一被代报人不能重复添加");
-            ValidateQty(a.GoodQty, a.DefectQty, a.DefectId, a.DurationMinutes, nameof(SubmitAsync));
+            ValidateQty(a.GoodQty, a.DefectQty, a.DefectId, (a.DurationMinutes ?? 0), nameof(SubmitAsync));
 
             var u = await _db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == a.UserId)
                 ?? throw ThrowHelper.Biz(nameof(SubmitAsync), $"被代报人不存在：{a.UserId}");
@@ -819,7 +906,7 @@ public class ReportService : IReportService
             if (groupUserIds != null && !groupUserIds.Contains(a.UserId))
                 throw ThrowHelper.Biz(nameof(SubmitAsync), $"无权为外部门工人代报：{u.Name}");
 
-            lines.Add((a.UserId, a.GoodQty, a.DefectQty, a.DefectQty > 0 ? a.DefectId : null, a.DurationMinutes));
+            lines.Add((a.UserId, a.GoodQty, a.DefectQty, a.DefectQty > 0 ? a.DefectId : null, (a.DurationMinutes ?? 0)));
         }
         return lines;
     }
@@ -831,6 +918,30 @@ public class ReportService : IReportService
                || msg.Contains("2627") || msg.Contains("2601")
                || msg.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase)
                || msg.Contains("duplicate", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public async Task<ApiResult<object?>> WithdrawAsync(long id, long currentUserId)
+    {
+        await using var tx = await _db.Database.BeginTransactionAsync();
+        var actor = await _db.Users.AsNoTracking().FirstAsync(x => x.Id == currentUserId);
+        var report = await _db.Reports.FirstOrDefaultAsync(x => x.Id == id && x.FactoryId == actor.FactoryId)
+            ?? throw ThrowHelper.BizUser("报工记录不存在");
+        if (actor.Role != 1 && report.UserId != currentUserId) throw ThrowHelper.BizUser("不可撤回他人报工");
+        var order = await _db.WorkOrders.FirstAsync(x => x.Id == report.OrderId);
+        await WechatEventService.LockOrderAsync(_db, order);
+        await _db.Entry(report).ReloadAsync();
+        if (report.SettledFlag || report.ReviewStatus == 1) throw ThrowHelper.BizUser("已通过或已结算报工不可撤回，请联系管理员处理");
+        var before = order.Status;
+        report.ReviewStatus = 2;
+        report.RejectReason = "本人撤回";
+        report.ReviewedBy = currentUserId;
+        report.ReviewedAt = DateTime.Now;
+        await _db.WorkSessions.Where(x => x.ReportId == id).ExecuteUpdateAsync(s => s.SetProperty(x => x.Status, (byte)3));
+        await _db.SaveChangesAsync();
+        await RecalcStatusAsync(order);
+        if (_events != null) await _events.EnqueueAsync(order, before);
+        await tx.CommitAsync();
+        return ApiResult<object?>.OkMsg();
     }
 
     public async Task<ApiResult<object?>> UpdateAsync(long id, ReportDto dto, long currentUserId)
@@ -855,9 +966,9 @@ public class ReportService : IReportService
             throw ThrowHelper.Biz(nameof(UpdateAsync), "良品/不良品数不能为负");
         if (dto.DefectQty > 0 && dto.DefectId == null)
             throw ThrowHelper.Biz(nameof(UpdateAsync), "有不良品时必须选择不良品原因");
-        if (dto.DurationMinutes < 0)
+        if ((dto.DurationMinutes ?? 0) < 0)
             throw ThrowHelper.Biz(nameof(UpdateAsync), "报工时长不能为负");
-        if (dto.DurationMinutes > 1440)
+        if ((dto.DurationMinutes ?? 0) > 1440)
             throw ThrowHelper.Biz(nameof(UpdateAsync), "单次报工时长不能超过24小时");
 
         var order = await _db.WorkOrders.FirstOrDefaultAsync(o => o.Id == report.OrderId)
@@ -882,7 +993,11 @@ public class ReportService : IReportService
         report.GoodQty = dto.GoodQty;
         report.DefectQty = dto.DefectQty;
         report.DefectId = dto.DefectId;
-        report.DurationMinutes = dto.DurationMinutes;
+        report.DurationMinutes = dto.DurationMinutes ?? report.DurationMinutes;
+        var editType = await new WorkSessionService(_db).PriceTypeAsync(order, report.OperationId, report.UserId, report.ReportTime);
+        if (editType == 2 && report.DurationMinutes <= 0) throw ThrowHelper.BizUser("计时报工时长必须大于0分钟");
+        await _db.WorkSessions.Where(x => x.ReportId == report.Id)
+            .ExecuteUpdateAsync(set => set.SetProperty(x => x.DurationMinutes, report.DurationMinutes));
         // 改数后回到待复核（含原已退回）
         report.ReviewStatus = 0;
         report.ReviewedBy = null;
@@ -893,7 +1008,7 @@ public class ReportService : IReportService
         report.DepartmentId ??= await ResolveDeptSnapshotAsync(report.UserId, report.OperationId);
         var (up, wa) = await PreviewWageAsync(
             report.FactoryId, report.ProductId, report.OperationId, report.DepartmentId, report.UserId,
-            dto.GoodQty, dto.DefectQty, dto.DurationMinutes, report.ReportTime);
+            dto.GoodQty, dto.DefectQty, report.DurationMinutes, report.ReportTime);
         report.UnitPrice = up;
         report.WageAmount = wa;
 
@@ -911,7 +1026,7 @@ public class ReportService : IReportService
             NewGoodQty = dto.GoodQty,
             NewDefectQty = dto.DefectQty,
             NewDefectId = dto.DefectId,
-            NewDurationMinutes = dto.DurationMinutes,
+            NewDurationMinutes = report.DurationMinutes,
             Source = source,
             ChangedAt = DateTime.Now
         });
@@ -997,8 +1112,8 @@ public class ReportService : IReportService
         if (user.Role != 1)
             throw ThrowHelper.Biz(nameof(BatchReportAsync), "无批量补报权限：仅管理员可操作");
 
-        if (dto.GoodQty <= 0)
-            throw ThrowHelper.Biz(nameof(BatchReportAsync), "补报良品数必须大于 0");
+        if (dto.GoodQty < 0)
+            throw ThrowHelper.Biz(nameof(BatchReportAsync), "补报良品数不能为负");
 
         var order = await _db.WorkOrders.FirstOrDefaultAsync(o => o.Id == dto.OrderId)
             ?? throw ThrowHelper.Biz(nameof(BatchReportAsync), "工单不存在");
@@ -1070,6 +1185,8 @@ public class ReportService : IReportService
                 .Select(u => new { u.Id, u.WageCoeff })
                 .ToListAsync();
             var coeffMap = coeffRows.ToDictionary(x => x.Id, x => WageCoeffHelper.Coerce(x.WageCoeff));
+            var clock = new WorkSessionService(_db);
+            var timedReports = new List<(ProdReport Report, ResolvedWorkTime Time)>();
             foreach (var op in pending)
             {
                 if (!perOpUsers.TryGetValue(op.OperationId, out var users))
@@ -1080,9 +1197,29 @@ public class ReportService : IReportService
                     var deptId = await ResolveDeptSnapshotAsync(uid, op.OperationId);
                     var rule = PriceRuleMatcher.Match(
                         rules, order.FactoryId, order.ProductId, op.OperationId, deptId, uid, now);
+                    var input = dto.Allocations?.FirstOrDefault(x => x.OperationId == op.OperationId)?.Users.FirstOrDefault(x => x.UserId == uid);
+                    var start = input?.StartTime ?? dto.StartTime;
+                    var end = input?.EndTime ?? dto.EndTime;
+                    var at = end ?? now;
+                    rule = PriceRuleMatcher.Match(rules, order.FactoryId, order.ProductId, op.OperationId, deptId, uid, at);
+                    if (qty == 0 && rule?.PriceType != 2) throw ThrowHelper.BizUser("非计时岗补报良品数必须大于0");
+                    ResolvedWorkTime? time = null;
+                    if (rule?.PriceType == 2)
+                    {
+                        if (!start.HasValue || !end.HasValue) throw ThrowHelper.BizUser("计时补报必须填写开始和结束时间");
+                        time = await clock.ResolveAsync(order, op.OperationId, uid, currentUserId,
+                            new WorkTimeInput { StartTime = start, EndTime = end }, now);
+                    }
+                    else
+                    {
+                        var target = await _db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == uid && x.FactoryId == order.FactoryId && x.Status == 1)
+                            ?? throw ThrowHelper.BizUser("补报人员不存在、停用或不属于本厂");
+                        if (!await ReportPermissionHelper.CanReportOperationAsync(_db, uid, target.Role, op.OperationId))
+                            throw ThrowHelper.BizUser($"无该工序报工权限：{target.Name}");
+                    }
                     var wageCoeff = coeffMap.GetValueOrDefault(uid, 1m);
-                    var calc = PriceRuleMatcher.Calculate(rule, qty, 0, 0, wageCoeff);
-                    _db.Reports.Add(new ProdReport
+                    var calc = PriceRuleMatcher.Calculate(rule, qty, 0, time?.Minutes ?? 0, wageCoeff);
+                    var report = new ProdReport
                     {
                         FactoryId = order.FactoryId,
                         OrderId = order.Id,
@@ -1091,7 +1228,7 @@ public class ReportService : IReportService
                         GoodQty = qty,
                         DefectQty = 0,
                         DefectId = null,
-                        DurationMinutes = 0,
+                        DurationMinutes = time?.Minutes ?? 0,
                         BatchNo = batchNo,
                         ProductId = order.ProductId,
                         DepartmentId = deptId,
@@ -1101,13 +1238,17 @@ public class ReportService : IReportService
                         ReviewStatus = 1, // docs/22：管理员批量补报直接已通过
                         ReviewedBy = currentUserId,
                         ReviewedAt = now,
-                        ReportTime = now
-                    });
+                        ReportTime = time?.ReportTime ?? now
+                    };
+                    _db.Reports.Add(report);
+                    if (time != null) timedReports.Add((report, time));
                     reportCount++;
                 }
             }
 
             var created = _db.ChangeTracker.Entries<ProdReport>().Where(x => x.State == EntityState.Added).Select(x => x.Entity).ToList();
+            await _db.SaveChangesAsync();
+            foreach (var (report, time) in timedReports) await clock.CompleteAsync(time, report, currentUserId);
             await _db.SaveChangesAsync();
             await RecalcStatusAsync(order);
             if (_events != null) await _events.EnqueueAsync(order, beforeStatus, created);
@@ -1209,8 +1350,8 @@ public class ReportService : IReportService
                 {
                     if (u.UserId <= 0)
                         throw ThrowHelper.Biz(loc, "拆分人员无效");
-                    if (u.GoodQty <= 0)
-                        throw ThrowHelper.Biz(loc, "拆分数量必须大于 0");
+                    if (u.GoodQty < 0)
+                        throw ThrowHelper.Biz(loc, "拆分数量不能为负");
                     sum += u.GoodQty;
                     list.Add((u.UserId, u.GoodQty));
                 }

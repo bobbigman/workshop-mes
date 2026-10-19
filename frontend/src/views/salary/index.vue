@@ -146,7 +146,8 @@
         <el-table-column prop="spec" label="规格尺码" width="90" />
         <el-table-column prop="goodQty" label="良品" width="60" />
         <el-table-column prop="defectQty" label="不良" width="60" />
-        <el-table-column prop="unitPrice" label="单价" width="70" />
+        <el-table-column label="时长" width="85"><template #default="{ row }">{{ row.priceType === 2 ? (row.durationMinutes / 60).toFixed(1) + 'h' : '' }}</template></el-table-column>
+        <el-table-column label="单价" width="115"><template #default="{ row }">{{ priceLabel(row) }}</template></el-table-column>
         <el-table-column prop="wageCoeff" label="系数" width="70" />
         <el-table-column prop="deductAmount" label="不良扣款" width="80" />
         <el-table-column prop="amount" label="小计" width="70" />
@@ -188,7 +189,11 @@
       <div v-if="detail" class="summary-grid">
         <div class="summary-item">
           <div class="summary-label">计件合计</div>
-          <div class="summary-value">{{ fmtMoney(pieceworkAmount) }}</div>
+          <div class="summary-value">{{ fmtMoney(categoryAmount(1)) }}</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-label">计时合计（元）</div>
+          <div class="summary-value">{{ fmtMoney(categoryAmount(2)) }}</div>
         </div>
         <div class="summary-item summary-total">
           <div class="summary-label">应发合计</div>
@@ -203,7 +208,8 @@
         <el-table-column prop="spec" label="规格尺码" width="90" />
         <el-table-column prop="goodQty" label="良品" width="60" />
         <el-table-column prop="defectQty" label="不良" width="60" />
-        <el-table-column prop="unitPrice" label="单价" width="70" />
+        <el-table-column label="时长" width="85"><template #default="{ row }">{{ row.priceType === 2 ? (row.durationMinutes / 60).toFixed(1) + 'h' : '' }}</template></el-table-column>
+        <el-table-column label="单价" width="115"><template #default="{ row }">{{ priceLabel(row) }}</template></el-table-column>
         <el-table-column prop="wageCoeff" label="系数" width="70" />
         <el-table-column prop="amount" label="小计" width="70" />
         <el-table-column prop="deductAmount" label="扣款" width="70" />
@@ -220,6 +226,9 @@
 </template>
 
 <script setup>
+function categoryAmount(type) { return (detail.value?.items || []).filter(x => x.priceType === type).reduce((sum, x) => sum + Number(x.amount || 0), 0) }
+function priceLabel(row) { const n = Number(row.unitPrice || 0); return row.priceType === 1 ? `${n}元/件` : row.priceType === 2 ? `${n}元/时` : row.priceType === 3 ? `固定${n}元` : String(n) }
+
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import {
   generateSalary, getSalaryList, getSalary,

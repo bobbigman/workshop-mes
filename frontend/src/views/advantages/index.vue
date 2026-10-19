@@ -157,7 +157,7 @@ import { creditLine, creditRoles } from '@/utils/instanceDisplay'
 
 const signedIn = !!localStorage.getItem('token')
 const returnPath = signedIn
-  ? (Number(localStorage.getItem('role')) === 2 ? '/h5/home' : '/order')
+  ? (Number(localStorage.getItem('role')) === 2 ? '/h5/home' : '/home')
   : '/login'
 const salesOpen = ref(false)
 

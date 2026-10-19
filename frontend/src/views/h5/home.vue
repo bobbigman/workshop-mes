@@ -21,18 +21,19 @@
       <div class="today-tip">按已复核+待复核报工估算，以工资单为准</div>
     </section>
 
+    <p v-if="loadError" role="alert">任务加载失败，请刷新重试，或扫码报工。</p>
     <section class="block">
       <h3 class="block-title">我的任务</h3>
-      <div v-if="list.length === 0" class="empty">暂无派给我的或本班组任务，可扫码报工</div>
+      <div v-if="!loadError && list.length === 0" class="empty">暂无派给我的或本班组任务，可扫码报工</div>
       <div
-        v-for="row in list"
+        v-for="(row, index) in list"
         :key="row.taskId"
         class="card"
         @click="goReport(row)"
       >
         <div class="row1">
           <span class="tag" :class="'s' + row.orderStatus">{{ statusLabel(row.orderStatus) }}</span>
-          <span class="no">{{ row.orderNo }}</span>
+          <span class="no">{{ index + 1 }}. {{ row.orderNo }}</span>
         </div>
         <div class="product">{{ row.productName }} · {{ row.operationName }}</div>
         <div class="meta">
@@ -92,6 +93,7 @@ import { setWorkerViewMode, isWorkerTasksOnlyView } from '@/utils/workerView'
 
 const router = useRouter()
 const list = ref([])
+const loadError = ref(false)
 const showPwaGuide = ref(false)
 const showOrdersEntry = ref(true)
 const role = Number(localStorage.getItem('role') || 0)
@@ -110,7 +112,7 @@ function formatDue(t) { return t ? String(t).replace('T', ' ').slice(0, 16) : '�
 function dueClass(row) { return row.dueState === 'overdue' ? 'due-overdue' : row.dueState === 'warning' ? 'due-warning' : '' }
 
 function goReport(row) {
-  router.push({ path: '/h5/report', query: { order: row.orderNo } })
+  router.push({ path: '/h5/report', query: { order: row.orderNo, task: row.taskId } })
 }
 
 function maybeShowPwaGuide() {
@@ -151,9 +153,11 @@ async function refreshViewMode() {
 }
 
 async function load() {
-  const res = await myTasks()
-  list.value = res.data || []
+  loadError.value = false
+  try { const res = await myTasks(); list.value = res.data || [] }
+  catch { list.value = []; loadError.value = true }
 }
+
 
 async function loadTodaySummary() {
   if (!canWage) return

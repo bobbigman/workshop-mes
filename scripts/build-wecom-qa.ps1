@@ -1,5 +1,9 @@
-﻿# 从 SupportDocs 白名单 15/19/08 生成 docs/企微客户问答库.docx
+﻿# 从 SupportDocs 里给客户看的手册生成 docs/企微客户问答库.docx
 # Windows PowerShell 5.1。不读指令目录，不改源文件，不进 MES。
+# 默认收入目录下每份客户手册：问答稿按原格式抽，操作手册按章节抽，能力表按行抽。
+# 新功能写进这些手册或能力表即可，不用另维护「必出现」清单。
+# 不进库的只有名单里的内部文件（配置暗语、字段名、销售底稿、应答规则）。
+# 产物按文件名加版本：企微客户问答库V1.docx、V2.docx … 内容有变化才出下一号，最高 V9999999。旧号不覆盖。
 #requires -Version 5.1
 [CmdletBinding()]
 param(
@@ -30,13 +34,20 @@ $NeverNames = @(
     '16-自动派工应答口径.md',
     '17-AI应答行为规则.md',
     '18-企业微信机器人角色设定模板.md',
+    'README.md',
     '_retrieval.json'
 )
 
-$Whitelist = @(
-    @{ File = '15-智能客服纯净50问.md'; Kind = 'num'; Priority = 30 },
-    @{ File = '19-AI功能价值与卖点问答.md'; Kind = 'ask'; Priority = 20 },
-    @{ File = '08-扫码报工问答.md'; Kind = 'q'; Priority = 10 }
+$MaxVersion = 9999999
+
+$SkipHeadingMarks = @(
+    'AI 兜底',
+    '后端接口',
+    '前端入口',
+    '维护日志',
+    '接头',
+    '铁律',
+    '给 AI 助手'
 )
 
 function Write-Log {
@@ -472,11 +483,272 @@ function Register-DailyTask {
     Write-Log -Level 'INFO' -File '-' -Step '计划任务' -Message '已注册 WorkshopMes-WeComQa，每天 08:00'
 }
 
-foreach ($name in $NeverNames) {
-    foreach ($row in $Whitelist) {
-        if ($row.File -eq $name) {
-            throw ('白名单误含禁用文件：{0}' -f $name)
+function Get-ParseKind {
+    param([string]$Text)
+    if ($Text -match '(?m)^##\s*二、高情商问答' -and $Text -match '(?m)^###\s+Q\d+\s+') { return 'q' }
+    if ([regex]::IsMatch($Text, '(?m)^\*\*问[:：]')) { return 'ask' }
+    if ([regex]::IsMatch($Text, '(?m)^###\s+\d+\.\s+')) { return 'num' }
+    if ([regex]::IsMatch($Text, '(?m)^##\s+\S')) { return 'manual' }
+    return ''
+}
+
+function Get-KindPriority {
+    param([string]$Kind)
+    switch ($Kind) {
+        'num' { return 40 }
+        'ask' { return 30 }
+        'q' { return 20 }
+        'manual' { return 12 }
+        default { return 10 }
+    }
+}
+
+function Remove-FrontMatter {
+    param([string]$Text)
+    if ($Text.StartsWith('---')) {
+        $idx = $Text.IndexOf("`n---")
+        if ($idx -gt 0) {
+            return $Text.Substring($idx + 4).TrimStart()
         }
+    }
+    return $Text
+}
+
+function Test-SkipHeading {
+    param([string]$Heading)
+    foreach ($mark in $SkipHeadingMarks) {
+        if ($Heading.IndexOf($mark, [StringComparison]::Ordinal) -ge 0) { return $true }
+    }
+    return $false
+}
+
+function Repair-CustomerBody {
+    param([string]$Text)
+    if ([string]::IsNullOrWhiteSpace($Text)) { return '' }
+    $s = $Text -replace "`r`n", "`n" -replace "`r", "`n"
+    $s = $s -replace '(?m)^!\[[^\]]*\]\([^)]+\)\s*$', ''
+    $s = $s -replace '!\[[^\]]*\]\([^)]+\)', ''
+    $s = $s -replace '\[([^\]]+)\]\([^)]+\)', '$1'
+    $s = $s -replace '`[^`]*`', ''
+    $s = $s -replace '（docs/[^）]+）', ''
+    $s = $s -replace 'docs/[0-9A-Za-z]+[、，,]?\s*', ''
+    $s = $s -replace '（role=\d+）', ''
+    $s = $s -replace '（[A-Za-z0-9_ ./+\-]+）', ''
+    $s = $s -replace '✅|🚧|⚠️', ''
+    $s = $s -replace '问「[^」]{0,40}」时[，,][^。\n]*[。]?', ''
+    $s = $s -replace '问怎么用时[^。\n]*[。]?', ''
+    $s = $s -replace '念下面[^。\n]*[。]?', ''
+    $s = $s -replace '不要说没有[^。\n]*[。]?', ''
+    $s = $s -replace '不要答成[^。\n]*[。]?', ''
+    $lines = $s -split "`n", -1
+    $kept = New-Object System.Collections.Generic.List[string]
+    foreach ($line in $lines) {
+        $line = $line -replace '^#{1,6}\s+', ''
+        $line = $line -replace '^\s*>\s*', ''
+        $line = $line -replace '#(?=\S)', ''
+        if ($line -match '只念下面|不要说知识库|不要自己编|禁止编|供\s*AI|别答成|Controller|/api/|licenseTier|LicenseTier|不要教客户') { continue }
+        $kept.Add($line.TrimEnd())
+    }
+    return Format-CustomerText (($kept -join "`n"))
+}
+
+function Get-MdCells {
+    param([string]$Line)
+    $t = $Line.Trim().Trim('|')
+    $cells = New-Object System.Collections.Generic.List[string]
+    foreach ($part in ($t -split '\|')) { $cells.Add($part.Trim()) }
+    return $cells
+}
+
+function Test-SepCells {
+    param($Cells)
+    if ($Cells.Count -eq 0) { return $false }
+    foreach ($c in $Cells) {
+        if ($c -notmatch '^:?-+:?$') { return $false }
+    }
+    return $true
+}
+
+function Get-SectionTables {
+    param([string]$Body)
+    $lines = $Body -replace "`r`n", "`n" -replace "`r", "`n" -split "`n", -1
+    $tables = New-Object System.Collections.Generic.List[object]
+    $i = 0
+    while ($i -lt $lines.Length) {
+        $trim = $lines[$i].Trim()
+        $isRow = $trim.StartsWith('|') -and $trim.EndsWith('|') -and $trim.Length -gt 1
+        if (-not $isRow) { $i++; continue }
+        $start = $i
+        $rows = New-Object System.Collections.Generic.List[object]
+        while ($i -lt $lines.Length) {
+            $trim = $lines[$i].Trim()
+            $isRow = $trim.StartsWith('|') -and $trim.EndsWith('|') -and $trim.Length -gt 1
+            if (-not $isRow) { break }
+            $cells = @(Get-MdCells -Line $trim)
+            if (-not (Test-SepCells -Cells $cells)) { $rows.Add($cells) }
+            $i++
+        }
+        if ($rows.Count -ge 2) {
+            $data = New-Object System.Collections.Generic.List[object]
+            for ($r = 1; $r -lt $rows.Count; $r++) { $data.Add($rows[$r]) }
+            $tables.Add([pscustomobject]@{ Start = $start; End = $i; Headers = @($rows[0]); Data = $data })
+        }
+    }
+    return $tables
+}
+
+function Get-KeptCells {
+    param($Headers, $Row)
+    $bits = New-Object System.Collections.Generic.List[string]
+    for ($c = 0; $c -lt $Headers.Count; $c++) {
+        $header = [string]$Headers[$c]
+        if ($header -match '对应指令|详细文档|Controller|关键接口') { continue }
+        $val = ''
+        if ($c -lt $Row.Count) { $val = [string]$Row[$c] }
+        $val = (Repair-CustomerBody $val)
+        if ([string]::IsNullOrWhiteSpace($val) -or $val -eq '—' -or $val -eq '-') { continue }
+        if ($c -eq 0) { $bits.Add($val) } else { $bits.Add($header + '：' + $val) }
+    }
+    return $bits
+}
+
+function Add-QaItem {
+    param($Items, [string]$Question, [string]$Answer, [string]$Source, [int]$Priority, [ref]$Ord)
+    $question = Repair-CustomerBody $Question
+    $answer = Repair-CustomerBody $Answer
+    if ([string]::IsNullOrWhiteSpace($question) -or [string]::IsNullOrWhiteSpace($answer)) { return }
+    if ($answer -match '不重复展开|口径变更只改|统一以') { return }
+    if ($question -match 'MCP|诊断') { return }
+    $Ord.Value = $Ord.Value + 1
+    $Items.Add([pscustomobject]@{
+        Question = $question
+        Answer   = $answer
+        Source   = $Source
+        Priority = $Priority
+        Ord      = $Ord.Value
+        Key      = (Get-QuestionKey $question)
+    })
+}
+
+function Add-ManualItems {
+    param([string]$Text, [string]$Source, [int]$Priority, [ref]$Ord, $Items)
+    $bodyText = Remove-FrontMatter $Text
+    $found = [regex]::Matches($bodyText, '(?m)^##\s+(.+?)\s*$')
+    if ($found.Count -eq 0) { return }
+    for ($i = 0; $i -lt $found.Count; $i++) {
+        $heading = $found[$i].Groups[1].Value.Trim()
+        if (Test-SkipHeading $heading) { continue }
+        $start = $found[$i].Index + $found[$i].Length
+        $end = $bodyText.Length
+        if ($i + 1 -lt $found.Count) { $end = $found[$i + 1].Index }
+        $chunk = $bodyText.Substring($start, $end - $start)
+        $tables = @(Get-SectionTables -Body $chunk)
+        $exploded = $false
+        foreach ($table in $tables) {
+            $head0 = ''
+            if ($table.Headers.Count -gt 0) { $head0 = [string]$table.Headers[0] }
+            if ($head0 -ne '能力' -and $head0 -ne '新功能' -and $head0 -ne '项') { continue }
+            $exploded = $true
+            $rowPriority = 8
+            if ($head0 -eq '新功能') { $rowPriority = 9 }
+            if ($head0 -eq '项') { $rowPriority = 7 }
+            foreach ($row in $table.Data) {
+                $name = ''
+                if ($row.Count -gt 0) { $name = (Repair-CustomerBody ([string]$row[0])) }
+                if ([string]::IsNullOrWhiteSpace($name)) { continue }
+                $bits = @(Get-KeptCells -Headers $table.Headers -Row $row)
+                $answerBits = New-Object System.Collections.Generic.List[string]
+                foreach ($bit in $bits) {
+                    if ($bit -eq $name) { continue }
+                    $answerBits.Add($bit)
+                }
+                $answer = ($answerBits -join '。')
+                if ($head0 -eq '新功能' -and $table.Headers.Count -ge 2 -and $row.Count -ge 2) {
+                    $oneLine = Repair-CustomerBody ([string]$row[1])
+                    if (-not [string]::IsNullOrWhiteSpace($oneLine)) { $answer = $oneLine }
+                }
+                if ($head0 -eq '项' -and $answer -match '未做|不做|未实现|占位|别承诺') {
+                    $answer = '还没有。' + $answer
+                }
+                $q = '有没有' + $name + '？'
+                if ($head0 -eq '项') { $q = '有没有' + $name + '？做了吗？' }
+                Add-QaItem -Items $Items -Question $q -Answer $answer -Source $Source -Priority $rowPriority -Ord $Ord
+            }
+        }
+        if ($exploded) { continue }
+        $flat = $chunk
+        foreach ($table in $tables) {
+            $lines = Convert-TableBlockToText -Table $table
+            $rawLines = ($chunk -replace "`r`n", "`n" -replace "`r", "`n") -split "`n", -1
+            $rebuilt = New-Object System.Collections.Generic.List[string]
+            for ($n = 0; $n -lt $rawLines.Length; $n++) {
+                if ($n -eq $table.Start) {
+                    foreach ($line in $lines) { $rebuilt.Add($line) }
+                }
+                if ($n -ge $table.Start -and $n -lt $table.End) { continue }
+                $rebuilt.Add($rawLines[$n])
+            }
+            $flat = ($rebuilt -join "`n")
+        }
+        Add-QaItem -Items $Items -Question $heading -Answer $flat -Source $Source -Priority $Priority -Ord $Ord
+    }
+}
+
+function Convert-TableBlockToText {
+    param($Table)
+    $lines = New-Object System.Collections.Generic.List[string]
+    foreach ($row in $Table.Data) {
+        $bits = @(Get-KeptCells -Headers $Table.Headers -Row $row)
+        if ($bits.Count -gt 0) { $lines.Add(($bits -join '。')) }
+    }
+    return $lines
+}
+
+function Add-RollupItems {
+    param($Items, [ref]$Ord)
+    $featureLines = New-Object System.Collections.Generic.List[string]
+    $wayLines = New-Object System.Collections.Generic.List[string]
+    $seen = @{}
+    $copy = New-Object object[] $Items.Count
+    for ($i = 0; $i -lt $Items.Count; $i++) { $copy[$i] = $Items[$i] }
+    $ranked = $copy | Sort-Object Priority -Descending
+    foreach ($item in $ranked) {
+        if ($item.Source -ne '00-系统能力总地图.md') { continue }
+        if ($item.Question -notmatch '^有没有([^？]+)？$') { continue }
+        $name = $Matches[1]
+        if ($seen.ContainsKey($name)) { continue }
+        $seen[$name] = $true
+        $first = ''
+        foreach ($line in ($item.Answer -split "`n")) {
+            if (-not [string]::IsNullOrWhiteSpace($line)) { $first = $line.Trim(); break }
+        }
+        if ([string]::IsNullOrWhiteSpace($first)) { $first = '见手册说明' }
+        $featureLines.Add('- ' + $name + '：' + $first)
+        $isWay = $name -match '报工|扫码|代报|补报'
+        $notWay = $name -match '设置|报表|复核|改数|工资|看板|监控|异常|桌面|校验|留痕|修改'
+        if ($isWay -and -not $notWay) {
+            $detail = ''
+            foreach ($manual in $copy) {
+                if ($manual.Priority -lt 12) { continue }
+                $q = [string]$manual.Question
+                $hit = ($q -eq $name) -or $q.StartsWith($name + '（') -or $q.StartsWith($name + '：')
+                if (-not $hit) { continue }
+                foreach ($line in ($manual.Answer -split "`n")) {
+                    if (-not [string]::IsNullOrWhiteSpace($line)) { $detail = $line.Trim(); break }
+                }
+                if (-not [string]::IsNullOrWhiteSpace($detail)) { break }
+            }
+            if ([string]::IsNullOrWhiteSpace($detail)) { $detail = $first }
+            $wayLines.Add('- ' + $name + '：' + $detail)
+        }
+    }
+    if ($featureLines.Count -gt 0) {
+        $answer = "按当前能力表逐条列出，每条带入口和状态。状态写了未实现、未做、不做的，就回答还没有。`n" + ($featureLines -join "`n")
+        Add-QaItem -Items $Items -Question '系统现在有哪些功能？分别在哪用？' -Answer $answer -Source '00-系统能力总地图.md' -Priority 28 -Ord $Ord
+    }
+    if ($wayLines.Count -gt 0) {
+        $answer = "工人报工，按现在系统里已经有的入口，有这些：`n" + ($wayLines -join "`n") + "`n对话里口述数量、让机器人替工人填数提交，这项还没有。机器人只负责把人送进填数页，数还是工人自己填。"
+        Add-QaItem -Items $Items -Question '员工报工有多少种方式？工人可以怎么报工？' -Answer $answer -Source '00-系统能力总地图.md' -Priority 28 -Ord $Ord
     }
 }
 
@@ -491,44 +763,63 @@ $parsed = New-Object System.Collections.Generic.List[object]
 $okFiles = 0
 $failFiles = 0
 
-foreach ($row in $Whitelist) {
-    $path = Join-Path $SupportDocsRoot $row.File
-    if (-not (Test-Path -LiteralPath $path)) {
-        $failFiles = $failFiles + 1
-        Write-Log -Level 'ERROR' -File $row.File -Step '读取' -Message ('文件不存在：{0}' -f $path)
+if (-not (Test-Path -LiteralPath $SupportDocsRoot)) {
+    Write-Log -Level 'ERROR' -File '-' -Step '读取' -Message ('目录不存在：{0}' -f $SupportDocsRoot)
+    exit 1
+}
+
+$files = @(Get-ChildItem -LiteralPath $SupportDocsRoot -Filter *.md -File | Sort-Object Name)
+foreach ($file in $files) {
+    $skip = $false
+    foreach ($name in $NeverNames) {
+        if ($file.Name -eq $name) { $skip = $true }
+    }
+    if ($skip) {
+        Write-Log -Level 'INFO' -File $file.Name -Step '跳过' -Message '内部文件，不进客户问答库'
         continue
     }
     try {
-        $text = Read-Utf8Text -Path $path
-        $batch = $null
-        if ($row.Kind -eq 'num') {
-            $batch = Parse-Numbered -Text $text -Source $row.File -Priority $row.Priority -Ord ([ref]$ord)
+        $text = Read-Utf8Text -Path $file.FullName
+        $kind = Get-ParseKind -Text $text
+        if ([string]::IsNullOrWhiteSpace($kind)) {
+            Write-Log -Level 'WARN' -File $file.Name -Step '解析' -Message '没有问答或章节，已跳过'
+            continue
         }
-        elseif ($row.Kind -eq 'ask') {
-            $batch = Parse-Ask -Text $text -Source $row.File -Priority $row.Priority -Ord ([ref]$ord)
+        $priority = Get-KindPriority -Kind $kind
+        $before = $parsed.Count
+        if ($kind -eq 'num') {
+            foreach ($one in @(Parse-Numbered -Text $text -Source $file.Name -Priority $priority -Ord ([ref]$ord))) {
+                if ($null -ne $one) { $parsed.Add($one) }
+            }
         }
-        elseif ($row.Kind -eq 'q') {
-            $batch = Parse-QHeading -Text $text -Source $row.File -Priority $row.Priority -Ord ([ref]$ord)
+        elseif ($kind -eq 'ask') {
+            foreach ($one in @(Parse-Ask -Text $text -Source $file.Name -Priority $priority -Ord ([ref]$ord))) {
+                if ($null -ne $one) { $parsed.Add($one) }
+            }
+        }
+        elseif ($kind -eq 'q') {
+            foreach ($one in @(Parse-QHeading -Text $text -Source $file.Name -Priority $priority -Ord ([ref]$ord))) {
+                if ($null -ne $one) { $parsed.Add($one) }
+            }
         }
         else {
-            throw ('未知解析类型：{0}' -f $row.Kind)
-        }
-        foreach ($one in @($batch)) {
-            if ($null -ne $one) { $parsed.Add($one) }
+            Add-ManualItems -Text $text -Source $file.Name -Priority $priority -Ord ([ref]$ord) -Items $parsed
         }
         $okFiles = $okFiles + 1
-        Write-Log -Level 'INFO' -File $row.File -Step '解析' -Message ('抽出 {0} 条' -f @($batch).Count)
+        Write-Log -Level 'INFO' -File $file.Name -Step '解析' -Message ('抽出 {0} 条' -f ($parsed.Count - $before))
     }
     catch {
         $failFiles = $failFiles + 1
-        Write-Log -Level 'ERROR' -File $row.File -Step '读取或解析' -Message $_.Exception.Message
+        Write-Log -Level 'ERROR' -File $file.Name -Step '读取或解析' -Message $_.Exception.Message
     }
 }
 
 if ($okFiles -eq 0) {
-    Write-Log -Level 'ERROR' -File '-' -Step '结束' -Message '三份白名单都失败，未写问答库'
+    Write-Log -Level 'ERROR' -File '-' -Step '结束' -Message '没有可用的客户手册，未写问答库'
     exit 1
 }
+
+Add-RollupItems -Items $parsed -Ord ([ref]$ord)
 
 $map = @{}
 foreach ($item in $parsed) {
@@ -555,25 +846,51 @@ $kept = @($map.Values) | Sort-Object @{ Expression = 'Priority'; Descending = $t
 $today = Get-Date -Format 'yyyy-MM-dd'
 $qaBody = Get-QaBody -Items $kept
 Assert-NoForbiddenMark -Body $qaBody
-$existing = Read-DocxSnapshot -Path $DocxPath
+
+$docsDir = Split-Path -Parent $DocxPath
+if ([string]::IsNullOrWhiteSpace($docsDir)) { $docsDir = $RepoRoot }
+$maxNumber = 0
+$latestPath = ''
+if (Test-Path -LiteralPath $docsDir) {
+    $named = @(Get-ChildItem -LiteralPath $docsDir -Filter '企微客户问答库V*.docx' -File)
+    foreach ($file in $named) {
+        $hit = [regex]::Match($file.Name, '^企微客户问答库V(\d+)\.docx$')
+        if (-not $hit.Success) { continue }
+        $n = 0
+        if (-not [int]::TryParse($hit.Groups[1].Value, [ref]$n)) { continue }
+        if ($n -gt $maxNumber) {
+            $maxNumber = $n
+            $latestPath = $file.FullName
+        }
+    }
+}
+
+$existing = @{ Version = 0; UpdatedAt = ''; Body = '' }
+if (-not [string]::IsNullOrWhiteSpace($latestPath)) {
+    $existing = Read-DocxSnapshot -Path $latestPath
+}
 
 $version = 1
 $updatedAt = $today
-if ($existing.Version -ge 1 -and $existing.Body -eq $qaBody) {
-    $version = $existing.Version
+$outPath = ''
+if ($maxNumber -ge 1 -and $existing.Body -eq $qaBody) {
+    $version = $maxNumber
+    $outPath = $latestPath
     if (-not [string]::IsNullOrWhiteSpace($existing.UpdatedAt)) {
         $updatedAt = $existing.UpdatedAt
     }
-    Write-Log -Level 'INFO' -File '-' -Step '版本' -Message ('内容未变，version 保持 {0}，updatedAt 保持 {1}' -f $version, $updatedAt)
-}
-elseif ($existing.Version -ge 1) {
-    $version = $existing.Version + 1
-    Write-Log -Level 'INFO' -File '-' -Step '版本' -Message ('内容有变化，version {0} -> {1}，updatedAt={2}' -f $existing.Version, $version, $updatedAt)
-}
-else {
-    Write-Log -Level 'INFO' -File '-' -Step '版本' -Message ('首次生成，version={0}，updatedAt={1}' -f $version, $updatedAt)
+    Write-Log -Level 'INFO' -File '-' -Step '版本' -Message ('内容未变，保持 V{0}，不另存新文件：{1}' -f $version, $outPath)
+    Write-Log -Level 'INFO' -File '-' -Step '结束' -Message ('共 {0} 条，失败源文件 {1} 个，version={2}，docx={3}' -f @($kept).Count, $failFiles, $version, $outPath)
+    exit 0
 }
 
-Write-QaDocx -Items $kept -Version $version -UpdatedAt $updatedAt -Path $DocxPath
-Write-Log -Level 'INFO' -File '-' -Step '结束' -Message ('写入 {0} 条，失败源文件 {1} 个，version={2}，docx={3}' -f @($kept).Count, $failFiles, $version, $DocxPath)
+$version = $maxNumber + 1
+if ($version -gt $MaxVersion) {
+    throw ('版本已到 V{0}，不再生成新文件' -f $MaxVersion)
+}
+$outPath = Join-Path $docsDir ('企微客户问答库V{0}.docx' -f $version)
+Write-Log -Level 'INFO' -File '-' -Step '版本' -Message ('内容有变化，另存 V{0}，updatedAt={1}' -f $version, $updatedAt)
+
+Write-QaDocx -Items $kept -Version $version -UpdatedAt $updatedAt -Path $outPath
+Write-Log -Level 'INFO' -File '-' -Step '结束' -Message ('写入 {0} 条，失败源文件 {1} 个，version={2}，docx={3}' -f @($kept).Count, $failFiles, $version, $outPath)
 exit 0

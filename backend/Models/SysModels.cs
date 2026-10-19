@@ -197,3 +197,15 @@ public class SysWxBind
     public DateTime? UnboundAt { get; set; }
     public string? Remark { get; set; }
 }
+
+/// <summary>PC 菜单收藏（docs/240）。一行 = 某用户钉住的一个菜单路由。</summary>
+public class SysUserFavorite
+{
+    public long Id { get; set; }
+    public long UserId { get; set; }
+    public string MenuKey { get; set; } = "";
+    public string MenuTitle { get; set; } = "";
+    public string? Icon { get; set; }
+    public DateTime SortAt { get; set; }
+    public DateTime CreatedAt { get; set; }
+}

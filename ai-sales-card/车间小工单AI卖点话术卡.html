@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>车间小工单 · AI 卖点话术卡</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231B6B8A'/%3E%3Cpath d='M9 8h14v3H9zm2 5h10v2H11zm1 4h8v2h-8z' fill='%23F5F2EA'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --paper:#FAF8F3;
+    --ink:#20262E;
+    --muted:#6B7280;
+    --line:#E6E1D6;
+    --boss:#C2410C;
+    --bossSoft:#FBE8DC;
+    --partner:#175E74;
+    --partnerSoft:#E2EEF3;
+    --worker:#0E7A6A;
+    --workerSoft:#DFF0EC;
+    --warn:#8A5A00;
+    --warnSoft:#FBF1D8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{background:#E8E4DC}
+  body{
+    font-family:"Microsoft YaHei","PingFang SC","Noto Sans SC",system-ui,sans-serif;
+    color:var(--ink);
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  .sheet{
+    width:min(100%, 210mm);
+    margin:0 auto;
+    background:var(--paper);
+    padding:14mm 15mm 12mm;
+    box-shadow:0 10px 40px rgba(0,0,0,.12);
+    min-height:100vh;
+  }
+  /* header */
+  .kicker{
+    display:flex;align-items:center;gap:8px;
+    font-size:11px;letter-spacing:.18em;color:var(--muted);
+    text-transform:uppercase;font-weight:600;
+  }
+  .kicker::before{content:"";width:22px;height:2px;background:var(--partner);display:inline-block}
+  h1{font-size:26px;font-weight:800;margin:4px 0 2px;letter-spacing:.01em}
+  .essence{
+    font-size:17px;font-weight:700;color:var(--ink);
+    margin:10px 0 4px;line-height:1.5;
+  }
+  .essence b{color:var(--boss)}
+  .channel{
+    display:flex;gap:10px;flex-wrap:wrap;
+    margin:12px 0 18px;
+  }
+  .chip{
+    background:var(--ink);color:#fff;
+    font-size:12.5px;padding:7px 12px;border-radius:8px;font-weight:600;
+  }
+  .chip span{color:#FFD8A8;font-weight:800}
+  /* blocks */
+  .card{
+    border:1px solid var(--line);
+    border-left:7px solid var(--partner);
+    border-radius:10px;
+    padding:16px 18px 15px;
+    margin-bottom:16px;
+    background:#fff;
+  }
+  .card.boss{border-left-color:var(--boss)}
+  .card.partner{border-left-color:var(--partner)}
+  .card.worker{border-left-color:var(--worker)}
+  .tagrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+  .tag{
+    font-size:15px;font-weight:800;color:#fff;border-radius:6px;
+    padding:3px 10px;letter-spacing:.02em;
+  }
+  .card.boss .tag{background:var(--boss)}
+  .card.partner .tag{background:var(--partner)}
+  .card.worker .tag{background:var(--worker)}
+  .sub{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.05em}
+  .core{
+    font-size:15.5px;font-weight:700;margin:2px 0 10px;line-height:1.5;
+  }
+  .core b{color:var(--ink)}
+  .core em{font-style:normal;color:var(--boss);font-weight:800}
+  ul{list-style:none;margin:0 0 4px}
+  li{
+    position:relative;padding-left:18px;margin-bottom:6px;font-size:13.5px;
+  }
+  li::before{
+    content:"";position:absolute;left:0;top:8px;width:7px;height:7px;border-radius:2px;background:var(--partner);
+  }
+  .card.boss li::before{background:var(--boss)}
+  .card.partner li::before{background:var(--partner)}
+  .card.worker li::before{background:var(--worker)}
+  li b{font-weight:700}
+  .line{font-size:13.5px;color:var(--muted);margin-top:8px}
+  .line b{color:var(--ink);font-weight:700}
+  .quote{
+    margin-top:10px;padding:9px 12px;border-radius:8px;
+    font-size:14px;font-weight:700;
+  }
+  .card.boss .quote{background:var(--bossSoft);color:var(--boss)}
+  .card.partner .quote{background:var(--partnerSoft);color:var(--partner)}
+  .card.worker .quote{background:var(--workerSoft);color:var(--worker)}
+  /* footer caution */
+  .caution{
+    margin-top:6px;border:1px solid var(--line);border-radius:10px;
+    background:var(--warnSoft);padding:14px 16px;
+  }
+  .caution h3{
+    font-size:13px;color:var(--warn);margin-bottom:8px;letter-spacing:.04em;display:flex;align-items:center;gap:6px;
+  }
+  .caution h3 svg{flex:0 0 auto}
+  .caution ul{list-style:none}
+  .caution li{padding-left:16px;position:relative;margin-bottom:5px;font-size:12.5px;color:#6b5320}
+  .caution li::before{content:"—";position:absolute;left:0;color:var(--warn);font-weight:700}
+  .foot{font-size:11px;color:var(--muted);text-align:center;margin-top:14px;letter-spacing:.06em}
+  @media (max-width:720px){
+    .sheet{padding:12mm 8mm 10mm}
+    h1{font-size:21px}
+    .essence{font-size:15px}
+  }
+  @media print{
+    html{background:#fff}
+    body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .sheet{width:210mm;box-shadow:none;min-height:0;padding:10mm 12mm 8mm}
+    .card{page-break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <div class="kicker">车间小工单 · 售前话术卡</div>
+  <h1>AI 卖点话术</h1>
+  <p class="essence">一句话本质：AI 是 <b>「会说话的老员工」</b> —— 您不用学电脑，<b>像发微信一样问</b>，厂里的事它替您盯着。</p>
+
+  <div class="channel">
+    <div class="chip">入口（咬死）：手机打开企业微信，发一句话，AI 在<span>企业微信</span>里回</div>
+    <div class="chip">定位：不是填表工具，是会给您 <span>遥控车间</span> 的遥控器</div>
+  </div>
+
+  <!-- 老板版 -->
+  <div class="card boss">
+    <div class="tagrow"><span class="tag">老板版</span><span class="sub">打感情 · 要掏钱</span></div>
+    <p class="core">核心一句：<b>「您不用学电脑，像发微信一样，厂里的事 AI 替您盯着。」</b></p>
+    <ul>
+      <li><b>客户当场问交期</b> → 手机企微问一句，AI 报出卡在哪、差多少，您敢当场拍板。</li>
+      <li><b>人在酒桌、心在车间</b> → 一句话知道卡哪、谁干、良品多少，心里有底。</li>
+      <li><b>月底数字对不上</b> → AI 把账摊开讲清楚，省的是吵架的力气。</li>
+    </ul>
+    <div class="quote">收尾金句：这套东西不是给工人练的，是给您当遥控器的。</div>
+  </div>
+
+  <!-- 伙伴版 -->
+  <div class="card partner">
+    <div class="tagrow"><span class="tag">伙伴版</span><span class="sub">讲好卖 · 要您跟我合作</span></div>
+    <p class="core">核心一句：<b>「别家是让工人学表格，咱是给车间配个会说话的老员工。」</b></p>
+    <ul>
+      <li><b>零培训</b> → 工人不用教，问一句就行，上线快、交付省心，不怕客户拖款卡实施。</li>
+      <li><b>演示杀手锏</b> → 客户面前手机企微一句话，查到真实数据当场展示，比放 PPT 说一百句管用。</li>
+      <li><b>差异化</b> → 对标黑湖，咱多个「能问」的嘴，报价能抬、单子好签。</li>
+      <li><b>复购粘性</b> → 老板用顺手就离不开，后续加排产、加工资解释，都是您的续单。</li>
+    </ul>
+    <div class="quote">一句话钩子：这不是堆功能，是「零培训上手 + 数字能讲理」——全是客户掏钱的痛点。</div>
+  </div>
+
+  <!-- 员工版 -->
+  <div class="card worker">
+    <div class="tagrow"><span class="tag">员工版</span><span class="sub">只讲新工人 · 不吓老师傅</span></div>
+    <p class="core">核心一句：<b>「新人进厂当天就能上手干活，不用再养三个月才顶用。」</b></p>
+    <ul>
+      <li><b>新工人上手快</b> → 进车间不干等着问人，对着系统就有答案，报工照着做，少犯错、少返工。</li>
+      <li><b>新工人心里有底</b> → 这道工序怎么做、注意啥，现场就能查到，不慌不忙。</li>
+      <li><b>新工人少挨骂</b> → 报工对、货做对，师傅少操心，新人也不至于天天被吼。</li>
+    </ul>
+    <div class="quote">措辞口径：说「工厂的知识沉淀在系统里」，绝口不提「老师傅经验被拿走」。</div>
+  </div>
+
+  <!-- 统一口径 & 避坑 -->
+  <div class="caution">
+    <h3>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3l10 18H2L12 3zm0 5.5L6 19h12L12 8.5zM11 14h2v3h-2v-3zm0-4h2v2h-2v-2z" fill="#8A5A00"/></svg>
+      统一口径 &amp; 避坑（讲之前先过一遍）
+    </h3>
+    <ul>
+      <li>入口只说「手机打开企业微信，发一句，AI 在企微回」；别说「在车间随口一句」。</li>
+      <li>别乱吹：AI 对话现在只开给电脑端管理员，工人 H5/PDA 还没开——员工版讲的是能落地的甜头/规划，别当成已上线。</li>
+      <li>措辞用「工厂的知识沉淀在系统」，不说「老师傅经验被系统抽走/提取」。</li>
+      <li>AI 只读不写：能查能答，不下单、不报工、不改数——被追问写回时如实讲「这是后续规划」。</li>
+    </ul>
+  </div>
+
+  <div class="foot">车间小工单（对标黑湖）· 多隆整理 · 打印版</div>
+</div>
+</body>
+</html>
