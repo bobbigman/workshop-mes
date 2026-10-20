@@ -258,7 +258,7 @@ if (role !== 1) {
   router.replace('/order')
 }
 
-const ROLES = [{ value: 'boss', label: '老板' }, { value: 'supervisor', label: '车间主管' }, { value: 'finance', label: '财务' }, { value: 'worker', label: '车间师傅' }, { value: 'engineer', label: '电脑工程师' }]
+const ROLES = [{ value: 'boss', label: '老板' }, { value: 'supervisor', label: '车间主管' }, { value: 'finance', label: '财务' }, { value: 'worker', label: '车间师傅' }, { value: 'engineer', label: '电脑部门' }]
 const selectedRole = ref('boss')
 const questionsOpen = ref(false)
 const mode = computed(() => selectedRole.value === 'boss' ? 'progress' : 'support')
@@ -325,16 +325,16 @@ const QUESTIONS = {
     '怎么看这道工序的作业指导书？'
   ],
   engineer: [
-    '这套系统的 AI 现在能做什么？',
-    'WorkBuddy 和系统内置 AI 助手有什么区别？',
-    '电脑工程师怎样结合 WorkBuddy 给客户演示？',
-    'WorkBuddy 能查询 MES 数据并整理分析报告吗？',
-    '客户原来的 Excel 资料怎么整理后导入？',
-    '结合 WorkBuddy 对接金蝶，需要准备哪些条件？',
-    '哪些 AI 能力已经实现，哪些还需要单独接入？',
-    'AI 对老板和车间主管有什么实际价值？',
-    'AI 对财务和车间师傅分别有什么帮助？',
-    '结合云端 AI 使用时，数据会不会出厂？'
+    '电脑部门怎么结合 WorkBuddy，给各部门做系统培训？',
+    '能把现有操作说明整理成新员工培训材料吗？',
+    '同一套系统，老板、主管、财务和工人分别怎么培训？',
+    '怎么把操作步骤整理成图文教程？',
+    '员工总问同样的问题，怎么整理成内部常见问题？',
+    '系统功能更新后，怎么整理本次培训重点？',
+    '怎么用演示工单，让员工边操作边学？',
+    '能根据培训内容，准备练习题和操作检查表吗？',
+    '各部门的 Excel 资料，怎么整理成统一格式？',
+    '内部资料交给 AI 前，哪些内容需要先处理？'
   ]
 }
 

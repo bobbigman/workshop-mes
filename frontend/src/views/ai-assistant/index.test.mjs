@@ -41,16 +41,21 @@ test('文档来源隐藏、引用脱离展示，真实证据和未知引用保�
   assert.equal(sources.length, 3)
 })
 
-test('五个入口各十题，工程师包含AI和WorkBuddy，权限和mode不扩大', () => {
+test('五个入口各十题，电脑部门包含内部培训和WorkBuddy，权限和mode不扩大', () => {
   const context = vm.createContext({})
   const roles = script.match(/const ROLES = \[.*?\]/)[0]
   const questions = script.match(/const QUESTIONS = \{[\s\S]*?\n\}/)[0]
   vm.runInContext(`${roles}; ${questions}; globalThis.roles = ROLES; globalThis.questions = QUESTIONS`, context)
   assert.equal(context.roles.length, 5)
-  assert.equal(context.roles.find(r => r.value === 'engineer').label, '电脑工程师')
+  assert.equal(context.roles.find(r => r.value === 'engineer').label, '电脑部门')
   for (const r of context.roles) assert.equal(context.questions[r.value].length, 10)
   assert.ok(context.questions.engineer.some(q => q.includes('WorkBuddy')))
   assert.ok(context.questions.engineer.some(q => q.includes('AI')))
+  assert.ok(context.questions.engineer.every(q => !/给客户|合作伙伴|客户原来/.test(q)))
+  assert.ok(context.questions.engineer[0].includes('给各部门做系统培训'))
+  const knowledge = fs.readFileSync(new URL('../../../../SupportDocs/19-AI功能价值与卖点问答.md', import.meta.url), 'utf8')
+  const headings = [...knowledge.matchAll(/^### (.+)$/gm)].map(match => match[1].trim())
+  assert.deepEqual(Array.from(context.questions.engineer), headings)
   assert.match(script, /selectedRole.value === 'boss' \? 'progress' : 'support'/)
   assert.match(script, /if \(role !== 1\)/)
 })
