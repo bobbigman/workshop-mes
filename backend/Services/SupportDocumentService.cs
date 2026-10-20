@@ -383,7 +383,7 @@ public class SupportDocumentService
             result.RetrievalSource = rules.Source;
             var terms = ExtractTerms(query, rules);
             var scored = Score(idx.Chapters, terms, query, rules);
-            var matched = scored.Where(s => s.Score > 0).ToList();
+            var matched = scored.Where(s => s.Score > 0 && !IsExcludedTitle(s.Chapter, rules)).ToList();
             result.TotalMatched = matched.Count;
 
             if (matched.Count == 0)
@@ -399,7 +399,6 @@ public class SupportDocumentService
             var taken = 0;
             var specific = matched.Where(m => !IsCapabilityMap(m.Chapter) && !IsExcludedTitle(m.Chapter, rules)).ToList();
             var ranked = specific.Count > 0 ? specific : matched.Where(m => !IsExcludedTitle(m.Chapter, rules)).ToList();
-            if (ranked.Count == 0) ranked = matched;
             foreach (var m in ranked.Take(_opt.MaxResults))
             {
                 if (used >= budget) { result.Truncated = true; break; }
@@ -848,8 +847,13 @@ public class SupportDocumentService
         RetrievalRules rules)
     {
         var scored = new List<(SupportChapter Chapter, int Score)>();
+        var asksSales = new[] { "销售", "售前", "卖点", "话术", "成交", "竞品", "客户异议", "王雩" }
+            .Any(term => query.Contains(term, StringComparison.OrdinalIgnoreCase));
         foreach (var ch in chapters)
         {
+            // 操作/业务查询不能用销售应答守则补位；销售问题仍可检索。
+            if (!asksSales && (ch.FileTitle.Contains("销售", StringComparison.Ordinal) || ch.FileTitle.Contains("王雩", StringComparison.Ordinal)))
+                continue;
             var score = 0;
             var titleText = (ch.FileTitle + " " + (ch.Chapter ?? "")).Trim();
             foreach (var t in terms)

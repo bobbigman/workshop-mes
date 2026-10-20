@@ -31,3 +31,5 @@ foreach (var (mode, argsJson) in checks)
     throw new Exception($"应拒绝参数或模式: {mode} {argsJson}");
 }
 Console.WriteLine("PASS: 三种模式工具声明、跨模式调用、工厂参数注入与非法查询参数（13项）");
+
+AssistantExperienceChecks.Run();

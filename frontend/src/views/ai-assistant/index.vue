@@ -2,12 +2,14 @@
   <div class="ai-page">
     <ValueTip :text="VALUE_TIPS.aiAssistant" />
     <div class="ai-toolbar">
-      <el-radio-group v-model="selectedRole" :disabled="busy" @change="onRoleChange">
-        <el-radio-button value="boss">老板</el-radio-button>
-        <el-radio-button value="supervisor">车间主管</el-radio-button>
-        <el-radio-button value="finance">财务</el-radio-button>
-        <el-radio-button value="worker">车间师傅</el-radio-button>
-      </el-radio-group>
+      <div class="role-tabs" aria-label="选择提问角色">
+        <button v-for="r in ROLES" :key="r.value" type="button" class="role-tab"
+          :class="{ active: selectedRole === r.value }" :disabled="busy"
+          :aria-expanded="selectedRole === r.value && questionsOpen" aria-controls="role-questions"
+          @click="onRoleClick(r.value)">
+          {{ r.label }}<span class="role-chevron" :class="{ expanded: selectedRole === r.value && questionsOpen }" aria-hidden="true">⌄</span>
+        </button>
+      </div>
       <div class="ai-status">
         <el-tag v-if="!status.enabled" type="info">已关闭</el-tag>
         <el-tag v-else-if="!status.configured" type="warning">未配置</el-tag>
@@ -19,23 +21,21 @@
 
     <el-alert v-if="banner" :type="bannerType" show-icon :closable="false" :title="banner" class="mb" />
 
-    <div class="examples">
-      <span class="muted">示例：</span>
-      <el-button
-        v-for="q in examples"
-        :key="q"
-        link
-        type="primary"
-        :disabled="busy || !canChat"
-        @click="useExample(q)"
-      >{{ q }}</el-button>
-    </div>
+    <section v-if="questionsOpen" id="role-questions" class="question-panel" aria-label="常用问题" @keydown.esc="questionsOpen = false">
+      <div class="question-panel-heading"><span>想了解什么？</span><el-button text size="small" @click="questionsOpen = false">收起</el-button></div>
+      <div class="question-grid">
+        <button v-for="(q, index) in examples" :key="q" type="button" class="question-item"
+          :disabled="busy || !canChat" @click="useExample(q)">
+          <span class="question-number">{{ String(index + 1).padStart(2, '0') }}</span><span>{{ q }}</span><span class="question-arrow" aria-hidden="true">↗</span>
+        </button>
+      </div>
+    </section>
 
     <div ref="chatRef" class="chat">
       <div v-for="(m, i) in messages" :key="i" class="bubble" :class="m.role">
-        <div class="bubble-role"><span v-if="m.role === 'assistant'" class="assistant-avatar">AI</span>{{ m.role === 'user' ? '我' : '小工单助手' }}<span v-if="m.role === 'assistant'" class="assistant-caption">为你整理</span></div>
+        <div class="bubble-role"><span v-if="m.role === 'assistant'" class="assistant-avatar">AI</span>{{ m.role === 'user' ? '我' : '小工单助手' }}</div>
         <div class="bubble-text" :class="{ 'is-md': m.role === 'assistant' }">
-          <AiAnswer v-if="m.role === 'assistant'" :text="m.text" />
+          <AiAnswer v-if="m.role === 'assistant'" :text="presentAiAnswer(m.text, m.sources)" />
           <template v-else>{{ m.text }}</template>
         </div>
 
@@ -181,9 +181,9 @@
           </div>
         </div>
 
-        <div v-if="m.sources?.length" class="block">
+        <div v-if="visibleAiSources(m.sources).length" class="block">
           <div class="block-title">来源</div>
-          <el-card v-for="s in m.sources" :key="s.sourceId" shadow="never" class="src">
+          <el-card v-for="s in visibleAiSources(m.sources)" :key="s.sourceId" shadow="never" class="src">
             <div>
               <b>{{ s.title }}</b>
               <span v-if="s.chapter" class="muted"> · {{ s.chapter }}</span>
@@ -205,16 +205,16 @@
       <el-input
         v-model="input"
         type="textarea"
-        :rows="2"
+        :rows="3"
         maxlength="2000"
-        show-word-limit
         :disabled="!canChat || busy"
-        placeholder="用日常语言提问，例如：明天到期还没完成的工单有哪些？"
+        placeholder="想了解什么？直接问，或点击上方角色选择问题"
         @keydown.ctrl.enter="onSend"
       />
-      <div class="composer-actions">
-        <el-button type="primary" :disabled="!canChat || !input.trim()" :loading="busy" @click="onSend">发送</el-button>
-        <el-button :disabled="!busy" @click="onStop">停止</el-button>
+      <div class="composer-footer">
+        <span class="composer-hint">{{ busy ? '正在回答，可随时停止' : 'Ctrl + Enter 发送' }}</span>
+        <el-button v-if="busy" class="stop-button" @click="onStop"><span class="stop-icon" aria-hidden="true"></span>停止生成</el-button>
+        <el-button v-else type="primary" :disabled="!canChat || !input.trim()" @click="onSend">发送 <span aria-hidden="true">↑</span></el-button>
       </div>
     </div>
 
@@ -247,6 +247,7 @@ import {
 import { getOrder } from '@/api/prod'
 import AiAnswer from '@/components/AiAnswer.vue'
 import { hasAnswerTable, formatAiBusinessDate } from '@/utils/aiWorkOrderPresentation'
+import { presentAiAnswer, visibleAiSources } from '@/utils/aiAssistantPresentation'
 import ValueTip from '@/components/ValueTip.vue'
 import { VALUE_TIPS } from '@/constants/valueTips'
 
@@ -257,7 +258,9 @@ if (role !== 1) {
   router.replace('/order')
 }
 
+const ROLES = [{ value: 'boss', label: '老板' }, { value: 'supervisor', label: '车间主管' }, { value: 'finance', label: '财务' }, { value: 'worker', label: '车间师傅' }]
 const selectedRole = ref('boss')
+const questionsOpen = ref(false)
 const mode = computed(() => selectedRole.value === 'boss' ? 'progress' : 'support')
 const status = ref({ enabled: false, configured: false, model: null })
 const conversationId = ref('')
@@ -352,6 +355,7 @@ async function refreshStatus() {
 
 function useExample(q) {
   if (!canChat.value || busy.value) return
+  questionsOpen.value = false
   input.value = q
   return onSend()
 }
@@ -372,6 +376,17 @@ async function onNewChat() {
   }
 }
 
+function onRoleClick(value) {
+  if (busy.value) return
+  if (selectedRole.value === value) {
+    questionsOpen.value = !questionsOpen.value
+    return
+  }
+  selectedRole.value = value
+  onRoleChange()
+  questionsOpen.value = true
+}
+
 let previousMode = mode.value
 function onRoleChange() {
   if (mode.value !== previousMode) onNewChat()
@@ -383,6 +398,7 @@ async function onSend() {
   const text = input.value.trim()
   if (!text) return
 
+  questionsOpen.value = false
   messages.value.push({ role: 'user', text })
   input.value = ''
   busy.value = true
@@ -541,15 +557,29 @@ async function scrollBottom() {
 </script>
 
 <style scoped>
-.ai-page { display: flex; flex-direction: column; height: calc(100vh - 120px); gap: 10px; width: 100%; min-width: 0; overflow: hidden; }
+.ai-page { display: flex; flex-direction: column; height: calc(100vh - 120px); gap: 14px; width: 100%; max-width: 1120px; margin: 0 auto; min-width: 0; overflow: hidden; }
 .ai-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
 .ai-status { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .muted { color: #888; font-size: 12px; }
 .mb { margin-bottom: 4px; }
-.examples { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.role-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.role-tab { display: flex; align-items: center; gap: 12px; border: 1px solid transparent; border-radius: 10px; padding: 10px 16px; background: transparent; color: #637087; cursor: pointer; font: inherit; font-size: 14px; }
+.role-tab.active { background: #fff; border-color: #dce5f4; color: #315bd2; box-shadow: 0 2px 6px #26364d06; font-weight: 600; }
+.role-tab:hover:not(:disabled) { background: #edf2fc; }
+.role-tab:disabled, .question-item:disabled { cursor: not-allowed; opacity: .55; }
+.role-chevron { transition: transform .15s; }
+.role-chevron.expanded { transform: rotate(180deg); }
+.question-panel { flex-shrink: 0; max-height: 38vh; overflow: auto; padding: 12px 16px 16px; background: #fff; border: 1px solid #e2e8f2; border-radius: 14px; }
+.question-panel-heading { display: flex; justify-content: space-between; align-items: center; color: #637087; font-size: 13px; margin-bottom: 8px; }
+.question-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; }
+.question-item { display: flex; align-items: center; gap: 10px; text-align: left; border: 0; border-radius: 8px; padding: 10px; background: #f7f9fc; color: #34445e; font: inherit; font-size: 13px; cursor: pointer; line-height: 1.6; }
+.question-item:hover:not(:disabled) { background: #edf2ff; color: #315bd2; }
+.question-number { color: #9aa7bc; font-size: 11px; }
+.question-arrow { margin-left: auto; color: #a1afc4; }
+.role-tab:focus-visible, .question-item:focus-visible { outline: 2px solid #315bd2; outline-offset: 2px; }
 .chat {
-  flex: 1; min-height: 0; min-width: 0; width: 100%; box-sizing: border-box; overflow: auto; border: 1px solid #e8ecf2; border-radius: 16px;
-  padding: 28px 24px; background: #f5f7fb;
+  flex: 1; min-height: 0; min-width: 0; width: 100%; box-sizing: border-box; overflow: auto; border: 0; border-radius: 16px;
+  padding: 24px 12px; background: transparent;
 }
 .bubble { margin: 0 auto 32px; max-width: 1040px; width: 100%; min-width: 0; box-sizing: border-box; }
 .bubble.user { margin-left: auto; max-width: 720px; }
@@ -568,7 +598,7 @@ async function scrollBottom() {
   box-shadow: var(--app-shadow, 0 1px 2px rgba(29, 33, 41, .04));
 }
 .bubble-text.is-md {
-  white-space: normal; padding: 30px 36px;
+  white-space: normal; padding: 20px 24px;
   border-radius: 16px; border-color: #e6ebf2;
   box-shadow: 0 4px 20px rgba(35, 55, 85, .035);
 }
@@ -589,6 +619,18 @@ async function scrollBottom() {
 .excerpt { color: #666; font-size: 12px; margin-top: 4px; white-space: pre-wrap; }
 .warn { color: #b88230; font-size: 12px; margin-top: 6px; }
 .pager { margin-top: 8px; display: flex; justify-content: flex-end; }
-.composer { display: flex; gap: 10px; align-items: flex-end; }
-.composer-actions { display: flex; flex-direction: column; gap: 6px; }
+.composer { flex-shrink: 0; padding: 6px 8px 8px; border: 1px solid #dce3ef; border-radius: 16px; background: #fff; box-shadow: 0 4px 20px #26364d08; }
+.composer:focus-within { border-color: #91a9ef; box-shadow: 0 0 0 3px #315bd20a; }
+.composer :deep(.el-textarea__inner) { box-shadow: none; resize: none; background: transparent; padding: 10px 12px; font-size: 14px; }
+.composer :deep(.el-textarea.is-disabled .el-textarea__inner) { background: transparent; }
+.composer-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 4px 0 12px; }
+.composer-hint { color: #9aa5b6; font-size: 12px; }
+.composer-footer .el-button { border-radius: 10px; min-width: 88px; margin-left: 0; }
+.stop-button { color: #34445e; border-color: #bcc8db; background: #f1f4f9; }
+.stop-icon { display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: currentColor; margin-right: 6px; }
+@media (max-width: 640px) {
+  .question-grid { grid-template-columns: 1fr; }
+  .role-tab { padding: 8px 10px; gap: 6px; }
+  .composer-hint { font-size: 11px; }
+}
 </style>
