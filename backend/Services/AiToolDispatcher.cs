@@ -53,7 +53,8 @@ public class AiToolDispatcher
                 SearchSupportDocsTool(),
                 SearchWorkOrdersTool(),
                 ProgressTool(),
-                ReportEvidenceTool()
+                ReportEvidenceTool(),
+                SearchAbnormalTool()
             };
         }
 
@@ -80,6 +81,82 @@ public class AiToolDispatcher
                 required = new[] { "productCode" }
             })
         };
+    }
+
+    private static DeepSeekToolDef SearchAbnormalTool() =>
+        Tool("search_abnormal", "查询当前工厂异常上报（设备故障/物料短缺/质量异常）。status=0未处理、1已处理，不传查全部；abnormalType=1设备故障、2物料短缺、3质量异常。总数以total为准，可按page翻页；引用异常id作为证据。handlerName是指定或实际处理人，不代表正在维修。", new
+        {
+            type = "object",
+            properties = new
+            {
+                status = new { type = "integer", minimum = 0, maximum = 1 },
+                abnormalType = new { type = "integer", minimum = 1, maximum = 3 },
+                page = new { type = "integer", minimum = 1, @default = 1 },
+                pageSize = new { type = "integer", minimum = 1, maximum = 20, @default = 10 }
+            },
+            additionalProperties = false
+        });
+
+    private async Task<string> SearchAbnormalAsync(JsonElement root, AiSessionState session, CancellationToken ct)
+    {
+        int? ReadInt(string name)
+        {
+            if (!root.TryGetProperty(name, out var value) || value.ValueKind == JsonValueKind.Null) return null;
+            if (value.ValueKind != JsonValueKind.Number || !value.TryGetInt32(out var number))
+                throw ThrowHelper.BizUser($"异常查询参数 {name} 必须是整数");
+            return number;
+        }
+        var status = ReadInt("status");
+        var type = ReadInt("abnormalType");
+        var page = ReadInt("page") ?? 1;
+        var pageSize = ReadInt("pageSize") ?? 10;
+        if (status is < 0 or > 1) throw ThrowHelper.BizUser("异常状态仅支持0未处理、1已处理");
+        if (type is < 1 or > 3) throw ThrowHelper.BizUser("异常类型仅支持1设备故障、2物料短缺、3质量异常");
+        if (page < 1 || pageSize < 1) throw ThrowHelper.BizUser("页码和每页条数必须大于0");
+        pageSize = Math.Min(pageSize, 20);
+        var skip = (long)(page - 1) * pageSize;
+        if (skip > int.MaxValue) throw ThrowHelper.BizUser("页码超出范围");
+
+        var query = _db.Abnormals.AsNoTracking().Where(a => a.FactoryId == session.FactoryId);
+        if (status != null) query = query.Where(a => a.Status == status.Value);
+        if (type != null) query = query.Where(a => a.AbnormalType == type.Value);
+        var total = await query.CountAsync(ct);
+        var rows = await query.OrderBy(a => a.Status)
+            .ThenBy(a => a.Status == 0 ? (DateTime?)a.ReportedAt : null)
+            .ThenByDescending(a => a.Status == 1 ? a.RecoveredAt : null)
+            .ThenBy(a => a.Id).Skip((int)skip).Take(pageSize)
+            .Select(a => new
+            {
+                a.Id, a.AbnormalType, a.Description, a.ReportedAt, a.Status, a.RecoveredAt, a.HandleNote,
+                reporterName = _db.Users.Where(u => u.FactoryId == session.FactoryId && u.Id == a.ReportedBy)
+                    .Select(u => u.Name).FirstOrDefault(),
+                handlerName = _db.Users.Where(u => u.FactoryId == session.FactoryId
+                        && u.Id == (a.Status == 0 ? a.AssignHandlerUserId : a.HandledBy))
+                    .Select(u => u.Name).FirstOrDefault(),
+                orderNo = _db.WorkOrders.Where(o => o.FactoryId == session.FactoryId && o.Id == a.WorkOrderId)
+                    .Select(o => o.OrderNo).FirstOrDefault()
+            }).ToListAsync(ct);
+        // 异常服务以服务器本地时间写库，保持相同时间口径。
+        var now = DateTime.Now;
+        return JsonSerializer.Serialize(new
+        {
+            total, page, pageSize,
+            list = rows.Select(a => new
+            {
+                id = a.Id,
+                typeLabel = AbnormalService.TypeLabel(a.AbnormalType),
+                description = a.Description,
+                a.reporterName,
+                reportedAt = a.ReportedAt.ToString("yyyy-MM-dd HH:mm"),
+                status = a.Status,
+                a.handlerName,
+                recoveredAt = a.RecoveredAt?.ToString("yyyy-MM-dd HH:mm"),
+                minutesOpen = (a.Status == 0 ? now : a.RecoveredAt) is DateTime end
+                    ? (long?)Math.Max(0, (long)(end - a.ReportedAt).TotalMinutes) : null,
+                a.orderNo,
+                handleNote = a.HandleNote
+            })
+        });
     }
 
     private static DeepSeekToolDef SearchWorkOrdersTool() =>
@@ -157,6 +234,7 @@ public class AiToolDispatcher
             "get_work_order_progress" => await GetProgressAsync(root, session, ct),
             "search_support_docs" => await SearchSupportDocsAsync(root, session, ct),
             "get_work_order_report_evidence" => await GetReportEvidenceAsync(root, session, ct),
+            "search_abnormal" => await SearchAbnormalAsync(root, session, ct),
             "resolve_product" => await ResolveProductAsync(root, session, ct),
             "get_production_guide" => await GetGuideAsync(root, session, ct),
             _ => throw ThrowHelper.BizUser("不支持的操作，请换个问法")
@@ -169,7 +247,7 @@ public class AiToolDispatcher
         ["guide"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "resolve_product", "get_production_guide" },
         ["support"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "search_support_docs", "search_work_orders", "get_work_order_progress", "get_work_order_report_evidence"
+            "search_support_docs", "search_work_orders", "get_work_order_progress", "get_work_order_report_evidence", "search_abnormal"
         }
     };
 

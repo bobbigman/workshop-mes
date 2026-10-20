@@ -2,35 +2,24 @@
   <div class="ai-page">
     <ValueTip :text="VALUE_TIPS.aiAssistant" />
     <div class="ai-toolbar">
-      <el-radio-group v-model="mode" :disabled="busy" @change="onModeChange">
-        <el-radio-button value="progress">查进度</el-radio-button>
-        <el-radio-button value="guide">问工艺</el-radio-button>
-        <el-radio-button value="support">智能客服</el-radio-button>
+      <el-radio-group v-model="selectedRole" :disabled="busy" @change="onRoleChange">
+        <el-radio-button value="boss">老板</el-radio-button>
+        <el-radio-button value="supervisor">车间主管</el-radio-button>
+        <el-radio-button value="finance">财务</el-radio-button>
+        <el-radio-button value="worker">车间师傅</el-radio-button>
       </el-radio-group>
       <div class="ai-status">
         <el-tag v-if="!status.enabled" type="info">已关闭</el-tag>
         <el-tag v-else-if="!status.configured" type="warning">未配置</el-tag>
         <el-tag v-else type="success">已就绪</el-tag>
-        <span v-if="status.model" class="muted">模型已配置</span>
-        <el-button size="small" :disabled="!status.enabled || busy" :loading="testing" @click="onTest">连接测试</el-button>
         <el-button size="small" :disabled="busy" @click="onNewChat">新对话</el-button>
       </div>
     </div>
 
-    <el-alert
-      v-if="!privacyAck"
-      type="warning"
-      show-icon
-      :closable="false"
-      title="使用说明"
-      description="AI 会将本次问题及必要业务资料发送至服务器配置的模型服务。请勿输入工资、密码等敏感内容。本期仅支持查询，不能改数或下单。"
-      class="mb"
-    />
-    <el-button v-if="!privacyAck" type="primary" size="small" class="mb" @click="ackPrivacy">我知道了</el-button>
 
     <el-alert v-if="banner" :type="bannerType" show-icon :closable="false" :title="banner" class="mb" />
 
-    <div class="examples" v-if="privacyAck">
+    <div class="examples">
       <span class="muted">示例：</span>
       <el-button
         v-for="q in examples"
@@ -253,8 +242,7 @@ import {
   getAiStatus,
   searchAiReportEvidence,
   searchAiWorkOrders,
-  sendAiMessage,
-  testAiConnection
+  sendAiMessage
 } from '@/api/aiAssistant'
 import { getOrder } from '@/api/prod'
 import AiAnswer from '@/components/AiAnswer.vue'
@@ -269,14 +257,13 @@ if (role !== 1) {
   router.replace('/order')
 }
 
-const mode = ref('progress')
+const selectedRole = ref('boss')
+const mode = computed(() => selectedRole.value === 'boss' ? 'progress' : 'support')
 const status = ref({ enabled: false, configured: false, model: null })
-const privacyAck = ref(false)
 const conversationId = ref('')
 const input = ref('')
 const messages = ref([])
 const busy = ref(false)
-const testing = ref(false)
 const banner = ref('')
 const bannerType = ref('info')
 const chatRef = ref(null)
@@ -285,15 +272,60 @@ let abortCtrl = null
 const detailDlg = ref(false)
 const detail = ref(null)
 
-const examples = computed(() =>
-  mode.value === 'progress'
-    ? ['明天到期还没完成的工单有哪些？', '查一下工单进度']
-    : mode.value === 'guide'
-      ? ['某产品裁切要注意什么？', '按产品编号问工艺要点']
-      : ['如何补报工单？', '为什么这个产品的完成数是 80？']
-)
+const QUESTIONS = {
+  boss: [
+    '今天要交货的工单有哪几张？',
+    '明天就要交的货，进度到哪了？',
+    '现在有哪几张单已经逾期了？逾期多久？',
+    '客户催货时，执行中的单里哪几张剩得最多？',
+    '刚下的单怎么到现在还没人动？',
+    '现在车间一共在做多少张单？',
+    '临期 3 天内要交的单有哪些？',
+    '被取消的工单有哪些？',
+    '客户在微信上突然问起某单，我在手机上怎么一秒查到？',
+    '做完的工单系统会自动结束吗？'
+  ],
+  supervisor: [
+    '今天到期的单有几张在赶？',
+    '逾期最久的是哪张？卡在哪道工序？',
+    '现在有几条设备异常还没处理？',
+    '拖最久的那条异常是谁报的、谁在修？',
+    '工人不会用手机扫码报工怎么办？',
+    '报工被退回了，工人来找我闹怎么办？',
+    '待复核的报工我该怎么处理？',
+    '工人说自己报错数了，能自己改吗？',
+    '班组长在手机上派工，工人那边能看到吗？',
+    '超报被系统硬拦了，我怎么放行？'
+  ],
+  finance: [
+    '工单计划数和完成数对不上，差在哪？',
+    '不良品会不会被算进完成数里？',
+    '客户投诉了，这活是谁做的、什么时候做的？',
+    '返工重做的件，算不算产量？',
+    '两个人合作做一批，数量怎么分？',
+    '临时工和正式工，系统里怎么区分标签？',
+    '交期被改过，我在哪看记录？',
+    '报工记录能导出 Excel 带去对账吗？',
+    '被退回的报工，会不会被算进完成数里？',
+    '月底对账时，良品+不良合计怎么对得上计划数？'
+  ],
+  worker: [
+    '工人怎么用手机扫码报工？',
+    'PDA 扫码枪怎么用？',
+    '扫了二维码打不开页面怎么办？',
+    '报错数量了，我自己能改吗？',
+    '不良品怎么报？必须填什么？',
+    '一道活分三次做，能分三次报吗？',
+    '班组长派给我的活，手机上在哪看？',
+    '没智能手机的工人怎么报工？',
+    '设备坏了我要怎么上报？',
+    '怎么看这道工序的作业指导书？'
+  ]
+}
 
-const canChat = computed(() => status.value.enabled && status.value.configured && privacyAck.value)
+const examples = computed(() => QUESTIONS[selectedRole.value])
+
+const canChat = computed(() => status.value.enabled && status.value.configured)
 
 onMounted(async () => {
   await refreshStatus()
@@ -318,46 +350,32 @@ async function refreshStatus() {
   }
 }
 
-function ackPrivacy() {
-  privacyAck.value = true
-}
-
 function useExample(q) {
+  if (!canChat.value || busy.value) return
   input.value = q
-}
-
-async function onTest() {
-  testing.value = true
-  try {
-    const res = await testAiConnection()
-    const d = res.data
-    if (d?.ok) ElMessage.success('连接成功')
-    else ElMessage.error(d?.message || '连接失败')
-  } catch (e) {
-    /* http 拦截器通常已提示；无响应时再补一句 */
-    if (!e?.message) ElMessage.error('连接测试失败')
-  } finally {
-    testing.value = false
-  }
+  return onSend()
 }
 
 async function onNewChat() {
-  if (conversationId.value) {
-    try {
-      await deleteAiConversation(conversationId.value)
-    } catch {
-      ElMessage.warning('旧会话清理失败，已开始新对话')
-    }
-  }
+  const oldConversationId = conversationId.value
   conversationId.value = ''
   messages.value = []
   input.value = ''
   abortCtrl?.abort()
   busy.value = false
+  if (oldConversationId) {
+    try {
+      await deleteAiConversation(oldConversationId)
+    } catch {
+      ElMessage.warning('旧会话清理失败，已开始新对话')
+    }
+  }
 }
 
-function onModeChange() {
-  onNewChat()
+let previousMode = mode.value
+function onRoleChange() {
+  if (mode.value !== previousMode) onNewChat()
+  previousMode = mode.value
 }
 
 async function onSend() {

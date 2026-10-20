@@ -164,7 +164,7 @@ public class WecomReportTaskService : IWecomReportTaskService
                     await _reports.ValidateSubmitAsync(new ReportDto
                     { OrderId = item.OrderId, OperationId = item.OperationId, GoodQty = 1, Source = 3 }, userId);
                 }
-                catch (BusinessException ex)
+                catch (BusinessException ex) when (ex.InnerException == null && !LogRedactor.LooksTechnical(ex.Message))
                 {
                     result.ExcludedReasons[ex.Message] = result.ExcludedReasons.GetValueOrDefault(ex.Message) + 1;
                     continue; // 业务不符合条件明确记在返回中；SQL/技术异常不捕获。

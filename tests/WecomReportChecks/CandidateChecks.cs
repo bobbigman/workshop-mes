@@ -23,11 +23,13 @@ public static class CandidateChecks
             : ApiResult<List<AssignTaskDto>>.Ok(assignedRows));
         var blocked = new HashSet<long>();
         var technicalFailure = false;
+        var wrappedTechnicalFailure = false;
         var reports = DispatchProxy.Create<IReportService, Stub>();
         ((Stub)(object)reports).Call = (method, args) =>
         {
             if (method.Name != "ValidateSubmitAsync") throw new InvalidOperationException("候选查询不应写入");
             if (technicalFailure) throw new InvalidOperationException("模拟SQL失败");
+            if (wrappedTechnicalFailure) throw new BusinessException("SQL执行失败。SQL原文: SELECT 1");
             if (blocked.Contains(((ReportDto)args![0]!).OperationId)) throw ThrowHelper.BizUser("前道不足或无报工权限");
             return Task.CompletedTask;
         };
@@ -66,6 +68,12 @@ public static class CandidateChecks
         catch (InvalidOperationException ex) when (ex.Message == "模拟SQL失败") { bubbled = true; }
         check(bubbled, "技术异常向上抛，不当业务过滤吞掉");
         technicalFailure = false;
+        wrappedTechnicalFailure = true;
+        var wrappedBubbled = false;
+        try { await service.QueryAsync(1, 7, 2, null, 1); }
+        catch (BusinessException ex) when (ex.Message.Contains("SQL执行失败")) { wrappedBubbled = true; }
+        check(wrappedBubbled, "带技术内容的业务异常继续抛出，不能当无候选");
+        wrappedTechnicalFailure = false;
 
         // SQL Server 提供程序仅生成 SQL，不打开连接，不接触真实库。
         using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
