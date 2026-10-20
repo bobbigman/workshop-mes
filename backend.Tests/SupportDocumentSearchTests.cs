@@ -11,9 +11,9 @@ public class SupportDocumentSearchTests
 {
     [Theory]
     [InlineData("账上多少钱", "方向一：车间和财务串起来", "金蝶账目还没接进来，现在看不到")]
-    [InlineData("材料涨价按新价算", "方向二：报价不拍脑袋", "留有接口，调用金蝶 MCP 集成")]
-    [InlineData("材料涨价按新价算报价", "方向二：报价不拍脑袋", "留有接口，调用金蝶 MCP 集成")]
-    [InlineData("销售报价的时候，AI 能帮着算算料钱吗？", "方向二：报价不拍脑袋", "留有接口，调用金蝶 MCP 集成")]
+    [InlineData("材料涨价按新价算", "方向二：报价不拍脑袋", "调用金蝶 MCP 集成")]
+    [InlineData("材料涨价按新价算报价", "方向二：报价不拍脑袋", "调用金蝶 MCP 集成")]
+    [InlineData("销售报价的时候，AI 能帮着算算料钱吗？", "方向二：报价不拍脑袋", "调用金蝶 MCP 集成")]
     public void IntegrationQuestions_RetrieveCurrentCapabilityBoundary(string question, string chapter, string boundary)
     {
         var result = Build(FindRepoSupportDocs()).Search(question);

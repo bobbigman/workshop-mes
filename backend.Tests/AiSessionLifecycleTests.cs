@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
 using ahu.MicrosoftMes.Common;
 using ahu.MicrosoftMes.Services;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -129,10 +130,15 @@ public class AiSessionLifecycleTests
 
     private sealed class ScriptedClient : IDeepSeekClient
     {
+        public IReadOnlyList<DeepSeekChatMessage> LastMessages { get; private set; } = Array.Empty<DeepSeekChatMessage>();
         public Func<CancellationToken, Task<DeepSeekChatResult>> Reply { get; set; } =
             _ => Task.FromResult(new DeepSeekChatResult { Content = "已核对。" });
         public Task<DeepSeekChatResult> ChatAsync(IReadOnlyList<DeepSeekChatMessage> messages,
-            IReadOnlyList<DeepSeekToolDef>? tools, CancellationToken ct) => Reply(ct);
+            IReadOnlyList<DeepSeekToolDef>? tools, CancellationToken ct)
+        {
+            LastMessages = messages;
+            return Reply(ct);
+        }
         public Task<DeepSeekChatResult> ConnectionTestAsync(CancellationToken ct) => Reply(ct);
     }
 
@@ -153,6 +159,56 @@ public class AiSessionLifecycleTests
 
     private static AiMessageRequest Request(string? id = null) =>
         new() { ConversationId = id, Mode = "support", Message = "怎么扫码报工" };
+
+    [Fact]
+    public async Task Support_PrefetchesEvidenceBeforeFirstModelCall_RefreshesEachTurn()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ai_prefetch_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var path = Path.Combine(root, "20.md");
+            File.WriteAllText(path, "# 账上多少钱\n金蝶账目还没接进来，现在看不到。\n");
+            var (service, _, client) = Assistant(root);
+            var first = await service.SendMessageAsync(new() { Mode = "support", Message = "账上多少钱" }, 1, 1, CancellationToken.None);
+            var firstTool = Assert.Single(client.LastMessages, m => m.Role == "tool");
+            using var firstPayload = JsonDocument.Parse(firstTool.Content!);
+            Assert.Contains(firstPayload.RootElement.GetProperty("sources").EnumerateArray(),
+                s => s.GetProperty("Excerpt").GetString()!.Contains("现在看不到"));
+            Assert.Contains(client.LastMessages, m => m.Role == "assistant"
+                && m.ToolCalls!.Any(c => c.Id == firstTool.ToolCallId));
+            Assert.NotEmpty(first.Data!.Sources);
+
+            File.WriteAllText(path, "# 材料涨价按新价算\n金蝶料价留有接口，调用金蝶 MCP 集成。\n");
+            var second = await service.SendMessageAsync(new() { Mode = "support", ConversationId = first.Data.ConversationId,
+                Message = "材料涨价按新价算" }, 1, 1, CancellationToken.None);
+            using var secondPayload = JsonDocument.Parse(client.LastMessages.Last(m => m.Role == "tool").Content!);
+            Assert.Contains(secondPayload.RootElement.GetProperty("sources").EnumerateArray(),
+                s => s.GetProperty("Excerpt").GetString()!.Contains("金蝶 MCP"));
+            Assert.All(second.Data!.Sources, s => Assert.DoesNotContain("现在看不到", s.Excerpt));
+            Assert.NotEmpty(second.Data.Sources);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Theory]
+    [InlineData("progress")]
+    [InlineData("guide")]
+    public async Task OtherModes_DoNotPrefetchSupportDocs(string mode)
+    {
+        var (service, _, client) = Assistant();
+        await service.SendMessageAsync(new() { Mode = mode, Message = "查询工单" }, 1, 1, CancellationToken.None);
+        Assert.DoesNotContain(client.LastMessages, m => m.Role == "tool");
+    }
+
+    [Fact]
+    public async Task Support_DisabledKnowledge_DoesNotInventEvidence()
+    {
+        var (service, _, client) = Assistant();
+        var result = await service.SendMessageAsync(Request(), 1, 1, CancellationToken.None);
+        Assert.Empty(result.Data!.Sources);
+        Assert.Contains("disabled", Assert.Single(client.LastMessages, m => m.Role == "tool").Content);
+    }
 
     private static int CachedCount(AiSessionStore store) =>
         ((System.Collections.IDictionary)typeof(AiSessionStore)
