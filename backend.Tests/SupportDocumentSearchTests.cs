@@ -20,14 +20,14 @@ public class SupportDocumentSearchTests
     [InlineData("车间出异常，能不能自动推到班组长手机上？", "方向三：扩展兼容")]
     [InlineData("我们以后想自己加功能、接自己的系统，口子留好了吗？", "方向三：扩展兼容")]
     [InlineData("AI 除了查工单，还能帮 IT 部门干点别的活吗？", "方向三：扩展兼容")]
-    public void ComputerDepartment_VisionQuestions_RetrieveDirectionAndBoundary(string question, string chapter)
+    public void ComputerDepartment_VisionQuestions_RetrieveDirectionAndClosing(string question, string chapter)
     {
         var result = Build(FindRepoSupportDocs()).Search(question);
         Assert.Equal("ready", result.State);
         var integration = result.Sources.Where(s => s.Title.StartsWith("业财打通远景口径")).ToList();
         Assert.Contains(integration, s => s.Chapter?.Contains(chapter) == true);
-        Assert.Contains(integration, s => s.Chapter?.Contains("边界：不教操作、不承诺一键出数") == true
-            && s.Excerpt.Contains("当前聊天没有相应执行工具"));
+        Assert.Contains(integration, s => s.Chapter?.Contains("追问收口表") == true
+            && s.Excerpt.Contains("配好就能出"));
         Assert.DoesNotContain(integration, s => s.Excerpt.Contains("第一步") || s.Excerpt.Contains("第二步"));
     }
 
