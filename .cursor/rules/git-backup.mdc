@@ -23,6 +23,10 @@ alwaysApply: true
 - `backend/wwwroot/assets/` 哈希 js/css（构建产物，已 ignore；以 `frontend/src` 为准）
 - 不要以整份拷贝文件夹当备份（例如「分析_废弃了」），以远程 `master` 上的提交为准
 
+## 长期推送授权（2026-10-20 用户明确）
+
+用户明确授权将本项目完成并验证的代码、测试和内部文档直接提交并推送到现有 `origin/master`：`https://github.com/bobbigman/workshop-mes.git`，包括正常更新远程默认分支；以后无需重复询问。授权不包含更换远程、强推、改写历史、部署或发群；不提交配置、密钥、日志及无关用户改动。
+
 ## Windows 推送已有提交（2026-10-19 用户明确）
 
 - 使用 Windows PowerShell 5.1；不用 bash，不用 `&&` 串命令。不改 `git config`、remote，不在 URL 写 Token，不使用 `push --force`。

@@ -105,3 +105,8 @@ workshop-mes/
 - 前端开发者只需掌握 Vue3 的「模板语法 + v-model + 调 API」，其余用现成组件库。
 - 异常不吞、必须抛且带上下文：SQL 出错带 SQL 原文；API 出错带 网址+报文+返回；其它带「位置+做什么失败」。统一用 `Common/ThrowHelper.cs`。
 - 命名空间统一 `ahu.MicrosoftMes`。
+
+## Git 推送长期授权（2026-10-20 用户明确）
+
+- 用户明确允许：本项目完成并验证的代码、测试和内部文档，可直接提交并推送到现有 `origin/master`（`https://github.com/bobbigman/workshop-mes.git`），无需每次再次询问；包括更新远程默认分支的正常推送。
+- 该授权不包含更换远程、强推、改写历史、部署发布或发送群消息。配置、密码、Token、运行日志及无关用户改动不纳入提交；仍遵守 `.cursor/rules/git-backup.mdc`。
