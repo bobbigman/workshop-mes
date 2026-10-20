@@ -22,6 +22,7 @@ public class AiSessionState
     public DateTime CreatedAt { get; set; }
     public DateTime LastAccessAt { get; set; }
     public int UserTurnCount { get; set; }
+    public bool HasAnswered { get; set; }
     public bool Busy { get; set; }
     public List<AiSessionMessage> Messages { get; set; } = new();
     public List<AiCandidateDto> Candidates { get; set; } = new();

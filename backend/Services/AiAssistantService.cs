@@ -124,6 +124,15 @@ public class AiAssistantService : IAiAssistantService
 
         try
         {
+            // 以已完成的回答判断首轮，失败/取消的提问和工具调用轮次不算已问候。
+            var hasAnswered = session.HasAnswered || session.Messages.Any(m => m.Role == "assistant"
+                && (m.ToolCalls == null || m.ToolCalls.Count == 0)
+                && !string.IsNullOrWhiteSpace(m.Content));
+            session.Messages[0].Content = SystemPrompt(mode)
+                + "【称呼】只使用用户在聊天中明确提供或要求的称呼，不根据姓名、管理员角色或资料里的称呼猜测‘某总’等身份。"
+                + (hasAnswered
+                    ? "本会话已有回答，本轮直接接着回答，不重复称呼、问好或自我介绍。"
+                    : "这是本会话首次回答：若用户未明确提供称呼，开头用‘师傅您好，’；有明确称呼则用该称呼问好。问好后直接给结论，不加‘以下是为您查询到的相关情况’等套话。");
             if (session.UserTurnCount >= _opt.MaxTurnsPerSession)
                 throw ThrowHelper.BizUser($"本会话已达 {_opt.MaxTurnsPerSession} 轮，请新建对话");
 
@@ -281,6 +290,7 @@ public class AiAssistantService : IAiAssistantService
                 || (finalAnswer?.Contains("选择", StringComparison.Ordinal) == true
                     && session.Candidates.Count > 0);
 
+            session.HasAnswered = true;
             return ApiResult<AiMessageResultDto>.Ok(new AiMessageResultDto
             {
                 ConversationId = session.Id,
