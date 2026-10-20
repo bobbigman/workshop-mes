@@ -10,24 +10,25 @@ namespace WorkshopMes.Tests;
 public class SupportDocumentSearchTests
 {
     [Theory]
-    [InlineData("车间计件工资算完，怎么自动推到金蝶生成凭证，不让财务再抄一遍？", "query_salary")]
-    [InlineData("工资推金蝶之前，IT 要先把哪几样东西配好？", "已确认")]
-    [InlineData("财务说金蝶里没看到工资凭证，IT 第一步先查哪里？", "执行记录")]
-    [InlineData("临时工和正式工工资算法不一样，推金蝶时怎么区分？", "快照")]
-    [InlineData("销售要报价，怎么让 AI 自动把金蝶 BOM 和材料单价拉出来算成本？", "价格来源")]
-    [InlineData("金蝶里 BOM 改过好几版，AI 算报价用的是哪一版？", "版本")]
-    [InlineData("材料这个月涨价了，报价时 AI 取的是哪天的单价？", "基准日")]
-    [InlineData("车间开工前，怎么让 AI 自动跑一遍\"这单料够不够\"？", "剩余需求")]
-    [InlineData("欠料清单出来后，怎么一眼看出缺哪颗料、差多少？", "欠料量")]
-    [InlineData("金蝶实时库存和车间实际用料对不上，先查哪边？", "领退料")]
-    public void ComputerDepartment_IntegrationQuestions_RetrieveStepsAndBoundary(string question, string evidence)
+    [InlineData("咱们车间的数据，能跟金蝶打通做业财一体化吗？", "方向一：业财打通")]
+    [InlineData("车间干完的活，能不能自动进金蝶，财务不用再抄一遍？", "方向一：业财打通")]
+    [InlineData("老板想一张表看全车间的生产和钱，系统撑得起来吗？", "方向一：业财打通")]
+    [InlineData("销售报价时，AI 能不能帮着算材料成本？", "方向二：成本报价")]
+    [InlineData("产品 BOM 改了，AI 算成本能不能跟着变？", "方向二：成本报价")]
+    [InlineData("材料涨价了，报价时 AI 能不能按最新行情算？", "方向二：成本报价")]
+    [InlineData("除了金蝶，这系统还能连别的管理软件吗？", "方向三：扩展兼容")]
+    [InlineData("车间出异常，能不能自动推到班组长手机上？", "方向三：扩展兼容")]
+    [InlineData("我们以后想自己加功能、接自己的系统，口子留好了吗？", "方向三：扩展兼容")]
+    [InlineData("AI 除了查工单，还能帮 IT 部门干点别的活吗？", "方向三：扩展兼容")]
+    public void ComputerDepartment_VisionQuestions_RetrieveDirectionAndBoundary(string question, string chapter)
     {
         var result = Build(FindRepoSupportDocs()).Search(question);
         Assert.Equal("ready", result.State);
-        var integration = result.Sources.Where(s => s.Title.StartsWith("业财打通三件事")).ToList();
-        Assert.True(integration.Count > 0, string.Join("; ", result.Sources.Select(s => s.Title + ":" + s.Chapter)));
-        Assert.Contains(integration, s => s.Excerpt.Contains(evidence));
-        Assert.Contains(integration, s => s.Excerpt.Contains("本页签") && s.Excerpt.Contains("WorkBuddy"));
+        var integration = result.Sources.Where(s => s.Title.StartsWith("业财打通远景口径")).ToList();
+        Assert.Contains(integration, s => s.Chapter?.Contains(chapter) == true);
+        Assert.Contains(integration, s => s.Chapter?.Contains("边界：不教操作、不承诺一键出数") == true
+            && s.Excerpt.Contains("当前聊天没有相应执行工具"));
+        Assert.DoesNotContain(integration, s => s.Excerpt.Contains("第一步") || s.Excerpt.Contains("第二步"));
     }
 
     private static SupportDocumentService Build(string root, SupportDocsOptions? o = null)
