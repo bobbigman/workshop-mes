@@ -10,7 +10,7 @@ const UNORDERED = /^\s{0,3}[-*+]\s+(.+)$/
 const ORDERED = /^\s{0,3}(\d{1,3})[.、)]\s+(.+)$/
 
 // 行内语法按优先级匹配：代码 → 加粗 → 链接 → 来源编号。
-const INLINE = /(`[^`\n]+`)|(\*\*[^*\n]+\*\*)|(\[[^\]\n]+\]\(https?:\/\/[^\s)]+\))|(\[(?:doc|evt|src)_[^\]\n]{1,80}\])/g
+const INLINE = /(`[^`\n]+`)|(\*\*[^*\n]+\*\*)|(\[[^\]\n]+\]\(https?:\/\/[^\s)]+\))|(\[(?:doc|evt|src)_[^\]\n]{1,200}\]|\b(?:doc|evt|src)_[A-Za-z0-9]+(?:#[^\s，。；：、（）()<>[\]]+)?)/g
 
 export function parseAiMarkdown(source) {
   const text = String(source ?? '').replace(/\r\n?/g, '\n')
@@ -127,7 +127,7 @@ export function parseInline(source) {
         ? { type: 'link', text: link[1], href: link[2] }
         : textPart(token))
     } else if (match[4]) {
-      parts.push({ type: 'src', text: token.slice(1, -1) })
+      parts.push({ type: 'src', text: token.startsWith('[') ? token.slice(1, -1) : token })
     }
 
     last = match.index + token.length

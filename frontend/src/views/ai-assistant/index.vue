@@ -44,7 +44,7 @@
 
     <div ref="chatRef" class="chat">
       <div v-for="(m, i) in messages" :key="i" class="bubble" :class="m.role">
-        <div class="bubble-role">{{ m.role === 'user' ? '我' : '助手' }}</div>
+        <div class="bubble-role"><span v-if="m.role === 'assistant'" class="assistant-avatar">AI</span>{{ m.role === 'user' ? '我' : '小工单助手' }}<span v-if="m.role === 'assistant'" class="assistant-caption">为你整理</span></div>
         <div class="bubble-text" :class="{ 'is-md': m.role === 'assistant' }">
           <AiAnswer v-if="m.role === 'assistant'" :text="m.text" />
           <template v-else>{{ m.text }}</template>
@@ -531,22 +531,28 @@ async function scrollBottom() {
 .mb { margin-bottom: 4px; }
 .examples { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .chat {
-  flex: 1; overflow: auto; border: 1px solid var(--el-border-color); border-radius: 8px;
-  padding: 16px; background: #f7f8fa;
+  flex: 1; min-height: 0; overflow: auto; border: 1px solid #e8ecf2; border-radius: 16px;
+  padding: 32px max(24px, calc((100% - 1120px) / 2)); background: #f5f7fb;
 }
-.bubble { margin-bottom: 18px; max-width: 1000px; min-width: 0; }
+.bubble { margin: 0 auto 32px; max-width: 1120px; min-width: 0; }
 .bubble.user { margin-left: auto; max-width: 720px; }
 .bubble-role {
-  font-size: 12px; color: var(--app-text-3, #86909c); margin-bottom: 5px; letter-spacing: .2px;
+  display: flex; align-items: center; gap: 10px;
+  font-size: 15px; font-weight: 600; color: #26364d; margin-bottom: 14px;
 }
+.assistant-avatar { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: #e7edff; color: #3864d9; font-size: 12px; letter-spacing: .5px; }
+.assistant-caption { font-size: 12px; font-weight: 400; color: #8994a5; }
+.bubble.user { margin-right: 0; }
+.bubble.user .bubble-role { justify-content: flex-end; }
 .bubble-text {
   white-space: pre-wrap; word-break: break-word;
   background: #fff; border: 1px solid var(--app-border, #e5e6eb); border-radius: 10px; padding: 10px 14px;
   box-shadow: var(--app-shadow, 0 1px 2px rgba(29, 33, 41, .04));
 }
 .bubble-text.is-md {
-  white-space: normal; padding: 14px 18px;
-  border-radius: 12px;
+  white-space: normal; padding: 30px 36px;
+  border-radius: 16px; border-color: #e6ebf2;
+  box-shadow: 0 4px 20px rgba(35, 55, 85, .035);
 }
 .bubble.user .bubble-text {
   background: #ecf5ff; border-color: #c6e2ff; box-shadow: none;

@@ -1,4 +1,6 @@
 <script setup>
+import { ref } from 'vue'
+const expanded = ref({})
 defineProps({
   parts: { type: Array, default: () => [] }
 })
@@ -14,7 +16,10 @@ defineProps({
       target="_blank"
       rel="noopener noreferrer"
     >{{ part.text }}</a>
-    <span v-else-if="part.type === 'src'" class="ai-md-src">{{ part.text }}</span>
+    <span v-else-if="part.type === 'src'" class="ai-md-citation">
+      <button class="ai-md-src" type="button" :aria-expanded="!!expanded[index]" @click="expanded[index] = !expanded[index]">{{ expanded[index] ? '收起依据' : '资料依据' }}</button>
+      <span v-if="expanded[index]" class="ai-md-source-detail">{{ part.text }}</span>
+    </span>
     <br v-else-if="part.type === 'br'" />
     <template v-else>{{ part.text }}</template>
   </template>

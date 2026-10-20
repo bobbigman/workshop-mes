@@ -80,8 +80,8 @@ const blocks = computed(() => parseAiMarkdown(props.text))
 <!-- 不用 scoped：Markdown 内容在 AiInline 子组件里，scoped 选择器穿不过去；统一用 .ai-md 前缀限定作用域。 -->
 <style>
 .ai-md {
-  font-size: 14px;
-  line-height: 1.72;
+  font-size: 16px;
+  line-height: 1.9;
   color: var(--app-text-1, #1d2129);
   word-break: break-word;
 }
@@ -89,23 +89,27 @@ const blocks = computed(() => parseAiMarkdown(props.text))
 .ai-md > :last-child { margin-bottom: 0; }
 
 .ai-md-h {
-  margin: 18px 0 8px;
-  font-size: 15px;
+  margin: 32px 0 14px;
+  font-size: 19px;
   line-height: 1.45;
   font-weight: 600;
   color: var(--app-text-1, #1d2129);
 }
 h2.ai-md-h, h1.ai-md-h {
-  padding-left: 9px;
-  border-left: 3px solid var(--app-primary, #3370ff);
-  font-size: 16px;
+  padding: 0 0 12px;
+  border-bottom: 1px solid #e6eaf0;
+  font-size: 20px;
 }
 h3.ai-md-h, h4.ai-md-h, h5.ai-md-h, h6.ai-md-h {
-  font-size: 14.5px;
+  font-size: 18px;
   color: var(--app-text-2, #4e5969);
 }
 
-.ai-md-p { margin: 0 0 9px; }
+.ai-md-p { margin: 0 0 16px; }
+.ai-md > .ai-md-p:first-child:not(.is-warn) {
+  font-size: 17px; font-weight: 500; line-height: 1.85;
+  margin-bottom: 26px; color: #26364d;
+}
 .ai-md-p.is-lead {
   margin-bottom: 13px;
   padding: 10px 12px;
@@ -149,16 +153,20 @@ h3.ai-md-h, h4.ai-md-h, h5.ai-md-h, h6.ai-md-h {
   background: #f2f3f5;
   color: var(--app-text-3, #86909c);
   font-family: var(--app-font-mono, Consolas, monospace);
-  font-size: 11px;
+  font-size: 12px;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
   line-height: 18px;
   overflow-wrap: anywhere;
 }
+.ai-md-src:hover, .ai-md-src:focus-visible { color: #245bdb; border-color: #8daff8; }
+.ai-md-source-detail { font-size: 12px; color: #66758a; overflow-wrap: anywhere; padding: 0 6px; }
 
 .ai-md-list {
-  margin: 0 0 10px;
-  padding-left: 20px;
+  margin: 0 0 20px;
+  padding-left: 25px;
 }
-.ai-md-list li { margin: 2px 0; }
+.ai-md-list li { margin: 8px 0; padding-left: 4px; }
 .ai-md-list li::marker { color: var(--app-text-3, #86909c); }
 
 .ai-md-quote {
@@ -182,11 +190,11 @@ h3.ai-md-h, h4.ai-md-h, h5.ai-md-h, h6.ai-md-h {
 .ai-md-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: 15px;
+  line-height: 1.7;
 }
 .ai-md-table th {
-  padding: 8px 10px;
+  padding: 13px 16px;
   border-bottom: 1px solid var(--app-border, #e5e6eb);
   background: #f7f8fa;
   color: var(--app-text-2, #4e5969);
@@ -194,7 +202,7 @@ h3.ai-md-h, h4.ai-md-h, h5.ai-md-h, h6.ai-md-h {
   white-space: nowrap;
 }
 .ai-md-table td {
-  padding: 7px 10px;
+  padding: 12px 16px;
   border-top: 1px solid var(--app-border-light, #f2f3f5);
   vertical-align: top;
   min-width: 76px;
@@ -226,7 +234,9 @@ h3.ai-md-h, h4.ai-md-h, h5.ai-md-h, h6.ai-md-h {
   border-top: 1px solid var(--app-border, #e5e6eb);
 }
 @media (max-width: 600px) {
-  .ai-md { font-size: 14px; }
+  .ai-md { font-size: 15px; }
+  .ai-md > .ai-md-p:first-child:not(.is-warn) { font-size: 16px; }
+  h2.ai-md-h, h1.ai-md-h { font-size: 18px; }
   .ai-md-table th, .ai-md-table td { padding: 7px 9px; }
 }
 </style>

@@ -3,6 +3,12 @@ import assert from 'node:assert/strict'
 import { parseAiMarkdown, parseInline } from './aiMarkdown.js'
 
 describe('parseAiMarkdown', () => {
+  it('recognizes unbracketed references from the actual long answer without eating punctuation', () => {
+    const parts = parseInline('依据 doc_56f4ee4f9c#查进度查报表_6（工宣 v1.11）：详情。')
+    assert.equal(parts[1].type, 'src')
+    assert.equal(parts[1].text, 'doc_56f4ee4f9c#查进度查报表_6')
+    assert.equal(parts[2].text, '（工宣 v1.11）：详情。')
+  })
   it('renders conclusion, heading, table and ordered list', () => {
     const blocks = parseAiMarkdown([
       '**结论：目前能确认的延期工单只有 1 条。**',
