@@ -44,7 +44,8 @@ public static class WorkOrderProgressQuery
         AppDbContext db,
         long factoryId,
         IReadOnlyList<OrderKey> orders,
-        string where = nameof(LoadAsync))
+        string where = nameof(LoadAsync),
+        DateTime? asOf = null)
     {
         var result = orders.ToDictionary(
             o => o.Id,
@@ -59,6 +60,7 @@ public static class WorkOrderProgressQuery
             from t in db.WorkOrderOperations.AsNoTracking()
             where orderIds.Contains(t.WorkOrderId)
             join op in db.Operations.AsNoTracking() on t.OperationId equals op.Id
+            where op.FactoryId == factoryId
             select new
             {
                 t.Id,
@@ -92,6 +94,7 @@ public static class WorkOrderProgressQuery
                     from s in db.RoutingSteps.AsNoTracking()
                     where routingIds.Contains(s.RoutingId)
                     join op in db.Operations.AsNoTracking() on s.OperationId equals op.Id
+                    where op.FactoryId == factoryId
                     select new { s.RoutingId, s.OperationId, op.Name, s.Seq }
                 ).ToListAsync()).Select(x => (x.RoutingId, x.OperationId, x.Name, x.Seq)).ToList();
             var stepsByRoute = steps.GroupBy(x => x.RoutingId)
@@ -111,7 +114,8 @@ public static class WorkOrderProgressQuery
 
         var reportRows = await (
             from r in db.Reports.AsNoTracking()
-            where orderIds.Contains(r.OrderId) && r.ReviewStatus != 2
+            where r.FactoryId == factoryId && orderIds.Contains(r.OrderId) && r.ReviewStatus != 2
+                && (!asOf.HasValue || (r.ReportTime <= asOf.Value && (r.ReviewStatus == 0 || r.ReviewStatus == 1)))
             group r by new { r.OrderId, r.OperationId } into g
             select new
             {

@@ -22,10 +22,12 @@ public class ProductController : ControllerBase
         _svc.GetAsync(id, JwtHelper.GetFactoryId(User));
 
     [HttpPost]
+    [Authorize(Roles = "1")]
     public Task<ApiResult<object?>> Create([FromBody] ProductCreateDto dto) =>
         _svc.CreateAsync(dto, JwtHelper.GetFactoryId(User));
 
     [HttpPut("{id}")]
+    [Authorize(Roles = "1")]
     public Task<ApiResult<object?>> Update(long id, [FromBody] ProductCreateDto dto) =>
         _svc.UpdateAsync(id, dto, JwtHelper.GetFactoryId(User));
 

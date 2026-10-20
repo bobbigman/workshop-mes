@@ -83,6 +83,7 @@ public class BaseProduct
     public long? RoutingId { get; set; }            // 工艺路线
     public string? Supplier { get; set; }           // 供应商(扩展属性)
     public decimal? Price { get; set; }             // 单价(扩展属性，不是工价)
+    public bool IsRiskFocus { get; set; }           // 综合风险简报优先关注产品（docs/251、252）
     public DateTime CreatedAt { get; set; }
 }
 

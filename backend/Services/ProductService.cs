@@ -23,6 +23,7 @@ public class ProductQueryDto
 
 public class ProductCreateDto
 {
+    public bool? IsRiskFocus { get; set; }
     public long? CopyFromId { get; set; }
     public RoutingCreateDto? NewRouting { get; set; }
     public string Code { get; set; } = "";
@@ -35,6 +36,7 @@ public class ProductCreateDto
 
 public class ProductListDto
 {
+    public bool IsRiskFocus { get; set; }
     public long Id { get; set; }
     public string Code { get; set; } = "";
     public string Name { get; set; } = "";
@@ -46,6 +48,7 @@ public class ProductListDto
 
 public class ProductDetailDto
 {
+    public bool IsRiskFocus { get; set; }
     public long Id { get; set; }
     public string Code { get; set; } = "";
     public string Name { get; set; } = "";
@@ -80,7 +83,7 @@ public class ProductService : IProductService
             {
                 Id = x.p.Id, Code = x.p.Code, Name = x.p.Name,
                 UnitName = x.UnitName, RoutingName = x.RoutingName,
-                Supplier = x.p.Supplier, Price = x.p.Price
+                Supplier = x.p.Supplier, Price = x.p.Price, IsRiskFocus = x.p.IsRiskFocus
             }).ToListAsync();
 
         return ApiResult<PageResult<ProductListDto>>.Ok(new PageResult<ProductListDto> { List = list, Total = total });
@@ -98,7 +101,8 @@ public class ProductService : IProductService
             UnitId = p.UnitId,
             RoutingId = p.RoutingId,
             Supplier = p.Supplier,
-            Price = p.Price
+            Price = p.Price,
+            IsRiskFocus = p.IsRiskFocus
         });
     }
 
@@ -130,6 +134,7 @@ public class ProductService : IProductService
             RoutingId = routingId,
             Supplier = dto.Supplier,
             Price = dto.Price,
+            IsRiskFocus = dto.IsRiskFocus ?? false,
             CreatedAt = DateTime.Now
         });
         await _db.SaveChangesAsync();
@@ -162,6 +167,7 @@ public class ProductService : IProductService
         product.RoutingId = dto.RoutingId;
         product.Supplier = dto.Supplier;
         product.Price = dto.Price;
+        if (dto.IsRiskFocus.HasValue) product.IsRiskFocus = dto.IsRiskFocus.Value;
         await _db.SaveChangesAsync();
         return ApiResult<object?>.OkMsg();
     }

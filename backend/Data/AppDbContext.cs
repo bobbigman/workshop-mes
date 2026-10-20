@@ -213,6 +213,7 @@ public class AppDbContext : DbContext
             e.Property(x => x.RoutingId).HasColumnName("routing_id");
             e.Property(x => x.Supplier).HasColumnName("supplier").HasMaxLength(128);
             e.Property(x => x.Price).HasColumnName("price").HasPrecision(12, 2);
+            e.Property(x => x.IsRiskFocus).HasColumnName("is_risk_focus").HasDefaultValue(false);
             e.Property(x => x.CreatedAt).HasColumnName("created_at");
         });
 

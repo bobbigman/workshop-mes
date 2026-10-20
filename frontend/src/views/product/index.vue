@@ -9,6 +9,9 @@
     <el-table :data="list">
       <el-table-column prop="code" label="产品编号" />
       <el-table-column prop="name" label="产品名称" />
+      <el-table-column label="重点产品" width="100">
+        <template #default="{ row }"><el-tag v-if="row.isRiskFocus" type="warning">重点</el-tag></template>
+      </el-table-column>
       <el-table-column prop="unitName" label="单位" />
       <el-table-column prop="routingName" label="工艺路线" />
       <el-table-column prop="supplier" label="供应商" />
@@ -27,6 +30,9 @@
       <el-form :model="form" :disabled="saving" label-width="100px">
         <el-form-item label="产品编号" required><el-input v-model="form.code" /></el-form-item>
         <el-form-item label="产品名称" required><el-input v-model="form.name" /></el-form-item>
+        <el-form-item v-if="isAdmin" label="重点产品">
+          <el-checkbox v-model="form.isRiskFocus">风险简报优先关注</el-checkbox>
+        </el-form-item>
         <el-form-item label="单位">
           <el-select v-model="form.unitId" clearable placeholder="选择" style="width:100%">
             <el-option v-for="u in unitOptions" :key="u.id" :label="u.name" :value="u.id" />
@@ -71,7 +77,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 const isAdmin = Number(localStorage.getItem('role')) === 1
 const copyFromId = ref(null), saving = ref(false), loadingRouting = ref(false)
 const list = ref([]), keyword = ref(''), dlg = ref(false), editingId = ref(null)
-const form = ref({ code: '', name: '', unitId: null, routingId: null, supplier: '', price: null })
+const form = ref({ code: '', name: '', unitId: null, routingId: null, supplier: '', price: null, isRiskFocus: false })
 const unitOptions = ref([]), routingOptions = ref([]), opOptions = ref([])
 
 onMounted(async () => {
@@ -87,7 +93,7 @@ async function load() {
 function openCreate() {
   copyFromId.value = null
   editingId.value = null
-  form.value = { code: '', name: '', unitId: null, routingId: null, supplier: '', price: null }
+  form.value = { code: '', name: '', unitId: null, routingId: null, supplier: '', price: null, isRiskFocus: false }
   dlg.value = true
 }
 async function openEdit(row) {
@@ -95,7 +101,7 @@ async function openEdit(row) {
   const res = await getProduct(row.id)
   editingId.value = row.id
   const d = res.data
-  form.value = { code: d.code, name: d.name, unitId: d.unitId, routingId: d.routingId, supplier: d.supplier, price: d.price }
+  form.value = { code: d.code, name: d.name, unitId: d.unitId, routingId: d.routingId, supplier: d.supplier, price: d.price, isRiskFocus: !!d.isRiskFocus }
   dlg.value = true
 }
 async function openCopy(row) {
@@ -103,6 +109,7 @@ async function openCopy(row) {
   editingId.value = null
   copyFromId.value = row.id
   form.value.code = ''
+  form.value.isRiskFocus = false
 }
 
 async function onSave() {

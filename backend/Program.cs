@@ -175,6 +175,8 @@ try
     builder.Services.AddScoped<ISalaryService, SalaryService>();
     builder.Services.AddScoped<IReportStatService, ReportStatService>();
     builder.Services.AddScoped<IExecutionMonitorService, ExecutionMonitorService>();
+    builder.Services.AddSingleton(TimeProvider.System);
+    builder.Services.AddScoped<IRiskBriefService, RiskBriefService>();
     builder.Services.AddScoped<IAbnormalService, AbnormalService>();
     builder.Services.AddScoped<IAiReportEvidenceService, AiReportEvidenceService>();
     builder.Services.AddScoped<ICustomFieldService, CustomFieldService>();
