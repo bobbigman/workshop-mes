@@ -45,7 +45,10 @@
     <div ref="chatRef" class="chat">
       <div v-for="(m, i) in messages" :key="i" class="bubble" :class="m.role">
         <div class="bubble-role">{{ m.role === 'user' ? '我' : '助手' }}</div>
-        <div class="bubble-text">{{ m.text }}</div>
+        <div class="bubble-text" :class="{ 'is-md': m.role === 'assistant' }">
+          <AiAnswer v-if="m.role === 'assistant'" :text="m.text" />
+          <template v-else>{{ m.text }}</template>
+        </div>
 
         <div v-if="m.candidates?.length" class="block">
           <div class="block-title">请选择</div>
@@ -253,6 +256,7 @@ import {
   testAiConnection
 } from '@/api/aiAssistant'
 import { getOrder } from '@/api/prod'
+import AiAnswer from '@/components/AiAnswer.vue'
 import ValueTip from '@/components/ValueTip.vue'
 import { VALUE_TIPS } from '@/constants/valueTips'
 
@@ -528,16 +532,29 @@ async function scrollBottom() {
 .examples { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .chat {
   flex: 1; overflow: auto; border: 1px solid var(--el-border-color); border-radius: 8px;
-  padding: 12px; background: #fafafa;
+  padding: 16px; background: #f7f8fa;
 }
-.bubble { margin-bottom: 14px; max-width: 920px; }
-.bubble.user { margin-left: auto; }
-.bubble-role { font-size: 12px; color: #888; margin-bottom: 4px; }
+.bubble { margin-bottom: 18px; max-width: 1000px; min-width: 0; }
+.bubble.user { margin-left: auto; max-width: 720px; }
+.bubble-role {
+  font-size: 12px; color: var(--app-text-3, #86909c); margin-bottom: 5px; letter-spacing: .2px;
+}
 .bubble-text {
   white-space: pre-wrap; word-break: break-word;
-  background: #fff; border: 1px solid var(--el-border-color); border-radius: 8px; padding: 10px 12px;
+  background: #fff; border: 1px solid var(--app-border, #e5e6eb); border-radius: 10px; padding: 10px 14px;
+  box-shadow: var(--app-shadow, 0 1px 2px rgba(29, 33, 41, .04));
 }
-.bubble.user .bubble-text { background: #ecf5ff; }
+.bubble-text.is-md {
+  white-space: normal; padding: 14px 18px;
+  border-radius: 12px;
+}
+.bubble.user .bubble-text {
+  background: #ecf5ff; border-color: #c6e2ff; box-shadow: none;
+}
+@media (max-width: 600px) {
+  .chat { padding: 10px; }
+  .bubble-text.is-md { padding: 12px; }
+}
 .block { margin-top: 8px; }
 .block-title { font-size: 13px; margin-bottom: 6px; }
 .cand { margin: 0 6px 6px 0; }
