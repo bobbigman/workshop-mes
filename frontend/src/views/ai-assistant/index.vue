@@ -1,7 +1,7 @@
 <template>
   <div class="ai-page">
-    <ValueTip :text="VALUE_TIPS.aiAssistant" />
-    <div class="ai-toolbar">
+    <ValueTip v-if="!isMobile" :text="VALUE_TIPS.aiAssistant" />
+    <div v-if="!isMobile" class="ai-toolbar">
       <div class="role-tabs" aria-label="选择提问角色">
         <button v-for="r in ROLES" :key="r.value" type="button" class="role-tab"
           :class="{ active: selectedRole === r.value }" :disabled="busy"
@@ -21,7 +21,7 @@
 
     <el-alert v-if="banner" :type="bannerType" show-icon :closable="false" :title="banner" class="mb" />
 
-    <section v-if="questionsOpen" id="role-questions" class="question-panel" aria-label="常用问题" @keydown.esc="questionsOpen = false">
+    <section v-if="questionsOpen && !isMobile" id="role-questions" class="question-panel" aria-label="常用问题" @keydown.esc="questionsOpen = false">
       <div class="question-panel-heading"><span>想了解什么？</span><el-button text size="small" @click="questionsOpen = false">收起</el-button></div>
       <div class="question-grid">
         <button v-for="(q, index) in examples" :key="q" type="button" class="question-item"
@@ -31,14 +31,24 @@
       </div>
     </section>
 
+    <el-drawer v-if="isMobile" v-model="questionsOpen" title="车间常见问题" direction="btt" size="75%" append-to-body>
+      <div class="mobile-question-roles" aria-label="选择提问角色">
+        <el-button v-for="r in ROLES" :key="r.value" :type="selectedRole === r.value ? 'primary' : 'default'"
+          :disabled="busy" @click="selectMobileRole(r.value)">{{ r.label }}</el-button>
+      </div>
+      <div class="question-grid mobile-question-grid">
+        <button v-for="q in examples" :key="q" type="button" class="question-item" :disabled="busy || !canChat" @click="useExample(q)">{{ q }}</button>
+      </div>
+    </el-drawer>
+
     <div ref="chatRef" class="chat">
       <div v-if="!messages.length" class="chat-empty">
         <span class="welcome-avatar" aria-hidden="true">AI</span>
         <h2>小工单助手</h2>
-        <p>选一个角色看看常用问题，也可以直接在下方提问</p>
+        <p>{{ isMobile ? '直接输入问题，或点左下角常见问题' : '选一个角色看看常用问题，也可以直接在下方提问' }}</p>
       </div>
       <div v-for="(m, i) in messages" :key="i" class="bubble" :class="m.role">
-        <div class="bubble-role"><span class="message-avatar" aria-hidden="true">{{ m.role === 'user' ? '我' : 'AI' }}</span>{{ m.role === 'user' ? '我' : '小工单助手' }}</div>
+        <div class="bubble-role"><span class="message-avatar" aria-hidden="true">{{ m.role === 'user' ? '我' : 'AI' }}</span><span class="message-name">{{ m.role === 'user' ? '我' : '小工单助手' }}</span></div>
         <div class="bubble-text" :class="{ 'is-md': m.role === 'assistant' }">
           <AiAnswer v-if="m.role === 'assistant'" :text="presentAiAnswer(m.text, m.sources)" />
           <template v-else>{{ m.text }}</template>
@@ -207,19 +217,20 @@
     </div>
 
     <div class="composer">
+      <button v-if="isMobile" class="questions-trigger" type="button" :disabled="busy" @click="questionsOpen = true">常见<br />问题</button>
       <el-input
         v-model="input"
         type="textarea"
-        :rows="3"
+        :autosize="{ minRows: isMobile ? 1 : 3, maxRows: isMobile ? 4 : 6 }"
         maxlength="2000"
         :disabled="!canChat || busy"
-        placeholder="想了解什么？直接问，或点击上方角色选择问题"
+        :placeholder="isMobile ? '请输入问题' : '想了解什么？直接问，或点击上方角色选择问题'"
         @keydown.ctrl.enter="onSend"
       />
       <div class="composer-footer">
         <span class="composer-hint">{{ busy ? '正在回答，可随时停止' : 'Ctrl + Enter 发送' }}</span>
         <el-button v-if="busy" class="stop-button" @click="onStop"><span class="stop-icon" aria-hidden="true"></span>停止生成</el-button>
-        <el-button v-else type="primary" :disabled="!canChat || !input.trim()" @click="onSend">发送 <span aria-hidden="true">↑</span></el-button>
+        <el-button v-else type="primary" :disabled="!canChat || !input.trim()" @click="onSend">发送 <span v-if="!isMobile" aria-hidden="true">↑</span></el-button>
       </div>
     </div>
 
@@ -239,7 +250,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, inject, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import {
@@ -255,6 +266,21 @@ import { hasAnswerTable, formatAiBusinessDate } from '@/utils/aiWorkOrderPresent
 import { presentAiAnswer, visibleAiSources } from '@/utils/aiAssistantPresentation'
 import ValueTip from '@/components/ValueTip.vue'
 import { VALUE_TIPS } from '@/constants/valueTips'
+
+const isMobile = ref(window.matchMedia('(max-width: 768px)').matches)
+const mobileMedia = window.matchMedia('(max-width: 768px)')
+const mobileNewChat = inject('aiNewChat', null)
+function updateMobile(event) { isMobile.value = event.matches; questionsOpen.value = false }
+mobileMedia.addEventListener('change', updateMobile)
+onMounted(() => { if (mobileNewChat) mobileNewChat.value = { run: onNewChat, busy } })
+onUnmounted(() => {
+  mobileMedia.removeEventListener('change', updateMobile)
+  if (mobileNewChat) mobileNewChat.value = null
+})
+function selectMobileRole(value) {
+  selectedRole.value = value
+  onRoleChange()
+}
 
 const router = useRouter()
 const role = Number(localStorage.getItem('role') || 0)
@@ -632,23 +658,36 @@ async function scrollBottom() {
 .composer-footer :deep(.el-button--primary) { --el-button-bg-color: #1599ed; --el-button-border-color: #1599ed; --el-button-hover-bg-color: #38abf3; --el-button-hover-border-color: #38abf3; }
 .stop-button { color: #53637b; border-color: #d9e0e8; background: #f7f9fc; }
 .stop-icon { display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: currentColor; margin-right: 6px; }
-@media (max-width: 640px) {
-  .ai-page { height: calc(100vh - 96px); height: calc(100dvh - 96px); border-radius: 9px; }
-  .ai-page :deep(.value-tip) { padding: 10px 12px 0; }
-  .ai-toolbar { padding: 10px 12px; gap: 8px; }
-  .role-tabs { gap: 2px; }
-  .role-tab { padding: 8px; gap: 5px; font-size: 13px; }
-  .question-panel { margin: 10px 12px 0; padding: 10px; max-height: 30vh; }
-  .question-grid { grid-template-columns: 1fr; }
-  .chat { padding: 24px 12px; }
-  .bubble { width: 100%; padding-left: 40px; }
-  .bubble.user { width: 94%; padding-right: 40px; }
-  .message-avatar { left: -40px; width: 28px; height: 28px; }
+.mobile-question-roles { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.mobile-question-roles .el-button { margin: 0; min-height: 40px; }
+.mobile-question-grid { grid-template-columns: 1fr; }
+.mobile-question-grid .question-item { min-height: 48px; text-align: left; }
+@media (max-width: 768px) {
+  .ai-page { height: 100%; max-width: none; border: 0; border-radius: 0; }
+  .chat { padding: 16px 10px; overscroll-behavior: contain; }
+  .bubble, .bubble.user { width: 100%; margin-bottom: 16px; }
+  .bubble { padding-left: 40px; }
+  .bubble.user { padding-right: 40px; }
+  .message-avatar { left: -40px; }
   .bubble.user .message-avatar { right: -40px; }
-  .bubble-text, .bubble-text.is-md { padding: 12px 14px; }
-  .chat-empty h2 { font-size: 20px; }
-  .chat-empty p { font-size: 13px; }
-  .composer { padding: 12px; }
-  .composer-hint { font-size: 11px; }
+  .bubble-role { min-height: 0; height: 0; margin: 0; }
+  .message-name { display: none; }
+  .message-avatar { width: 30px; height: 30px; border-radius: 5px; }
+  .bubble-text, .bubble-text.is-md { padding: 9px 12px; font-size: 16px; line-height: 1.6; border-radius: 5px; }
+  .bubble.user .bubble-text { border-radius: 5px; }
+  .bubble-text :deep(.ai-md) { font-size: 16px; line-height: 1.6; }
+  .bubble-text :deep(.ai-md-p), .bubble-text :deep(.ai-md > .ai-md-p:first-child:not(.is-warn)) { font-size: 16px; line-height: 1.6; margin-bottom: 10px; }
+  .bubble-text :deep(.ai-md > :last-child) { margin-bottom: 0; }
+  .bubble-text :deep(.ai-md-h) { margin-top: 18px; margin-bottom: 8px; }
+  .bubble-text :deep(.ai-md-list) { margin-bottom: 10px; padding-left: 22px; }
+  .bubble-text :deep(.ai-md-list li) { margin: 4px 0; }
+  .composer { display: flex; align-items: flex-end; gap: 8px; padding: 8px 10px max(8px, env(safe-area-inset-bottom)); background: #f7f7f7; }
+  .questions-trigger { flex-shrink: 0; border: 0; background: transparent; color: #53637b; font-size: 12px; min-height: 40px; padding: 0 4px; cursor: pointer; }
+  .composer :deep(.el-textarea__inner) { min-height: 40px !important; padding: 8px 10px; background: #fff; border-radius: 5px; font-size: 16px; line-height: 24px; }
+  .composer-footer { flex-shrink: 0; min-height: 40px; }
+  .composer-hint { display: none; }
+  .composer-footer .el-button { min-width: 56px; height: 40px; padding: 0 10px; }
+  .composer-footer .stop-button { min-width: 76px; }
 }
+
 </style>

@@ -1,5 +1,5 @@
 <template>
-  <el-container class="layout" :class="{ 'is-mobile': isMobile, 'monitor-shell': $route.path === '/execution-monitor' }">
+  <el-container :style="isMobile && $route.path === '/ai-assistant' ? { height: viewportHeight + 'px' } : undefined" class="layout" :class="{ 'is-mobile': isMobile, 'monitor-shell': $route.path === '/execution-monitor', 'ai-mobile-shell': isMobile && $route.path === '/ai-assistant' }">
     <el-aside v-show="!isMobile" width="var(--app-aside-width)" class="aside">
       <div class="logo is-link" @click="goHome">
         <div class="logo-title">{{ factoryName || instanceName }}</div>
@@ -28,9 +28,18 @@
           >
             <span /><span /><span />
           </button>
-          <span class="page-title">{{ $route.meta.title || '首页' }}</span>
+          <span class="page-title">{{ isMobile && $route.path === '/ai-assistant' ? '车间小助手' : ($route.meta.title || '首页') }}</span>
         </div>
         <div class="header-right">
+          <el-dropdown v-if="isMobile && $route.path === '/ai-assistant'" trigger="click">
+            <button class="ai-more" type="button" aria-label="更多操作">⋯</button>
+            <template #dropdown><el-dropdown-menu>
+              <el-dropdown-item :disabled="!aiNewChat || aiNewChat.busy" @click="aiNewChat?.run()">新对话</el-dropdown-item>
+              <el-dropdown-item @click="goH5">返回报工端</el-dropdown-item>
+              <el-dropdown-item @click="onLogout">退出登录</el-dropdown-item>
+            </el-dropdown-menu></template>
+          </el-dropdown>
+          <template v-if="!isMobile || $route.path !== '/ai-assistant'">
           <el-button
             v-if="isMobile"
             type="primary"
@@ -47,6 +56,7 @@
           >？</el-button>
           <span v-if="!isMobile" class="user">{{ userName }}</span>
           <el-button :size="isMobile ? 'small' : 'default'" @click="onLogout">退出</el-button>
+          </template>
         </div>
       </el-header>
       <el-alert
@@ -64,7 +74,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, provide, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Iphone } from '@element-plus/icons-vue'
@@ -75,6 +85,8 @@ import { resolveInstanceLabel, PRODUCT_TITLE } from '@/utils/instanceDisplay'
 import { LOGIN_FACTORY_KEY, rememberLoginFactory } from '@/utils/loginAppearance'
 import { resetFavorites } from '@/composables/useFavorites'
 
+const aiNewChat = ref(null)
+provide('aiNewChat', aiNewChat)
 const router = useRouter()
 const route = useRoute()
 const userName = ref(localStorage.getItem('userName') || '')
@@ -86,6 +98,8 @@ const licenseBanner = ref('')
 const licenseBannerType = ref('warning')
 
 const isLegacy = ref(localStorage.getItem('theme') === 'legacy')
+const viewportHeight = ref(window.visualViewport?.height || window.innerHeight)
+function updateViewportHeight() { viewportHeight.value = window.visualViewport?.height || window.innerHeight }
 const isMobile = ref(false)
 const drawerOpen = ref(false)
 const pageHelpRef = ref(null)
@@ -155,6 +169,8 @@ watch(() => route.path, () => {
 
 onMounted(() => {
   checkMobile()
+  window.visualViewport?.addEventListener('resize', updateViewportHeight)
+  window.addEventListener('resize', updateViewportHeight)
   mql = window.matchMedia('(max-width: 768px)')
   mql.addEventListener('change', checkMobile)
   getInstanceInfo().then(res => {
@@ -176,6 +192,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   mql?.removeEventListener('change', checkMobile)
+  window.visualViewport?.removeEventListener('resize', updateViewportHeight)
+  window.removeEventListener('resize', updateViewportHeight)
 })
 </script>
 
@@ -262,6 +280,11 @@ onUnmounted(() => {
 .is-mobile .header { padding: 0 16px; }
 .is-mobile .page-title { font-size: 16px; }
 .is-mobile .main { padding: 12px !important; }
+.ai-mobile-shell { height: 100dvh; }
+.ai-mobile-shell .main-wrap { min-height: 0; }
+.ai-mobile-shell .header { height: 48px !important; padding: 0 12px; flex-shrink: 0; }
+.ai-mobile-shell .main { padding: 0 !important; display: flex; flex-direction: column; overflow: hidden; }
+.ai-more { border: 0; background: transparent; font-size: 28px; min-width: 44px; height: 44px; cursor: pointer; color: var(--app-text-1); }
 </style>
 
 <style>
