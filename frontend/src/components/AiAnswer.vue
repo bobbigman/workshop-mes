@@ -13,7 +13,7 @@ const blocks = computed(() => parseAiMarkdown(props.text))
 <template>
   <div class="ai-md">
     <template v-for="(block, index) in blocks" :key="index">
-      <component :is="`h${block.level}`" v-if="block.type === 'h'" class="ai-md-h">
+      <component :is="`h${block.level}`" v-if="block.type === 'h'" class="ai-md-h" :class="{ 'is-focus': block.parts.some(part => /重点关注|优先处理/.test(part.text || '')) }">
         <AiInline :parts="block.parts" />
       </component>
 
@@ -102,8 +102,14 @@ h2.ai-md-h, h1.ai-md-h {
 }
 h3.ai-md-h, h4.ai-md-h, h5.ai-md-h, h6.ai-md-h {
   font-size: 18px;
-  color: var(--app-text-2, #4e5969);
+  color: var(--app-text-1, #1d2129);
 }
+.ai-md-h.is-focus { color: #925319; margin-bottom: 10px; }
+.ai-md-h.is-focus + .ai-md-list {
+  padding: 12px 20px 12px 40px; border: 1px solid #f1e1c9;
+  border-radius: 10px; background: #fffaf1;
+}
+.ai-md-h.is-focus + .ai-md-list li { margin: 6px 0; }
 
 .ai-md-p { margin: 0 0 16px; }
 .ai-md > .ai-md-p:first-child:not(.is-warn) {

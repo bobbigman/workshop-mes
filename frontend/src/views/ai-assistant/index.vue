@@ -65,7 +65,8 @@
           </el-button>
         </div>
 
-        <div v-if="m.workOrders" class="block">
+        <details v-if="m.workOrders" class="block work-order-data" :open="!hasAnswerTable(m.text)">
+          <summary>工单原始数据 · 共 {{ m.workOrders.total }} 条<span class="muted"> · 查看详情与翻页</span></summary>
           <div class="block-title">
             共 {{ m.workOrders.total }} 条
             <span v-if="filterLabel(m.workOrders)" class="muted">（{{ filterLabel(m.workOrders) }}）</span>
@@ -98,7 +99,7 @@
               @current-change="(p) => onPage(m, p)"
             />
           </div>
-        </div>
+        </details>
 
         <div v-if="m.reportEvidence" class="block">
           <div class="block-title">
@@ -257,6 +258,7 @@ import {
 } from '@/api/aiAssistant'
 import { getOrder } from '@/api/prod'
 import AiAnswer from '@/components/AiAnswer.vue'
+import { hasAnswerTable, formatAiBusinessDate } from '@/utils/aiWorkOrderPresentation'
 import ValueTip from '@/components/ValueTip.vue'
 import { VALUE_TIPS } from '@/constants/valueTips'
 
@@ -503,10 +505,7 @@ function reviewText(s) {
 }
 
 function formatDate(v) {
-  if (!v) return '—'
-  const d = new Date(v)
-  if (Number.isNaN(d.getTime())) return String(v).slice(0, 10)
-  return d.toISOString().slice(0, 10)
+  return formatAiBusinessDate(v)
 }
 
 function formatDateTime(v) {
@@ -524,17 +523,17 @@ async function scrollBottom() {
 </script>
 
 <style scoped>
-.ai-page { display: flex; flex-direction: column; height: calc(100vh - 120px); gap: 10px; }
+.ai-page { display: flex; flex-direction: column; height: calc(100vh - 120px); gap: 10px; width: 100%; min-width: 0; overflow: hidden; }
 .ai-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
 .ai-status { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .muted { color: #888; font-size: 12px; }
 .mb { margin-bottom: 4px; }
 .examples { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .chat {
-  flex: 1; min-height: 0; overflow: auto; border: 1px solid #e8ecf2; border-radius: 16px;
-  padding: 32px max(24px, calc((100% - 1120px) / 2)); background: #f5f7fb;
+  flex: 1; min-height: 0; min-width: 0; width: 100%; box-sizing: border-box; overflow: auto; border: 1px solid #e8ecf2; border-radius: 16px;
+  padding: 28px 24px; background: #f5f7fb;
 }
-.bubble { margin: 0 auto 32px; max-width: 1120px; min-width: 0; }
+.bubble { margin: 0 auto 32px; max-width: 1040px; width: 100%; min-width: 0; box-sizing: border-box; }
 .bubble.user { margin-left: auto; max-width: 720px; }
 .bubble-role {
   display: flex; align-items: center; gap: 10px;
@@ -545,6 +544,7 @@ async function scrollBottom() {
 .bubble.user { margin-right: 0; }
 .bubble.user .bubble-role { justify-content: flex-end; }
 .bubble-text {
+  box-sizing: border-box; min-width: 0; max-width: 100%;
   white-space: pre-wrap; word-break: break-word;
   background: #fff; border: 1px solid var(--app-border, #e5e6eb); border-radius: 10px; padding: 10px 14px;
   box-shadow: var(--app-shadow, 0 1px 2px rgba(29, 33, 41, .04));
@@ -562,6 +562,9 @@ async function scrollBottom() {
   .bubble-text.is-md { padding: 12px; }
 }
 .block { margin-top: 8px; }
+.work-order-data { padding: 12px 16px; border: 1px solid #e5eaf2; border-radius: 10px; background: #fff; }
+.work-order-data summary { cursor: pointer; color: #53637b; font-size: 13px; }
+.work-order-data[open] summary { margin-bottom: 14px; }
 .block-title { font-size: 13px; margin-bottom: 6px; }
 .cand { margin: 0 6px 6px 0; }
 .src { margin-bottom: 6px; }
