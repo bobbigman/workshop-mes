@@ -119,9 +119,9 @@ public class WechatMessageSender(AppDbContext db, IHttpClientFactory http, ILice
             "部分接收人无效或不在应用可见范围内", string.Join('|', failed));
     }
 
-    public async Task<WechatSendResult> SendAsync(long factoryId, string alertKey, string content,
+    public virtual async Task<WechatSendResult> SendAsync(long factoryId, string alertKey, string content,
         string? recipients = null, long? deliveryId = null, Guid? leaseId = null, bool test = false,
-        string? channel = null)
+        string? channel = null, Func<Task<string>>? contentFactory = null, DateTime? batchDate = null)
     {
         if (!string.IsNullOrWhiteSpace(channel) && channel != "group")
             return new("cancelled", "旧会话通道已停止，请重新配置群规则");
@@ -154,16 +154,18 @@ public class WechatMessageSender(AppDbContext db, IHttpClientFactory http, ILice
                 if (!await sendingDb.WechatAlertRules.AnyAsync(x => x.Id == delivery.RuleId && x.FactoryId == factoryId && x.Enabled))
                     return new("cancelled", "规则已停用");
             }
+            // 额度账本沿用通道本地日期；业务批次日期只决定幂等键，避免两种时区拆分共享额度。
             var today = DateTime.Today;
+            var requestDate = batchDate?.Date ?? today;
             var requestKey = test ? $"test:{Guid.NewGuid():N}" : delivery != null
-                ? $"delivery:{delivery.Id}:{delivery.Attempts + 1}" : $"daily:{today:yyyy-MM-dd}:{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(alertKey)))}";
+                ? $"delivery:{delivery.Id}:{delivery.Attempts + 1}" : $"daily:{requestDate:yyyy-MM-dd}:{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(alertKey)))}";
             if (delivery == null && !test)
             {
                 // 成功日志兼容旧版本；unknown/partial 账本也阻止旧入口盲目重发。
-                if (await sendingDb.WechatAlertLogs.AnyAsync(x => x.FactoryId == factoryId && x.AlertKey == alertKey && x.SendDate == today))
+                if (await sendingDb.WechatAlertLogs.AnyAsync(x => x.FactoryId == factoryId && x.AlertKey == alertKey && (batchDate.HasValue || x.SendDate == today)))
                     return new("dedup");
                 var uncertain = await sendingDb.WechatSendAttempts.AsNoTracking().Where(x => x.FactoryId == factoryId &&
-                    x.AlertKey == alertKey && x.SendDate == today && (x.Outcome == "unknown" || x.Outcome == "partial"))
+                    x.AlertKey == alertKey && (batchDate.HasValue || x.SendDate == today) && (x.Outcome == "unknown" || x.Outcome == "partial"))
                     .OrderByDescending(x => x.Id).FirstOrDefaultAsync();
                 if (uncertain != null) return new(uncertain.Outcome, uncertain.Error ?? "上次发送结果待核实，禁止直接重发", uncertain.FailedUsers);
                 var prior = await sendingDb.WechatSendAttempts.AsNoTracking().FirstOrDefaultAsync(x => x.FactoryId == factoryId && x.RequestKey == requestKey);
@@ -222,6 +224,8 @@ public class WechatMessageSender(AppDbContext db, IHttpClientFactory http, ILice
             var since = DateTime.Now.AddMinutes(-1);
             if (await sendingDb.WechatSendAttempts.CountAsync(x => x.RobotKeyHash == robotHash && x.CreatedAt > since) >= 20)
                 return new("rate_limited", "此机器人每分钟最多20条，请稍后再试");
+            // 在现有锁和去重/额度/限流检查之后生成，重复批次不消耗模型调用。
+            if (contentFactory != null) content = await contentFactory();
             var attempt = new SysWechatSendAttempt {
                 FactoryId = factoryId, RequestKey = requestKey, AlertKey = alertKey, DeliveryId = deliveryId,
                 SendDate = today, ToUser = string.IsNullOrEmpty(users) ? "(group)" : users, Outcome = "retry", CreatedAt = DateTime.Now
