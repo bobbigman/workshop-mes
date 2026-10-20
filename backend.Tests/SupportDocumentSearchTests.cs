@@ -9,6 +9,27 @@ namespace WorkshopMes.Tests;
 
 public class SupportDocumentSearchTests
 {
+    [Theory]
+    [InlineData("车间计件工资算完，怎么自动推到金蝶生成凭证，不让财务再抄一遍？", "query_salary")]
+    [InlineData("工资推金蝶之前，IT 要先把哪几样东西配好？", "已确认")]
+    [InlineData("财务说金蝶里没看到工资凭证，IT 第一步先查哪里？", "执行记录")]
+    [InlineData("临时工和正式工工资算法不一样，推金蝶时怎么区分？", "快照")]
+    [InlineData("销售要报价，怎么让 AI 自动把金蝶 BOM 和材料单价拉出来算成本？", "价格来源")]
+    [InlineData("金蝶里 BOM 改过好几版，AI 算报价用的是哪一版？", "版本")]
+    [InlineData("材料这个月涨价了，报价时 AI 取的是哪天的单价？", "基准日")]
+    [InlineData("车间开工前，怎么让 AI 自动跑一遍\"这单料够不够\"？", "剩余需求")]
+    [InlineData("欠料清单出来后，怎么一眼看出缺哪颗料、差多少？", "欠料量")]
+    [InlineData("金蝶实时库存和车间实际用料对不上，先查哪边？", "领退料")]
+    public void ComputerDepartment_IntegrationQuestions_RetrieveStepsAndBoundary(string question, string evidence)
+    {
+        var result = Build(FindRepoSupportDocs()).Search(question);
+        Assert.Equal("ready", result.State);
+        var integration = result.Sources.Where(s => s.Title.StartsWith("业财打通三件事")).ToList();
+        Assert.True(integration.Count > 0, string.Join("; ", result.Sources.Select(s => s.Title + ":" + s.Chapter)));
+        Assert.Contains(integration, s => s.Excerpt.Contains(evidence));
+        Assert.Contains(integration, s => s.Excerpt.Contains("本页签") && s.Excerpt.Contains("WorkBuddy"));
+    }
+
     private static SupportDocumentService Build(string root, SupportDocsOptions? o = null)
     {
         var opt = o ?? new SupportDocsOptions();
