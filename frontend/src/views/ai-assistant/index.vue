@@ -258,7 +258,7 @@ if (role !== 1) {
   router.replace('/order')
 }
 
-const ROLES = [{ value: 'boss', label: '老板' }, { value: 'supervisor', label: '车间主管' }, { value: 'finance', label: '财务' }, { value: 'worker', label: '车间师傅' }]
+const ROLES = [{ value: 'boss', label: '老板' }, { value: 'supervisor', label: '车间主管' }, { value: 'finance', label: '财务' }, { value: 'worker', label: '车间师傅' }, { value: 'engineer', label: '电脑工程师' }]
 const selectedRole = ref('boss')
 const questionsOpen = ref(false)
 const mode = computed(() => selectedRole.value === 'boss' ? 'progress' : 'support')
@@ -323,6 +323,18 @@ const QUESTIONS = {
     '没智能手机的工人怎么报工？',
     '设备坏了我要怎么上报？',
     '怎么看这道工序的作业指导书？'
+  ],
+  engineer: [
+    '这套系统的 AI 现在能做什么？',
+    'WorkBuddy 和系统内置 AI 助手有什么区别？',
+    '电脑工程师怎样结合 WorkBuddy 给客户演示？',
+    'WorkBuddy 能查询 MES 数据并整理分析报告吗？',
+    '客户原来的 Excel 资料怎么整理后导入？',
+    '结合 WorkBuddy 对接金蝶，需要准备哪些条件？',
+    '哪些 AI 能力已经实现，哪些还需要单独接入？',
+    'AI 对老板和车间主管有什么实际价值？',
+    'AI 对财务和车间师傅分别有什么帮助？',
+    '结合云端 AI 使用时，数据会不会出厂？'
   ]
 }
 

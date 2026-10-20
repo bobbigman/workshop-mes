@@ -23,7 +23,7 @@ test('点角色展开/收起，同support不清空，跨mode清空，忙碌不�
   vm.runInContext(`const mode = { get value() { return selectedRole.value === 'boss' ? 'progress' : 'support' } }; function onNewChat() { clears++ }; ${change}; ${click}`, context)
   vm.runInContext(`onRoleClick('boss')`, context); assert.equal(context.questionsOpen.value, true)
   vm.runInContext(`onRoleClick('boss')`, context); assert.equal(context.questionsOpen.value, false)
-  vm.runInContext(`onRoleClick('supervisor'); onRoleClick('finance'); onRoleClick('worker')`, context)
+  vm.runInContext(`onRoleClick('supervisor'); onRoleClick('finance'); onRoleClick('worker'); onRoleClick('engineer')`, context)
   assert.equal(context.clears, 1)
   vm.runInContext(`onRoleClick('boss'); busy.value=true; onRoleClick('worker')`, context)
   assert.equal(context.clears, 2); assert.equal(context.selectedRole.value, 'boss')
@@ -39,4 +39,18 @@ test('文档来源隐藏、引用脱离展示，真实证据和未知引用保�
   assert.equal(presentAiAnswer('[evt_12] 数量50 [doc_unknown]', sources), '[evt_12] 数量50 [doc_unknown]')
   assert.deepEqual(visibleAiSources(sources).map(s => s.sourceId), ['evt_12', 'src_1'])
   assert.equal(sources.length, 3)
+})
+
+test('五个入口各十题，工程师包含AI和WorkBuddy，权限和mode不扩大', () => {
+  const context = vm.createContext({})
+  const roles = script.match(/const ROLES = \[.*?\]/)[0]
+  const questions = script.match(/const QUESTIONS = \{[\s\S]*?\n\}/)[0]
+  vm.runInContext(`${roles}; ${questions}; globalThis.roles = ROLES; globalThis.questions = QUESTIONS`, context)
+  assert.equal(context.roles.length, 5)
+  assert.equal(context.roles.find(r => r.value === 'engineer').label, '电脑工程师')
+  for (const r of context.roles) assert.equal(context.questions[r.value].length, 10)
+  assert.ok(context.questions.engineer.some(q => q.includes('WorkBuddy')))
+  assert.ok(context.questions.engineer.some(q => q.includes('AI')))
+  assert.match(script, /selectedRole.value === 'boss' \? 'progress' : 'support'/)
+  assert.match(script, /if \(role !== 1\)/)
 })
