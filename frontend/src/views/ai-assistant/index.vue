@@ -263,7 +263,7 @@ if (role !== 1) {
   router.replace('/order')
 }
 
-const ROLES = [{ value: 'boss', label: '老板' }, { value: 'supervisor', label: '车间主管' }, { value: 'finance', label: '财务' }, { value: 'worker', label: '车间师傅' }, { value: 'engineer', label: '电脑部门' }]
+const ROLES = [{ value: 'boss', label: '老板' }, { value: 'supervisor', label: '车间主管' }, { value: 'finance', label: '财务' }, { value: 'worker', label: '车间师傅' }, { value: 'engineer', label: 'AI' }]
 const selectedRole = ref('boss')
 const questionsOpen = ref(false)
 const mode = computed(() => selectedRole.value === 'boss' ? 'progress' : 'support')
@@ -330,16 +330,16 @@ const QUESTIONS = {
     '怎么看这道工序的作业指导书？'
   ],
   engineer: [
-    '咱们车间的数据，能跟金蝶打通做业财一体化吗？',
-    '车间干完的活，能不能自动进金蝶，财务不用再抄一遍？',
-    '老板想一张表看全车间的生产和钱，系统撑得起来吗？',
-    '销售报价时，AI 能不能帮着算材料成本？',
-    '产品 BOM 改了，AI 算成本能不能跟着变？',
-    '材料涨价了，报价时 AI 能不能按最新行情算？',
-    '除了金蝶，这系统还能连别的管理软件吗？',
-    '车间出异常，能不能自动推到班组长手机上？',
-    '我们以后想自己加功能、接自己的系统，口子留好了吗？',
-    'AI 除了查工单，还能帮 IT 部门干点别的活吗？'
+    '车间干的活，能跟财务的账串起来吗？',
+    '工人干完活，财务不用再对着 Excel 抄一遍吧？',
+    '老板能不能一张表看清车间干了多少、账上多少钱？',
+    '销售报价的时候，AI 能帮着算算料钱吗？',
+    '产品用料清单改了，算出来的成本跟着变吗？',
+    '材料这阵子涨价了，报价按新价算吗？',
+    '除了金蝶，还能连别的软件吗？',
+    '车间出问题，能自动发消息到班组长手机上吗？',
+    '以后想加新功能，留路子了吗？',
+    'AI 除了查工单，还能帮我们干点啥？'
   ]
 }
 

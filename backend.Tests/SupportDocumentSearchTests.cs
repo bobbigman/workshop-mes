@@ -10,21 +10,21 @@ namespace WorkshopMes.Tests;
 public class SupportDocumentSearchTests
 {
     [Theory]
-    [InlineData("咱们车间的数据，能跟金蝶打通做业财一体化吗？", "方向一：业财打通")]
-    [InlineData("车间干完的活，能不能自动进金蝶，财务不用再抄一遍？", "方向一：业财打通")]
-    [InlineData("老板想一张表看全车间的生产和钱，系统撑得起来吗？", "方向一：业财打通")]
-    [InlineData("销售报价时，AI 能不能帮着算材料成本？", "方向二：成本报价")]
-    [InlineData("产品 BOM 改了，AI 算成本能不能跟着变？", "方向二：成本报价")]
-    [InlineData("材料涨价了，报价时 AI 能不能按最新行情算？", "方向二：成本报价")]
-    [InlineData("除了金蝶，这系统还能连别的管理软件吗？", "方向三：扩展兼容")]
-    [InlineData("车间出异常，能不能自动推到班组长手机上？", "方向三：扩展兼容")]
-    [InlineData("我们以后想自己加功能、接自己的系统，口子留好了吗？", "方向三：扩展兼容")]
-    [InlineData("AI 除了查工单，还能帮 IT 部门干点别的活吗？", "方向三：扩展兼容")]
+    [InlineData("车间干的活，能跟财务的账串起来吗？", "方向一：车间和财务串起来")]
+    [InlineData("工人干完活，财务不用再对着 Excel 抄一遍吧？", "方向一：车间和财务串起来")]
+    [InlineData("老板能不能一张表看清车间干了多少、账上多少钱？", "方向一：车间和财务串起来")]
+    [InlineData("销售报价的时候，AI 能帮着算算料钱吗？", "方向二：报价不拍脑袋")]
+    [InlineData("产品用料清单改了，算出来的成本跟着变吗？", "方向二：报价不拍脑袋")]
+    [InlineData("材料这阵子涨价了，报价按新价算吗？", "方向二：报价不拍脑袋")]
+    [InlineData("除了金蝶，还能连别的软件吗？", "方向三：还能干嘛")]
+    [InlineData("车间出问题，能自动发消息到班组长手机上吗？", "方向三：还能干嘛")]
+    [InlineData("以后想加新功能，留路子了吗？", "方向三：还能干嘛")]
+    [InlineData("AI 除了查工单，还能帮我们干点啥？", "方向三：还能干嘛")]
     public void ComputerDepartment_VisionQuestions_RetrieveDirectionAndClosing(string question, string chapter)
     {
         var result = Build(FindRepoSupportDocs()).Search(question);
         Assert.Equal("ready", result.State);
-        var integration = result.Sources.Where(s => s.Title.StartsWith("业财打通远景口径")).ToList();
+        var integration = result.Sources.Where(s => s.Title.StartsWith("AI 能力展示口径")).ToList();
         Assert.Contains(integration, s => s.Chapter?.Contains(chapter) == true);
         Assert.Contains(integration, s => s.Chapter?.Contains("追问收口表") == true
             && s.Excerpt.Contains("配好就能出"));
