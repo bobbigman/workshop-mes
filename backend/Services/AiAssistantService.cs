@@ -107,9 +107,10 @@ public class AiAssistantService : IAiAssistantService
             throw ThrowHelper.BizUser($"消息过长，最多 {_opt.MaxInputChars} 字");
 
         AiSessionState session;
-        if (string.IsNullOrWhiteSpace(req.ConversationId))
+        var isNewConversation = string.IsNullOrWhiteSpace(req.ConversationId);
+        if (isNewConversation)
         {
-            session = _sessions.Create(factoryId, userId, mode);
+            session = _sessions.Create(factoryId, userId, mode, beginGenerate: true);
             session.Messages.Add(new AiSessionMessage { Role = "system", Content = SystemPrompt(mode) });
         }
         else
@@ -119,7 +120,7 @@ public class AiAssistantService : IAiAssistantService
                 throw ThrowHelper.BizUser("切换模式请新建对话");
         }
 
-        if (!_sessions.TryBeginGenerate(session))
+        if (!isNewConversation && !_sessions.TryBeginGenerate(session))
             throw ThrowHelper.BizUser("正在处理中，请勿重复提交");
 
         try
@@ -290,6 +291,7 @@ public class AiAssistantService : IAiAssistantService
                 || (finalAnswer?.Contains("选择", StringComparison.Ordinal) == true
                     && session.Candidates.Count > 0);
 
+            ct.ThrowIfCancellationRequested();
             session.HasAnswered = true;
             return ApiResult<AiMessageResultDto>.Ok(new AiMessageResultDto
             {
@@ -307,7 +309,8 @@ public class AiAssistantService : IAiAssistantService
         }
         finally
         {
-            _sessions.EndGenerate(session);
+            _sessions.EndGenerate(session,
+                discard: isNewConversation && (!session.HasAnswered || ct.IsCancellationRequested));
         }
     }
 

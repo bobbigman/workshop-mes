@@ -43,10 +43,10 @@ public class AiOptions
     /// <summary>单会话最多用户轮次；超限提示新对话。</summary>
     public int MaxTurnsPerSession { get; set; } = 10;
 
-    /// <summary>同一用户+工厂最多并存会话数。</summary>
+    /// <summary>同一用户+工厂缓存容量及生成并发上限；满额先自动回收闲置会话。</summary>
     public int MaxSessionsPerUser { get; set; } = 3;
 
-    /// <summary>进程内总会话上限。</summary>
+    /// <summary>进程内总会话容量；满额先自动回收闲置会话，正在生成的会话不回收。</summary>
     public int MaxSessions { get; set; } = 100;
 
     /// <summary>智能客服知识目录配置（docs/25 §3）。默认关闭。</summary>
