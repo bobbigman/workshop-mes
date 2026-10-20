@@ -1,11 +1,13 @@
 车间小工单 · 更新包（增量）
 
+交付方式：直接交付整个 publish-update 文件夹（不打 zip）。
+
 适用：已用整包 publish-win64 装过一次的客户机。
 不要用本包做首次安装。
 已上线机禁止用整包 publish-win64 覆盖安装目录（会冲掉 HTTPS/连接串）。
 
 本包更新内容：wwwroot、*.dll（及明确需要的web.config）；另附apply-update、说明和scripts供部署使用。
-本包另附 **SupportDocs 智能客服知识库**（含 _retrieval.json）：apply-update.bat 已内置自动拷贝，双击即自动更新到 `D:\WorkShop\SupportDocs`（脚本顶部 KNOWLEDGE 变量，路径不同先改这行）。
+本包不含 SupportDocs 智能客服知识库；知识库变更走独立部署流程，不随程序增量包发布。
 本包不含且 apply-update 绝不覆盖：
 - appsettings*.json
 - start.bat / stop.bat
@@ -14,28 +16,28 @@
 
 （exe / runtimeconfig / deps 若被覆盖，会提示 You must install .NET）
 
-【本包功能 · 2026-10-16 · 版本 1.1.332】
-- 企微对话报工（docs/241）：新增 `POST /api/WecomReport/preview` + `/confirm`（企微应用 Token 鉴权，不用工人 JWT）；预览回显确认卡+短时一次性 token（不落库），确认后复用 ReportService 校验落库；`prod_report` 增 source/confirmed_at；有不良等复杂报工回退 149 发卡表单。
-- PC 首页常用功能卡片 + 菜单星标收藏（docs/240，对标金蝶云星空）：侧边菜单项旁点☆收藏，登录后进新建 PC 首页「我的工作→常用功能」，只显示自己钉的入口；空收藏按角色给 4 个默认入口（工单/报工/报工复核/执行监控，看不到复核则换生产报表）；新增 sys_user_favorite 表 + /api/userfavorite 两个接口，首次启动 DbCompat 自动建表。
-- 小批量复制（docs/…）：产品、工艺路线、工序支持「复制已有资料 → 改差异 → 保存」，减少小批量建号/建工艺的录入步骤；仍遵守产品编号唯一、工序报工按部门、删除依赖倒序等硬规则。
-- 智能客服检索规则热加载：SupportDocs 检索规则可外置到 `SupportDocs/_retrieval.json`（关键词/同义词/加权/排除），改文件即生效、缺文件回退内置默认。
-- 登录背景：加入微聚轻 MES 生产看板背景并压缩至 132KB；登录页记住所选工厂背景，减少手机端图片加载（前端增量）。
-- 报工复核·工序前置数量校验（docs/230）：复核页按工艺路线上工序已复核良品算出本工序可报上限，列表新增「上工序合格库存/可报上限」列；报工数量超上限的行浅黄高亮并挂橙色【数量异常】标签；批量通过自动跳过异常单据；单点通过弹出特批确认弹窗（备注不落库）。PC 端与 H5 端一次做完，全厂通用、所有账套开启。
-- 报工数量口径设置（docs/230）：新增工厂级配置 sys_report_qty_setting（每工厂一条），允许超报比例 0～999%（默认 0）、上道不良是否计入下道可报（默认不计入）；仅管理员可改。首次启动 DbCompat 自动幂等建表，无需手工执行 SQL。
-- SupportDocs 支持文档/FAQ 同步更新（系统能力总图、常见问题、扫码报工问答、50问等）。
-- scripts 目录不由 apply-update 复制；任务脚本/SQL 按需单独复制。
-- 新增配置键：`Instance:CreditPartner`（空=胡工单方版；填伙伴名如「沈工」=胡工、沈工联合出品）、`Instance:Url`（空即可）、`WecomReport:ApiToken` / `FactoryId` / `ConfirmExpireMinutes`（docs/241 企微对话报工）。服务器 appsettings 只**手工加新键、旧值不动**，勿整文件覆盖。
+【本包功能 · 2026-10-20 · 版本 1.1.370】
+- 电脑端 AI 智能客服/助理问答（docs/259、260）：PC 新增「电脑工程师」问答入口与 AI 能力问答，覆盖 AI 当前能力、WorkBuddy 区别与演示、MES 查询和报表、Excel 导入准备、金蝶前提、已交付边界、老板/财务/现场价值、云模型数据边界等；AI 按「关键发现 + 简要细节」结构作答，安全 Markdown 渲染，贴心建议卡片，仅首次回复问候；空闲会话自动回收、失败首请求自动清理。
+- 检索与措辞对齐 v2.4（docs/259）：AI 答案措辞、工程师角色与 IT/计算机部门焦点问题、检索章节与知识映射同步修正。
+- AI 手机聊天（H5）界面优化：手机端 AI 对话正文留出空间、收起常见问题，更清爽（092af2c）。
+- AI 工单进度读取改为共享 DbContext 顺序读取，避免并发冲突。
+- 定时企微简报复用既有风险聚合逻辑（docs/251 能力继续保留）。
+- 企微对话报工（docs/242-250）、H5 我的工资条（docs/241）、计时工资全链路（docs/240）、AI 综合风险简报（docs/251、252）等 1.1.352 已有能力继续保留。
+- SupportDocs 支持文档/FAQ 不随本包更新。
 
 【更新步骤】（一键）
 1. 把本文件夹拷到服务器任意位置（如 D:\WorkShop\publish-update）
 2. 双击 apply-update.bat（自动：停进程 → 更新 wwwroot/dll → 用安装目录原有 start.bat 拉起）
-3. 浏览器 Ctrl+F5，看登录页版本号
+3. 浏览器 Ctrl+F5，看登录页版本号（应显示 v1.1.370）
 
 目标目录写死：D:\WorkShop\backend\publish-win64（不覆盖 appsettings / start.bat）
 
 【若新版本新增了配置项】
 不要整文件覆盖 appsettings.json。对比开发机与服务器键差，只把新键合并进服务器那份，旧值不动。
-本包新增配置键：`Instance:CreditPartner`、`Instance:Url`、`WecomReport:ApiToken`、`WecomReport:FactoryId`、`WecomReport:ConfirmExpireMinutes`。仅手工把新键合并进服务器 appsettings（旧值不动），勿整文件覆盖。
+本包新增配置键（1.1.367 起）：
+- `Ai` 段（AI 智能客服）：`Enabled`（默认 true，设 false 可关闭）、`BaseUrl`（默认 https://api.deepseek.com）、`ApiKey`（服务器须填自己的 key）、`Model`（deepseek-flash）、`BusinessTimeZone`、`RequestTimeoutSeconds`、`MaxToolRounds`、`MaxInputChars`、`MaxKnowledgeChars`、`SessionIdleMinutes`、`MaxTurnsPerSession`、`MaxSessionsPerUser`、`MaxSessions`；子段 `Ai:SupportDocs`（`Enabled`/`RootPath`/`MaxFiles`/`MaxFileBytes`/`MaxTotalBytes`/`MaxResults`/`MaxEvidenceChars`）。`Ai:SupportDocs:RootPath` 服务器须指向本机知识库目录。
+- `KnowledgeBase:RootPath`：知识库检索根路径，服务器改为本机知识库目录。
+（较早的服务器若还没有 `WecomReport` 段，补 `ApiToken` / `FactoryId` / `ConfirmExpireMinutes`，旧值不动。）
 
 【若已误覆盖出现 “You must install .NET”】
 用完整包 publish-win64 里的这两个文件盖回去（不要动 appsettings.json / start.bat）：

@@ -31,6 +31,11 @@
 
 `Instance:DisplayName`：填**中文厂名**（登录眉标/页头）；禁止 `WorkShop` 等英文代号。已上线机若仍显示英文，在服务器 appsettings 里手工改该键，勿整文件覆盖。
 
+## 增量包交付方式（2026-10-20 定）
+
+打包只产出 `backend\publish-update` 文件夹，**不打 zip**。
+交付 = 直接拷整个 `publish-update` 文件夹到服务器 → 双击 `apply-update.bat`（自动停进程 → 更新 wwwroot/dll → 用安装目录原有 start.bat 拉起）。
+
 ## 禁止
 
 - 用开发机 appsettings / start.bat 整文件盖服务器。
