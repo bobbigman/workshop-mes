@@ -300,14 +300,14 @@ public class AiToolDispatcher
         // 复用现有进度口径
         if (list.Count > 0)
         {
-            var ids = list.Select(x => x.Id).ToList();
-            var detailTasks = ids.Select(id => _workOrders.GetAsync(id, factoryId));
-            var details = await Task.WhenAll(detailTasks);
-            var map = details.Where(d => d.Code == 0 && d.Data != null)
-                .ToDictionary(d => d.Data!.Id, d => d.Data!);
+            // 同一请求中的服务共用 scoped DbContext，必须等待前一张工单读完后再读下一张。
             foreach (var item in list)
             {
-                if (!map.TryGetValue(item.Id, out var d)) continue;
+                ct.ThrowIfCancellationRequested();
+                var detail = await _workOrders.GetAsync(item.Id, factoryId);
+                if (detail.Code != 0 || detail.Data == null)
+                    throw ThrowHelper.BizUser($"读取工单 {item.OrderNo} 的进度失败：{detail.Msg}");
+                var d = detail.Data;
                 item.DoneQty = d.Tasks.Count > 0 ? d.Tasks.Min(t => t.DoneQty) : 0;
                 item.RemainQty = Math.Max(0, item.Qty - item.DoneQty);
             }

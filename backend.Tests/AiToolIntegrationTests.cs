@@ -116,6 +116,22 @@ public class AiToolIntegrationTests
     // ============ 可控模型响应走通工具往返 ============
 
     [Fact]
+    public async Task SearchWorkOrders_MultipleOrders_ReadsProgressWithoutSharedContextConcurrency()
+    {
+        var (db, dispatcher) = BuildDispatcher(_fx, null);
+        await using var ownedDb = db;
+        var page = await dispatcher.QueryWorkOrdersForAiAsync(
+            new AiWorkOrderFiltersDto(), 1, 50, _fx.FactoryId, CancellationToken.None);
+
+        Assert.True(page.List.Count >= 2);
+        var first = Assert.Single(page.List, x => x.Id == _fx.W1);
+        Assert.Equal(80, first.DoneQty);
+        Assert.Equal(20, first.RemainQty);
+        Assert.Equal(0, Assert.Single(page.List, x => x.Id == _fx.W3).DoneQty);
+        Assert.DoesNotContain(page.List, x => x.Id == _fx.Factory2OrderId);
+    }
+
+    [Fact]
     public async Task SupportMode_ReportEvidence_ToolRoundTrip()
     {
         var client = new ScriptedDeepSeekClient(
