@@ -155,6 +155,7 @@ function makeParagraph(lines) {
 
   let tone = ''
   if (/^⚠/.test(plain)) tone = 'warn'
+  else if (/^(?:💡\s*)?(?:建议|推荐|温馨提示|小提示)/u.test(plain)) tone = 'advice'
   else if (/^(结论|重点|关键)/.test(plain)) tone = 'lead'
 
   return { type: 'p', tone, parts: filtered }

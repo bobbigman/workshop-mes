@@ -3,6 +3,15 @@ import assert from 'node:assert/strict'
 import { parseAiMarkdown, parseInline } from './aiMarkdown.js'
 
 describe('parseAiMarkdown', () => {
+  it('shows a closing recommendation as advice without changing its wording', () => {
+    const text = '建议优先安排前两张较早逾期工单的产能。完成量为 0 不代表全部工序未开工。'
+    const [block] = parseAiMarkdown(text)
+    assert.equal(block.tone, 'advice')
+    assert.equal(block.parts[0].text, text)
+    assert.equal(parseAiMarkdown('**建议：**核对工序进度')[0].tone, 'advice')
+    assert.equal(parseAiMarkdown('⚠️ 建议核对')[0].tone, 'warn')
+    assert.equal(parseAiMarkdown('本次查询没有结果')[0].tone, '')
+  })
   it('recognizes unbracketed references from the actual long answer without eating punctuation', () => {
     const parts = parseInline('依据 doc_56f4ee4f9c#查进度查报表_6（工宣 v1.11）：详情。')
     assert.equal(parts[1].type, 'src')

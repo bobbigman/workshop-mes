@@ -22,6 +22,7 @@ const blocks = computed(() => parseAiMarkdown(props.text))
         class="ai-md-p"
         :class="block.tone ? `is-${block.tone}` : ''"
       >
+        <span v-if="block.tone === 'advice'" class="ai-md-advice-icon" aria-hidden="true">💡</span>
         <AiInline :parts="block.parts" />
       </p>
 
@@ -112,6 +113,17 @@ h3.ai-md-h, h4.ai-md-h, h5.ai-md-h, h6.ai-md-h {
 .ai-md-h.is-focus + .ai-md-list li { margin: 6px 0; }
 
 .ai-md-p { margin: 0 0 16px; }
+.ai-md-p.is-advice {
+  position: relative;
+  margin-top: 20px;
+  padding: 15px 18px 15px 48px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f0f4f8;
+  color: #34445b;
+  line-height: 1.85;
+}
+.ai-md-advice-icon { position: absolute; left: 17px; top: 15px; font-size: 19px; line-height: 1.55; }
 .ai-md > .ai-md-p:first-child:not(.is-warn) {
   font-size: 17px; font-weight: 500; line-height: 1.85;
   margin-bottom: 26px; color: #26364d;
