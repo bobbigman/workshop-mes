@@ -10,6 +10,20 @@ namespace WorkshopMes.Tests;
 public class SupportDocumentSearchTests
 {
     [Theory]
+    [InlineData("账上多少钱", "方向一：车间和财务串起来", "金蝶账目还没接进来，现在看不到")]
+    [InlineData("材料涨价按新价算", "方向二：报价不拍脑袋", "留有接口，调用金蝶 MCP 集成")]
+    [InlineData("材料涨价按新价算报价", "方向二：报价不拍脑袋", "留有接口，调用金蝶 MCP 集成")]
+    [InlineData("销售报价的时候，AI 能帮着算算料钱吗？", "方向二：报价不拍脑袋", "留有接口，调用金蝶 MCP 集成")]
+    public void IntegrationQuestions_RetrieveCurrentCapabilityBoundary(string question, string chapter, string boundary)
+    {
+        var result = Build(FindRepoSupportDocs()).Search(question);
+        Assert.Equal("ready", result.State);
+        Assert.Equal("file", result.RetrievalSource);
+        Assert.Contains(result.Sources, s => s.Title.StartsWith("AI 能力展示口径")
+            && s.Chapter?.Contains(chapter) == true && s.Excerpt.Contains(boundary));
+    }
+
+    [Theory]
     [InlineData("车间干的活，能跟财务的账串起来吗？", "方向一：车间和财务串起来")]
     [InlineData("工人干完活，财务不用再对着 Excel 抄一遍吧？", "方向一：车间和财务串起来")]
     [InlineData("老板能不能一张表看清车间干了多少、账上多少钱？", "方向一：车间和财务串起来")]
