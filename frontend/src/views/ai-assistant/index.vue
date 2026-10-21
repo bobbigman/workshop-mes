@@ -23,7 +23,22 @@
 
     <section v-if="questionsOpen && !isMobile" id="role-questions" class="question-panel" aria-label="常用问题" @keydown.esc="questionsOpen = false">
       <div class="question-panel-heading"><span>想了解什么？</span><el-button text size="small" @click="questionsOpen = false">收起</el-button></div>
-      <div class="question-grid">
+      <div v-if="sellingPoints.length" class="question-panel-body">
+        <div class="selling-col">
+          <div class="selling-col-title">AI 卖点</div>
+          <button v-for="(q, index) in sellingPoints" :key="q" type="button" class="question-item selling-item"
+            :disabled="busy || !canChat" @click="useExample(q)">
+            <span class="selling-tag">{{ index + 1 }}</span><span>{{ q }}</span>
+          </button>
+        </div>
+        <div class="other-grid question-grid">
+          <button v-for="(q, index) in otherQuestions" :key="q" type="button" class="question-item"
+            :disabled="busy || !canChat" @click="useExample(q)">
+            <span class="question-number">{{ String(index + 5).padStart(2, '0') }}</span><span>{{ q }}</span><span class="question-arrow" aria-hidden="true">↗</span>
+          </button>
+        </div>
+      </div>
+      <div v-else class="question-grid">
         <button v-for="(q, index) in examples" :key="q" type="button" class="question-item"
           :disabled="busy || !canChat" @click="useExample(q)">
           <span class="question-number">{{ String(index + 1).padStart(2, '0') }}</span><span>{{ q }}</span><span class="question-arrow" aria-hidden="true">↗</span>
@@ -370,6 +385,13 @@ const QUESTIONS = {
 }
 
 const examples = computed(() => QUESTIONS[selectedRole.value])
+// 4 个卖点（AI 页签）：预估报价/算料钱/料齐不齐/排工单顺序，左栏竖排
+const sellingPoints = computed(() =>
+  selectedRole.value === 'engineer' ? (QUESTIONS.engineer || []).slice(0, 4) : [])
+const otherQuestions = computed(() => {
+  const qs = QUESTIONS[selectedRole.value] || []
+  return selectedRole.value === 'engineer' ? qs.slice(4) : qs
+})
 
 const canChat = computed(() => status.value.enabled && status.value.configured)
 
@@ -618,6 +640,12 @@ async function scrollBottom() {
 .question-panel { flex-shrink: 0; max-height: 34vh; overflow: auto; margin: 14px 24px 0; padding: 12px 16px 16px; background: #fff; border: 1px solid #e9ecf0; border-radius: 10px; }
 .question-panel-heading { display: flex; justify-content: space-between; align-items: center; color: #7b8593; font-size: 13px; margin-bottom: 8px; }
 .question-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; }
+.question-panel-body { display: flex; gap: 16px; align-items: flex-start; }
+.selling-col { flex-shrink: 0; width: 235px; display: flex; flex-direction: column; gap: 8px; border-right: 1px solid #e9ecf0; padding-right: 14px; }
+.selling-col-title { color: #1685e6; font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+.selling-item { background: #eef7ff; }
+.selling-tag { color: #1685e6; font-size: 11px; font-weight: 600; }
+.other-grid { flex: 1; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .question-item { display: flex; align-items: center; gap: 10px; text-align: left; border: 0; border-radius: 7px; padding: 10px; background: #f7f9fc; color: #34445e; font: inherit; font-size: 13px; cursor: pointer; line-height: 1.6; }
 .question-item:hover:not(:disabled) { background: #edf5ff; color: #1685e6; }
 .question-number { color: #a0aaba; font-size: 11px; }
