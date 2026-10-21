@@ -31,7 +31,7 @@
       </div>
     </section>
 
-    <el-drawer v-if="isMobile" v-model="questionsOpen" title="车间常见问题" direction="btt" size="75%" append-to-body>
+    <el-drawer v-if="isMobile" v-model="questionsOpen" title="有问题这儿一处查，新人少踩坑、不等老师傅" direction="btt" size="75%" append-to-body>
       <div class="mobile-question-roles" aria-label="选择提问角色">
         <el-button v-for="r in ROLES" :key="r.value" :type="selectedRole === r.value ? 'primary' : 'default'"
           :disabled="busy" @click="selectMobileRole(r.value)">{{ r.label }}</el-button>
@@ -356,13 +356,16 @@ const QUESTIONS = {
     '怎么看这道工序的作业指导书？'
   ],
   engineer: [
+    '销售报价的时候，AI 能帮着预估报价吗？',
+    '销售报价的时候，AI 能帮着算算料钱吗？',
+    '排工单的时候，AI 能帮着看看料齐不齐、缺不缺吗？',
+    'AI 能帮着按轻重缓急把工单排个先后顺序吗？',
     '车间干的活，能跟财务的账串起来吗？',
     '工人干完活，财务不用再对着 Excel 抄一遍吧？',
-    '销售报价的时候，AI 能帮着算算料钱吗？',
-    '除了金蝶，还能连别的软件吗？',
     '车间出问题，能自动发消息到班组长手机上吗？',
-    '以后想加新功能，留路子了吗？',
-    'AI 除了查工单，还能帮我们干点啥？'
+    'AI 除了查工单，还能帮我们干点啥？',
+    '除了金蝶，还能连别的软件吗？',
+    '以后想加新功能，留路子了吗？'
   ]
 }
 
