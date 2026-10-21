@@ -7,6 +7,7 @@ public class AiSessionMessage
 {
     public string Role { get; set; } = ""; // system | user | assistant | tool
     public string? Content { get; set; }
+    public string? ReasoningContent { get; set; }
     public string? ToolCallId { get; set; }
     public string? Name { get; set; }
     public List<DeepSeekToolCall>? ToolCalls { get; set; }

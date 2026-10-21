@@ -36,6 +36,9 @@ public class DeepSeekChatMessage
     [JsonPropertyName("content")]
     public string? Content { get; set; }
 
+    [JsonPropertyName("reasoning_content")]
+    public string? ReasoningContent { get; set; }
+
     [JsonPropertyName("tool_call_id")]
     public string? ToolCallId { get; set; }
 
@@ -81,6 +84,7 @@ public class DeepSeekUsage
 
 public class DeepSeekChatResult
 {
+    public string? ReasoningContent { get; set; }
     public string? Content { get; set; }
     public List<DeepSeekToolCall> ToolCalls { get; set; } = new();
     public DeepSeekUsage? Usage { get; set; }
@@ -225,6 +229,8 @@ public class DeepSeekClient : IDeepSeekClient
             var content = choice.TryGetProperty("content", out var c) && c.ValueKind == JsonValueKind.String
                 ? c.GetString()
                 : null;
+            var reasoningContent = choice.TryGetProperty("reasoning_content", out var reasoning)
+                && reasoning.ValueKind == JsonValueKind.String ? reasoning.GetString() : null;
             var toolCalls = new List<DeepSeekToolCall>();
             if (choice.TryGetProperty("tool_calls", out var tcs) && tcs.ValueKind == JsonValueKind.Array)
             {
@@ -257,6 +263,7 @@ public class DeepSeekClient : IDeepSeekClient
             return new DeepSeekChatResult
             {
                 Content = content,
+                ReasoningContent = reasoningContent,
                 ToolCalls = toolCalls,
                 Usage = usage,
                 RawSafeSummary = $"status=ok; tools={toolCalls.Count}; contentChars={(content?.Length ?? 0)}"

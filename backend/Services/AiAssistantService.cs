@@ -183,7 +183,7 @@ public class AiAssistantService : IAiAssistantService
                     }
                 };
                 var payload = await _tools.DispatchAsync(lookup.Function.Name, lookup.Function.Arguments, session, timeoutCts.Token);
-                session.Messages.Add(new AiSessionMessage { Role = "assistant", ToolCalls = new() { lookup } });
+                session.Messages.Add(new AiSessionMessage { Role = "assistant", ReasoningContent = "", ToolCalls = new() { lookup } });
                 session.Messages.Add(new AiSessionMessage
                 {
                     Role = "tool", ToolCallId = lookup.Id, Name = lookup.Function.Name, Content = payload
@@ -245,6 +245,7 @@ public class AiAssistantService : IAiAssistantService
                     {
                         Role = "assistant",
                         Content = modelResult.Content,
+                        ReasoningContent = modelResult.ReasoningContent,
                         ToolCalls = modelResult.ToolCalls
                     });
 
@@ -281,7 +282,7 @@ public class AiAssistantService : IAiAssistantService
                     : modelResult.Content.Trim();
                 if (string.IsNullOrWhiteSpace(finalAnswer))
                     finalAnswer = BuildFallbackAnswer(session, mode);
-                session.Messages.Add(new AiSessionMessage { Role = "assistant", Content = finalAnswer });
+                session.Messages.Add(new AiSessionMessage { Role = "assistant", Content = finalAnswer, ReasoningContent = modelResult.ReasoningContent });
                 if (forceAnswer && modelResult.ToolCalls.Count > 0)
                     warnings.Add("已根据查询结果直接作答（模型仍想继续调工具，已拦截）");
                 break;
@@ -465,6 +466,7 @@ public class AiAssistantService : IAiAssistantService
             {
                 Role = m.Role,
                 Content = m.Content,
+                ReasoningContent = m.Role == "assistant" ? m.ReasoningContent : null,
                 ToolCallId = m.ToolCallId,
                 Name = m.Name,
                 ToolCalls = m.ToolCalls

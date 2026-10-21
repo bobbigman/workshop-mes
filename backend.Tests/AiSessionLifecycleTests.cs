@@ -14,6 +14,26 @@ public class AiSessionLifecycleTests
         Options.Create(new AiOptions { MaxSessionsPerUser = perUser, MaxSessions = total }));
 
     [Fact]
+    public async Task ThinkingHistory_PreservesToolAndFinalReasoningAcrossTurns()
+    {
+        var (service, _, client) = Assistant();
+        var calls = 0;
+        const string reasoning = "  思考\n原文  ";
+        client.Reply = _ => Task.FromResult(++calls == 1
+            ? new DeepSeekChatResult { ReasoningContent = reasoning, ToolCalls = new() { new()
+                { Id = "lookup", Function = new() { Name = "search_support_docs", Arguments = "{\"query\":\"扫码\"}" } } } }
+            : new DeepSeekChatResult { Content = "已核对。", ReasoningContent = reasoning + calls });
+        var first = await service.SendMessageAsync(Request(), 1, 1, CancellationToken.None);
+        Assert.Contains(client.LastMessages, m => m.ToolCalls?.Any(t => t.Id == "lookup") == true
+            && m.ReasoningContent == reasoning);
+        await service.SendMessageAsync(Request(first.Data!.ConversationId), 1, 1, CancellationToken.None);
+        Assert.Contains(client.LastMessages, m => m.Content == "已核对。" && m.ReasoningContent == reasoning + "2");
+        Assert.All(client.LastMessages.Where(m => m.ToolCalls?.Any(t => t.Id.StartsWith("support_")) == true),
+            m => Assert.Equal("", m.ReasoningContent));
+        Assert.DoesNotContain("ReasoningContent", JsonSerializer.Serialize(first));
+    }
+
+    [Fact]
     public void UserCapacity_RecyclesLeastRecentlyUsed_NotRecentlyAccessedOrBusy()
     {
         var store = Store();
