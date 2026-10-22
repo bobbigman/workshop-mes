@@ -270,6 +270,7 @@ public class AppDbContext : DbContext
             e.Property(x => x.DepartmentId).HasColumnName("department_id");
             e.Property(x => x.UnitPrice).HasColumnName("unit_price").HasPrecision(12, 4);
             e.Property(x => x.WageAmount).HasColumnName("wage_amount").HasPrecision(12, 2);
+            e.Property(x => x.PriceSnapshot).HasColumnName("price_snapshot");
             e.Property(x => x.SettledFlag).HasColumnName("settled_flag");
             e.Property(x => x.ReviewStatus).HasColumnName("review_status");
             e.Property(x => x.ReviewedBy).HasColumnName("reviewed_by");

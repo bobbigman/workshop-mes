@@ -12,6 +12,7 @@ public static class DbCompat
     {
         // 当前实例沿用EnsureCreated；与252增量EF迁移共用幂等SQL。
         await db.Database.ExecuteSqlRawAsync(RiskBriefSchema.UpgradeSql);
+        await db.Database.ExecuteSqlRawAsync(ReportPriceSnapshotSchema.UpgradeSql);
         // docs/240 计时工资：仅补新表与新快照列，保留历史报工时长。
         await db.Database.ExecuteSqlRawAsync(@"
 IF OBJECT_ID(N'prod_work_session', N'U') IS NULL

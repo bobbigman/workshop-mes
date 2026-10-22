@@ -450,20 +450,20 @@ async function onDelete(row) {
 }
 
 async function onRecalc(row) {
-  await ElMessageBox.confirm('按当前工价重算报工明细，继续？', '重算')
+  await ElMessageBox.confirm('按报工时工价快照重算报工明细，继续？', '重算')
   const res = await recalcSalary(row.id)
   const unmatched = res?.data?.unmatchedCount ?? 0
   if (unmatched > 0) {
     ElMessage.warning(`已重算，仍有 ${unmatched} 条未匹配工价，请先补齐工价`)
   } else {
-    ElMessage.success('已按当前工价重算')
+    ElMessage.success('已按报工时工价快照重算')
   }
   load()
 }
 
 /** 已确认：软撤回回草稿 + 原地重算（与批量同语义，docs/136） */
 async function onRevoke(row) {
-  await ElMessageBox.confirm('撤回后回草稿并按当前工价重算，报工解冻，工资单保留，继续？', '撤回重算')
+  await ElMessageBox.confirm('撤回后回草稿并按报工时工价快照重算，报工解冻，工资单保留，继续？', '撤回重算')
   await revokeSalary(row.id)
   const res = await recalcSalary(row.id)
   const unmatched = res?.data?.unmatchedCount ?? 0

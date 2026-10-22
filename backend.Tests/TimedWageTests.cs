@@ -52,6 +52,45 @@ public class TimedWageTests : IAsyncLifetime
         GoodQty = 0, SessionId = session, DurationMinutes = minutes, ClientRequestId = Guid.NewGuid().ToString("N") };
 
     [Fact]
+    public async Task PriceChange_DoesNotRewriteSnapshot_GenerateRecalcRevokeAndMyStatement()
+    {
+        var end = DateTime.Now.AddMinutes(-1);
+        var input = Input();
+        input.Assignees = new() { new() { UserId = _worker, StartTime = end.AddHours(-2), EndTime = end } };
+        await Reports(_db).SubmitAsync(input, _admin);
+        var original = await _db.Reports.SingleAsync(r => r.FactoryId == _factory);
+        var snapshot = original.PriceSnapshot;
+        var rule = await _db.PriceRules.SingleAsync(r => r.FactoryId == _factory);
+        rule.UnitPrice = 90; rule.DeductPrice = 20;
+        rule.EffectiveFrom = DateTime.Now.AddMinutes(1); // 即使改生效时间也不影响旧快照
+        await _db.SaveChangesAsync();
+        var salary = new SalaryService(_db, NullLogger<SalaryService>.Instance);
+        await salary.GenerateAsync(new SalaryGenerateDto { PeriodValue = end.ToString("yyyy-MM"), UserId = _worker }, _factory);
+        var item = await _db.SalaryStatementItems.SingleAsync(i => i.ReportId == original.Id);
+        Assert.Equal(30m, item.UnitPrice); Assert.Equal(48m, item.Amount);
+        await salary.RecalcDraftAsync(item.StatementId, _factory, _admin);
+        Assert.Equal(48m, item.Amount);
+        await salary.ConfirmAsync(item.StatementId, _factory);
+        var mine = await salary.MyStatementItemsAsync(item.StatementId, _factory, _worker);
+        Assert.Equal(30m, Assert.Single(mine.Data!).UnitPrice);
+        await salary.RevokeAsync(item.StatementId, _factory, _admin);
+        await salary.RecalcDraftAsync(item.StatementId, _factory, _admin);
+        Assert.Equal(48m, item.Amount); Assert.Equal(snapshot, original.PriceSnapshot);
+        rule.EffectiveFrom = end.AddDays(-1);
+        await _db.SaveChangesAsync();
+        var next = Input();
+        next.Assignees = new() { new() { UserId = _worker, StartTime = end.AddMinutes(-30), EndTime = end } };
+        await Reports(_db).SubmitAsync(next, _admin);
+        var latest = await _db.Reports.Where(r => r.FactoryId == _factory).OrderByDescending(r => r.Id).FirstAsync();
+        Assert.Equal(90m, latest.UnitPrice); Assert.Equal(36m, latest.WageAmount);
+        original.PriceSnapshot = null;
+        await _db.SaveChangesAsync();
+        var error = await Assert.ThrowsAsync<BusinessException>(() => salary.RecalcDraftAsync(item.StatementId, _factory, _admin));
+        Assert.Contains(original.Id.ToString(), error.Message);
+        Assert.Equal(48m, (await _db.SalaryStatementItems.AsNoTracking().SingleAsync(i => i.Id == item.Id)).Amount);
+    }
+
+    [Fact]
     public async Task Start_IsIdempotent_AndSwitchLeavesPending()
     {
         var service = new WorkSessionService(_db);

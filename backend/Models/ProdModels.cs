@@ -52,6 +52,7 @@ public class ProdReport
     public string? BatchNo { get; set; }            // 批量补报批次号；单条报工为空
     public long? ProductId { get; set; }            // 产品快照（docs/21）
     public long? DepartmentId { get; set; }         // 报工部门快照
+    public string? PriceSnapshot { get; set; } // docs/266：报工时工价规则，不随调价重写
     public decimal? UnitPrice { get; set; }         // 命中工价单价快照
     public decimal? WageAmount { get; set; }        // 预计算工资额
     public bool SettledFlag { get; set; }           // 已结算冻结

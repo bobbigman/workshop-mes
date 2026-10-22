@@ -16,13 +16,13 @@ public interface ISalaryService
     Task<ApiResult<PageResult<SalaryListDto>>> QueryAsync(SalaryQueryDto query, long factoryId);
     /// <summary>本期工资汇总（docs/222）：已确认/草稿计件额 + 返工扣款，按明细汇总，不受分页截断。</summary>
     Task<ApiResult<SalaryPeriodSummaryDto>> SummarizePeriodAsync(SalaryQueryDto query, long factoryId);
-    /// <summary>当日计件试算（docs/222）：只读、不落库；按工价表 PriceRuleMatcher 逐条算。</summary>
+    /// <summary>当日计件试算（docs/222）：只读、不落库；按报工工价快照逐条算。</summary>
     Task<ApiResult<DailyPieceworkEstimateDto>> EstimateDailyPieceworkAsync(long factoryId, long userId, string? businessTimeZone);
     Task<ApiResult<SalaryDetailDto>> GetAsync(long id, long factoryId);
     /// <summary>docs/136：手工列已移除；旧端仍传字段则忽略不报错。</summary>
     Task<ApiResult<object?>> UpdateComponentsAsync(long id, SalaryComponentsDto dto, long factoryId, long operatorUserId);
     Task<ApiResult<object?>> ConfirmAsync(long id, long factoryId);
-    /// <summary>草稿按当前工价原地重算计件明细（docs/133/136）。</summary>
+    /// <summary>草稿按报工工价快照原地重算计件明细（docs/133/136）。</summary>
     Task<ApiResult<object?>> RecalcDraftAsync(long id, long factoryId, long operatorUserId);
     /// <summary>软撤回已确认工资单：回草稿、回滚 settled_flag，保留单与明细（docs/136；docs/67 删单语义废弃）。</summary>
     Task<ApiResult<object?>> RevokeAsync(long id, long factoryId, long operatorUserId);
@@ -112,7 +112,7 @@ public class DailyPieceworkEstimateDto
     public int UnreviewedCount { get; set; }
     /// <summary>固定口径，回答时必须带出</summary>
     public string Disclaimer { get; set; } =
-        "按工价表试算、未复核未入账、复核后定；不生成工资单、不落库";
+        "按报工工价快照试算、未复核未入账、复核后定；不生成工资单、不落库";
 }
 
 public class SalaryDetailDto
@@ -327,8 +327,9 @@ public partial class SalaryService : ISalaryService
         if (existed.Count > 0)
             throw ThrowHelper.Biz(nameof(GenerateAsync), "部分人员该周期工资单已存在，请先删除草稿后再生成");
 
-        var rules = await _db.PriceRules.AsNoTracking().Where(r => r.FactoryId == factoryId).ToListAsync();
         var coeffMap = await LoadWageCoeffMapAsync(userIds);
+        foreach (var report in reports)
+            _ = ReportPriceSnapshot.Calculate(report, coeffMap.GetValueOrDefault(report.UserId, 1m));
         var now = DateTime.Now;
 
         await using var tx = await _db.Database.BeginTransactionAsync();
@@ -355,11 +356,7 @@ public partial class SalaryService : ISalaryService
                 var wageCoeff = coeffMap.GetValueOrDefault(group.Key, 1m);
                 foreach (var report in group)
                 {
-                    var productId = report.ProductId;
-                    var rule = PriceRuleMatcher.Match(
-                        rules, factoryId, productId, report.OperationId,
-                        report.DepartmentId, report.UserId, report.ReportTime);
-                    var calc = PriceRuleMatcher.Calculate(rule, report.GoodQty, report.DefectQty, report.DurationMinutes, wageCoeff);
+                    var calc = ReportPriceSnapshot.Calculate(report, wageCoeff);
                     if (!calc.Matched) unmatched++;
 
                     _db.SalaryStatementItems.Add(new SalaryStatementItem
@@ -502,7 +499,7 @@ public partial class SalaryService : ISalaryService
         var dayEnd = dayStart.AddDays(1);
         var businessDate = dayStart.ToString("yyyy-MM-dd");
 
-        // 含待复核+已通过，排除退回；与 docs/206 今日计件范围一致，金额按工价表现算
+        // 含待复核+已通过，排除退回；与 docs/206 今日计件范围一致，金额按报工工价快照算
         var reports = await _db.Reports.AsNoTracking()
             .Where(r => r.FactoryId == factoryId
                         && r.UserId == userId
@@ -522,7 +519,6 @@ public partial class SalaryService : ISalaryService
             });
         }
 
-        var rules = await _db.PriceRules.AsNoTracking().Where(r => r.FactoryId == factoryId).ToListAsync();
         var wageCoeff = await LoadWageCoeffAsync(userId);
         decimal reviewedNet = 0, unreviewedNet = 0, deductTotal = 0;
         var matched = 0;
@@ -532,10 +528,13 @@ public partial class SalaryService : ISalaryService
 
         foreach (var report in reports)
         {
-            var rule = PriceRuleMatcher.Match(
-                rules, factoryId, report.ProductId, report.OperationId,
-                report.DepartmentId, report.UserId, report.ReportTime);
-            var calc = PriceRuleMatcher.Calculate(rule, report.GoodQty, report.DefectQty, report.DurationMinutes, wageCoeff);
+            if (string.IsNullOrWhiteSpace(report.PriceSnapshot))
+            {
+                unmatched++;
+                if (report.ReviewStatus == 1) reviewedCount++; else unreviewedCount++;
+                continue;
+            }
+            var calc = ReportPriceSnapshot.Calculate(report, wageCoeff);
             if (calc.Matched) matched++;
             else unmatched++;
 
@@ -701,7 +700,7 @@ public partial class SalaryService : ISalaryService
         });
     }
 
-    /// <summary>草稿按当前工价原地重算计件明细（docs/133/136）。</summary>
+    /// <summary>草稿按报工工价快照原地重算计件明细（docs/133/136）。</summary>
     public async Task<ApiResult<object?>> RecalcDraftAsync(long id, long factoryId, long operatorUserId)
     {
         var statement = await _db.SalaryStatements
@@ -723,19 +722,16 @@ public partial class SalaryService : ISalaryService
                     $"明细关联报工不存在 reportId={item.ReportId} statementId={id}");
         }
 
-        var rules = await _db.PriceRules.AsNoTracking()
-            .Where(r => r.FactoryId == factoryId).ToListAsync();
         var wageCoeff = await LoadWageCoeffAsync(statement.UserId);
 
+        foreach (var report in reports.Values)
+            _ = ReportPriceSnapshot.Calculate(report, wageCoeff);
         var unmatched = 0;
         decimal pieceworkSum = 0;
         foreach (var item in items)
         {
             var report = reports[item.ReportId];
-            var rule = PriceRuleMatcher.Match(
-                rules, factoryId, report.ProductId, report.OperationId,
-                report.DepartmentId, report.UserId, report.ReportTime);
-            var calc = PriceRuleMatcher.Calculate(rule, report.GoodQty, report.DefectQty, report.DurationMinutes, wageCoeff);
+            var calc = ReportPriceSnapshot.Calculate(report, wageCoeff);
             if (!calc.Matched) unmatched++;
 
             item.RuleId = calc.RuleId;
@@ -910,6 +906,13 @@ public partial class SalaryService : ISalaryService
                         continue;
                     }
 
+                    var originalReports = await (
+                        from item in _db.SalaryStatementItems.AsNoTracking()
+                        join report in _db.Reports.AsNoTracking() on item.ReportId equals report.Id
+                        where item.StatementId == id && report.FactoryId == factoryId
+                        select report).ToListAsync();
+                    foreach (var report in originalReports)
+                        _ = ReportPriceSnapshot.Calculate(report, 1m);
                     await RevokeAsync(id, factoryId, operatorUserId);
                     await RecalcDraftAsync(id, factoryId, operatorUserId);
                     results.Add(new SalaryBatchRecalcResultItem

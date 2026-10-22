@@ -309,7 +309,7 @@ public class ReportService : IReportService
             foreach (var line in lines)
             {
                 var deptId = await ResolveDeptSnapshotAsync(line.UserId, dto.OperationId);
-                var (unitPrice, wageAmount) = await PreviewWageAsync(
+                var (unitPrice, wageAmount, priceSnapshot) = await PreviewWageAsync(
                     order.FactoryId, order.ProductId, dto.OperationId, deptId, line.UserId,
                     line.GoodQty, line.DefectQty, times[line.UserId].Minutes, times[line.UserId].ReportTime);
 
@@ -325,6 +325,7 @@ public class ReportService : IReportService
                     DurationMinutes = times[line.UserId].Minutes,
                     ProductId = order.ProductId,
                     DepartmentId = deptId,
+                    PriceSnapshot = priceSnapshot,
                     UnitPrice = unitPrice,
                     WageAmount = wageAmount,
                     SettledFlag = false,
@@ -994,7 +995,7 @@ public class ReportService : IReportService
         report.DefectQty = dto.DefectQty;
         report.DefectId = dto.DefectId;
         report.DurationMinutes = dto.DurationMinutes ?? report.DurationMinutes;
-        var editType = await new WorkSessionService(_db).PriceTypeAsync(order, report.OperationId, report.UserId, report.ReportTime);
+        var editType = ReportPriceSnapshot.Calculate(report, 1m).PriceType;
         if (editType == 2 && report.DurationMinutes <= 0) throw ThrowHelper.BizUser("计时报工时长必须大于0分钟");
         await _db.WorkSessions.Where(x => x.ReportId == report.Id)
             .ExecuteUpdateAsync(set => set.SetProperty(x => x.DurationMinutes, report.DurationMinutes));
@@ -1003,14 +1004,11 @@ public class ReportService : IReportService
         report.ReviewedBy = null;
         report.ReviewedAt = null;
         report.RejectReason = null;
-        // docs/21：重新匹配工价预览
-        report.ProductId ??= order.ProductId;
-        report.DepartmentId ??= await ResolveDeptSnapshotAsync(report.UserId, report.OperationId);
-        var (up, wa) = await PreviewWageAsync(
-            report.FactoryId, report.ProductId, report.OperationId, report.DepartmentId, report.UserId,
-            dto.GoodQty, dto.DefectQty, report.DurationMinutes, report.ReportTime);
-        report.UnitPrice = up;
-        report.WageAmount = wa;
+        // docs/266：改数量、时长仍沿用原工价；缺失快照阻断。
+        var storedCoeff = await _db.Users.Where(u => u.Id == report.UserId).Select(u => u.WageCoeff).SingleAsync();
+        var calc = ReportPriceSnapshot.Calculate(report, WageCoeffHelper.Coerce(storedCoeff));
+        report.UnitPrice = calc.UnitPrice;
+        report.WageAmount = calc.WageAmount;
 
         // docs/205：修改留痕（原值→新值）
         var source = dto.Source == 2 ? (byte)2 : (byte)1;
@@ -1232,6 +1230,7 @@ public class ReportService : IReportService
                         BatchNo = batchNo,
                         ProductId = order.ProductId,
                         DepartmentId = deptId,
+                        PriceSnapshot = ReportPriceSnapshot.Capture(rule),
                         UnitPrice = calc.Matched ? calc.UnitPrice : null,
                         WageAmount = calc.Matched ? calc.WageAmount : null,
                         SettledFlag = false,
@@ -1383,7 +1382,7 @@ public class ReportService : IReportService
         return hit;
     }
 
-    private async Task<(decimal? UnitPrice, decimal? WageAmount)> PreviewWageAsync(
+    private async Task<(decimal? UnitPrice, decimal? WageAmount, string? Snapshot)> PreviewWageAsync(
         long factoryId, long? productId, long operationId, long? departmentId, long userId,
         int goodQty, int defectQty, int durationMinutes, DateTime atTime)
     {
@@ -1395,8 +1394,8 @@ public class ReportService : IReportService
             .FirstOrDefaultAsync();
         var wageCoeff = storedCoeff is > 0m ? WageCoeffHelper.Coerce(storedCoeff.Value) : 1m;
         var calc = PriceRuleMatcher.Calculate(rule, goodQty, defectQty, durationMinutes, wageCoeff);
-        if (!calc.Matched) return (null, null);
-        return (calc.UnitPrice, calc.WageAmount);
+        if (!calc.Matched) return (null, null, null);
+        return (calc.UnitPrice, calc.WageAmount, ReportPriceSnapshot.Capture(rule));
     }
 
     private async Task SaveReportExtAsync(long reportId, Dictionary<long, string>? ext)
