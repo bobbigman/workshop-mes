@@ -1,46 +1,49 @@
 <template>
   <div class="pwa-mask" @click.self="emit('dismiss-this-time')">
-    <div class="pwa-card" role="dialog" aria-labelledby="pwa-guide-title">
-      <h3 id="pwa-guide-title">添加到手机桌面</h3>
-      <p class="lead">装一次，以后点桌面图标就能进，不用每次输网址。</p>
-
-      <div v-if="isAndroid" class="step-block">
-        <p class="step-title">安卓</p>
-        <p class="step-text">右上角菜单「⋮」→ 添加到主屏幕 / 安装应用 → 桌面出现图标</p>
-        <img class="step-img" src="/manual/pwa-android-add.png" alt="安卓：添加到主屏幕示意" />
+    <div class="pwa-card" role="dialog" aria-modal="true" aria-labelledby="pwa-guide-title">
+      <div class="guide-header">
+        <h3 id="pwa-guide-title">添加到手机桌面</h3>
+        <p class="lead">装一次，以后点桌面图标就能进，不用每次输网址。</p>
+        <div class="actions">
+          <button type="button" class="btn-secondary" @click="emit('dismiss-forever')">以后不再自动弹出</button>
+          <button type="button" class="btn-primary" @click="emit('dismiss-this-time')">只关闭本次</button>
+        </div>
       </div>
 
-      <div v-if="isApple" class="step-block">
-        <p class="step-title">iPhone / iPad</p>
-        <p class="step-text">点底部「分享」按钮 → 添加到主屏幕 → 桌面出现图标</p>
-        <img class="step-img" src="/manual/pwa-ios-add.png" alt="iPhone：添加到主屏幕示意" />
-      </div>
-
-      <template v-if="!isAndroid && !isApple">
-        <div class="step-block">
+      <div class="guide-content">
+        <div v-if="isAndroid" class="step-block">
           <p class="step-title">安卓</p>
           <p class="step-text">右上角菜单「⋮」→ 添加到主屏幕 / 安装应用 → 桌面出现图标</p>
           <img class="step-img" src="/manual/pwa-android-add.png" alt="安卓：添加到主屏幕示意" />
         </div>
-        <div class="step-block">
+
+        <div v-if="isApple" class="step-block">
           <p class="step-title">iPhone / iPad</p>
           <p class="step-text">点底部「分享」按钮 → 添加到主屏幕 → 桌面出现图标</p>
           <img class="step-img" src="/manual/pwa-ios-add.png" alt="iPhone：添加到主屏幕示意" />
         </div>
-      </template>
 
-      <p v-if="isWeChat" class="wechat-tip">
-        请先用右上角「…」→ 在浏览器打开，再按上面的步骤添加
-      </p>
+        <template v-if="!isAndroid && !isApple">
+          <div class="step-block">
+            <p class="step-title">安卓</p>
+            <p class="step-text">右上角菜单「⋮」→ 添加到主屏幕 / 安装应用 → 桌面出现图标</p>
+            <img class="step-img" src="/manual/pwa-android-add.png" alt="安卓：添加到主屏幕示意" />
+          </div>
+          <div class="step-block">
+            <p class="step-title">iPhone / iPad</p>
+            <p class="step-text">点底部「分享」按钮 → 添加到主屏幕 → 桌面出现图标</p>
+            <img class="step-img" src="/manual/pwa-ios-add.png" alt="iPhone：添加到主屏幕示意" />
+          </div>
+        </template>
 
-      <div class="step-block">
-        <p class="step-title">装好后</p>
-        <img class="step-img homescreen" src="/manual/pwa-homescreen.png" alt="手机桌面上的微聚图标，红框标出位置" />
-      </div>
+        <p v-if="isWeChat" class="wechat-tip">
+          请先用右上角「…」→ 在浏览器打开，再按上面的步骤添加
+        </p>
 
-      <div class="actions">
-        <button type="button" class="btn-secondary" @click="emit('dismiss-forever')">不再提示</button>
-        <button type="button" class="btn-primary" @click="emit('dismiss-this-time')">知道了</button>
+        <div class="step-block">
+          <p class="step-title">装好后</p>
+          <img class="step-img homescreen" src="/manual/pwa-homescreen.png" alt="手机桌面上的微聚图标，红框标出位置" />
+        </div>
       </div>
     </div>
   </div>
@@ -71,12 +74,25 @@ const isWeChat = /MicroMessenger/i.test(ua)
   width: 100%;
   max-width: 360px;
   max-height: min(88vh, 640px);
-  overflow-y: auto;
+  max-height: min(88dvh, 640px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: var(--app-card, #fff);
   border-radius: 12px;
-  padding: 20px 16px 16px;
   box-sizing: border-box;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+}
+.guide-header {
+  flex-shrink: 0;
+  padding: 20px 16px 14px;
+  border-bottom: 1px solid var(--app-border, #e5e6eb);
+}
+.guide-content {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 16px 16px;
 }
 h3 {
   margin: 0 0 8px;
@@ -127,11 +143,16 @@ h3 {
 .actions {
   display: flex;
   gap: 10px;
-  margin-top: 8px;
+  margin-top: 0;
 }
 .actions button {
   flex: 1;
-  height: 44px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 6px;
+  line-height: 1.4;
+  white-space: normal;
+  overflow-wrap: anywhere;
   border-radius: 8px;
   font-size: 15px;
   font-weight: 600;
