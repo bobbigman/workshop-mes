@@ -44,7 +44,7 @@
         {{ row.productName }}
       </div>
       <div class="progress-head">
-        <span>已完成</span>
+        <span>工单已完成</span>
         <span class="val">{{ row.doneQty ?? 0 }} / {{ row.planQty ?? row.qty }}</span>
         <span class="pct">{{ progressPct(row) }}%</span>
       </div>
@@ -52,7 +52,7 @@
         <div class="bar-fill" :style="{ width: progressPct(row) + '%' }" />
       </div>
       <div class="meta">
-        <span class="remain">剩余 <b>{{ row.remainQty ?? 0 }}</b></span>
+        <span class="remain">工单剩余 <b>{{ row.remainQty ?? 0 }}</b></span>
         <span class="time" :class="dueClass(row)">交期 {{ formatDue(row.dueDate) }}</span>
       </div>
       <div v-if="opLine(row)" class="op-line">{{ opLine(row) }}</div>
@@ -234,12 +234,12 @@ h2 { margin: 0; font-size: 18px; flex: none; color: var(--app-text-1); }
   margin-bottom: 10px; box-shadow: var(--app-shadow);
 }
 .row1 { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.no { margin-left: auto; font-weight: 700; font-size: 15px; color: var(--app-text-1); }
+.no { min-width: 0; overflow-wrap: anywhere; margin-left: auto; font-weight: 700; font-size: 15px; color: var(--app-text-1); }
 .tag { font-size: 12px; padding: 2px 8px; border-radius: 4px; }
 .tag.s0 { background: var(--app-border-light); color: var(--app-text-2); }
 .tag.s1 { background: var(--app-primary-light); color: var(--app-primary); }
 .tag.s2 { background: color-mix(in srgb, var(--app-success) 14%, var(--app-card)); color: var(--app-success); }
-.product { font-size: 16px; font-weight: 600; color: var(--app-text-1); margin-bottom: 12px; }
+.product { overflow-wrap: anywhere; font-size: 16px; font-weight: 600; color: var(--app-text-1); margin-bottom: 12px; }
 .product .code { margin-right: 6px; }
 .progress-head {
   display: flex; align-items: baseline; gap: 8px;

@@ -3,6 +3,7 @@
     <div class="header">
       <FactoryBadge />
       <h2>工作台</h2>
+      <span class="login-user">{{ userName }}</span>
       <H5LogoutBtn />
     </div>
 
@@ -11,20 +12,23 @@
       type="button"
       class="scan-btn"
       @click="router.push('/h5/scan')"
-    >去扫码报工</button>
+    >扫码报工</button>
 
     <section v-if="canWage" class="today-card">
-      <div class="today-label">今日计件</div>
-      <div class="today-val">
-        今日 {{ todayGoodQty }} 件 / ￥{{ formatMoney(todayWage) }}
-      </div>
-      <div class="today-tip">按已复核+待复核报工估算，以工资单为准</div>
+      <div v-if="summaryLoading" role="status">今日计件加载中…</div>
+      <div v-else-if="summaryError" role="alert">今日计件加载失败 <button type="button" @click="loadTodaySummary">重试</button></div>
+      <template v-else>
+        <div class="today-label">今日良品报工累计 <b>{{ todayGoodQty }}</b></div>
+        <div class="today-val">预计计件收入 ￥{{ formatMoney(todayWage) }}</div>
+        <div class="today-tip">含已复核和待复核，以工资单为准</div>
+      </template>
     </section>
 
-    <p v-if="loadError" role="alert">任务加载失败，请刷新重试，或扫码报工。</p>
+    <p v-if="loadError" role="alert">任务加载失败 <button type="button" @click="load">重试</button></p>
     <section class="block">
       <h3 class="block-title">我的任务</h3>
-      <div v-if="!loadError && list.length === 0" class="empty">暂无派给我的或本班组任务，可扫码报工</div>
+      <div v-if="tasksLoading" class="empty" role="status">任务加载中…</div>
+      <div v-else-if="!loadError && list.length === 0" class="empty">暂无派给我的或本班组任务<span v-if="canScan">，可扫码报工</span><span v-if="viewReady && showOrdersEntry">，或从工单入口查找</span></div>
       <div
         v-for="row in list"
         :key="row.taskId"
@@ -46,9 +50,10 @@
 
     <section class="block">
       <h3 class="block-title">快捷入口</h3>
+      <p v-if="viewError" role="alert">工单入口配置加载失败 <button type="button" @click="refreshViewMode">重试</button></p>
       <div class="shortcuts">
         <button
-          v-if="showOrdersEntry"
+          v-if="viewReady && showOrdersEntry"
           type="button"
           class="shortcut"
           @click="router.push('/h5/orders')"
@@ -60,6 +65,10 @@
           class="shortcut wage"
           @click="router.push('/h5/my-wage')"
         >我的工资</button>
+      </div>
+      <div class="secondary-entries">
+        <button type="button" class="shortcut" @click="router.push('/h5/abnormal')">上报异常</button>
+        <router-link class="shortcut" :to="{ path: '/help', query: { topic: 'mobile/登录和找到自己的工单' } }">帮助</router-link>
       </div>
       <!-- docs/141：管理员从报工端回 PC，不起眼小入口 -->
       <button
@@ -94,8 +103,14 @@ import { setWorkerViewMode, isWorkerTasksOnlyView } from '@/utils/workerView'
 const router = useRouter()
 const list = ref([])
 const loadError = ref(false)
+const tasksLoading = ref(true)
+const summaryLoading = ref(true)
+const summaryError = ref(false)
+const viewReady = ref(false)
+const viewError = ref(false)
+const userName = localStorage.getItem('userName') || '当前用户'
 const showPwaGuide = ref(false)
-const showOrdersEntry = ref(true)
+const showOrdersEntry = ref(false)
 const role = Number(localStorage.getItem('role') || 0)
 const canScan = canUse(currentTier(), FEATURE.ScanReport)
 const canWage = canUse(currentTier(), FEATURE.PieceWage)
@@ -143,31 +158,41 @@ onMounted(() => {
 })
 
 async function refreshViewMode() {
+  viewReady.value = false
+  viewError.value = false
   try {
     const res = await getWorkerView()
     setWorkerViewMode(res.data?.workerViewMode)
+    showOrdersEntry.value = !isWorkerTasksOnlyView()
+    viewReady.value = true
   } catch (error) {
-    console.error('[工人视角] 读取工厂视角配置失败', error)
+    viewError.value = true
+    console.error('[工人视角] 读取工厂视角配置失败，暂不显示工单入口', error)
   }
-  showOrdersEntry.value = !isWorkerTasksOnlyView()
 }
 
 async function load() {
+  tasksLoading.value = true
   loadError.value = false
   try { const res = await myTasks(); list.value = res.data || [] }
-  catch { list.value = []; loadError.value = true }
+  catch (error) {
+    list.value = []; loadError.value = true
+    console.error('[工作台] 加载我的任务失败', error)
+  } finally { tasksLoading.value = false }
 }
-
 
 async function loadTodaySummary() {
   if (!canWage) return
+  summaryLoading.value = true
+  summaryError.value = false
   try {
     const res = await getTodayPieceSummary()
     todayGoodQty.value = res.data?.todayGoodQty ?? 0
     todayWage.value = res.data?.todayWage ?? 0
   } catch (error) {
+    summaryError.value = true
     console.error('[今日计件] 加载失败', error)
-  }
+  } finally { summaryLoading.value = false }
 }
 </script>
 
@@ -179,7 +204,7 @@ async function loadTodaySummary() {
   background: var(--app-bg);
   box-sizing: border-box;
 }
-.header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.header { flex-wrap: wrap; display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 h2 { margin: 0; font-size: 18px; flex: none; color: var(--app-text-1); }
 .scan-btn {
   width: 100%;
@@ -211,7 +236,7 @@ h2 { margin: 0; font-size: 18px; flex: none; color: var(--app-text-1); }
   font-weight: 600;
   color: var(--app-text-2);
 }
-.empty { text-align: center; color: var(--app-text-4); padding: 28px 0; font-size: 14px; }
+.empty { text-align: center; color: var(--app-text-4); padding: 12px 0; font-size: 14px; }
 .card {
   background: var(--app-card); border-radius: var(--h5-card-radius); padding: var(--h5-card-padding);
   margin-bottom: 10px; box-shadow: var(--app-shadow);
@@ -268,4 +293,9 @@ h2 { margin: 0; font-size: 18px; flex: none; color: var(--app-text-1); }
 .product { margin-bottom: 6px; }
 .go { margin-top: 4px; min-height: 24px; }
 .meta { flex-wrap: wrap; }
+.login-user { font-size: 13px; overflow-wrap: anywhere; color: var(--app-text-2); }
+.secondary-entries { display: flex; gap: 10px; margin-top: 10px; }
+.secondary-entries .shortcut { flex: 1; text-align: center; text-decoration: none; box-sizing: border-box; }
+.today-label, .today-val { display: block; font-size: 14px; overflow-wrap: anywhere; }
+.product, .no { overflow-wrap: anywhere; }
 </style>

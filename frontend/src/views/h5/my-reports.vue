@@ -57,7 +57,7 @@
     </div>
 
     <p class="tip">待复核记录可自行修改数量；已通过需管理员退回后再改；已结算不可改。</p>
-    <TabBar active="home" />
+    <TabBar active="my-reports" />
 
     <div v-if="editVisible" class="mask" @click.self="closeEdit">
       <div class="edit-panel">

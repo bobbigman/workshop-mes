@@ -134,7 +134,8 @@ import {
   buildRefreshUrl,
   stripRefreshParam
 } from '@/utils/clearBrowserCache'
-import { setWorkerViewMode, workerHomePath } from '@/utils/workerView'
+import { setWorkerViewMode } from '@/utils/workerView'
+import { loginDestination } from '@/utils/loginDestination'
 import { resolveLoginFactory, rememberLoginFactory } from '@/utils/loginAppearance'
 
 const route = useRoute()
@@ -363,9 +364,7 @@ function applyLoginSession(data) {
 async function goAfterLogin(data) {
   const redirect = route.query.redirect
   const role = Number(data.role || 0)
-  const failure = typeof redirect === 'string' && redirect.startsWith('/h5/') && !redirect.startsWith('//')
-    ? await router.replace(redirect)
-    : await router.push(role === 2 ? workerHomePath() : '/home')
+  const failure = await router.replace(loginDestination(redirect, role))
   if (failure) throw failure
   ElMessage.success('登录成功')
 }

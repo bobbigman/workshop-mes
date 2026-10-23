@@ -15,25 +15,9 @@
       </svg>
       <span>任务</span>
     </div>
-    <div v-if="canScan" class="tab" :class="{ active: active === 'scan' }" @click="$router.replace('/h5/scan')">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M3 7V5a2 2 0 0 1 2-2h2" />
-        <path d="M17 3h2a2 2 0 0 1 2 2v2" />
-        <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
-        <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
-        <rect x="7" y="7" width="4" height="4" rx="1" />
-        <rect x="13" y="7" width="4" height="4" rx="1" />
-        <rect x="7" y="13" width="4" height="4" rx="1" />
-      </svg>
-      <span>扫码</span>
-    </div>
-    <div class="tab" :class="{ active: active === 'abnormal' }" @click="$router.replace('/h5/abnormal')">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 9v4" />
-        <path d="M12 17h.01" />
-        <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
-      </svg>
-      <span>异常</span>
+    <div class="tab" :class="{ active: active === 'my-reports' }" @click="$router.replace('/h5/my-reports')">
+      <span class="help-icon" aria-hidden="true">≡</span>
+      <span>我的报工</span>
     </div>
     <div v-if="canReview" class="tab" :class="{ active: active === 'review' }" @click="$router.replace('/h5/review')">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -42,10 +26,7 @@
       </svg>
       <span>复核</span>
     </div>
-    <router-link class="tab help-tab" :to="{ path: '/help', query: { topic: 'mobile/登录和找到自己的工单' } }">
-      <span class="help-icon" aria-hidden="true">?</span>
-      <span>帮助</span>
-    </router-link>
+
   </div>
 </template>
 
@@ -54,10 +35,9 @@ import { computed } from 'vue'
 import { canUse, FEATURE, currentTier } from '@/utils/licenseTier'
 
 defineProps({
-  active: { type: String, default: 'home' } // home | tasks | scan | abnormal | review
+  active: { type: String, default: 'home' } // home | tasks | my-reports | review
 })
 
-const canScan = computed(() => canUse(currentTier(), FEATURE.ScanReport))
 const canReview = computed(() => {
   const role = Number(localStorage.getItem('role') || 0)
   return (role === 1 || role === 3) && canUse(currentTier(), FEATURE.ReportReview)
