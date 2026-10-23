@@ -48,6 +48,7 @@ public class WorkOrderStatusCountsDto
 
 public class WorkOrderCreateDto
 {
+    public Dictionary<long, ProcessingChoice>? ProcessingChoices { get; set; }
     public long? CopyFromId { get; set; }
     public string? OrderNo { get; set; }             // 可自定义，空则自动生成
     public long ProductId { get; set; }
@@ -64,6 +65,7 @@ public class WorkOrderPlanDto
 
 public class WorkOrderUpdateDto
 {
+    public Dictionary<long, ProcessingChoice>? ProcessingChoices { get; set; }
     public string? OrderNo { get; set; }             // 可改
     public long? ProductId { get; set; }             // 可换
     public int? Qty { get; set; }                    // 可改
@@ -104,6 +106,8 @@ public class WorkOrderListDto
 
 public class WorkOrderTaskDto
 {
+    public bool HasReports { get; set; }
+    public ProcessingQuote? ProcessingPrice { get; set; }
     public long Id { get; set; }               // prod_work_order_operation.id；旧数据兜底临时任务为 0
     public long OperationId { get; set; }
     public string OperationName { get; set; } = "";
@@ -411,6 +415,7 @@ public class WorkOrderService : IWorkOrderService
 
     private async Task<List<WorkOrderTaskDto>> LoadTasksAsync(ProdWorkOrder order)
     {
+        var reportedOps = (await _db.Reports.Where(r => r.OrderId == order.Id).Select(r => r.OperationId).Distinct().ToListAsync()).ToHashSet();
         var reportSum = await (from r in _db.Reports.AsNoTracking()
                                where r.OrderId == order.Id && r.ReviewStatus != 2
                                group r by r.OperationId into g
@@ -496,6 +501,8 @@ public class WorkOrderService : IWorkOrderService
             return new WorkOrderTaskDto
             {
                 Id = t.Id,
+                HasReports = reportedOps.Contains(t.OperationId),
+                ProcessingPrice = t.ProcessingPrice == null ? null : OperationPricingService.Read<ProcessingQuote>(t.ProcessingPrice),
                 OperationId = t.OperationId,
                 OperationName = names.GetValueOrDefault(t.OperationId, ""),
                 Seq = t.Seq,
@@ -513,7 +520,7 @@ public class WorkOrderService : IWorkOrderService
 
     public async Task<ApiResult<object?>> CreateAsync(WorkOrderCreateDto dto, long currentUserId, long factoryId)
     {
-        await using var tx = await _db.Database.BeginTransactionAsync();
+        await using var tx = await _db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
         if (dto.CopyFromId.HasValue && !await _db.WorkOrders.AnyAsync(o => o.Id == dto.CopyFromId && o.FactoryId == factoryId))
             throw ThrowHelper.Biz(nameof(CreateAsync), "复制来源工单不存在或不属于本厂");
         var product = await _db.Products.FirstOrDefaultAsync(p => p.Id == dto.ProductId && p.FactoryId == factoryId)
@@ -549,6 +556,7 @@ public class WorkOrderService : IWorkOrderService
         await _db.SaveChangesAsync();
 
         await SyncTasksAsync(order, product.RoutingId, dto.Qty, null);
+        await new OperationPricingService(_db).BindAsync(order, dto.ProcessingChoices);
         await SaveExtAsync(order.Id, dto.Ext);
         await tx.CommitAsync();
         return ApiResult<object?>.OkMsg();
@@ -556,7 +564,7 @@ public class WorkOrderService : IWorkOrderService
 
     public async Task<ApiResult<object?>> UpdateAsync(long id, WorkOrderUpdateDto dto, long factoryId)
     {
-        await using var tx = await _db.Database.BeginTransactionAsync();
+        await using var tx = await _db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
         var order = await _db.WorkOrders.FirstOrDefaultAsync(o => o.Id == id && o.FactoryId == factoryId)
             ?? throw ThrowHelper.Biz(nameof(UpdateAsync), "工单不存在");
 
@@ -605,7 +613,7 @@ public class WorkOrderService : IWorkOrderService
             order.Qty = dto.Qty.Value;
             // 无报工时同步各任务计划数；有报工仅改工单级 qty
             if (!hasReport)
-                await SyncTasksAsync(order, null, dto.Qty.Value, null);
+                await SyncTasksAsync(order, null, dto.Qty.Value, null, preserveExisting: true);
         }
 
         // 工序计划数（有任务时按行改）
@@ -633,6 +641,7 @@ public class WorkOrderService : IWorkOrderService
         if (dto.Ext != null)
             await SaveExtAsync(id, dto.Ext);
 
+        await new OperationPricingService(_db).BindAsync(order, dto.ProcessingChoices);
         await RecalcStatusAsync(order);
         await tx.CommitAsync();
         return ApiResult<object?>.OkMsg();
@@ -688,9 +697,19 @@ public class WorkOrderService : IWorkOrderService
         var ext = await _db.CustomFieldValues.AsNoTracking()
             .Where(v => v.TargetId == id && fields.Contains(v.FieldId))
             .ToDictionaryAsync(v => v.FieldId, v => v.Value ?? "");
+        var pricing = new OperationPricingService(_db);
+        var selections = new Dictionary<long, ProcessingChoice>();
+        var sourceTasks = await _db.WorkOrderOperations.AsNoTracking().Where(t => t.WorkOrderId == id && t.ProcessingPrice != null).ToListAsync();
+        foreach (var task in sourceTasks)
+        {
+            var old = OperationPricingService.Read<ProcessingQuote>(task.ProcessingPrice!);
+            var quote = await pricing.PreviewAsync(task.OperationId, src.ProductId, factoryId, old.Choice);
+            quote.Choice.QuoteToken = quote.QuoteToken;
+            selections[task.OperationId] = quote.Choice;
+        }
         return await CreateAsync(new WorkOrderCreateDto
         {
-            CopyFromId = id, ProductId = src.ProductId, Qty = src.Qty, Ext = ext
+            CopyFromId = id, ProductId = src.ProductId, Qty = src.Qty, Ext = ext, ProcessingChoices = selections
         }, currentUserId, factoryId);
     }
 
@@ -760,8 +779,15 @@ public class WorkOrderService : IWorkOrderService
     /// <summary>
     /// 重建工单工序任务。routingId 为 null 时沿用现有（用于只改计划数的场景）。
     /// </summary>
-    private async Task SyncTasksAsync(ProdWorkOrder order, long? routingId, int planQty, List<WorkOrderPlanDto>? plans)
+    private async Task SyncTasksAsync(ProdWorkOrder order, long? routingId, int planQty, List<WorkOrderPlanDto>? plans, bool preserveExisting = false)
     {
+        if (!routingId.HasValue && preserveExisting)
+        {
+            var existing = await _db.WorkOrderOperations.Where(t => t.WorkOrderId == order.Id).ToListAsync();
+            foreach (var t in existing) t.PlanQty = plans?.FirstOrDefault(p => p.OperationId == t.OperationId)?.PlanQty ?? planQty;
+            await _db.SaveChangesAsync();
+            return;
+        }
         _db.WorkOrderOperations.RemoveRange(_db.WorkOrderOperations.Where(t => t.WorkOrderId == order.Id));
         await _db.SaveChangesAsync();
 

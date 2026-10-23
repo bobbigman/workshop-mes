@@ -332,7 +332,7 @@ public class ReportService : IReportService
                 var deptId = await ResolveDeptSnapshotAsync(line.UserId, dto.OperationId);
                 var (_, unitPrice, wageAmount, priceSnapshot) = await PreviewWageAsync(
                     order.FactoryId, order.ProductId, dto.OperationId, deptId, line.UserId,
-                    line.GoodQty, line.DefectQty, times[line.UserId].Minutes, times[line.UserId].ReportTime);
+                    line.GoodQty, line.DefectQty, times[line.UserId].Minutes, times[line.UserId].ReportTime, order.Id);
 
                 var report = new ProdReport
                 {
@@ -1221,6 +1221,8 @@ public class ReportService : IReportService
                     var end = input?.EndTime ?? dto.EndTime;
                     var at = end ?? now;
                     rule = PriceRuleMatcher.Match(rules, order.FactoryId, order.ProductId, op.OperationId, deptId, uid, at);
+                    var lockedPrice = await new OperationPricingService(_db).LockedAsync(order.Id, op.OperationId, order.FactoryId);
+                    if (lockedPrice != null) rule = new BasePriceRule { Id = lockedPrice.RuleId, PriceType = 1, UnitPrice = lockedPrice.UnitPrice, DeductPrice = lockedPrice.DeductPrice };
                     if (qty == 0 && rule?.PriceType != 2) throw ThrowHelper.BizUser("非计时岗补报良品数必须大于0");
                     ResolvedWorkTime? time = null;
                     if (rule?.PriceType == 2)
@@ -1237,7 +1239,7 @@ public class ReportService : IReportService
                             throw ThrowHelper.BizUser($"无该工序报工权限：{target.Name}");
                     }
                     var wageCoeff = coeffMap.GetValueOrDefault(uid, 1m);
-                    var calc = PriceRuleMatcher.Calculate(rule, qty, 0, time?.Minutes ?? 0, wageCoeff);
+                    var calc = PriceRuleMatcher.Calculate(rule, qty, 0, time?.Minutes ?? 0, wageCoeff, lockedPrice?.Processing?.UnitsPerPriceUnit ?? 1m);
                     var report = new ProdReport
                     {
                         FactoryId = order.FactoryId,
@@ -1251,7 +1253,7 @@ public class ReportService : IReportService
                         BatchNo = batchNo,
                         ProductId = order.ProductId,
                         DepartmentId = deptId,
-                        PriceSnapshot = ReportPriceSnapshot.Capture(rule),
+                        PriceSnapshot = lockedPrice == null ? ReportPriceSnapshot.Capture(rule) : System.Text.Json.JsonSerializer.Serialize(lockedPrice),
                         UnitPrice = calc.Matched ? calc.UnitPrice : null,
                         WageAmount = calc.Matched ? calc.WageAmount : null,
                         SettledFlag = false,
@@ -1405,7 +1407,7 @@ public class ReportService : IReportService
 
     private async Task<(byte PriceType, decimal? UnitPrice, decimal? WageAmount, string? Snapshot)> PreviewWageAsync(
         long factoryId, long? productId, long operationId, long? departmentId, long userId,
-        int goodQty, int defectQty, int durationMinutes, DateTime atTime)
+        int goodQty, int defectQty, int durationMinutes, DateTime atTime, long orderId)
     {
         var rules = await _db.PriceRules.AsNoTracking().Where(r => r.FactoryId == factoryId).ToListAsync();
         var rule = PriceRuleMatcher.Match(rules, factoryId, productId, operationId, departmentId, userId, atTime);
@@ -1414,6 +1416,13 @@ public class ReportService : IReportService
             .Select(u => (decimal?)u.WageCoeff)
             .FirstOrDefaultAsync();
         var wageCoeff = storedCoeff is > 0m ? WageCoeffHelper.Coerce(storedCoeff.Value) : 1m;
+        var locked = await new OperationPricingService(_db).LockedAsync(orderId, operationId, factoryId);
+        if (locked != null)
+        {
+            var result = ReportPriceSnapshot.Calculate(new ProdReport { GoodQty = goodQty, DefectQty = defectQty,
+                PriceSnapshot = System.Text.Json.JsonSerializer.Serialize(locked) }, wageCoeff);
+            return (1, result.UnitPrice, result.WageAmount, System.Text.Json.JsonSerializer.Serialize(locked));
+        }
         var calc = PriceRuleMatcher.Calculate(rule, goodQty, defectQty, durationMinutes, wageCoeff);
         if (!calc.Matched) return (calc.PriceType, null, null, null);
         return (calc.PriceType, calc.UnitPrice, calc.WageAmount, ReportPriceSnapshot.Capture(rule));
@@ -1428,7 +1437,7 @@ public class ReportService : IReportService
         var deptId = await ResolveDeptSnapshotAsync(currentUserId, dto.OperationId);
         var (priceType, unitPrice, wageAmount, _) = await PreviewWageAsync(
             factoryId, order.ProductId, dto.OperationId, deptId, currentUserId,
-            dto.GoodQty, dto.DefectQty, dto.DurationMinutes, DateTime.Now);
+            dto.GoodQty, dto.DefectQty, dto.DurationMinutes, DateTime.Now, order.Id);
         return ApiResult<ReportWagePreviewDto>.Ok(new ReportWagePreviewDto
         {
             Matched = unitPrice != null,

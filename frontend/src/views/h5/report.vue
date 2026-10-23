@@ -32,6 +32,7 @@
         </option>
       </select>
 
+      <ProcessingRequirements :price="currentTask?.processingPrice" />
       <div class="summary" aria-label="当前工序进度">
         <span>计划 <b>{{ summary.plan }}</b></span>
         <span>已完成 <b>{{ summary.done }}</b></span>
@@ -253,6 +254,7 @@
 </template>
 
 <script setup>
+import ProcessingRequirements from '@/components/ProcessingRequirements.vue'
 import { onUnmounted, ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast, showSuccessToast, showImagePreview, showConfirmDialog, NumberKeyboard as VanNumberKeyboard } from 'vant'

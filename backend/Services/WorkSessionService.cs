@@ -118,6 +118,7 @@ public class WorkSessionService(AppDbContext db)
 
     public async Task<byte> PriceTypeAsync(ProdWorkOrder order, long operationId, long userId, DateTime at)
     {
+        if (await new OperationPricingService(db).LockedAsync(order.Id, operationId, order.FactoryId) != null) return 1;
         var deptIds = await db.DepartmentUsers.AsNoTracking().Where(x => x.UserId == userId)
             .Select(x => x.DepartmentId).ToListAsync();
         var dept = await db.OperationDepartments.AsNoTracking().Where(x => x.OperationId == operationId && deptIds.Contains(x.DepartmentId))

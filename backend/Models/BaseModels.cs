@@ -24,6 +24,7 @@ public class BaseDefectItem
 /// <summary>工序</summary>
 public class BaseOperation
 {
+    public string? PricingConfig { get; set; }
     public long Id { get; set; }
     public long FactoryId { get; set; }
     public string Code { get; set; } = "";          // 工序编号

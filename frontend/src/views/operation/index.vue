@@ -11,14 +11,16 @@
       <el-table-column prop="name" label="工序名称" />
       <el-table-column prop="deptNames" label="报工权限(部门)" />
       <el-table-column prop="defectNames" label="不良品项" />
-      <el-table-column label="操作" width="220">
+      <el-table-column label="操作" width="300">
         <template #default="{ row }">
           <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
           <el-button v-if="isAdmin" link type="primary" @click="openCopy(row)">复制</el-button>
+          <el-button v-if="isAdmin && canUse(currentTier(), FEATURE.PieceWage)" link type="primary" @click="pricingOperation=row; pricingDlg=true">加工计价</el-button>
           <el-button link type="danger" @click="onDelete(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
+    <OperationPricingEditor v-model="pricingDlg" :operation-id="pricingOperation.id" :operation-name="pricingOperation.name" />
 
     <el-dialog v-model="dlg" :title="editingId ? '编辑工序' : copyFromId ? '复制工序' : '创建工序'" :close-on-click-modal="!saving" :close-on-press-escape="!saving" :show-close="!saving" width="520px">
       <el-alert v-if="copyFromId" title="请填写新编号；作业指导书、图纸及独立计价规则未复制。" type="info" :closable="false" show-icon style="margin-bottom:12px" />
@@ -54,9 +56,12 @@ import { getOperationList, getOperation, createOperation, updateOperation, delet
 import { getDeptList } from '@/api/sys'
 import ImportDialog from '@/components/ImportDialog.vue'
 import KnowledgeFiles from '@/components/KnowledgeFiles.vue'
+import OperationPricingEditor from '@/components/OperationPricingEditor.vue'
+import { canUse, currentTier, FEATURE } from '@/utils/licenseTier'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const isAdmin = Number(localStorage.getItem('role')) === 1
+const pricingDlg = ref(false), pricingOperation = ref({})
 const copyFromId = ref(null), saving = ref(false)
 const list = ref([]), keyword = ref(''), dlg = ref(false), editingId = ref(null)
 const form = ref({ code: '', name: '', deptIds: [], defectIds: [] })

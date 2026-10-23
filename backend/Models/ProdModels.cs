@@ -20,6 +20,7 @@ public class ProdWorkOrder
 /// <summary>工单工序任务（工序级计划数，对标黑湖「生产任务」tab）</summary>
 public class ProdWorkOrderOperation
 {
+    public string? ProcessingPrice { get; set; }
     public long Id { get; set; }
     public long WorkOrderId { get; set; }             // 工单
     public long OperationId { get; set; }             // 工序

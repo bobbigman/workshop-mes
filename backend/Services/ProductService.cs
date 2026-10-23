@@ -36,6 +36,7 @@ public class ProductCreateDto
 
 public class ProductListDto
 {
+    public long? UnitId { get; set; }
     public bool IsRiskFocus { get; set; }
     public long Id { get; set; }
     public string Code { get; set; } = "";
@@ -81,7 +82,7 @@ public class ProductService : IProductService
             .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
             .Select(x => new ProductListDto
             {
-                Id = x.p.Id, Code = x.p.Code, Name = x.p.Name,
+                Id = x.p.Id, Code = x.p.Code, Name = x.p.Name, UnitId = x.p.UnitId,
                 UnitName = x.UnitName, RoutingName = x.RoutingName,
                 Supplier = x.p.Supplier, Price = x.p.Price, IsRiskFocus = x.p.IsRiskFocus
             }).ToListAsync();

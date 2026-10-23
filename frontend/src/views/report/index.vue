@@ -133,6 +133,7 @@
             />
           </el-select>
         </el-form-item>
+        <ProcessingRequirements :price="orderDetail?.tasks?.find(t=>t.operationId===createForm.operationId)?.processingPrice" />
         <el-form-item label="良品数"><el-input-number v-model="createForm.goodQty" :min="0" :max="remainNum" /></el-form-item>
         <el-form-item label="不良品数"><el-input-number v-model="createForm.defectQty" :min="0" /></el-form-item>
         <el-form-item label="不良原因">
@@ -290,6 +291,7 @@
         <p v-if="proxyLoadError" class="proxy-error" role="alert">{{ proxyLoadError }} <el-button link type="primary" :disabled="proxySubmitting || proxyLoading" @click="retryProxyLoad">重试</el-button></p>
         <p v-if="proxyLoading" role="status">正在加载工单及可代报人员…</p>
         <p v-else-if="proxyDetail && !proxyDetail.tasks?.length" role="status">该工单暂无可选工序</p>
+        <ProcessingRequirements :price="proxyDetail?.tasks?.find(t=>t.operationId===proxyForm.operationId)?.processingPrice" />
         <section class="proxy-details">
           <h3>代报明细</h3>
           <p class="proxy-hint">记到所选工人名下，各人分别填写数量。</p>
@@ -472,6 +474,7 @@
   </div>
 </template>
 <script setup>
+import ProcessingRequirements from '@/components/ProcessingRequirements.vue'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getReportList, updateReport, submitReport, batchReport, getDefectsByOp, getOrderByNo, getOrderList, getReportCandidates, getReportChangeLogs } from '@/api/prod'

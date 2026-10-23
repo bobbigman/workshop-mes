@@ -161,6 +161,7 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<BaseOperation>(e =>
         {
+            e.Property(x => x.PricingConfig).HasColumnName("pricing_config");
             e.ToTable("base_operation");
             e.Property(x => x.FactoryId).HasColumnName("factory_id");
             e.Property(x => x.Code).HasColumnName("code").HasMaxLength(64);
@@ -233,6 +234,7 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<ProdWorkOrderOperation>(e =>
         {
+            e.Property(x => x.ProcessingPrice).HasColumnName("processing_price");
             e.ToTable("prod_work_order_operation");
             e.HasIndex(x => new { x.WorkOrderId, x.OperationId }).IsUnique();
             e.HasIndex(x => new { x.WorkOrderId, x.Seq }).IsUnique();

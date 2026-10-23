@@ -53,7 +53,7 @@ public static class PriceRuleMatcher
     }
 
     /// <param name="wageCoeff">人级工价系数。1 与不传相同。计件/计时乘入金额后再四舍五入到分；固定不乘；扣款始终不乘。</param>
-    public static CalcResult Calculate(BasePriceRule? rule, int goodQty, int defectQty, int durationMinutes, decimal wageCoeff = 1m)
+    public static CalcResult Calculate(BasePriceRule? rule, int goodQty, int defectQty, int durationMinutes, decimal wageCoeff = 1m, decimal unitsPerPriceUnit = 1m)
     {
         if (wageCoeff <= 0m) wageCoeff = 1m;
 
@@ -70,7 +70,8 @@ public static class PriceRuleMatcher
             };
         }
 
-        var deduct = defectQty * (rule.DeductPrice ?? 0m);
+        if (unitsPerPriceUnit <= 0) throw ahu.MicrosoftMes.Common.ThrowHelper.BizUser("计价单位换算必须大于0");
+        var deduct = defectQty * (rule.DeductPrice ?? 0m) / unitsPerPriceUnit;
         decimal amount;
         int calcQty;
         decimal applied = 1m;
@@ -89,7 +90,7 @@ public static class PriceRuleMatcher
                 applied = 1m;
                 break;
             default: // 计件
-                var piece = goodQty * rule.UnitPrice;
+                var piece = goodQty * rule.UnitPrice / unitsPerPriceUnit;
                 if (wageCoeff != 1m) piece *= wageCoeff;
                 amount = Math.Round(piece, 2, MidpointRounding.AwayFromZero);
                 calcQty = goodQty;
@@ -101,7 +102,7 @@ public static class PriceRuleMatcher
         {
             RuleId = rule.Id,
             PriceType = rule.PriceType,
-            UnitPrice = rule.UnitPrice,
+            UnitPrice = rule.UnitPrice / unitsPerPriceUnit,
             CalcQty = calcQty,
             Amount = amount,
             DeductAmount = Math.Round(deduct, 2, MidpointRounding.AwayFromZero),

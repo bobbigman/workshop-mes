@@ -44,7 +44,6 @@
       <el-button @click="onSearch">查询</el-button>
       <el-button @click="onReset">重置</el-button>
       <el-button v-if="isAdmin" type="primary" @click="openCreate">+ 创建工单</el-button>
-      <el-button v-if="isAdmin" @click="router.push('/order-pricing-demo')">加工选项演示</el-button>
       <el-button v-if="isAdmin && canPrint" @click="printSettingDlg = true">打印设置</el-button>
     </div>
 
@@ -172,6 +171,7 @@
           </el-select>
           <el-input v-else v-model="form.ext[f.id]" />
         </el-form-item>
+        <WorkOrderProcessing v-if="dlg" ref="processingEditor" :product-id="form.productId" :tasks="processingTasks" :copy="!!copyFromId" :disabled="saving" />
       </el-form>
       <template #footer>
         <el-button :disabled="saving" @click="dlg = false">取消</el-button>
@@ -193,6 +193,12 @@
       <el-table :data="detail.tasks" class="detail-tasks">
         <el-table-column prop="seq" label="序" width="50" />
         <el-table-column prop="operationName" label="工序" />
+        <el-table-column v-if="isAdmin" label="加工要求 / 锁定工价" min-width="240">
+          <template #default="{row}"><template v-if="row.processingPrice">
+            <div>{{ row.processingPrice.baseName }} · {{ row.processingPrice.unitPrice }}元/{{ row.processingPrice.priceUnit }}</div>
+            <div v-for="(l,i) in row.processingPrice.lines" :key="i">{{ l.group }}：{{ l.option }}{{ l.included?'（已含）':'' }}</div>
+          </template><span v-else>原工价表</span></template>
+        </el-table-column>
         <el-table-column prop="planQty" label="计划" width="80" />
         <el-table-column prop="doneQty" label="已报良品" width="100" />
         <el-table-column v-if="canAssign" label="派工" min-width="260">
@@ -299,6 +305,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import WorkOrderProcessing from '@/components/WorkOrderProcessing.vue'
 import { getOrderList, getOrder, getOrderStatusCounts, createOrder, updateOrder, transitionOrder, deleteOrder, getCustomFields } from '@/api/prod'
 import { getProductList } from '@/api/base'
 import { assign, assignWorkers, assignDepartments, assignSuggest } from '@/api/assign'
@@ -313,6 +320,7 @@ import { VALUE_TIPS } from '@/constants/valueTips'
 import { canUse, FEATURE, currentTier } from '@/utils/licenseTier'
 
 const router = useRouter()
+const processingEditor = ref(null), processingTasks = ref([])
 const route = useRoute()
 const role = Number(localStorage.getItem('role') || 0)
 const isAdmin = role === 1
@@ -487,6 +495,7 @@ function onReset() {
 }
 
 function openCreate() {
+  processingTasks.value = []
   copyFromId.value = null
   editingId.value = null
   form.value = { orderNo: '', productId: null, qty: 1, dueDate: null, ext: {}, tasks: [] }
@@ -497,6 +506,7 @@ async function openEdit(row) {
   copyFromId.value = null
   const res = await getOrder(row.id)
   const d = res.data
+  processingTasks.value = d.tasks || []
   editingId.value = row.id
   form.value = {
     orderNo: d.orderNo,
@@ -510,6 +520,7 @@ async function openEdit(row) {
 }
 
 function onProductChange() {
+  processingTasks.value = []
   // 换产品后计划数由后端按新路线重建，前端清空旧计划
   if (editingId.value) form.value.tasks = []
 }
@@ -520,10 +531,13 @@ async function onSave() {
     ElMessage.error('请选择产品并填写数量')
     return
   }
+  let processingChoices
+  try { processingChoices = processingEditor.value?.getChoices() || {} } catch(e) { ElMessage.error(e.message); return }
   saving.value = true
   try {
     if (editingId.value) {
       const payload = {
+        processingChoices,
         orderNo: form.value.orderNo || undefined,
         productId: form.value.productId,
         qty: form.value.qty,
@@ -534,7 +548,7 @@ async function onSave() {
       await updateOrder(editingId.value, payload)
       ElMessage.success('已保存')
     } else {
-      await createOrder({ copyFromId: copyFromId.value, orderNo: form.value.orderNo || undefined, productId: form.value.productId, qty: form.value.qty, dueDate: form.value.dueDate || null, ext: form.value.ext })
+      await createOrder({ processingChoices, copyFromId: copyFromId.value, orderNo: form.value.orderNo || undefined, productId: form.value.productId, qty: form.value.qty, dueDate: form.value.dueDate || null, ext: form.value.ext })
       ElMessage.success('创建成功')
     }
     dlg.value = false
@@ -553,6 +567,7 @@ async function onTransition(row, action) {
 async function onCopy(row) {
   const res = await getOrder(row.id)
   const d = res.data
+  processingTasks.value = d.tasks || []
   editingId.value = null
   copyFromId.value = row.id
   form.value = { orderNo: '', productId: d.productId, qty: d.qty, dueDate: null,
