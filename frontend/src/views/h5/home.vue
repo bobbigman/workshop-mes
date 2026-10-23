@@ -1,105 +1,63 @@
 <template>
   <div class="h5-page">
-    <div class="header">
+    <header class="header">
       <FactoryBadge />
       <h2>工作台</h2>
-      <span class="login-user">{{ userName }}</span>
+      <span class="login-user" :title="userName">{{ userName }}</span>
       <H5LogoutBtn />
-    </div>
+    </header>
 
-    <button
-      v-if="canScan"
-      type="button"
-      class="scan-btn"
-      @click="router.push('/h5/scan')"
-    >扫码报工</button>
+    <button v-if="canScan" type="button" class="scan-btn" @click="router.push('/h5/scan')">
+      <span class="scan-copy"><strong>扫码报工</strong><span>扫工单二维码，填写本次数量</span></span>
+      <span class="scan-icon"><van-icon name="scan" aria-hidden="true" /></span>
+    </button>
 
-    <section v-if="role === 1 || role === 3" class="management-shortcuts" aria-label="管理操作">
-      <button type="button" class="shortcut" @click="router.push(managementDestination('proxy'))">代报工</button>
-      <button v-if="canReview" type="button" class="shortcut" @click="router.push('/h5/review')">报工复核</button>
-      <template v-if="role === 1">
-        <button type="button" class="shortcut" @click="router.push(managementDestination('batch'))">一键补报未完工序</button>
-        <button type="button" class="shortcut" @click="router.push(managementDestination('pending'))">补报开工记录</button>
-      </template>
-    </section>
-
-    <section v-if="canWage" class="today-card">
-      <div v-if="summaryLoading" role="status">今日计件加载中…</div>
-      <div v-else-if="summaryError" role="alert">今日计件加载失败 <button type="button" @click="loadTodaySummary">重试</button></div>
+    <section v-if="canWage" class="today-summary" aria-label="今日计件">
+      <div v-if="summaryLoading" class="summary-state" role="status">今日计件加载中…</div>
+      <div v-else-if="summaryError" class="summary-state" role="alert">今日计件加载失败 <button type="button" @click="loadTodaySummary">重试</button></div>
       <template v-else>
-        <div class="today-label">今日良品报工累计 <b>{{ todayGoodQty }}</b></div>
-        <div class="today-val">预计计件收入 ￥{{ formatMoney(todayWage) }}</div>
-        <div class="today-tip">含已复核和待复核，以工资单为准</div>
+        <div class="today-cards">
+          <div class="today-card good"><span>今日良品报工累计</span><strong>{{ todayGoodQty }}</strong></div>
+          <div class="today-card wage"><span>预计计件收入</span><strong>¥{{ formatMoney(todayWage) }}</strong></div>
+        </div>
+        <p class="today-tip">含已复核和待复核，以工资单为准</p>
       </template>
     </section>
 
-    <p v-if="loadError" role="alert">任务加载失败 <button type="button" @click="load">重试</button></p>
-    <section class="block">
-      <h3 class="block-title">我的任务</h3>
-      <div v-if="tasksLoading" class="empty" role="status">任务加载中…</div>
-      <div v-else-if="!loadError && list.length === 0" class="empty">暂无派给我的或本班组任务<span v-if="canScan">，可扫码报工</span><span v-if="viewReady && showOrdersEntry">，或从工单入口查找</span></div>
-      <div
-        v-for="row in list"
-        :key="row.taskId"
-        class="card"
-        @click="goReport(row)"
-      >
-        <div class="row1">
-          <span class="tag" :class="'s' + row.orderStatus">{{ statusLabel(row.orderStatus) }}</span>
-          <span class="no">工单 {{ row.orderNo }}</span>
-        </div>
-        <div class="product"><template v-if="row.productCode">{{ row.productCode }} · </template>{{ row.productName }} · {{ row.operationName }}</div>
-        <div class="meta">
-          <span class="remain">剩余 <b>{{ row.remainQty }}</b></span>
-          <span class="time" :class="dueClass(row)">{{ row.dueState === 'overdue' ? '已逾期 · ' : '交期 ' }}{{ formatDue(row.dueDate) }}</span>
-        </div>
-        <div class="go">去报工 ›</div>
-      </div>
+    <section class="task-summary" aria-label="我的任务">
+      <router-link class="task-entry" to="/h5/tasks">
+        <span class="task-copy">
+          <strong>我的任务</strong>
+          <span v-if="tasksLoading" class="entry-note" role="status">任务加载中…</span>
+          <span v-else-if="loadError" class="entry-note">任务数量暂不可用</span>
+          <span v-else-if="!list.length" class="entry-note">暂无派给我或本班组的任务</span>
+          <span v-else class="entry-note"><b>已派任务 {{ list.length }} 项</b>（含本班组）</span>
+        </span>
+        <span class="entry-arrow">{{ loadError ? '查看任务' : '查看全部' }} ›</span>
+      </router-link>
+      <p v-if="loadError" class="load-error" role="alert">任务加载失败 <button type="button" @click="load">重试</button></p>
     </section>
 
-    <section class="block">
-      <h3 class="block-title">快捷入口</h3>
-      <p v-if="viewError" role="alert">工单入口配置加载失败 <button type="button" @click="refreshViewMode">重试</button></p>
+    <section class="block" aria-label="常用功能">
+      <h3 class="block-title">常用功能</h3>
+      <p v-if="viewError" class="load-error" role="alert">查询入口配置加载失败 <button type="button" @click="refreshViewMode">重试</button></p>
       <div class="shortcuts">
-        <button
-          v-if="viewReady && showOrdersEntry"
-          type="button"
-          class="shortcut"
-          @click="router.push('/h5/orders')"
-        >工单</button>
-        <button type="button" class="shortcut" @click="router.push('/h5/my-reports')">我的报工</button>
-        <button
-          v-if="canWage"
-          type="button"
-          class="shortcut wage"
-          @click="router.push('/h5/my-wage')"
-        >我的工资</button>
+        <router-link v-for="item in shortcuts" :key="item.label" class="shortcut" :to="item.to">
+          <span class="shortcut-icon" :class="item.tone"><van-icon :name="item.icon" aria-hidden="true" /></span>
+          <span class="shortcut-label">{{ item.label }}</span>
+        </router-link>
       </div>
-      <div class="secondary-entries">
-        <button type="button" class="shortcut" @click="router.push('/h5/abnormal')">上报异常</button>
-        <router-link class="shortcut" to="/h5/help">帮助</router-link>
-      </div>
-      <button type="button" class="shortcut more-entry" @click="router.push('/h5/more')">更多功能 ›</button>
-      <!-- docs/141：管理员从报工端回 PC，不起眼小入口 -->
-      <button
-        v-if="role !== 2"
-        type="button"
-        class="admin-back"
-        @click="router.push('/order')"
-      >管理后台</button>
     </section>
 
     <TabBar active="home" />
-    <PwaGuide
-      v-if="showPwaGuide"
-      @dismiss-this-time="onPwaDismissThisTime"
-      @dismiss-forever="onPwaDismissForever"
-    />
+    <PwaGuide v-if="showPwaGuide" @dismiss-this-time="onPwaDismissThisTime" @dismiss-forever="onPwaDismissForever" />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
+import { Icon as VanIcon } from 'vant'
+import 'vant/lib/index.css'
 import { useRouter } from 'vue-router'
 import { myTasks } from '@/api/assign'
 import { getWorkerView, getTodayPieceSummary } from '@/api/prod'
@@ -109,7 +67,6 @@ import H5LogoutBtn from '@/components/H5LogoutBtn.vue'
 import PwaGuide from '@/components/PwaGuide.vue'
 import { canUse, FEATURE, currentTier } from '@/utils/licenseTier'
 import { setWorkerViewMode, isWorkerTasksOnlyView } from '@/utils/workerView'
-import { managementDestination } from '@/utils/reportManagement'
 
 const router = useRouter()
 const list = ref([])
@@ -122,24 +79,25 @@ const viewError = ref(false)
 const userName = localStorage.getItem('userName') || '当前用户'
 const showPwaGuide = ref(false)
 const showOrdersEntry = ref(false)
-const role = Number(localStorage.getItem('role') || 0)
 const canScan = canUse(currentTier(), FEATURE.ScanReport)
 const canWage = canUse(currentTier(), FEATURE.PieceWage)
-const canReview = canUse(currentTier(), FEATURE.ReportReview)
+const shortcuts = computed(() => [
+  ...(viewReady.value && showOrdersEntry.value ? [{ label: '工单', icon: 'orders-o', tone: 'blue', to: '/h5/orders' }] : []),
+  ...(canWage ? [{ label: '我的工资', icon: 'gold-coin-o', tone: 'green', to: '/h5/my-wage' }] : []),
+  { label: '上报异常', icon: 'warning-o', tone: 'orange', to: '/h5/abnormal' },
+  ...(viewReady.value && showOrdersEntry.value ? [
+    { label: '生产报表', icon: 'bar-chart-o', tone: 'purple', to: { path: '/stat', query: { from: 'h5' } } },
+    { label: '执行监控', icon: 'tv-o', tone: 'cyan', to: { path: '/execution-monitor', query: { from: 'h5' } } },
+    { label: '车间看板', icon: 'chart-trending-o', tone: 'yellow', to: { path: '/board', query: { from: 'h5' } } }
+  ] : []),
+  { label: '帮助', icon: 'question-o', tone: 'pink', to: '/h5/help' },
+  { label: '更多功能', icon: 'ellipsis', tone: 'slate', to: '/h5/more' }
+])
 const todayGoodQty = ref(0)
 const todayWage = ref(0)
 
 function formatMoney(n) {
   return Number(n || 0).toFixed(2)
-}
-
-const STATUS = { 0: '未开始', 1: '执行中', 2: '已结束', 3: '已取消' }
-function statusLabel(s) { return STATUS[s] ?? s }
-function formatDue(t) { return t ? String(t).replace('T', ' ').slice(0, 10) : '—' }
-function dueClass(row) { return row.dueState === 'overdue' ? 'due-overdue' : row.dueState === 'warning' ? 'due-warning' : '' }
-
-function goReport(row) {
-  router.push({ path: '/h5/report', query: { order: row.orderNo, task: row.taskId } })
 }
 
 function maybeShowPwaGuide() {
@@ -179,7 +137,7 @@ async function refreshViewMode() {
     viewReady.value = true
   } catch (error) {
     viewError.value = true
-    console.error('[工人视角] 读取工厂视角配置失败，暂不显示工单入口', error)
+    console.error('[工人视角] 读取工厂视角配置失败，暂不显示全车间查询入口', error)
   }
 }
 
@@ -209,97 +167,47 @@ async function loadTodaySummary() {
 </script>
 
 <style scoped>
-.h5-page {
-  padding: var(--h5-page-padding);
-  padding-bottom: calc(var(--h5-tabbar-height) + 16px + env(safe-area-inset-bottom));
-  min-height: 100vh;
-  background: var(--app-bg);
-  box-sizing: border-box;
-}
-.header { flex-wrap: wrap; display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-h2 { margin: 0; font-size: 18px; flex: none; color: var(--app-text-1); }
-.scan-btn {
-  width: 100%;
-  height: 48px;
-  margin-bottom: 16px;
-  border: 0;
-  border-radius: var(--h5-card-radius);
-  background: var(--app-primary);
-  color: #fff;
-  font-size: 17px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.scan-btn:active { opacity: 0.9; }
-.today-card {
-  background: var(--app-card);
-  border-radius: var(--h5-card-radius);
-  padding: 14px 16px;
-  margin-bottom: 16px;
-  box-shadow: var(--app-shadow);
-}
-.today-label { font-size: 13px; color: var(--app-text-3); margin-bottom: 4px; }
-.today-val { font-size: 20px; font-weight: 700; color: var(--app-primary); }
-.today-tip { margin-top: 6px; font-size: 11px; color: var(--app-text-4); }
-.block { margin-bottom: 16px; }
-.block-title {
-  margin: 0 0 10px;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--app-text-2);
-}
-.empty { text-align: center; color: var(--app-text-4); padding: 12px 0; font-size: 14px; }
-.card {
-  background: var(--app-card); border-radius: var(--h5-card-radius); padding: var(--h5-card-padding);
-  margin-bottom: 10px; box-shadow: var(--app-shadow);
-}
-.row1 { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.no { margin-left: auto; font-weight: 700; font-size: 15px; color: var(--app-text-1); word-break: break-all; }
-.tag { font-size: 12px; padding: 2px 8px; border-radius: 4px; }
-.tag.s0 { background: var(--app-border-light); color: var(--app-text-2); }
-.tag.s1 { background: var(--app-primary-light); color: var(--app-primary); }
-.tag.s2 { background: color-mix(in srgb, var(--app-success) 14%, var(--app-card)); color: var(--app-success); }
-.tag.s3 { background: color-mix(in srgb, var(--app-danger) 14%, var(--app-card)); color: var(--app-danger); }
-.product { font-size: 16px; font-weight: 600; color: var(--app-text-1); margin-bottom: 12px; }
-.meta { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.remain { font-size: 13px; color: var(--app-text-2); }
-.remain b { font-size: 22px; color: var(--app-primary); margin-left: 2px; }
-.time { font-size: 12px; color: var(--app-text-3); }
-.due-warning { color: var(--app-warning); }
-.due-overdue { color: var(--app-danger); font-weight: 600; }
-.go { margin-top: 8px; text-align: right; font-size: 14px; color: var(--app-primary); font-weight: 600; }
-.shortcuts { display: flex; flex-wrap: wrap; gap: 8px; }
-.shortcut {
-  flex: 1 1 30%;
-  min-width: 96px;
-  height: 40px;
-  border: 1px solid var(--app-border);
-  border-radius: var(--app-radius-sm);
-  background: var(--app-card);
-  color: var(--app-text-1);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.shortcut.wage { color: var(--app-primary); border-color: color-mix(in srgb, var(--app-primary) 35%, var(--app-border)); }
-.admin-back { display: block; width: 100%; margin: 10px 0 0; min-height: 42px; border: 1px solid var(--app-border); border-radius: 8px; background: var(--app-card); color: var(--app-primary); font-size: 14px; cursor: pointer; }
-.more-entry { display: block; width: 100%; margin-top: 10px; min-height: 42px; }
-
-/* 任务首屏减少留白，保留触摸尺寸 */
-.scan-btn { height: 48px; margin-bottom: 10px; }
-.today-card { padding: 10px 12px; margin-bottom: 12px; }
-.today-label, .today-val { display: inline; font-size: 15px; }
-.today-label { margin-right: 8px; }
-.today-tip { margin-top: 4px; color: var(--app-text-2); }
-.card { padding: 12px; margin-bottom: 8px; }
-.product { margin-bottom: 6px; }
-.go { margin-top: 4px; min-height: 24px; }
-.meta { flex-wrap: wrap; }
-.login-user { font-size: 13px; overflow-wrap: anywhere; color: var(--app-text-2); }
-.secondary-entries { display: flex; gap: 10px; margin-top: 10px; }
-.secondary-entries .shortcut { flex: 1; text-align: center; text-decoration: none; box-sizing: border-box; }
-.today-label, .today-val { display: block; font-size: 14px; overflow-wrap: anywhere; }
-.product, .no { overflow-wrap: anywhere; }
-.management-shortcuts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
-.management-shortcuts .shortcut { min-width: 0; min-height: 44px; padding: 8px; font-size: 14px; white-space: normal; }
+.h5-page { padding: 0 16px calc(var(--h5-tabbar-height) + 16px + env(safe-area-inset-bottom)); min-height: 100vh; background: #f5f6fa; box-sizing: border-box; color: var(--app-text-1); }
+.header { display: flex; align-items: center; gap: 8px; min-height: 52px; margin: 0 -16px 16px; padding: 0 16px; background: var(--app-card); }
+.header :deep(.factory-badge) { flex: 1; min-width: 0; max-width: 150px; padding: 0; background: transparent; border-radius: 0; font-size: 11px; font-weight: 400; line-height: 1.4; }
+h2 { margin: 0; flex-shrink: 0; font-size: 17px; }
+.login-user { margin-left: auto; max-width: 56px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--app-text-2); }
+.header :deep(.h5-logout) { margin-left: 0; flex-shrink: 0; font-size: 12px; min-height: 44px; padding: 6px 0; }
+.scan-btn { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; min-height: 104px; padding: 18px; border: 0; border-radius: 16px; background: linear-gradient(110deg, #0968ff, #3e98ff); color: #fff; text-align: left; cursor: pointer; margin-bottom: 12px; }
+.scan-copy { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.scan-copy strong { font-size: 23px; line-height: 1.2; }
+.scan-copy > span { font-size: 12px; line-height: 1.5; }
+.scan-icon { flex-shrink: 0; display: grid; place-items: center; width: 52px; height: 52px; border-radius: 15px; background: #f1f8ff; color: #1677ff; font-size: 30px; }
+.today-summary { margin-bottom: 16px; }
+.today-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.today-card { min-width: 0; padding: 14px 8px; border-radius: 14px; text-align: center; }
+.today-card > span { display: block; font-size: 12px; line-height: 1.5; color: #65758b; }
+.today-card strong { display: block; margin-top: 5px; font-size: 27px; line-height: 1.2; overflow-wrap: anywhere; }
+.good { background: #edf3ff; color: #1677ff; }
+.wage { background: #e7f6ee; color: #12975f; }
+.today-tip { margin: 8px 0 0; font-size: 11px; line-height: 1.5; color: #7f899a; }
+.summary-state { padding: 18px 12px; border-radius: 14px; background: #fff; font-size: 14px; }
+.task-summary { background: var(--app-card); border: 1px solid #e9edf3; border-radius: 14px; margin-bottom: 18px; }
+.task-entry { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 52px; padding: 8px 12px; box-sizing: border-box; color: var(--app-text-1); text-decoration: none; }
+.task-copy { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; font-size: 12px; overflow-wrap: anywhere; }
+.task-copy strong { font-size: 13px; font-weight: 500; }
+.entry-note { color: var(--app-text-2); }
+.entry-note b { color: var(--app-primary); font-weight: 600; }
+.entry-arrow { flex-shrink: 0; color: var(--app-primary); font-size: 12px; }
+.load-error { margin: 0; padding: 0 12px 12px; font-size: 13px; }
+.block-title { margin: 0 0 10px; font-size: 16px; font-weight: 700; }
+.shortcuts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.shortcut { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 8px; min-width: 0; min-height: 102px; padding: 12px 3px 10px; box-sizing: border-box; border: 1px solid #e9edf3; border-radius: 14px; background: var(--app-card); color: var(--app-text-1); text-align: center; text-decoration: none; }
+.shortcut-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 14px; font-size: 26px; }
+.shortcut-label { font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+.blue { background: #edf3ff; color: #1677ff; }
+.green { background: #e7f6ee; color: #109961; }
+.orange { background: #fff3e7; color: #ed8a00; }
+.purple { background: #f2edff; color: #7a61e8; }
+.cyan { background: #e4f6fa; color: #0896ad; }
+.yellow { background: #fff9e4; color: #d5a000; }
+.pink { background: #fceef4; color: #e65399; }
+.slate { background: #edf1f7; color: #8190a8; }
+.scan-btn:active, .shortcut:active { opacity: .8; }
+@media (max-width: 350px) { .header { gap: 5px; } .header :deep(.factory-badge) { font-size: 10px; } .login-user { max-width: 36px; } .shortcuts { gap: 8px; } .shortcut-icon { width: 44px; height: 44px; } .shortcut-label { font-size: 13px; } .scan-btn { padding: 16px; } }
 </style>
