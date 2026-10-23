@@ -1,0 +1,155 @@
+{
+  "date": "2026-10-23",
+  "target": {
+    "url": "https://103.39.222.133:11302",
+    "factoryCode": "HY002",
+    "factoryName": "HY伞业V2",
+    "factoryId": 5
+  },
+  "source": {
+    "factoryCode": "HY001",
+    "factoryName": "HY伞业",
+    "factoryId": 4
+  },
+  "serverVersion": "1.1.395",
+  "license": {
+    "tier": "trial",
+    "priceSaveResult": {
+      "code": 1,
+      "msg": "当前为入门款，计件工资需企业版及以上",
+      "data": null
+    }
+  },
+  "counts": {
+    "Department": 10,
+    "Unit": 3,
+    "DefectItem": 14,
+    "Operation": 14,
+    "Routing": 2,
+    "Product": 4,
+    "WorkOrder": 0
+  },
+  "mapping": {
+    "Department": {
+      "22": 45,
+      "23": 44,
+      "24": 43,
+      "25": 42,
+      "26": 41,
+      "27": 40,
+      "29": 39,
+      "30": 38,
+      "31": 37,
+      "32": 36
+    },
+    "Unit": {
+      "13": 16,
+      "14": 17,
+      "15": 18
+    },
+    "DefectItem": {
+      "21": 38,
+      "22": 39,
+      "23": 40,
+      "24": 41,
+      "25": 42,
+      "26": 43,
+      "27": 44,
+      "28": 45,
+      "29": 46,
+      "30": 47,
+      "31": 48,
+      "32": 49,
+      "33": 50,
+      "34": 51
+    },
+    "Operation": {
+      "18": 37,
+      "19": 38,
+      "20": 40,
+      "21": 41,
+      "22": 44,
+      "23": 42,
+      "24": 43,
+      "25": 49,
+      "26": 45,
+      "27": 46,
+      "28": 47,
+      "29": 50,
+      "30": 48,
+      "32": 39
+    },
+    "Routing": {
+      "5": 10,
+      "7": 9
+    },
+    "Product": {
+      "8": 22,
+      "9": 21,
+      "15": 20,
+      "16": 19
+    }
+  },
+  "changes": [
+    {
+      "entity": "Department",
+      "oldId": 30,
+      "from": "PJ",
+      "to": "PJ-30",
+      "reason": "源部门编码重复，V2消歧"
+    },
+    {
+      "entity": "Operation",
+      "oldId": 32,
+      "from": "02",
+      "to": "02-32",
+      "reason": "源工序编码重复，V2消歧"
+    },
+    {
+      "entity": "Routing",
+      "oldId": 6,
+      "action": "skip",
+      "reason": "未被任何产品引用；原路线重复工序不符合当前校验"
+    }
+  ],
+  "verification": {
+    "oldAccountUnchanged": {
+      "Department": true,
+      "Unit": true,
+      "DefectItem": true,
+      "Operation": true,
+      "Routing": true,
+      "Product": true,
+      "WorkOrder": true
+    },
+    "operationAssociations": true,
+    "routeAssociations": true,
+    "productAssociations": true,
+    "attachmentStatus": 200,
+    "attachmentSha256Matches": true,
+    "noPricingSaved": true
+  },
+  "attachment": {
+    "id": 45,
+    "fileName": "2026生产部加工单价表.xlsx",
+    "fileType": "xlsx",
+    "version": "2026-01 原始客户价目表，待计价授权后配置",
+    "refType": "operation",
+    "refId": 42,
+    "refName": null,
+    "sha256": "5765fbce0911ce79ebc79f953cebb5392be6e2163ae3225f21f4f71890bf76ea"
+  },
+  "unitsPending": [
+    {
+      "productCode": "HY-003",
+      "retainedUnit": "套",
+      "reason": "未获每套把数，未擅自换把"
+    },
+    {
+      "productCode": "HY-004",
+      "retainedUnit": "件",
+      "reason": "未明确每件对应把数，未擅自换把"
+    }
+  ],
+  "status": "基础资料及原表已导入；加工计价被入门授权阻止，未保存任何工价"
+}
