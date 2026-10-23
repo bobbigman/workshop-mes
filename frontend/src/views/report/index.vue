@@ -238,8 +238,10 @@
     </el-dialog>
 
     <!-- 代报工（docs/94，管理员/班组长） -->
-    <el-dialog v-model="proxyDlg" title="代报工" width="720px" @closed="resetProxy">
-      <el-form label-width="90px">
+    <el-dialog v-model="proxyDlg" title="代报工" width="720px" class="proxy-dialog"
+      :fullscreen="proxyNarrow" :style="proxyNarrow ? { height: proxyViewportHeight + 'px' } : {}"
+      :close-on-click-modal="false" :before-close="closeProxy" @closed="resetProxy">
+      <el-form label-width="90px" :label-position="proxyNarrow ? 'top' : 'right'" :disabled="proxySubmitting || proxyLoading">
         <el-form-item label="工单号" required>
           <el-select
             v-model="proxyForm.orderNo"
@@ -259,7 +261,7 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="proxyDetail" label="产品">
+        <el-form-item v-if="proxyDetail" label="产品" class="proxy-product">
           <span>{{ proxyDetail.productName }}（计划 {{ proxyDetail.qty }}）</span>
         </el-form-item>
         <el-form-item label="工序" required>
@@ -278,37 +280,57 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="被代报人">
-          <div class="alloc-wrap">
-            <div class="hint">记到工人名下；各人数量可不同。选项已限该工序报权部门{{ isLeader ? '（班组长再限本组）' : '' }}。</div>
-            <div v-for="(row, idx) in proxyForm.rows" :key="idx" class="alloc-user">
-              <el-select v-model="row.userId" filterable placeholder="选工人" style="width:180px">
-                <el-option v-for="p in proxyCandidates" :key="p.id" :label="p.name" :value="p.id" />
-              </el-select>
-              <span>良品</span>
-              <el-input-number v-model="row.goodQty" :min="0" />
-              <span>不良</span>
-              <el-input-number v-model="row.defectQty" :min="0" />
-              <el-select
-                v-model="row.defectId"
-                clearable
-                placeholder="不良原因"
-                style="width:140px"
-                :disabled="!(row.defectQty > 0)"
-              >
+        <p v-if="proxyLoadError" class="proxy-error" role="alert">{{ proxyLoadError }} <el-button link type="primary" :disabled="proxySubmitting || proxyLoading" @click="retryProxyLoad">重试</el-button></p>
+        <p v-if="proxyLoading" role="status">正在加载工单及可代报人员…</p>
+        <p v-else-if="proxyDetail && !proxyDetail.tasks?.length" role="status">该工单暂无可选工序</p>
+        <section class="proxy-details">
+          <h3>代报明细</h3>
+          <p class="proxy-hint">记到所选工人名下，各人分别填写数量。</p>
+          <p class="proxy-hint">仅可选该工序报权部门人员{{ isLeader ? '，且限本组' : '' }}。</p>
+          <p v-if="proxyForm.operationId && !proxyLoading && !proxyLoadError && !proxyCandidates.length" role="status">当前工序暂无可代报人员</p>
+          <article v-for="(row, idx) in proxyForm.rows" :key="row.localId" class="proxy-person">
+            <header class="proxy-person-header">
+              <b>工人{{ idx + 1 }}</b>
+              <el-button link type="danger" :disabled="proxyForm.rows.length <= 1 || proxySubmitting || proxyLoading" @click="proxyForm.rows.splice(idx, 1)">移除</el-button>
+            </header>
+            <label :for="'proxy-user-' + row.localId">工人</label>
+            <el-select :id="'proxy-user-' + row.localId" v-model="row.userId" filterable placeholder="选择工人" :disabled="!proxyForm.operationId || !!proxyLoadError">
+              <el-option v-for="p in proxyCandidates" :key="p.id" :label="p.name" :value="p.id" />
+            </el-select>
+            <label :for="'proxy-good-' + row.localId">良品数量</label>
+            <el-input-number :id="'proxy-good-' + row.localId" v-model="row.goodQty" :min="0" />
+            <label :for="'proxy-defect-' + row.localId">不良数量</label>
+            <el-input-number :id="'proxy-defect-' + row.localId" v-model="row.defectQty" :min="0" />
+            <template v-if="row.defectQty > 0">
+              <label :for="'proxy-reason-' + row.localId">不良原因</label>
+              <el-select :id="'proxy-reason-' + row.localId" v-model="row.defectId" clearable placeholder="选择不良原因" :disabled="!proxyForm.operationId || !!proxyLoadError">
                 <el-option v-for="d in proxyDefects" :key="d.id" :label="d.name" :value="d.id" />
               </el-select>
-              <el-date-picker v-if="isAdmin" v-model="row.timeRange" type="datetimerange" value-format="YYYY-MM-DDTHH:mm:ss" start-placeholder="计时补报开始" end-placeholder="结束" style="width:340px" />
-              <el-button link type="danger" :disabled="proxyForm.rows.length <= 1" @click="proxyForm.rows.splice(idx, 1)">删</el-button>
-            </div>
-            <el-button link type="primary" @click="addProxyRow">+ 加人</el-button>
-            <div class="hint">合计良品 {{ proxyGoodSum }}</div>
-          </div>
-        </el-form-item>
+            </template>
+            <template v-if="isAdmin">
+              <template v-if="proxyNarrow">
+                <label :for="'proxy-start-' + row.localId">计时补报开始时间</label>
+                <input :id="'proxy-start-' + row.localId" type="datetime-local" step="1" :value="row.timeRange?.[0] || ''" :disabled="proxySubmitting || proxyLoading" @input="setProxyTime(row, 0, $event.target.value)" />
+                <label :for="'proxy-end-' + row.localId">计时补报结束时间</label>
+                <input :id="'proxy-end-' + row.localId" type="datetime-local" step="1" :value="row.timeRange?.[1] || ''" :disabled="proxySubmitting || proxyLoading" @input="setProxyTime(row, 1, $event.target.value)" />
+              </template>
+              <template v-else>
+                <label>计时补报起止时间</label>
+                <el-date-picker v-model="row.timeRange" type="datetimerange" value-format="YYYY-MM-DDTHH:mm:ss" start-placeholder="计时补报开始" end-placeholder="结束" />
+              </template>
+            </template>
+          </article>
+          <el-button plain type="primary" :disabled="proxySubmitting || proxyLoading" @click="addProxyRow">+ 添加工人</el-button>
+        </section>
       </el-form>
       <template #footer>
-        <el-button @click="proxyDlg=false">取消</el-button>
-        <el-button type="primary" :loading="proxySubmitting" @click="onProxySubmit">确认代报</el-button>
+        <div class="proxy-footer">
+          <div class="proxy-total">合计良品 {{ proxyGoodSum }} · 不良 {{ proxyDefectSum }}</div>
+          <div class="proxy-actions">
+            <el-button :disabled="proxySubmitting" @click="proxyDlg=false">取消</el-button>
+            <el-button type="primary" :loading="proxySubmitting" :disabled="proxyLoading || !!proxyLoadError || !proxyDetail || !proxyForm.operationId" @click="onProxySubmit">确认代报</el-button>
+          </div>
+        </div>
       </template>
     </el-dialog>
 
@@ -413,7 +435,7 @@
   </div>
 </template>
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getReportList, updateReport, submitReport, batchReport, getDefectsByOp, getOrderByNo, getOrderList, getReportCandidates, getReportChangeLogs } from '@/api/prod'
 import { getUserList } from '@/api/sys'
@@ -451,6 +473,37 @@ const candidatesLoadError = ref(false)
 const participantIds = ref([])
 const participantDurations = ref({})
 
+const proxyNarrow = ref(window.matchMedia('(max-width: 767px)').matches)
+const proxyViewportHeight = ref(window.visualViewport?.height || window.innerHeight)
+const proxyMedia = window.matchMedia('(max-width: 767px)')
+function updateProxyViewport() {
+  proxyNarrow.value = proxyMedia.matches
+  proxyViewportHeight.value = window.visualViewport?.height || window.innerHeight
+}
+onMounted(() => {
+  proxyMedia.addEventListener('change', updateProxyViewport)
+  window.visualViewport?.addEventListener('resize', updateProxyViewport)
+  window.addEventListener('resize', updateProxyViewport)
+})
+onUnmounted(() => {
+  proxyMedia.removeEventListener('change', updateProxyViewport)
+  window.visualViewport?.removeEventListener('resize', updateProxyViewport)
+  window.removeEventListener('resize', updateProxyViewport)
+  proxyOrderVersion++; proxyOpVersion++
+})
+let proxyRowSequence = 0
+let proxyOrderVersion = 0
+let proxyOpVersion = 0
+const proxyLoading = ref(false)
+const proxyLoadError = ref('')
+function newProxyRow() {
+  return { localId: ++proxyRowSequence, userId: null, goodQty: 0, defectQty: 0, defectId: null, timeRange: null }
+}
+function setProxyTime(row, index, value) {
+  const range = [...(row.timeRange || ['', ''])]
+  range[index] = value && value.length === 16 ? value + ':00' : value
+  row.timeRange = range.some(Boolean) ? range : null
+}
 const proxyDlg = ref(false)
 const proxySubmitting = ref(false)
 const proxyDetail = ref(null)
@@ -458,11 +511,17 @@ const proxyCandidates = ref([])
 const proxyDefects = ref([])
 const proxyClientRequestId = ref('')
 const proxyForm = ref({
-  orderNo: '', operationId: null, rows: [{ userId: null, goodQty: 0, defectQty: 0, defectId: null }]
+  orderNo: '', operationId: null, rows: [newProxyRow()]
 })
 const proxyGoodSum = computed(() =>
   (proxyForm.value.rows || []).reduce((s, r) => s + (Number(r.goodQty) || 0), 0)
 )
+
+const proxyDefectSum = computed(() => proxyForm.value.rows.reduce((sum, row) => sum + (Number(row.defectQty) || 0), 0))
+watch(() => proxyForm.value.rows.map(row => row.defectQty), () => {
+  for (const row of proxyForm.value.rows) if (!(row.defectQty > 0)) row.defectId = null
+}, { flush: 'sync' })
+function closeProxy(done) { if (!proxySubmitting.value) done() }
 
 const batchDlg = ref(false)
 const createTimes = ref(null)
@@ -660,11 +719,7 @@ function onCreateOrderChange(val) {
   loadOrder()
 }
 
-function onProxyOrderChange(val) {
-  if (!val) {
-    proxyDetail.value = null
-    return
-  }
+function onProxyOrderChange() {
   loadProxyOrder()
 }
 
@@ -895,56 +950,97 @@ async function batchReportWithUpstreamConfirm(payload) {
 }
 
 function resetProxy() {
+  proxyOrderVersion++; proxyOpVersion++
+  proxyLoading.value = false
+  proxyLoadError.value = ''
   proxyDetail.value = null
   proxyCandidates.value = []
   proxyDefects.value = []
   proxyClientRequestId.value = ''
-  proxyForm.value = {
-    orderNo: '', operationId: null, rows: [{ userId: null, goodQty: 0, defectQty: 0, defectId: null }]
-  }
+  proxyForm.value = { orderNo: '', operationId: null, rows: [newProxyRow()] }
 }
 
-function addProxyRow() {
-  proxyForm.value.rows.push({ userId: null, goodQty: 0, defectQty: 0, defectId: null })
+function addProxyRow() { proxyForm.value.rows.push(newProxyRow()) }
+
+function clearProxySelections() {
+  const hadSelection = proxyForm.value.rows.some(row => row.userId || row.defectId)
+  for (const row of proxyForm.value.rows) { row.userId = null; row.defectId = null }
+  if (hadSelection) ElMessage.warning('工单或工序已变化，请重新选择工人和不良原因；数量已保留，请核对')
+}
+
+function retryProxyLoad() {
+  if (proxyDetail.value && proxyForm.value.operationId) onProxyOpChange()
+  else loadProxyOrder()
 }
 
 async function loadProxyOrder() {
+  const version = ++proxyOrderVersion
+  ++proxyOpVersion
   const no = (proxyForm.value.orderNo || '').trim()
-  if (!no) {
-    ElMessage.error('请输入工单编号')
-    return
-  }
-  const res = await getOrderByNo(no)
-  const data = res.data
-  if (data.status === 2 || data.status === 3) {
-    ElMessage.error(data.status === 2 ? '工单已结束，不可报工' : '工单已取消，不可报工')
-    proxyDetail.value = null
-    return
-  }
-  proxyDetail.value = data
+  proxyDetail.value = null
   proxyForm.value.operationId = null
-  proxyCandidates.value = []
-  proxyDefects.value = []
-  const tasks = data.tasks || []
-  if (tasks.length === 1) {
-    proxyForm.value.operationId = tasks[0].operationId
-    await onProxyOpChange()
+  proxyCandidates.value = []; proxyDefects.value = []
+  proxyLoadError.value = ''
+  proxyLoading.value = !!no
+  clearProxySelections()
+  if (!no) return
+  try {
+    const { data } = await getOrderByNo(no)
+    if (version !== proxyOrderVersion || !proxyDlg.value) return
+    if (data.status === 2 || data.status === 3) {
+      proxyLoadError.value = data.status === 2 ? '工单已结束，不可报工' : '工单已取消，不可报工'
+      return
+    }
+    proxyDetail.value = data
+    if (data.tasks?.length === 1) {
+      proxyForm.value.operationId = data.tasks[0].operationId
+      await onProxyOpChange()
+    }
+  } catch (error) {
+    if (version !== proxyOrderVersion || !proxyDlg.value) return
+    proxyLoadError.value = '加载代报工工单失败，请重试'
+    console.error('[代报工] 加载工单失败', no, error)
+  } finally {
+    if (version === proxyOrderVersion) {
+      proxyLoading.value = false
+    }
   }
 }
 
 async function onProxyOpChange() {
-  proxyCandidates.value = []
-  proxyDefects.value = []
-  if (!proxyForm.value.operationId) return
-  const [c, d] = await Promise.all([
-    getReportCandidates(proxyForm.value.operationId),
-    getDefectsByOp(proxyForm.value.operationId)
-  ])
-  proxyCandidates.value = c.data || []
-  proxyDefects.value = d.data || []
+  const version = ++proxyOpVersion
+  const orderVersion = proxyOrderVersion
+  const operationId = proxyForm.value.operationId
+  proxyCandidates.value = []; proxyDefects.value = []
+  proxyLoadError.value = ''
+  if (!operationId) {
+    proxyLoading.value = false
+    clearProxySelections()
+    return
+  }
+  proxyLoading.value = true
+  try {
+    const [c, d] = await Promise.all([getReportCandidates(operationId), getDefectsByOp(operationId)])
+    if (version !== proxyOpVersion || orderVersion !== proxyOrderVersion || !proxyDlg.value) return
+    proxyCandidates.value = c.data || []
+    proxyDefects.value = d.data || []
+    let cleared = false
+    for (const row of proxyForm.value.rows) {
+      if (row.userId && !proxyCandidates.value.some(p => p.id === row.userId)) { row.userId = null; cleared = true }
+      if (row.defectId && !proxyDefects.value.some(d => d.id === row.defectId)) { row.defectId = null; cleared = true }
+    }
+    if (cleared) ElMessage.warning('已清除当前工序不适用的工人或不良原因；数量已保留，请核对')
+  } catch (error) {
+    if (version !== proxyOpVersion || orderVersion !== proxyOrderVersion || !proxyDlg.value) return
+    proxyLoadError.value = '加载代报工人员或不良原因失败，请重试'
+    console.error('[代报工] 加载工序人员和不良原因失败', operationId, error)
+  } finally {
+    if (version === proxyOpVersion && orderVersion === proxyOrderVersion) proxyLoading.value = false
+  }
 }
 
 async function onProxySubmit() {
+  if (proxySubmitting.value || proxyLoading.value || proxyLoadError.value) return
   if (!proxyDetail.value) {
     ElMessage.error('请先加载工单')
     return
@@ -958,14 +1054,31 @@ async function onProxySubmit() {
     ElMessage.error('请至少添加一名被代报人')
     return
   }
-  for (const r of rows) {
+  for (const [index, r] of rows.entries()) {
+    const person = `工人${index + 1}`
     if (!r.userId) {
-      ElMessage.error('请选择被代报人')
+      ElMessage.error(`${person}：请选择被代报人`)
       return
     }
     if ((r.defectQty || 0) > 0 && !r.defectId) {
-      ElMessage.error('有不良品时必须选择不良品原因')
+      ElMessage.error(`${person}：有不良品时必须选择不良品原因`)
       return
+    }
+    if (!proxyCandidates.value.some(p => p.id === r.userId)
+      || (r.defectQty > 0 && !proxyDefects.value.some(d => d.id === r.defectId))) {
+      ElMessage.error(`${person}：工人或不良原因不适用于当前工序，请重新选择`)
+      return
+    }
+    if (r.timeRange?.some(Boolean)) {
+      const [start, end] = r.timeRange
+      if (!start || !end || !Number.isFinite(Date.parse(start)) || !Number.isFinite(Date.parse(end)) || Date.parse(end) <= Date.parse(start)) {
+        ElMessage.error(`${person}：请补全开始和结束时间，结束须晚于开始`)
+        return
+      }
+      if (Date.parse(end) - Date.parse(start) > 24 * 60 * 60 * 1000) {
+        ElMessage.error(`${person}：单次计时补报不能超过24小时`)
+        return
+      }
     }
   }
   proxySubmitting.value = true
@@ -981,7 +1094,7 @@ async function onProxySubmit() {
         userId: r.userId,
         goodQty: r.goodQty || 0,
         defectQty: r.defectQty || 0,
-        defectId: r.defectId,
+        defectId: r.defectQty > 0 ? r.defectId : null,
         durationMinutes: null,
         ...timeFields(r.timeRange)
       }))
@@ -994,8 +1107,9 @@ async function onProxySubmit() {
     else ElMessage.success(tip)
     proxyDlg.value = false
     await load()
-  } catch {
-    // soft 取消或 http 已提示
+  } catch (error) {
+    // 用户取消上游确认不记为接口故障，其他错误由http提示并保留输入和请求标识。
+    if (error !== 'cancel' && error !== 'close') console.error('[代报工] 提交失败，保留输入供核对重试', error)
   } finally {
     proxySubmitting.value = false
   }
@@ -1195,4 +1309,38 @@ async function onBatchSubmit() {
 .share-min { width: 120px; }
 .share-unit { flex: none; font-size: 14px; line-height: 32px; color: #303133; }
 .share-preview { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #ebeef5; color: #606266; font-size: 13px; }
+</style>
+
+<style>
+/* 仅作用于代报工弹窗，避免影响共用分摊/补报控件。 */
+.el-dialog.proxy-dialog { display: flex; flex-direction: column; max-height: calc(100dvh - 64px); margin-top: 32px; }
+.proxy-dialog .el-dialog__header, .proxy-dialog .el-dialog__footer { flex: none; }
+.proxy-dialog .el-dialog__body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.proxy-dialog .proxy-product { overflow-wrap: anywhere; }
+.proxy-dialog .proxy-details h3 { margin: 8px 0; font-size: 15px; }
+.proxy-dialog .proxy-hint { margin: 4px 0; color: #606266; line-height: 1.5; font-size: 13px; }
+.proxy-dialog .proxy-error { color: #c45656; }
+.proxy-dialog .proxy-person { display: grid; grid-template-columns: 130px minmax(0, 1fr); align-items: center; gap: 10px; border: 1px solid #dcdfe6; border-radius: 8px; padding: 14px; margin: 12px 0; min-width: 0; }
+.proxy-dialog .proxy-person-header { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; }
+.proxy-dialog .proxy-person label { font-size: 14px; line-height: 1.4; color: #303133; }
+.proxy-dialog .proxy-person .el-select, .proxy-dialog .proxy-person .el-input-number, .proxy-dialog .proxy-person .el-date-editor { width: 100%; min-width: 0; box-sizing: border-box; }
+.proxy-dialog .proxy-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.proxy-dialog .proxy-total { color: #303133; font-size: 14px; overflow-wrap: anywhere; }
+.proxy-dialog .proxy-actions { display: flex; gap: 10px; }
+.proxy-dialog .proxy-actions .el-button + .el-button { margin-left: 0; }
+@media (max-width: 767px) {
+  .el-dialog.proxy-dialog.is-fullscreen { width: 100% !important; max-width: none; max-height: 100dvh; margin: 0 !important; border-radius: 0; padding: 12px 16px; box-sizing: border-box; }
+  .proxy-dialog .el-dialog__body { padding: 8px 0; }
+  .proxy-dialog .el-dialog__header { padding-bottom: 8px; }
+  .proxy-dialog .el-dialog__footer { padding: 12px 0 max(4px, env(safe-area-inset-bottom)); border-top: 1px solid #ebeef5; }
+  .proxy-dialog .el-form-item__label { padding: 0 0 6px; line-height: 22px; }
+  .proxy-dialog .proxy-person { grid-template-columns: minmax(0, 1fr); gap: 7px; padding: 12px; }
+  .proxy-dialog .proxy-person label { margin-top: 5px; }
+  .proxy-dialog .proxy-person .el-input-number, .proxy-dialog .proxy-person .el-select__wrapper { min-height: 42px; }
+  .proxy-dialog .proxy-person input[type="datetime-local"] { display: block; width: 100%; min-width: 0; max-width: 100%; height: 42px; box-sizing: border-box; padding: 6px 8px; border: 1px solid #dcdfe6; border-radius: 4px; background: #fff; color: #303133; font: inherit; }
+  .proxy-dialog .proxy-footer { display: block; }
+  .proxy-dialog .proxy-total { margin-bottom: 10px; text-align: left; }
+  .proxy-dialog .proxy-actions .el-button { flex: 1; min-height: 42px; }
+  .proxy-dialog .el-input__inner { font-size: 16px; }
+}
 </style>
