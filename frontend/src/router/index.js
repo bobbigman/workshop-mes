@@ -11,6 +11,7 @@ const routes = [
     children: [
       { path: 'home', name: 'Home', component: () => import('@/views/home/index.vue'), meta: { title: '首页' } },
       { path: 'order', name: 'Order', component: () => import('@/views/order/index.vue'), meta: { title: '工单' } },
+      { path: 'order-pricing-demo', name: 'OrderPricingDemo', component: () => import('@/views/order-pricing-demo/index.vue'), meta: { title: '加工选项演示', adminOnly: true } },
       { path: 'execution-monitor', name: 'ExecutionMonitor', component: () => import('@/views/execution-monitor/index.vue'), meta: { title: '执行监控' } },
       { path: 'report', name: 'Report', component: () => import('@/views/report/index.vue'), meta: { title: '报工' } },
       { path: 'review', name: 'Review', component: () => import('@/views/review/index.vue'), meta: { title: '报工复核', feature: FEATURE.ReportReview } },

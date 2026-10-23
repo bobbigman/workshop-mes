@@ -44,6 +44,7 @@
       <el-button @click="onSearch">查询</el-button>
       <el-button @click="onReset">重置</el-button>
       <el-button v-if="isAdmin" type="primary" @click="openCreate">+ 创建工单</el-button>
+      <el-button v-if="isAdmin" @click="router.push('/order-pricing-demo')">加工选项演示</el-button>
       <el-button v-if="isAdmin && canPrint" @click="printSettingDlg = true">打印设置</el-button>
     </div>
 
