@@ -16,9 +16,6 @@
       </section>
     </template>
     <div ref="chat" class="worker-messages" role="log" aria-live="polite">
-      <div v-if="!messages.length" class="worker-examples">
-        <van-button v-for="q in examples" :key="q" size="small" :disabled="!ready || busy" @click="draft = q">{{ q }}</van-button>
-      </div>
       <article v-for="(m, i) in messages" :key="i" class="worker-message" :class="m.role">
         <b>{{ m.role === 'user' ? '我' : '操作帮助' }}</b><div class="worker-answer">{{ m.text }}</div>
         <template v-for="s in m.sources || []" :key="s.sourceId">
@@ -201,7 +198,6 @@ onUnmounted(() => { disposed = true; cancel(); window.visualViewport?.removeEven
 .question-number { color: #a0aaba; font-size: 11px; flex: none; padding-top: 1px; }
 .question-text { min-width: 0; }
 .worker-messages { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-.worker-examples { display: flex; flex-wrap: wrap; gap: 8px; padding: 16px 0; }
 .worker-message { background: var(--app-card); border-radius: 8px; padding: 12px; margin: 10px 0; overflow-wrap: anywhere; }
 .worker-message.user { background: var(--app-primary-light); }
 .worker-message b { font-size: 13px; }
