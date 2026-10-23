@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>调研报告：伞厂合片工价场景 · 黑湖小工单及主流软件对照</title>
+<style>
+  :root{
+    --ink:#1f2933; --ink-2:#52606d; --line:#e4e7eb; --bg:#f5f7fa;
+    --brand:#0e7c7b; --brand-soft:#e6f4f4; --amber:#b7791f; --amber-soft:#fdf6e3;
+    --red:#b91c1c; --red-soft:#fdecea; --blue:#1d4ed8; --blue-soft:#e8eefc;
+    --green:#166534; --green-soft:#e9f7ef;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Microsoft YaHei","PingFang SC","Segoe UI",sans-serif;line-height:1.7;}
+  .wrap{max-width:1180px;margin:0 auto;padding:32px 20px 80px;}
+  header.hero{background:linear-gradient(135deg,#0e7c7b 0%,#0a5c5b 100%);color:#fff;border-radius:14px;padding:34px 38px;margin-bottom:28px;}
+  header.hero h1{margin:0 0 10px;font-size:26px;line-height:1.4;}
+  header.hero .sub{opacity:.92;font-size:14px;}
+  header.hero .meta{margin-top:14px;font-size:13px;opacity:.85;border-top:1px solid rgba(255,255,255,.25);padding-top:12px;}
+  h2{font-size:20px;margin:44px 0 14px;padding-left:12px;border-left:5px solid var(--brand);}
+  h3{font-size:16px;margin:26px 0 10px;color:var(--brand);}
+  h4{font-size:14.5px;margin:18px 0 8px;}
+  p{margin:8px 0;}
+  .card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:20px 24px;margin:16px 0;}
+  .kbox{background:var(--brand-soft);border:1px solid #bcdedd;border-radius:8px;padding:12px 16px;margin:10px 0;font-size:14.5px;}
+  .kbox.warn{background:var(--amber-soft);border-color:#ecd9a8;}
+  .kbox.red{background:var(--red-soft);border-color:#f2c4c0;}
+  .kbox.blue{background:var(--blue-soft);border-color:#c3d0f5;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;background:#fff;}
+  th,td{border:1px solid var(--line);padding:8px 10px;vertical-align:top;text-align:left;}
+  th{background:#eef2f4;font-weight:700;white-space:nowrap;}
+  tr:nth-child(even) td{background:#fafbfc;}
+  .tag{display:inline-block;font-size:11.5px;font-weight:700;padding:1px 8px;border-radius:10px;margin-right:4px;white-space:nowrap;}
+  .tA{background:#d1fae5;color:#065f46;} .tB{background:#dbeafe;color:#1e40af;}
+  .tC{background:#fef3c7;color:#92400e;} .tI{background:#f3f4f6;color:#4b5563;}
+  .url{font-size:12.5px;color:var(--blue);word-break:break-all;}
+  .small{font-size:12.5px;color:var(--ink-2);}
+  .badge{display:inline-block;background:var(--brand-soft);color:var(--brand);border:1px solid #bcdedd;border-radius:6px;padding:2px 10px;font-size:12.5px;margin:2px 4px 2px 0;}
+  .badge.amber{background:var(--amber-soft);color:#92400e;border-color:#ecd9a8;}
+  .flow{display:flex;flex-direction:column;gap:0;margin:12px 0;}
+  .fstep{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px dashed var(--line);}
+  .fstep:last-child{border-bottom:none;}
+  .fnum{flex:0 0 26px;height:26px;border-radius:50%;background:var(--brand);color:#fff;text-align:center;line-height:26px;font-size:13px;font-weight:700;}
+  .fstep .body{flex:1;}
+  .q-num{display:inline-block;background:var(--brand);color:#fff;border-radius:4px;padding:0 7px;font-size:12px;margin-right:6px;}
+  .calc{background:#f0f7f7;border:1px solid #cfe5e5;border-radius:8px;padding:12px 16px;font-family:Consolas,Menlo,monospace;font-size:13.5px;margin:10px 0;}
+  .toc{columns:2;column-gap:32px;font-size:13.5px;}
+  .toc a{color:var(--brand);text-decoration:none;}
+  .toc li{margin:4px 0;}
+  footer{margin-top:40px;color:var(--ink-2);font-size:12.5px;border-top:1px solid var(--line);padding-top:14px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>伞厂"合片"工序工价场景调研报告<br>黑湖小工单 及 主流制造业软件的"加工要求 × 工价"实际处理方式</h1>
+  <div class="sub">用途：为微聚/小蜜蜂工单的"加工选项 × 计件工价"设计提供外部事实依据。本次仅调研与建议，不修改代码。</div>
+  <div class="meta">调研日期：2026-10-23（Asia/Shanghai）｜方式：只读公开资料（官方帮助中心 / 官方操作手册 / 官网文章 / 社区资料）｜抽查复核：组织者亲自核读黑湖绩效工资操作文档与 Odoo 变体定价官方文档</div>
+</header>
+
+<h2 id="toc">目录</h2>
+<div class="card">
+  <ol class="toc">
+    <li><a href="#s1">一、结论先行：黑湖小工单到底查到什么、没查到什么</a></li>
+    <li><a href="#s2">二、八项调研问题 · 逐项总览（7 家产品）</a></li>
+    <li><a href="#s3">三、产品对照表</a></li>
+    <li><a href="#s4">四、最接近的完整流程（黑湖 A 级主流程 + 金蝶类比流程）</a></li>
+    <li><a href="#s5">五、对"候选方案"的独立判断（不迎合）</a></li>
+    <li><a href="#s6">六、推荐最小方案（对齐现有工资底座）+ 两个案例演示</a></li>
+    <li><a href="#s7">七、仍需客户确认的问题（软件能力 / 客户业务规则分列）</a></li>
+    <li><a href="#s8">八、与项目既有文档的衔接与纠偏</a></li>
+    <li><a href="#s9">九、证据分级与来源清单</a></li>
+    <li><a href="#s10">附：边界声明</a></li>
+  </ol>
+</div>
+
+<h2 id="s1">一、结论先行：黑湖小工单到底查到什么、没查到什么</h2>
+
+<div class="card">
+<h3>✅ 查到的（有官方操作文档证据，A 级）</h3>
+<ul>
+  <li><b>黑湖小工单确有"绩效工资"模块</b>：路径 <code>基础数据 → 绩效工资配置</code>，支持计件单价维护、扫码报工自动算薪、工资报表导出。</li>
+  <li><b>工价模型 = "取数维度组合匹配最终价"，不是"基础价＋附加价叠加"</b>。管理员先选取数维度（产品编号/名称/规格、工序名称、计价方式，最多可加 15 个自定义字段），再把维度排成若干"绩效维度组合"并设优先级 1–5；每条工资配置 = 一组维度值 ＋ 一个固定单价。报工时按优先级从高到低匹配，命中哪条用哪条单价。</li>
+  <li><b>支持"完全匹配 / 模糊匹配"两种模式</b>；配置表字段为：产品编号、产品名称、工序名称、计价方式、车床、工资单价（必填）、标准效率（可选）。</li>
+  <li><b>自定义字段支持"单选框（互斥单选）""复选框（多选）""公式（仅报工模块）"等类型</b>，挂在产品/工序/工单/报工/用户 5 个模块（每模块最多 50 个）；单选框可以作为绩效工资取数维度。</li>
+  <li><b>第二种计价模式："按工单实际定价"</b>——在工序上加数字类型自定义字段"工序单价"，建单时在工单任务里填写，工资公式取 <code>${报工.任务.工序单价}</code>。移动端报工设置里"工价"二选一：绩效工资配置 / 计算公式。</li>
+  <li><b>报工表单可配自定义校验规则</b>（表达式，如良品数&gt;计划数时报错），可启停。</li>
+  <li><b>工人报工不选价</b>：扫码 → 选工单 → 选工序 → 选人 → 填良品/不良数 → 提交，单价由系统匹配。</li>
+</ul>
+
+<h3>❌ 没查到 / 明确不支持的（同样重要）</h3>
+<ul>
+  <li><b>无"基础价＋附加项自动叠加"机制</b>。伞厂"5 元基础＋丝印档加价＋双层叠片加价"这类叠加逻辑，黑湖原生不支持——每条记录一个固定单价。</li>
+  <li><b>无"成套价已含某项加工、自动防止重复加价"的专门机制</b>。"含丝印的成套价 7.70"在黑湖里就是一条独立的维度组合记录，单价写死 7.70；互斥/去重靠人工把每种组合预建一条记录，系统不做"已包含"判断。</li>
+  <li><b>无"选项组互斥/依赖"规则引擎</b>：单选框字段本身互斥（只能选一个），但"选了成套价就不能再选丝印档"这类跨组联动限制，公开文档未找到证据。</li>
+  <li><b>工价配置表没有"生效起止时间"字段</b>（营销文章反复建议"应设生效时间"，但操作文档里不存在该字段——官方口径自相矛盾）。</li>
+  <li><b>计价单位与报工单位换算</b>：仅案例文章提到"计划按千支、报工按 KG 需要换算"是客户痛点，未找到系统原生换算配置的操作文档。</li>
+  <li><b>工单复制、已报工后改加工要求、改单对历史金额的影响</b>：未找到专门操作文档；唯一相关系统提示是"改匹配规则时维度若有增删移，会清空现有工价数据，需先导出备份"。</li>
+  <li><b>调价对历史工资</b>：营销文说"按报工当时锁定、新价只影响后续"（B 级，建议性表述）；官网产品页说"工价变更可即时刷新"（B 级）；合作伙伴功能清单有"批量刷新工资"（C 级）。综合推断：黑湖改价后历史报工金额<b>会被重算</b>，历史口径靠人工导出留底，不是系统硬保证。</li>
+</ul>
+
+<div class="kbox blue"><b>一句话总结：</b>黑湖停在"维度组合匹配最终价"，把组合爆炸留给人工建表；它刻意不做叠加运算、不做包含项去重、不做跨组互斥规则。你们候选方案里"基础价＋附加价叠加＋成套价预设包含项自动判断"，<b>正是黑湖没做的那一层</b>——黑湖能借鉴的是"维度优先级匹配＋完全/模糊匹配＋草稿生效＋Excel 导入导出"这套壳。</div>
+</div>
+
+<h2 id="s2">二、八项调研问题 · 逐项总览</h2>
+
+<div class="card">
+<table>
+<thead><tr><th style="width:170px">问题</th><th>黑湖小工单</th><th>金蝶云星空</th><th>用友 U8+/畅捷通 T+</th><th>SAP S/4HANA</th><th>Odoo 18</th><th>Dynamics 365 SCM</th></tr></thead>
+<tbody>
+<tr>
+  <td><b>① 同工序因规格/难度不同如何设不同工价</b></td>
+  <td>规格/班别等做成自定义字段（单选框）纳入取数维度，每组合一行价 <span class="tag tA">A</span></td>
+  <td>计件工资工价维度：产品×标准工序×工种×工种等级（可自定义），组合匹配 <span class="tag tA">A</span></td>
+  <td>U8+计件要素（产品×工序×生产订单号×设备，可自定义），每组合一行价 <span class="tag tA">A</span></td>
+  <td>销售侧：变式特性＋变式条件按组合取价；车间计件侧（HR-PT 工票）无按特性取价引擎 <span class="tag tB">B</span></td>
+  <td>模板基础价＋属性值 Value Price Extra（叠加求和）<span class="tag tA">A</span></td>
+  <td>价格模型：Base price 表达式＋多条带条件的 price element <span class="tag tA">A</span></td>
+</tr>
+<tr>
+  <td><b>② 选项组＋组内单选/多选；定义在哪层</b></td>
+  <td>单选框/复选框字段，定义在产品/工序/工单/报工/用户模块，可作取数维度 <span class="tag tA">A</span></td>
+  <td>辅助属性挂在<b>物料</b>上（库存维度，影响全单据）；工价维度是主数据维度，非工单勾选项；<b>未找到"选项组"标准功能</b></td>
+  <td>无"选项组"原生 UI；实质是"标准要素=维度，取值组合成工价行"，<b>系统不强制互斥</b> <span class="tag tA">A</span></td>
+  <td>特性（characteristic）＋允许值列表＋Precondition/约束过滤；定义在<b>可配置物料（KMAT）</b>的配置文件上（产品层）<span class="tag tB">B</span></td>
+  <td>Attribute=选项组；Display Type：Radio/Select=单选，Multi-checkbox=多选；定义在产品模板层 <span class="tag tA">A</span></td>
+  <td>属性类型 Text with fixed list（单选组）/Boolean/整数区间；定义在配置模型（组件/子组件）<span class="tag tA">A</span></td>
+</tr>
+<tr>
+  <td><b>③ 选择发生在哪个环节</b></td>
+  <td>建产品档案/建工单时（工单自定义字段或"工序单价"）；<b>报工不选价</b> <span class="tag tA">A</span></td>
+  <td>销售取价在订单录入时自动带出；计件工价在<b>工序汇报（报工）</b>时按工作中心等匹配 <span class="tag tA">A</span></td>
+  <td>U8+在报工/车间工时记录单导入时自动带价；T+在计件核算单参照工序汇报生成时取价 <span class="tag tA">A</span></td>
+  <td>销售侧在销售订单配置会话选特性；车间计件侧在 CO11N 报工/工票录入时 <span class="tag tB">B</span></td>
+  <td>销售订单/POS/电商配置产品时（Dynamically 模式"只在加入订单时才建变体"）<span class="tag tA">A</span></td>
+  <td>销售订单/报价单/采购订单/生产订单的配置会话；<b>报工不重选属性</b> <span class="tag tA">A</span></td>
+</tr>
+<tr>
+  <td><b>④ 计价机制：组合匹配 vs 基础+附加</b></td>
+  <td><b>只支持组合匹配最终价</b>，无附加价概念 <span class="tag tA">A</span></td>
+  <td><b>只支持组合匹配</b>（官方原文"找到唯一匹配价或找不到"），<b>不支持叠加</b> <span class="tag tA">A</span></td>
+  <td>组合匹配为主；U8+可用计件项目公式自算叠加；T+组合匹配＋例外覆盖 <span class="tag tA">A</span></td>
+  <td>销售侧<b>两种都支持</b>：基础价 PR00＋条件累加，条件排除组（A–L）做互斥只取其一 <span class="tag tB">B</span></td>
+  <td><b>叠加模型</b>（官方原文：变体售价=模板价＋属性附加价之和）<span class="tag tA">A</span></td>
+  <td>叠加为主（base＋命中条件的 element 求和）；表达式也可写死组合价，两种都覆盖 <span class="tag tA">A</span></td>
+</tr>
+<tr>
+  <td><b>⑤ 成套价已含加工如何防重复计费</b></td>
+  <td><b>未找到机制</b>；靠把成套价建成独立维度组合记录、物理隔离（推断）<span class="tag tI">推断</span></td>
+  <td><b>未找到标准机制</b>；靠不同价目表行人工选对（推断）<span class="tag tI">推断</span></td>
+  <td><b>未找到机制</b>（三家车间计件侧均无）<span class="tag tI">推断</span></td>
+  <td>销售侧有：条件排除组 Exclusive / Best Price 逻辑（报价引擎）；<b>车间计件侧未找到</b> <span class="tag tB">B</span></td>
+  <td><b>未找到</b>（通读变体文档全文，无"已含/覆盖"标志位）<span class="tag tA">A(反证)</span></td>
+  <td><b>未找到自动豁免</b>；只能靠配置纪律（成套价写进 base 表达式、不给该项建附加规则）<span class="tag tI">推断</span></td>
+</tr>
+<tr>
+  <td><b>⑥ 不适用组合限制 / 缺价 / 未选必选项</b></td>
+  <td>字段可设"必填"；报工表单可写表达式校验；<b>缺价时行为未找到证据</b>；跨组联动限制未找到 <span class="tag tA">A</span></td>
+  <td>缺价=不携带单价（需手工/限价控制 4 级）；辅助属性启用后<b>单据必须录入属性值</b>；无互斥规则引擎 <span class="tag tA">A</span></td>
+  <td>T+有"工价审核后才允许取价"；U8+未找到原生约束（靠不建行规避）<span class="tag tA">A</span></td>
+  <td><b>最强</b>：Precondition 直接灰掉不适用值、Constraint 一致性校验、必选特性不选不能下单（销售侧）<span class="tag tB">B</span></td>
+  <td>仅 "Exclude for" 单条互斥链接（产品×属性值）；<b>无必选校验</b> <span class="tag tA">A</span></td>
+  <td><b>最强</b>：表达式约束＋表约束（允许组合矩阵）＋必选/只读/隐藏属性 <span class="tag tA">A</span></td>
+</tr>
+<tr>
+  <td><b>⑦ 改单/已报工后改要求/调价，历史金额</b></td>
+  <td>无生效日期字段；改价<b>会重算历史</b>（C 级"批量刷新工资"佐证）；改维度结构清空工价数据需先备份 <span class="tag tA">A</span></td>
+  <td>价目表有生效/失效日期＋价格类型优先级；<b>改价不追溯历史</b>（取价时点快照），手动"重新取价"才重算 <span class="tag tB">B</span></td>
+  <td>T+有"重取工价"按钮＋工价审核；U8+手册未明确历史规则 <span class="tag tA">A</span></td>
+  <td>条件记录有有效期（推断）；HR-PT 过薪资期不自动回改（推断）<span class="tag tI">推断</span></td>
+  <td>模板价改动向前覆盖所有变体（A）；历史订单快照未找到证据 <span class="tag tA">A</span></td>
+  <td><b>成本侧有官方版本链</b>：成本记录 Pending/生效日期/Current active，历史日期的 BOM 计算按对应生效日期取价 <span class="tag tA">A</span></td>
+</tr>
+<tr>
+  <td><b>⑧ 计价单位与报工单位换算</b></td>
+  <td><b>未找到原生配置</b>（案例文仅提痛点到"千支 vs KG"）</td>
+  <td><b>按单位换算率自动折算</b>（官方原文：价目表价格按单位换算后回填）<span class="tag tA">A</span></td>
+  <td>U8+未找到直接证据（推断按存货计量单位）；T+辅计量核算（C）</td>
+  <td>条件技术支持数量换算与阶梯（销售侧）<span class="tag tB">B</span></td>
+  <td>完整 UoM 体系，<b>Dozen（打）为内置单位</b>，同类别可换算 <span class="tag tA">A</span></td>
+  <td>本次未找到销售价与报工单位换算文档</td>
+</tr>
+</tbody>
+</table>
+<p class="small">鼎捷 T100/E10：仅查到合作伙伴 ISV 二次开发证据（工艺路线挂工价×子类别 1/2/3×数量阶梯×岗位系数，报工选子类别自动带价），<b>非原厂标准功能</b>，证据等级 C，不列入上表主行。详细来源见第九节。</p>
+</div>
+
+<h2 id="s3">三、产品对照表</h2>
+
+<div class="card">
+<table>
+<thead><tr><th>产品及版本</th><th>实际做法（一句话）</th><th>选择位置</th><th>计价机制</th><th>成套价已含项处理</th><th>历史改价</th><th>证据等级</th></tr></thead>
+<tbody>
+<tr>
+  <td><b>黑湖小工单</b>（Web 版，2026-10-23 访问）</td>
+  <td>绩效工资配置：取数维度组合＋优先级 1–5＋完全/模糊匹配；每条记录一个固定单价；自定义字段（含单选框）可作维度</td>
+  <td>建产品档案/建工单时（工单字段或"工序单价"）；报工不选价</td>
+  <td>组合匹配最终价（不支持叠加）</td>
+  <td>无专门机制；靠独立维度组合记录隔离（推断）</td>
+  <td>无生效日期字段；改价重算历史（C 级佐证）；改维度结构清空工价数据（A）</td>
+  <td><span class="tag tA">A 为主</span>＋<span class="tag tI">推断</span></td>
+</tr>
+<tr>
+  <td><b>金蝶云星空</b>（帮助中心/官方社区，2026-10-23 访问）</td>
+  <td>辅助属性挂物料（库存维度）勾"影响价格"→价目表按物料＋辅助属性组合取价；独立计件工资模块（工价维度=产品/标准工序/工种/工种等级）</td>
+  <td>销售取价在订单录入；计件工价在工序汇报时匹配</td>
+  <td>组合匹配最终价（官方原文），不支持叠加</td>
+  <td>无标准机制；靠不同价目表行人工选对（推断）</td>
+  <td>生效/失效日期＋价格类型优先级；改价不追溯历史，手动"重新取价"</td>
+  <td><span class="tag tA">A</span>＋<span class="tag tB">B</span></td>
+</tr>
+<tr>
+  <td><b>用友 U8+/U8 cloud</b>（官方计件手册，2026-10-23 访问）</td>
+  <td>计件要素（产品×工序×生产订单号×设备，可自定义）×工价档案，每组合一行价；车间工时记录单导入自动带价；计件项目公式可自算</td>
+  <td>报工/工时记录导入时取价</td>
+  <td>组合匹配为主；公式可做叠加</td>
+  <td>未找到机制</td>
+  <td>手册未明确历史规则；T+有"重取工价"＋工价审核</td>
+  <td><span class="tag tA">A</span></td>
+</tr>
+<tr>
+  <td><b>畅捷通 T+</b>（用友系，官方帮助）</td>
+  <td>多维度工价（工序/工艺路线/产品分类/产品/车间/员工/班组/期间），明细优先/例外覆盖；核算单参照工序汇报生成</td>
+  <td>计件核算单生成时取价</td>
+  <td>组合匹配＋例外覆盖</td>
+  <td>未找到机制</td>
+  <td>工价审核后才取价；核算单可"重取工价"</td>
+  <td><span class="tag tA">A</span></td>
+</tr>
+<tr>
+  <td><b>鼎捷 T100/E10</b></td>
+  <td>仅查到 ISV 二次开发：工艺路线挂工价×子类别×数量阶梯×岗位系数</td>
+  <td>报工环节（ISV）</td>
+  <td>组合匹配＋乘法系数</td>
+  <td>无</td>
+  <td>未找到</td>
+  <td><span class="tag tC">C（仅 ISV）</span></td>
+</tr>
+<tr>
+  <td><b>SAP S/4HANA</b></td>
+  <td>变式配置 VC（特性/对象依赖/约束）＋条件技术定价（基础价＋附加条件＋条件排除组 A–L 互斥）＝<b>销售/配置报价</b>；车间计件走 HR-PT 工票＋PP 报工，无定价引擎</td>
+  <td>销售订单配置会话选特性；工票报工时</td>
+  <td>销售侧叠加＋排除组；计件侧无定价引擎</td>
+  <td>销售侧条件排除组/最优选价可避免重复收（报价引擎）</td>
+  <td>条件记录有效期（推断）；过薪资期不自动回改（推断）</td>
+  <td><span class="tag tB">B</span>＋<span class="tag tC">C</span></td>
+</tr>
+<tr>
+  <td><b>Odoo 18</b></td>
+  <td>产品模板基础价＋属性值 Value Price Extra（叠加模型）；Radio 单选 / Multi-checkbox 多选；Exclude for 单条互斥</td>
+  <td>销售订单/POS/电商配置时</td>
+  <td><b>基础价＋附加价叠加</b>（官方原文）</td>
+  <td>无已含去重（通读全文反证）</td>
+  <td>模板价改动向前覆盖变体；历史订单快照未找到证据</td>
+  <td><span class="tag tA">A</span></td>
+</tr>
+<tr>
+  <td><b>Dynamics 365 SCM</b></td>
+  <td>价格模型=Base price 表达式＋多条带条件 price element（基础＋命中条件附加求和）；表达式约束＋表约束＋必选属性；成本类别支持按产出数量计价（piece rates）＋生效日期版本链</td>
+  <td>销售/采购/生产订单配置会话</td>
+  <td>叠加为主；表达式可写死组合价</td>
+  <td>无自动豁免；靠配置纪律（推断）</td>
+  <td>成本侧有 Pending/生效日期版本链（官方）</td>
+  <td><span class="tag tA">A</span></td>
+</tr>
+</tbody>
+</table>
+<p class="small">⚠️ 销售定价 ≠ 车间计件工资：SAP 变式配置＋条件技术、Odoo 变体定价、D365 价格模型、金蝶销售价目表均为"销售/配置报价"能力，可作机制类比，<b>不能当作车间计件工资功能</b>；两家（SAP 工票、D365 成本类别）与车间计价有衔接，但都缺"扫码报工→按工序按打计件发工资"的完整闭环证据。</p>
+</div>
+
+<h2 id="s4">四、最接近的完整流程（黑湖 A 级主流程）</h2>
+
+<div class="card">
+<p>以下流程由黑湖官方操作文档拼合（<span class="url">xiaogongdan.net/36.html</span> 绩效工资配置、<span class="url">/43.html</span> 自定义字段、<span class="url">/437.html</span> 匹配模式与按单定价、<span class="url">/358.html</span> 报工操作），与伞厂场景最接近。</p>
+
+<div class="flow">
+  <div class="fstep"><div class="fnum">1</div><div class="body"><b>管理员配置（PC）</b>：<code>基础数据 → 绩效工资配置 → 绩效工资匹配规则</code>（草稿态）<br>① 新增取数维度：默认带 产品.编号 / 产品.名称 / 产品.规格 / 工序.名称 / 计价方式；按需加自定义字段（如"丝印档位"单选框：无 / 1片 / 2-4片 / 5-8片）<br>② 设维度组合优先级：优先级 1 = 产品编号＋产品规格＋丝印档位＋工序＋计价方式（细粒度）；优先级 2 = 产品编号＋工序＋计价方式（兜底）。优先级 1 最高、5 最低。<br>⚠️ 改维度结构（增/删/移）会<b>清空现有工价数据</b>，先导出备份再生效（操作文档原文提示）。</div></div>
+  <div class="fstep"><div class="fnum">2</div><div class="body"><b>管理员建工价记录</b>：<code>创建绩效工资配置</code>，按优先级 1 的组合逐行填——〔产品编号 00001 · 产品规格 25寸8K · 丝印档位 无 · 工序 合片 · 计价方式 计件〕工资单价 5.00；再建〔…丝印档位 1片…〕5.25、〔…2-4片…〕5.50、〔…5-8片…〕6.65……每种组合一条记录。支持 Excel 模板批量导入。</div></div>
+  <div class="fstep"><div class="fnum">3</div><div class="body"><b>文员建工单</b>：选产品 00001（自动带出规格 25寸8K），在工单自定义字段"丝印档位"里选"2-4片"。</div></div>
+  <div class="fstep"><div class="fnum">4</div><div class="body"><b>工人报工（手机/H5）</b>：扫工单二维码 → 选工序"合片" → 选自己 → 填良品数（如 100 打）→ 提交。<b>不选价</b>。</div></div>
+  <div class="fstep"><div class="fnum">5</div><div class="body"><b>算钱</b>：按优先级 1 匹配〔00001 · 25寸8K · 丝印档位2-4片 · 合片 · 计件〕→ 命中单价 5.50 → 工资 = 100 × 5.50 = 550 元，记入当日绩效，月末导出工资报表。</div></div>
+</div>
+
+<div class="kbox red"><b>关键差异提醒：</b>黑湖<b>不会自动算"5.00＋0.50=5.50"</b>——5.50 这条记录是管理员提前建好的。这就是黑湖模型与你们候选方案（基础价＋附加价自动叠加）的最大分界。</div>
+
+<h3>金蝶类比流程（A 级，销售取价；计件模块仅片段）</h3>
+<div class="flow">
+  <div class="fstep"><div class="fnum">1</div><div class="body">物料维护：物料维度页签 → 辅助属性 → 启用并勾"影响价格"；在【设置→辅助属性】维护属性值（如 尺寸：25寸/27寸/32寸；丝印档：无/1片/2-4片/5-8片）。</div></div>
+  <div class="fstep"><div class="fnum">2</div><div class="body">销售价目表：每个"物料＋辅助属性组合＋单位＋数量段"维护一行最终价，表头带生效/失效日期、价格类型优先级。</div></div>
+  <div class="fstep"><div class="fnum">3</div><div class="body">订单取价：按"价格对象→辅助属性→单位→数量段→有效期"依次匹配，命中唯一一行带出价格；<b>找不到就"不携带任何字段"</b>（单价为空）。</div></div>
+  <div class="fstep"><div class="fnum">4</div><div class="body">改价：反审核改行或追加新行（新生效日期）；已审核历史订单价格不变，需手动点"重新取价"。</div></div>
+</div>
+<p class="small">金蝶计件工资模块（生产制造→车间管理→计件工资）：官方知识页确认工价维度预置"产品、标准工序、工种、工种等级"4 种可自定义、按工作中心/车间/组织维护计件范围、工序汇报时匹配工价——但完整"配置→建单→报工→算钱"端到端操作手册本次未在公开渠道找到全文（页面动态加载仅得片段），故不展开成完整流程。</p>
+</div>
+
+<h2 id="s5">五、对"候选方案"的独立判断（不迎合）</h2>
+
+<div class="card">
+<h3>5.1 判断摘要</h3>
+<table>
+<thead><tr><th>候选方案要素</th><th>判断</th><th>依据</th></tr></thead>
+<tbody>
+<tr><td>工序下设"加工选项"，丝印为单选组、含明确零加价选项</td><td style="background:#e9f7ef"><b>✅ 合理，保留</b></td><td>"选项组＋组内单选"有成熟参照：黑湖单选框字段、Odoo Radio、金蝶辅助属性值、D365 固定列表属性；单选天然保证互斥，"无丝印=5.00 的行"即零加价选项</td></tr>
+<tr><td>建工单时选择加工要求；报工沿用、不重复选价</td><td style="background:#e9f7ef"><b>✅ 合理，保留</b></td><td>与黑湖（工单字段/工序单价）、D365（配置在建单）、金蝶（取价自动带出）一致；工人端零负担</td></tr>
+<tr><td>普通工价 = 基础价＋适用附加价（叠加引擎）</td><td style="background:#fdf6e3"><b>⚠️ 建议降级为"录入辅助"</b></td><td>金蝶辅助属性、黑湖、用友的真实机制<b>全是"组合匹配最终价"，不是叠加</b>；真正做叠加的是 Odoo（Value Price Extra）——所以这套方案本质"仿 Odoo"而非"仿金蝶"。叠加引擎要求先确定互斥/可叠加/包含规则（客户未定），规则不全即算错钱；"计算依据"审计复杂</td></tr>
+<tr><td>成套价预设包含项，自动判断是否另收费</td><td style="background:#fdecea"><b>❌ 建议放弃"自动判断"</b></td><td>本次调研的 8 个产品（黑湖/金蝶/用友/T+/鼎捷/SAP/Odoo/D365）<b>全部没有</b>"成套价已含加工自动不再加价"的原生机制；唯一接近的是 SAP 销售侧条件排除组（报价引擎，非车间计件）。"含丝印到哪档"客户未定，自动判定无规则可依</td></tr>
+<tr><td>保存选择/单价/计算依据；调价可追溯、不静默改历史</td><td style="background:#e9f7ef"><b>✅ 合理，保留（且比黑湖严谨）</b></td><td>与金蝶"取价时点快照＋手动重新取价"一致，与项目 docs/266 快照设计一致；黑湖反而会重算历史（有"批量刷新工资"），微聚不做</td></tr>
+</tbody>
+</table>
+
+<h3>5.2 必须纠正的一个认知："仿金蝶辅助属性"与金蝶真实机制不一致</h3>
+<div class="kbox">
+金蝶辅助属性的真实机制（官方手册原文）：<b>"系统能找到唯一的价目表匹配价格或者找不到对应的价目表价格"</b>——是<b>组合匹配出一个最终价</b>；多个辅助属性之间是笛卡尔积穷举（每个组合一个价格行），<b>不是"基础价＋各属性附加价相加"</b>。且辅助属性挂在<b>物料</b>上、是<b>库存维度</b>（一旦启用，所有涉及该物料的采购/销售/生产/库存单据都自适应增加该字段），金蝶实施顾问都提醒"同一物料挂多个辅助属性影响性能"。
+<br><br>
+<b>含义</b>：① 若真要"仿金蝶"，做的应是"每个组合一行最终价"，与客户 Excel 的"基础＋附加"直觉相反；② 客户 Excel 工价表是叠加格式（基础 5 元＋丝印档＋双层叠片），这套直觉用 Odoo 模型（基础价＋Value Price Extra）更贴合；③ 微聚是轻 MES，<b>不应引入金蝶式物料库存维度</b>（污染所有单据），把"加工选项"作为工价规则维度＋建单选择字段即可。
+</div>
+
+<h3>5.3 为什么推荐"组合匹配最终价"而不是"叠加引擎"（本报告核心判断）</h3>
+<ul>
+  <li><b>行业主流就是组合匹配</b>：黑湖、金蝶、用友、T+、金蝶计件工资，全部是"每组合一行最终价"。轻量产品（黑湖）刻意不做叠加，是因为叠加规则（互斥/可叠加/条件叠加/成套包含）一旦做全，配置界面就变重，违背轻量定位。</li>
+  <li><b>客户规则未定，叠加引擎会算错钱且无法自证</b>："双层能否叠加""成套含哪档丝印"未确认前，叠加引擎无完整规则；组合匹配则把"能不能做这个组合"推迟到建价目表行时逐行确认——能做的组合才有行，不能做的没有行，<b>天然满足"不能自行假定"</b>。</li>
+  <li><b>本场景组合数很小</b>：丝印 4 档 × 规格若干 ＋ 成套 2 种 ＋ 双层 1 项，展开约 8～12 行，穷举成本可忽略。</li>
+  <li><b>追溯性最好</b>：报工快照引用"一行价"，计算依据=一行价＋维度值，审计最简单。</li>
+  <li><b>对齐项目现有底座</b>：项目 docs/32 原则"不做万能工资引擎、只做底座＋一条算钱口子"，docs/21 的 base_price_rule 已是"后台匹配（有优先级、有生效期）"——组合匹配与现有架构零冲突；叠加引擎反而是另起炉灶。</li>
+</ul>
+</div>
+
+<h2 id="s6">六、推荐最小方案（对齐现有工资底座）＋ 两个案例演示</h2>
+
+<div class="card">
+<h3>6.1 最小方案（首版，直接可做）</h3>
+<div class="flow">
+  <div class="fstep"><div class="fnum">1</div><div class="body"><b>工价规则行加"加工选项"维度</b>（沿用现有 base_price_rule 的匹配器/优先级/生效期）：行 = 产品/产品规格 × 工序 × 加工选项（单选组） × 加工模式（散装/成套） → <b>一个最终单价</b>。<br>加工选项单选组示例：丝印档位〔无 / 1片 / 2-4片 / 5-8片〕——互斥由单选天然保证；"无"即零加价档（对应 5.00 的行）。</div></div>
+  <div class="fstep"><div class="fnum">2</div><div class="body"><b>成套价 = 独立取价行，不做"包含项自动判定"</b>：〔27寸以下大小片方形 · 合片 · 加工模式=成套〕→ 7.70。命中成套行即终，<b>重复加价被取价模型天然消除</b>——这是组合匹配的免费午餐，不需要"已含去重"功能。</div></div>
+  <div class="fstep"><div class="fnum">3</div><div class="body"><b>建工单时选择加工选项</b>（单选组，可带"适用规格"过滤）；选"成套"时丝印档位隐藏/不参与。</div></div>
+  <div class="fstep"><div class="fnum">4</div><div class="body"><b>报工沿用工单选择</b>，落 prod_report 快照（现有 docs/266：规则 ID、计价方式、单价、不良扣价）——<b>零新增机制</b>。</div></div>
+  <div class="fstep"><div class="fnum">5</div><div class="body"><b>缺价拦截</b>：组合匹配不到行 → 建单/保存时提示"该组合无工价，请联系管理员"（金蝶同款行为）。不适用组合＝不建行即拦截。</div></div>
+  <div class="fstep"><div class="fnum">6</div><div class="body"><b>历史</b>：调价只影响新取价（现有生效期＋快照已保证）；撤回重算沿用快照（现有 67/134）。<b>不做黑湖式"批量刷新工资"</b>。</div></div>
+  <div class="fstep"><div class="fnum">7</div><div class="body"><b>单位</b>：计价单位"打"，伞厂按打报工则一致、无需换算；预留"单位换算率"字段（借鉴金蝶自动折算 / Odoo Dozen 内置单位）。</div></div>
+</div>
+
+<h3>6.2 可选 V2（暂不做，留口子）</h3>
+<ul>
+  <li><b>录入辅助（Odoo 式直觉）</b>：价目表行支持"基础价＋附加项"填法（如 5.00 ＋ 0.25），<b>保存时自动求和并落成一行最终价</b>——录入沿用客户 Excel 直觉，存储/取价/追溯仍是"一行价"。不引入"运行时叠加引擎"。</li>
+  <li><b>完全/模糊匹配＋优先级兜底</b>（黑湖壳）：优先级 1 精确匹配，优先级 2 兜底行，报工永不缺价。</li>
+</ul>
+
+<h3>6.3 案例演示（交付要求必答）</h3>
+
+<div class="kbox blue"><h4 style="margin-top:0">案例 1：25寸8K 基础价 5 元/打 ＋ 1片丝印 0.25 元/打</h4>
+<b>价目表（组合匹配，两行）：</b><br>
+〔产品规格 25寸8K · 工序 合片 · 丝印档位 无〕→ <b>5.00</b> 元/打<br>
+〔产品规格 25寸8K · 工序 合片 · 丝印档位 1片〕→ <b>5.25</b> 元/打<br>
+<b>建单</b>：产品 25寸8K，丝印档位选"1片" → 自动取价 5.25。<br>
+<b>报工</b>：100 打 → 快照〔丝印档位=1片 · 单价 5.25 · 规则ID〕→ 工资 = 100 × 5.25 = <b>525 元</b>。<br>
+<b>V2 录入辅助（可选）</b>：管理员录"基础 5.00 ＋ 附加 0.25" → 预览 5.25 → 保存落成一行 5.25（取价与追溯仍按行）。<br>
+<b>调价</b>：丝印 1 片涨到 0.30 后，新行 5.30 自生效日起启用；已报工的 5.25 快照不动。</div>
+
+<div class="kbox warn"><h4 style="margin-top:0">案例 2：成套价 7.70 元/打（含丝印）</h4>
+<b>价目表（一行）：</b>〔产品规格 27寸以下大小片方形 · 工序 合片 · 加工模式 成套〕→ <b>7.70</b> 元/打<br>
+<b>建单</b>：规格选"27寸以下大小片方形"、加工模式选"成套" → 丝印档位不参与（隐藏）→ 命中 7.70。<br>
+<b>报工</b>：100 打 → 快照〔加工模式=成套 · 单价 7.70 · 规则ID〕→ 工资 = 100 × 7.70 = <b>770 元</b>。<br>
+<b>为什么不重复加价</b>：取价是组合匹配，命中成套行即终，系统根本没有"再叠加丝印"这一步——<b>不需要"包含项判定"功能</b>。<br>
+<b>待客户确认（软件之外）</b>：成套 7.70 含丝印到哪一档？若"成套＋5-8片丝印"确实要补差，就再加一行〔成套 · 丝印档位 5-8片〕＝7.70＋1.65＝<b>9.35</b>（具体数值由客户拍板，本报告不假定）。</div>
+</div>
+
+<h2 id="s7">七、仍需客户确认的问题（软件能力 / 客户业务规则分列）</h2>
+
+<div class="card">
+<h3>7.1 软件能力侧（主流产品已验证可行，我们能做，无需客户拍板）</h3>
+<ul>
+  <li>选项组单选＋组合匹配取价（黑湖/金蝶/用友同款机制，A 级证据）</li>
+  <li>建工单选加工要求、报工沿用不重复选价（黑湖/D365 同款）</li>
+  <li>报工快照＋调价不追溯历史（金蝶"取价时点快照"；项目 266 已实现）</li>
+  <li>缺价拦截（金蝶"找不到匹配价则单价为空/限价控制"同款行为）</li>
+  <li>单位换算率（金蝶自动折算 / Odoo UoM 同款）</li>
+</ul>
+
+<h3>7.2 客户业务规则侧（必须客户拍板，不能自行假定）</h3>
+<table>
+<thead><tr><th style="width:46px">#</th><th>问题</th><th>影响什么</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><b>成套价 7.70"含丝印"到底含到哪一档？</b>（1片 / 2-4片 / 5-8片，封顶哪档？）</td><td>决定是否要"成套＋高档丝印补差行"及其数值</td></tr>
+<tr><td>2</td><td><b>32寸头盔伞 18.10"含黑胶＋无边＋夹带"</b>：这三项单独发生时有无工价？散装组合怎么计价？</td><td>价目表行结构、是否要做"拆项"行</td></tr>
+<tr><td>3</td><td><b>双层伞面叠片 ＋1.60</b>：适用于哪些规格？能否与丝印叠加？能否用于成套价（成套是否已含叠片）？</td><td>是否开放"叠片"选项组、是否并入组合行</td></tr>
+<tr><td>4</td><td><b>"0.50 档"四项（2-4片丝印 / 剪线头 / 对线 / 折叠标）</b>：彼此也互斥，还是可并存（如同时报"剪线头＋对线"）？</td><td>单选组还是多选组、是否拆行</td></tr>
+<tr><td>5</td><td><b>报工单位</b>：按"打"报工还是按"件"报工？（Excel 是元/打）</td><td>是否需要单位换算率</td></tr>
+<tr><td>6</td><td><b>价格是否总是价目表固定</b>？是否偶发"每单谈价"？（黑湖有"按工单实际定价"模式，需不需要）</td><td>是否做第二种计价模式</td></tr>
+<tr><td>7</td><td><b>规格体系</b>："25寸8K""27寸以下大小片方形"是同一产品的规格值还是不同产品？"27寸以下"如何判定（尺寸字段？产品分类？）</td><td>价目表行用"产品×工序"还是"规格×工序"</td></tr>
+<tr><td>8</td><td><b>调价节奏</b>：新工价何时生效？在制工单、已报工是否受影响？（建议：不影响历史，但需客户知晓并认可）</td><td>生效期与快照规则的可接受度</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="s8">八、与项目既有文档的衔接与纠偏</h2>
+
+<div class="card">
+<table>
+<thead><tr><th style="width:150px">既有文档</th><th>本次调研结论</th><th>处理建议</th></tr></thead>
+<tbody>
+<tr>
+  <td>docs/2G-对标分析-工资计算vs黑湖小工单（2026-09-24）</td>
+  <td>2G 称黑湖"工价版本：按报工时间自动适用对应版本，不被覆盖不重算"——<b>本次核实：黑湖操作文档（36.html）无"生效起止时间"字段</b>；该说法来自营销文（B 级建议性）；官网产品页另有"工价变更可即时刷新"（B 级），合作伙伴清单有"批量刷新工资"（C 级）。综合推断黑湖改价后历史<b>会被重算</b>，与 2G 表述相反。</td>
+  <td>2G 该条降级为"营销口径，操作文档未证实"；微聚坚持"快照＋不追溯"是<b>比黑湖更严谨</b>的设计，方向不变</td>
+</tr>
+<tr>
+  <td>docs/2G（黑湖工价能力清单）</td>
+  <td>2G 称黑湖支持"阶梯工价、困难溢价、技能系数、班组分摊比例"——来自营销文/案例；操作文档（36.html 表单）仅见"工资单价＋标准效率"字段，<b>未核实到阶梯/系数/分摊的配置字段</b></td>
+  <td>标注证据等级 B/C（营销口径），不作为对标承诺</td>
+</tr>
+<tr>
+  <td>docs/32-设计说明-工资底座与计价外挂口子（定稿）</td>
+  <td>本报告推荐方案与 32 号<b>完全一致</b>：加工选项=工价规则的新维度，计价仍是"组合匹配取最终价＋快照＋口子"，不新增叠加引擎</td>
+  <td>无需修改 32 号；伞厂工价表（含成套/互斥）可作为"该客户计价规则"落到 base_price_rule 扩展行</td>
+</tr>
+<tr>
+  <td>docs/266（报工保存完整快照：规则ID、计价方式、单价、不良扣价）</td>
+  <td>伞厂场景只需在快照中追加"加工选项值"（如丝印档位），与 266 兼容</td>
+  <td>快照字段 +1 列即可</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="s9">九、证据分级与来源清单</h2>
+
+<div class="card">
+<h3>证据分级说明</h3>
+<p><span class="tag tA">A</span> 官方操作文档、明确官方演示、或实际系统操作证据　<span class="tag tB">B</span> 官方产品介绍/案例提及，但缺操作细节　<span class="tag tC">C</span> 社区或合作伙伴资料，仅作线索　<span class="tag tI">推断</span> 根据已知机制推演，不构成产品现成功能</p>
+<p class="small">"本次公开资料未找到直接证据"≠产品不支持。所有结论基于 2026-10-23 公开资料，未注册、未预约、未联系销售、未访问付费/登录内容。</p>
+
+<h3>黑湖小工单</h3>
+<table>
+<thead><tr><th>来源</th><th>性质</th><th>证明了什么</th></tr></thead>
+<tbody>
+<tr><td class="url">https://www.xiaogongdan.net/36.html</td><td>官方操作文档 <span class="tag tA">A</span></td><td>绩效工资配置：取数维度、维度组合优先级（1 最高 5 最低）、完全/模糊匹配、工资单价必填、车床/标准效率字段、"维度增删移清空工价数据需先备份"（组织者亲自复核）</td></tr>
+<tr><td class="url">https://www.xiaogongdan.net/43.html</td><td>官方操作文档 <span class="tag tA">A</span></td><td>自定义字段类型：单选框（只能选其一）/复选框（可多选）/公式（仅报工模块）；每模块最多 50 个；必填、隐藏条件</td></tr>
+<tr><td class="url">https://www.xiaogongdan.net/437.html</td><td>官方 FAQ <span class="tag tA">A</span></td><td>同产品同工序白晚班不同价→加自定义字段"班别"进维度；按工单实际定价→工序"工序单价"数字字段</td></tr>
+<tr><td class="url">https://www.xiaogongdan.net/358.html</td><td>官方操作文档 <span class="tag tA">A</span></td><td>报工操作：选工单→工序→人员→填良品/不良，不选价</td></tr>
+<tr><td class="url">https://www.xiaogongdan.net/46.html</td><td>官方操作文档 <span class="tag tA">A</span></td><td>报工表单校验规则表达式（如良品数&gt;计划数报错）</td></tr>
+<tr><td class="url">https://www.xiaogongdan.cn/products</td><td>官网营销页 <span class="tag tB">B</span></td><td>"工价变更可即时刷新"（与操作文档口径矛盾点之一）</td></tr>
+<tr><td class="url">https://www.xiaogongdan.cn/news/xiaogongdan-piece-rate-configuration.html</td><td>官网营销/SEO 稿 <span class="tag tB">B</span></td><td>建议"设生效时间"等最佳实践表述；通篇为建议性措辞，非操作手册（线索已核实，与 .net 操作文档对照后降级）</td></tr>
+<tr><td class="url">https://105063340.b2b.11467.com/product/36540449.asp</td><td>合作伙伴功能清单 <span class="tag tC">C</span></td><td>"对绩效进行批量刷新工资"→改价后历史会被重算</td></tr>
+<tr><td>xiaogongdan.net/92.html</td><td>官方案例文 <span class="tag tB">B</span></td><td>五金行业"计划按千支/千颗、报工按 KG 需单位换算"是客户痛点，未展示原生解法</td></tr>
+</tbody>
+</table>
+
+<h3>金蝶（云星空为主）</h3>
+<table>
+<thead><tr><th>来源</th><th>性质</th><th>证明了什么</th></tr></thead>
+<tbody>
+<tr><td class="url">https://help.open.kingdee.com/dokuwiki_std/doku.php?id=%E9%87%87%E8%B4%AD%E4%BB%B7%E6%A0%BC%E7%AE%A1%E7%90%86</td><td>官方手册 <span class="tag tA">A</span></td><td>取价=组合匹配："系统能找到唯一的价目表匹配价格或者找不到对应的价目表价格"；缺价不携带字段；"价格按单位换算后再回填"</td></tr>
+<tr><td class="url">https://help.open.kingdee.com/dokuwiki/doku.php?id=%E9%94%80%E5%94%AE%E4%BB%B7%E7%9B%AE%E8%A1%A8</td><td>官方手册 <span class="tag tA">A</span></td><td>价目表生效/失效日期、价格类型优先级、计价单位可改、最低限价</td></tr>
+<tr><td class="url">https://help.open.kingdee.com/dokuwiki_std/doku.php?id=%E7%89%A9%E6%96%99</td><td>官方手册 <span class="tag tA">A</span></td><td>辅助属性在物料维护（库存维度）</td></tr>
+<tr><td class="url">https://vip.kingdee.com/knowledge/4878</td><td>官方社区 <span class="tag tB">B</span></td><td>辅助属性=库存维度、启用后全单据自适应增加字段、"影响成本"全有或全无、单据必须录入属性值</td></tr>
+<tr><td class="url">https://vip.kingdee.com/knowledge/139420269231570688</td><td>官方社区 <span class="tag tB">B</span></td><td>下推携带源单价格；点"重新取价"才按新价目表重算</td></tr>
+<tr><td class="url">https://vip.kingdee.com/knowledge/specialDetail/581525923099151360?id=631494186818126336</td><td>官方知识页（计件工资指引）<span class="tag tA">A(片段)</span></td><td>工价维度预置"产品、标准工序、工种、工种等级"4 种可自定义（全文动态加载仅得片段）</td></tr>
+<tr><td class="url">https://vip.kingdee.com/knowledge/specialDetail/581525923099151360?id=624977068102636800</td><td>官方知识页（计件范围）<span class="tag tA">A</span></td><td>按工作中心/车间/组织维护计件范围；按产品数量或活动工时计件；匹配工价维度可多选；适配工序汇报</td></tr>
+<tr><td class="url">https://vip.kingdee.com/questions/731536290927229952</td><td>社区问答 <span class="tag tC">C</span></td><td>辅助属性 ID=各属性取值排列组合的唯一值，价格明确到物料ID+辅助属性ID</td></tr>
+<tr><td class="url">https://vip.kingdee.com/article/408771827243188736</td><td>社区实践（二开）<span class="tag tC">C</span></td><td>标准计件不够用时，实施顾问在工艺路线加自定义字段携带到工序汇报单——证明标准功能无"选项式加工要求"</td></tr>
+</tbody>
+</table>
+
+<h3>用友 / 畅捷通 / 鼎捷</h3>
+<table>
+<thead><tr><th>来源</th><th>性质</th><th>证明了什么</th></tr></thead>
+<tbody>
+<tr><td class="url">https://17009945.s21i.faiusr.com/61/ABUIABA9GAAgndCX-gUo_uCi6wM.pdf</td><td>用友官方手册 <span class="tag tA">A</span></td><td>U8+计件工资：计件要素（产品/工序/生产订单号/设备+自定义）、工价按标准要素组合、批量增价、计件项目公式</td></tr>
+<tr><td class="url">http://m.download.cucdc.com/wenku/dc3107b3c9d64c9993fad8e486ee59de.html</td><td>U872 说明书 <span class="tag tA">A</span></td><td>预置标准要素清单、车间工时记录单导入自动带订单号/工序</td></tr>
+<tr><td class="url">https://t.static.chanjet.com/notice/md/main/decloud/dec160/16_jjgz.html</td><td>畅捷通 T+ 官方帮助 <span class="tag tA">A</span></td><td>多维度工价、明细优先/例外覆盖取价、核算单参照工序汇报生成、"重取工价"按钮</td></tr>
+<tr><td class="url">http://www.czchliy.com/news/info.aspx?id=22678</td><td>ISV（常州诚力友）<span class="tag tC">C</span></td><td>易助 T100 集成平台：工艺路线挂工价×子类别×数量阶梯×岗位系数（<b>非鼎捷原厂</b>）</td></tr>
+<tr><td class="url">https://www.jhufida.com/lucheng-info-5604.html</td><td>代理转述 <span class="tag tC">C</span></td><td>T+工价审核后才允许取价、辅计量核算</td></tr>
+</tbody>
+</table>
+
+<h3>SAP S/4HANA</h3>
+<table>
+<thead><tr><th>来源</th><th>性质</th><th>证明了什么</th></tr></thead>
+<tbody>
+<tr><td>SAP Feature Scope Description for SAP Variant Configuration and Pricing</td><td>官方能力清单 <span class="tag tB">B</span></td><td>定价过程支持基础价/折扣/附加费、数量与货币换算、阶梯、Best Price 排除逻辑、手工覆盖</td></tr>
+<tr><td class="url">https://www.gotothings.com/sd/use-of-exclusion-group-customizing-to-exclude-conditions.htm</td><td>社区 <span class="tag tC">C</span></td><td>条件排除组方法 D=Exclusive 等（互斥只取其一）</td></tr>
+<tr><td class="url">https://www.guru99.com/all-about-condition-exclusion-group.html</td><td>社区 <span class="tag tC">C</span></td><td>排除方法 A–L 对照表</td></tr>
+<tr><td class="url">https://www.kelote.com/news/case/1046366630889787392</td><td>社区 <span class="tag tC">C</span></td><td>VC 配置链路：KMAT/特性/依赖/CU41/VK30/VK11</td></tr>
+<tr><td class="url">https://www.sap-press.com/advanced-variant-configuration-with-sap-s4hana_5628/toc/5019</td><td>SAP PRESS 图书 <span class="tag tB">B</span></td><td>变式条件、参考特性分配</td></tr>
+<tr><td class="url">https://www.sap-tcodes.org/tcode/pw00.html</td><td>社区 <span class="tag tC">C</span></td><td>PW00=激励工资入口（HR-PT）</td></tr>
+<tr><td class="url">https://www.sap-tables.org/table/pllle.html</td><td>社区 <span class="tag tC">C</span></td><td>PLLLE=个人工票表，外键含 T006 计量单位</td></tr>
+</tbody>
+</table>
+
+<h3>Odoo 18 / Dynamics 365 SCM</h3>
+<table>
+<thead><tr><th>来源</th><th>性质</th><th>证明了什么</th></tr></thead>
+<tbody>
+<tr><td class="url">https://www.odoo.com/documentation/18.0/applications/sales/sales/products_prices/products/variants.html</td><td>官方操作文档 <span class="tag tA">A</span></td><td>"变体售价=模板价＋属性附加价之和"（组织者亲自复核原文）；Value Price Extra 定义；Display Type 单选/多选；Exclude for 互斥；Dynamically 模式</td></tr>
+<tr><td class="url">https://www.odoo.com/documentation/18.0/applications/inventory_and_mrp/inventory/product_management/configure/uom.html</td><td>官方操作文档 <span class="tag tA">A</span></td><td>UoM 同类别换算、Dozen（打）内置单位、销售单单位换算至仓库单位</td></tr>
+<tr><td class="url">https://www.odoo.com/documentation/18.0/applications/inventory_and_mrp/manufacturing/basic_setup/mo_costs.html</td><td>官方操作文档 <span class="tag tA">A</span></td><td>车间成本按小时×工时费率计算，<b>无按件计件工资</b></td></tr>
+<tr><td class="url">https://learn.microsoft.com/en-us/dynamics365/supply-chain/pim/tasks/set-up-attribute-based-pricing-configurable-products</td><td>官方任务文档 <span class="tag tA">A</span></td><td>价格模型=Base price element＋任意多条 price expression rules，每条带条件（如 CabinetFinish=="Rosewood"）</td></tr>
+<tr><td class="url">https://learn.microsoft.com/en-us/dynamics365/supply-chain/pim/product-configuration-models</td><td>官方概念文档 <span class="tag tA">A</span></td><td>表达式约束＋表约束（允许组合矩阵）＋必选/只读/隐藏属性；可在销售/采购/生产订单配置</td></tr>
+<tr><td class="url">https://learn.microsoft.com/en-us/dynamics365/supply-chain/cost-management/cost-categories-used-production-routings</td><td>官方文档 <span class="tag tA">A</span></td><td>成本类别可按"产出数量"计价（"such as the piece rates for paying labor"）；成本记录 Pending/生效日期/Current active 版本链</td></tr>
+<tr><td class="url">https://learn.microsoft.com/en-us/dynamics365/supply-chain/pim/attribute-based-sales-prices-constraint-based-product-configuration</td><td>官方概念页（快照引用）<span class="tag tB">B</span></td><td>销售价基于组件与属性而非 BOM/工艺；每个配置模型可有多个价格模型</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="s10">附：边界声明</h2>
+
+<div class="card">
+<ul>
+  <li><b>黑湖域名区分</b>：<code>xiaogongdan.cn</code> 为营销/SEO 站（本次涉及其 products 页与多篇"计件工资指南"类文章，措辞多为建议性，一律按 B 级降格引用）；<code>xiaogongdan.net</code> 为老站帮助中心（操作文档，A 级）。官网域名下出现的不等于官方产品承诺。</li>
+  <li><b>销售/配置定价 ≠ 车间计件工资</b>：SAP 变式配置＋条件技术、Odoo 变体定价、D365 价格模型、金蝶销售价目表均属报价能力，仅作机制类比；不得据此宣称这些产品"支持伞厂式工序计件加工选项"。D365 成本类别按数量计价（piece rates）与 SAP HR-PT 工票是与车间计价最近的证据，但都缺"扫码报工→按工序按打计件→发工资"完整闭环。</li>
+  <li><b>鼎捷部分仅 ISV 二次开发证据</b>（常州诚力友"易助 T100 集成平台"），不是鼎捷原厂 T100/E10 标准功能，只能作线索。</li>
+  <li><b>视频证据</b>：本次未找到可核实时间点的官方操作视频，故未采用视频来源；截图均来自操作文档页面截图（黑湖 36.html 界面、Odoo 变体页），来源与版本已在文中标注。</li>
+  <li><b>"未找到直接证据"≠产品不支持</b>：本文所有"未找到"均为本次公开资料检索结论（2026-10-23），不构成对产品能力的否定性结论。</li>
+  <li><b>本报告为调研建议稿，未修改任何代码</b>；如需沉淀为项目文档，建议按 docs 编号规则归档至"分析对标"类。</li>
+</ul>
+</div>
+
+<footer>
+调研报告 · 伞厂"合片"工价场景 · 2026-10-23 ｜ 用途：微聚/小蜜蜂工单"加工选项×计件工价"设计依据 ｜ 本次仅调研与建议，未修改代码
+</footer>
+
+</div>
+</body>
+</html>
