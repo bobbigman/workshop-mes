@@ -96,12 +96,12 @@ public class AiSessionStore
         }
     }
 
-    public void DeleteOwned(string id, long factoryId, long userId)
+    public void DeleteOwned(string id, long factoryId, long userId, string? mode = null)
     {
         lock (_gate)
         {
             if (!_sessions.TryGetValue(id, out var s)) return;
-            if (s.FactoryId != factoryId || s.UserId != userId)
+            if (s.FactoryId != factoryId || s.UserId != userId || (mode != null && s.Mode != mode))
                 throw ThrowHelper.Biz(nameof(DeleteOwned), "无权清除该会话");
             // 删除不能提前释放正在处理的名额，避免请求未结束就绕过并发保护。
             if (s.Busy) s.DeleteWhenIdle = true;

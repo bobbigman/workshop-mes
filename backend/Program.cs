@@ -225,6 +225,7 @@ try
     builder.Services.AddScoped<AiToolDispatcher>();
     builder.Services.AddScoped<IDeepSeekClient, DeepSeekClient>();
     builder.Services.AddScoped<IAiAssistantService, AiAssistantService>();
+    builder.Services.AddScoped<WorkerHelpService>();
     builder.Services.AddScoped<IDiagSqlService, DiagSqlService>();
 
     builder.Services.AddHttpClient(DeepSeekClient.HttpClientName, (sp, c) =>

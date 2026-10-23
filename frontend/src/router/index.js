@@ -45,6 +45,9 @@ const routes = [
       { path: 'faq', name: 'Faq', component: () => import('@/views/faq/index.vue'), meta: { title: '常见问题（系统能力50问）' } },
     ]
   },
+  { path: '/h5/more', component: () => import('@/views/h5/more.vue'), meta: { title: '更多功能' } },
+  { path: '/h5/help', component: () => import('@/views/h5/help.vue'), meta: { title: '帮助' } },
+  { path: '/h5/ai-help', component: () => import('@/views/h5/ai-help.vue'), meta: { title: 'AI操作帮助' } },
   { path: '/h5/home', name: 'H5Home', component: () => import('@/views/h5/home.vue'), meta: { title: '工作台' } },
   { path: '/h5/report-authorize', name: 'H5ReportAuthorize', component: () => import('@/views/h5/report-authorize.vue'), meta: { title: '对话报工身份验证' } },
   { path: '/h5/orders', name: 'H5Orders', component: () => import('@/views/h5/orders.vue'), meta: { title: '工单' } },

@@ -68,8 +68,9 @@
       </div>
       <div class="secondary-entries">
         <button type="button" class="shortcut" @click="router.push('/h5/abnormal')">上报异常</button>
-        <router-link class="shortcut" :to="{ path: '/help', query: { topic: 'mobile/登录和找到自己的工单' } }">帮助</router-link>
+        <router-link class="shortcut" to="/h5/help">帮助</router-link>
       </div>
+      <button type="button" class="shortcut more-entry" @click="router.push('/h5/more')">更多功能 ›</button>
       <!-- docs/141：管理员从报工端回 PC，不起眼小入口 -->
       <button
         v-if="role !== 2"
@@ -270,18 +271,8 @@ h2 { margin: 0; font-size: 18px; flex: none; color: var(--app-text-1); }
   cursor: pointer;
 }
 .shortcut.wage { color: var(--app-primary); border-color: color-mix(in srgb, var(--app-primary) 35%, var(--app-border)); }
-.admin-back {
-  display: block;
-  margin: 14px auto 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--app-text-4);
-  font-size: 12px;
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
+.admin-back { display: block; width: 100%; margin: 10px 0 0; min-height: 42px; border: 1px solid var(--app-border); border-radius: 8px; background: var(--app-card); color: var(--app-primary); font-size: 14px; cursor: pointer; }
+.more-entry { display: block; width: 100%; margin-top: 10px; min-height: 42px; }
 
 /* 任务首屏减少留白，保留触摸尺寸 */
 .scan-btn { height: 48px; margin-bottom: 10px; }

@@ -131,6 +131,8 @@ function maybeRedirectWorkerToH5() {
   if (!isMobile.value) return
   if (role !== 2) return
   if (route.path.startsWith('/h5')) return
+  // 273：从手机更多功能明确打开已有只读查询；来源不改变路由/API权限。
+  if (route.query.from === 'h5' && ['/stat', '/execution-monitor'].includes(route.path)) return
   router.replace('/h5/home')
 }
 

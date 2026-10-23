@@ -37,6 +37,8 @@ public class AiToolDispatcher
 
     public IReadOnlyList<DeepSeekToolDef> ToolsForMode(string mode)
     {
+        if (mode == "worker-help") return new[] { SearchSupportDocsTool() };
+
         if (mode == "progress")
         {
             return new[]
@@ -243,6 +245,7 @@ public class AiToolDispatcher
 
     private static readonly Dictionary<string, HashSet<string>> ModeTools = new(StringComparer.OrdinalIgnoreCase)
     {
+        ["worker-help"] = new(StringComparer.OrdinalIgnoreCase) { "search_support_docs" },
         ["progress"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "search_work_orders", "get_work_order_progress" },
         ["guide"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "resolve_product", "get_production_guide" },
         ["support"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -452,7 +455,9 @@ public class AiToolDispatcher
         if (query!.Trim().Length > 500)
             throw ThrowHelper.BizUser("搜索内容最多 500 字");
 
-        var result = _supportDocs.Search(query.Trim());
+        var result = session.Mode == "worker-help" ? _supportDocs.SearchWorkerHelp(query.Trim()) : _supportDocs.Search(query.Trim());
+        if (session.Mode == WorkerHelpPolicy.Mode && result.State == "failed")
+            throw ThrowHelper.BizUser("操作说明加载失败，请稍后重试或查看手册");
         var sources = result.Sources.Select(s => new AiSourceDto
         {
             SourceId = s.SourceId,

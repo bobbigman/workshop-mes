@@ -1,0 +1,7 @@
+.h5-help-page { box-sizing: border-box; min-height: 100dvh; background: var(--app-bg); padding: 16px; color: var(--app-text-1); }
+.h5-help-header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 16px; }
+.h5-help-header h1 { font-size: 19px; margin: 0; }
+.h5-help-header a, .h5-help-page .help-link { color: var(--app-primary); text-decoration: none; padding: 8px 0; }
+.h5-help-page .help-note { font-size: 14px; color: var(--app-text-2); line-height: 1.6; }
+.h5-help-page .van-cell { min-height: 60px; align-items: center; }
+.h5-help-page .help-error { color: var(--app-danger); }

@@ -111,6 +111,8 @@ http.interceptors.response.use(
     return body
   },
   err => {
+    // 工人帮助主动取消由页面显示中文反馈；仍将取消抛回调用方。
+    if (err.code === 'ERR_CANCELED' && err.config?.silentCancel) return Promise.reject(err)
     if (err.response?.status === 401) {
       localStorage.removeItem('token')
       localStorage.removeItem('userName')

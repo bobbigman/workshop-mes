@@ -366,16 +366,42 @@ public class SupportDocumentService
     /// 中文关键词检索（S04）：章节加权、同义词、预算与指纹缓存失效。
     /// 未启用/未配置/空目录/无匹配/失败分别以 State 区分，不抛错也不编造。
     /// </summary>
-    public SupportSearchResult Search(string query)
+    public SupportSearchResult Search(string query) => SearchCore(query, false);
+
+    /// <summary>固定发布手册白名单，先限定来源再评分；完全不读取客服目录/外部检索配置。</summary>
+    public SupportSearchResult SearchWorkerHelp(string query) => SearchCore(query, true);
+
+    private static readonly Lazy<SupportIndex> WorkerIndex = new(() =>
+    {
+        var chapters = new List<SupportChapter>();
+        foreach (var kind in new[] { "mobile", "faq" })
+        {
+            using var stream = typeof(SupportDocumentService).Assembly.GetManifestResourceStream($"WorkerHelp.{kind}.md")
+                ?? throw ThrowHelper.BizUser("操作手册未正确发布，请联系管理员");
+            using var reader = new StreamReader(stream, Encoding.UTF8);
+            var content = reader.ReadToEnd();
+            var firstChapter = System.Text.RegularExpressions.Regex.Match(content, @"(?m)^## ");
+            if (!firstChapter.Success) throw ThrowHelper.BizUser("发布的操作手册缺少章节，请联系管理员");
+            content = content[firstChapter.Index..];
+            // 来源与前端手册的二级章节一致，三级小标题保留正文，不生成无法打开的独立来源。
+            content = System.Text.RegularExpressions.Regex.Replace(content, @"(?m)^#{3,} +", "");
+            var file = new SupportDocFile { SourceId = $"worker:{kind}", RelativePath = $"{kind}.md",
+                Title = kind == "mobile" ? "手机/PDA操作手册" : "通用操作常见问题", Content = content };
+            chapters.AddRange(SplitChapters(file));
+        }
+        return new SupportIndex { Chapters = chapters, Rules = BuildDefaultRules() };
+    });
+
+    private SupportSearchResult SearchCore(string query, bool workerHelp)
     {
         var result = new SupportSearchResult();
-        if (!_opt.Enabled) { result.State = "disabled"; result.Message = "智能客服未启用"; return result; }
-        if (!_opt.IsConfigured) { result.State = "not_configured"; result.Message = "未配置客服知识目录"; return result; }
+        if (!workerHelp && !_opt.Enabled) { result.State = "disabled"; result.Message = "智能客服未启用"; return result; }
+        if (!workerHelp && !_opt.IsConfigured) { result.State = "not_configured"; result.Message = "未配置客服知识目录"; return result; }
         if (string.IsNullOrWhiteSpace(query)) { result.State = "no_match"; result.Message = "请输入问题"; return result; }
 
         try
         {
-            var idx = EnsureIndex();
+            var idx = workerHelp ? WorkerIndex.Value : EnsureIndex();
             if (idx.Chapters.Count == 0) { result.State = "empty"; result.Message = "客服知识目录为空"; return result; }
 
             var rules = idx.Rules;
@@ -433,7 +459,7 @@ public class SupportDocumentService
         {
             _logger.LogWarning(ex, "客服检索失败 query={Query}", query);
             result.State = "failed";
-            result.Message = $"客服检索失败：{ex.Message}";
+            result.Message = workerHelp ? "操作说明检索失败，请稍后重试或查看手册" : $"客服检索失败：{ex.Message}";
             return result;
         }
     }

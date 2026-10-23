@@ -99,7 +99,7 @@ const siblings = computed(() => chapters.filter(item => item.group === selected.
 const nextChapter = computed(() => siblings.value[siblings.value.findIndex(item => item.id === selected.value.id) + 1])
 const results = computed(() => searchChapters(chapters, query.value))
 const groupTitle = id => groups.find(group => group.id === id)?.title
-const chapterLocation = item => ({ path: '/help', query: { topic: item.id } })
+const chapterLocation = item => ({ path: '/help', query: { topic: item.id, ...(route.query.from === 'h5' ? { from: 'h5' } : {}) } })
 
 async function openChapter(item, clearSearch = false) {
   if (clearSearch) query.value = ''

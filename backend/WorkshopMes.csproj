@@ -29,6 +29,10 @@
   </Target>
 
   <ItemGroup>
+    <EmbeddedResource Include="../docs/开发手册和方案/31-使用手册-工人（手机端）.md" LogicalName="WorkerHelp.mobile.md" />
+    <EmbeddedResource Include="../docs/manual/遇到问题.md" LogicalName="WorkerHelp.faq.md" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.*" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.*">
       <PrivateAssets>all</PrivateAssets>
