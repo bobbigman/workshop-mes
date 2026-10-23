@@ -7,7 +7,9 @@
     close-on-click-action
     @update:show="emit('update:show', $event)"
     @select="selectAction"
-  />
+  >
+    <div style="padding:10px 16px;font-size:12px;color:#86909c;text-align:center;">基础资料、人员配置请在电脑端操作</div>
+  </van-action-sheet>
 </template>
 
 <script setup>
@@ -28,7 +30,7 @@ const actions = computed(() => {
       { name: '一键补报未完工序', action: 'batch' },
       { name: '补报开工记录', action: 'pending' }
     ] : []),
-    { name: '管理后台', action: 'backend' }
+    { name: '电脑端', action: 'backend' }
   ]
 })
 

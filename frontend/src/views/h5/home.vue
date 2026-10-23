@@ -94,11 +94,6 @@ const shortcuts = computed(() => [
   ...(viewReady.value && showOrdersEntry.value ? [{ label: '工单', icon: 'orders-o', tone: 'blue', to: '/h5/orders' }] : []),
   ...(canWage ? [{ label: '我的工资', icon: 'gold-coin-o', tone: 'green', to: '/h5/my-wage' }] : []),
   { label: '上报异常', icon: 'warning-o', tone: 'orange', to: '/h5/abnormal' },
-  ...(viewReady.value && showOrdersEntry.value ? [
-    { label: '生产报表', icon: 'bar-chart-o', tone: 'purple', to: { path: '/stat', query: { from: 'h5' } } },
-    { label: '执行监控', icon: 'tv-o', tone: 'cyan', to: { path: '/execution-monitor', query: { from: 'h5' } } },
-    { label: '车间看板', icon: 'chart-trending-o', tone: 'yellow', to: { path: '/board', query: { from: 'h5' } } }
-  ] : []),
   { label: '帮助', icon: 'question-o', tone: 'pink', to: '/h5/help' }
 ])
 const todayGoodQty = ref(0)

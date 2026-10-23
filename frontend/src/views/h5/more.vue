@@ -4,13 +4,8 @@
     <p v-if="loading" role="status">正在加载可用功能…</p>
     <p v-else-if="error" class="help-error" role="alert">功能配置加载失败 <van-button size="small" @click="load">重试</van-button></p>
     <van-cell-group inset>
-      <template v-if="!loading && !error && !tasksOnly">
-        <van-cell title="生产报表" label="查看生产统计" is-link :to="{ path: '/stat', query: { from: 'h5' } }" />
-        <van-cell title="执行监控" label="查看执行情况" is-link :to="{ path: '/execution-monitor', query: { from: 'h5' } }" />
-        <van-cell title="车间看板" label="查看车间进度" is-link :to="{ path: '/board', query: { from: 'h5' } }" />
-      </template>
       <van-cell title="帮助" label="AI操作帮助、手册和常见问题" is-link to="/h5/help" />
-      <van-cell v-if="canManage" title="管理操作" label="代报工、补报与管理后台（按角色）" is-link @click="managementOpen = true" />
+      <van-cell v-if="canManage" title="管理操作" label="代报工、补报与电脑端（按角色）" is-link @click="managementOpen = true" />
     </van-cell-group>
     <H5ManagementMenu v-model:show="managementOpen" />
     <p v-if="!loading && !error && tasksOnly" class="help-note">当前仅看我的任务。任务、报工记录和可用的工资入口请返回工作台查看。</p>
