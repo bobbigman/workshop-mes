@@ -46,10 +46,15 @@
           <span class="shortcut-icon" :class="item.tone"><van-icon :name="item.icon" aria-hidden="true" /></span>
           <span class="shortcut-label">{{ item.label }}</span>
         </router-link>
+        <button v-if="canManage" type="button" class="shortcut" @click="managementOpen = true">
+          <span class="shortcut-icon slate"><van-icon name="setting-o" aria-hidden="true" /></span>
+          <span class="shortcut-label">管理操作</span>
+        </button>
       </div>
     </section>
 
     <TabBar active="home" />
+    <H5ManagementMenu v-model:show="managementOpen" />
     <PwaGuide v-if="showPwaGuide" @dismiss-this-time="onPwaDismissThisTime" @dismiss-forever="onPwaDismissForever" />
   </div>
 </template>
@@ -65,6 +70,7 @@ import TabBar from './TabBar.vue'
 import FactoryBadge from '@/components/FactoryBadge.vue'
 import H5LogoutBtn from '@/components/H5LogoutBtn.vue'
 import PwaGuide from '@/components/PwaGuide.vue'
+import H5ManagementMenu from '@/components/H5ManagementMenu.vue'
 import { canUse, FEATURE, currentTier } from '@/utils/licenseTier'
 import { setWorkerViewMode, isWorkerTasksOnlyView } from '@/utils/workerView'
 
@@ -81,6 +87,9 @@ const showPwaGuide = ref(false)
 const showOrdersEntry = ref(false)
 const canScan = canUse(currentTier(), FEATURE.ScanReport)
 const canWage = canUse(currentTier(), FEATURE.PieceWage)
+const role = Number(localStorage.getItem('role') || 0)
+const canManage = role === 1 || role === 3
+const managementOpen = ref(false)
 const shortcuts = computed(() => [
   ...(viewReady.value && showOrdersEntry.value ? [{ label: '工单', icon: 'orders-o', tone: 'blue', to: '/h5/orders' }] : []),
   ...(canWage ? [{ label: '我的工资', icon: 'gold-coin-o', tone: 'green', to: '/h5/my-wage' }] : []),
@@ -90,8 +99,7 @@ const shortcuts = computed(() => [
     { label: '执行监控', icon: 'tv-o', tone: 'cyan', to: { path: '/execution-monitor', query: { from: 'h5' } } },
     { label: '车间看板', icon: 'chart-trending-o', tone: 'yellow', to: { path: '/board', query: { from: 'h5' } } }
   ] : []),
-  { label: '帮助', icon: 'question-o', tone: 'pink', to: '/h5/help' },
-  { label: '更多功能', icon: 'ellipsis', tone: 'slate', to: '/h5/more' }
+  { label: '帮助', icon: 'question-o', tone: 'pink', to: '/h5/help' }
 ])
 const todayGoodQty = ref(0)
 const todayWage = ref(0)
@@ -200,6 +208,7 @@ h2 { margin: 0; flex-shrink: 0; font-size: 17px; }
 .shortcut { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 8px; min-width: 0; min-height: 102px; padding: 12px 3px 10px; box-sizing: border-box; border: 1px solid #e9edf3; border-radius: 14px; background: var(--app-card); color: var(--app-text-1); text-align: center; text-decoration: none; }
 .shortcut-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 14px; font-size: 26px; }
 .shortcut-label { font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+button.shortcut { font: inherit; cursor: pointer; }
 .blue { background: #edf3ff; color: #1677ff; }
 .green { background: #e7f6ee; color: #109961; }
 .orange { background: #fff3e7; color: #ed8a00; }
