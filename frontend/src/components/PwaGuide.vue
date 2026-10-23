@@ -35,7 +35,7 @@
 
       <div class="step-block">
         <p class="step-title">装好后</p>
-        <img class="step-img homescreen" src="/manual/pwa-homescreen.png" alt="桌面图标示意" />
+        <img class="step-img homescreen" src="/manual/pwa-homescreen.png" alt="手机桌面上的微聚图标，红框标出位置" />
       </div>
 
       <div class="actions">
@@ -112,7 +112,7 @@ h3 {
   border: 1px solid var(--app-border, #e5e6eb);
 }
 .step-img.homescreen {
-  max-width: 160px;
+  max-width: 280px;
   margin: 0 auto;
 }
 .wechat-tip {
