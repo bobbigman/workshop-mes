@@ -60,7 +60,7 @@ public class OperationService : IOperationService
             q = q.Where(o => o.Code.Contains(query.Keyword) || o.Name.Contains(query.Keyword));
 
         var total = await q.CountAsync();
-        var ops = await q.OrderByDescending(o => o.Id)
+        var ops = await q.OrderBy(o => o.Code).ThenBy(o => o.Id)
             .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).ToListAsync();
 
         var opIds = ops.Select(o => o.Id).ToList();
