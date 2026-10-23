@@ -14,6 +14,15 @@
       @click="router.push('/h5/scan')"
     >扫码报工</button>
 
+    <section v-if="role === 1 || role === 3" class="management-shortcuts" aria-label="管理操作">
+      <button type="button" class="shortcut" @click="router.push(managementDestination('proxy'))">代报工</button>
+      <button v-if="canReview" type="button" class="shortcut" @click="router.push('/h5/review')">报工复核</button>
+      <template v-if="role === 1">
+        <button type="button" class="shortcut" @click="router.push(managementDestination('batch'))">一键补报未完工序</button>
+        <button type="button" class="shortcut" @click="router.push(managementDestination('pending'))">补报开工记录</button>
+      </template>
+    </section>
+
     <section v-if="canWage" class="today-card">
       <div v-if="summaryLoading" role="status">今日计件加载中…</div>
       <div v-else-if="summaryError" role="alert">今日计件加载失败 <button type="button" @click="loadTodaySummary">重试</button></div>
@@ -100,6 +109,7 @@ import H5LogoutBtn from '@/components/H5LogoutBtn.vue'
 import PwaGuide from '@/components/PwaGuide.vue'
 import { canUse, FEATURE, currentTier } from '@/utils/licenseTier'
 import { setWorkerViewMode, isWorkerTasksOnlyView } from '@/utils/workerView'
+import { managementDestination } from '@/utils/reportManagement'
 
 const router = useRouter()
 const list = ref([])
@@ -115,6 +125,7 @@ const showOrdersEntry = ref(false)
 const role = Number(localStorage.getItem('role') || 0)
 const canScan = canUse(currentTier(), FEATURE.ScanReport)
 const canWage = canUse(currentTier(), FEATURE.PieceWage)
+const canReview = canUse(currentTier(), FEATURE.ReportReview)
 const todayGoodQty = ref(0)
 const todayWage = ref(0)
 
@@ -289,4 +300,6 @@ h2 { margin: 0; font-size: 18px; flex: none; color: var(--app-text-1); }
 .secondary-entries .shortcut { flex: 1; text-align: center; text-decoration: none; box-sizing: border-box; }
 .today-label, .today-val { display: block; font-size: 14px; overflow-wrap: anywhere; }
 .product, .no { overflow-wrap: anywhere; }
+.management-shortcuts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+.management-shortcuts .shortcut { min-width: 0; min-height: 44px; padding: 8px; font-size: 14px; white-space: normal; }
 </style>

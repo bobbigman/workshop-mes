@@ -1,5 +1,10 @@
 <template>
   <div>
+    <div v-if="managementEntry" class="management-entry">
+      <router-link to="/h5/home">‹ 返回工作台</router-link>
+      <p v-if="!managementAllowed" role="alert">无权使用该操作或入口无效，请返回工作台。</p>
+    </div>
+    <template v-else>
     <ValueTip :text="VALUE_TIPS.report" />
     <div class="toolbar">
       <el-select
@@ -77,6 +82,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </template>
 
     <!-- 新增报工（电脑端） -->
     <el-dialog v-model="createDlg" title="新增报工" width="560px" @closed="resetCreate">
@@ -240,7 +246,8 @@
     <!-- 代报工（docs/94，管理员/班组长） -->
     <el-dialog v-model="proxyDlg" title="代报工" width="720px" class="proxy-dialog"
       :fullscreen="proxyNarrow" :style="proxyNarrow ? { height: proxyViewportHeight + 'px' } : {}"
-      :close-on-click-modal="false" :before-close="closeProxy" @closed="resetProxy">
+      :close-on-click-modal="false" :before-close="closeProxy" @closed="onProxyClosed">
+      <p v-if="orderOptionsError" role="alert">工单选项加载失败 <el-button link @click="loadOrderOptions">重试</el-button></p>
       <el-form label-width="90px" :label-position="proxyNarrow ? 'top' : 'right'" :disabled="proxySubmitting || proxyLoading">
         <el-form-item label="工单号" required>
           <el-select
@@ -335,8 +342,12 @@
     </el-dialog>
 
     <!-- 一键补报未完工序（docs/17，仅管理员） -->
-    <el-dialog v-model="batchDlg" title="一键补报未完工序" width="720px" @closed="resetBatch">
-      <el-form label-width="100px">
+    <el-dialog v-model="batchDlg" title="一键补报未完工序" width="720px" class="report-management-dialog"
+      :fullscreen="proxyNarrow" :style="proxyNarrow ? { height: proxyViewportHeight + 'px' } : {}"
+      :close-on-click-modal="false" :before-close="closeBatch" @closed="onBatchClosed">
+      <p v-if="orderOptionsError" role="alert">工单选项加载失败 <el-button link @click="loadOrderOptions">重试</el-button></p>
+      <p v-if="batchLoadError" role="alert">{{ batchLoadError }} <el-button link @click="loadBatchOrder">重试</el-button></p>
+      <el-form label-width="100px" :label-position="proxyNarrow ? 'top' : 'right'" :disabled="batchSubmitting || batchLoading">
         <el-form-item label="工单号" required>
           <el-select
             v-model="batchForm.orderNo"
@@ -360,7 +371,15 @@
           <span>{{ batchDetail.productName }}（计划 {{ batchDetail.qty }}）</span>
         </el-form-item>
         <el-form-item v-if="batchDetail" label="待报工序">
-          <el-table :data="pendingTasks" size="small" border empty-text="所有工序已报满">
+          <div v-if="proxyNarrow" class="management-records">
+            <article v-for="row in pendingTasks" :key="row.operationId" class="management-record">
+              <b>{{ row.seq }} · {{ row.operationName }}</b>
+              <div>计划 {{ row.planQty }} · 已报良品 {{ row.doneQty }}</div>
+              <div>剩余可报 {{ row.remain }}</div>
+            </article>
+            <p v-if="!pendingTasks.length">所有工序已报满</p>
+          </div>
+          <el-table v-else :data="pendingTasks" size="small" border empty-text="所有工序已报满">
             <el-table-column prop="seq" label="序号" width="60" />
             <el-table-column prop="operationName" label="工序" />
             <el-table-column prop="planQty" label="计划" width="80" />
@@ -375,7 +394,7 @@
           <span class="hint">上限 = 各待报工序剩余最小值（{{ minRemain }}）</span>
         </el-form-item>
         <el-form-item v-if="pendingTasks.length" label="计时起止">
-          <el-date-picker v-model="batchTimes" type="datetimerange" value-format="YYYY-MM-DDTHH:mm:ss" start-placeholder="计时岗开始" end-placeholder="计时岗结束" />
+          <ManagementTimeRange v-model="batchTimes" :narrow="proxyNarrow" :disabled="batchSubmitting || batchLoading" start-label="计时开始时间" end-label="计时结束时间" />
           <span class="hint">计时岗必填；多人时间不同时在下方逐人填写</span>
         </el-form-item>
         <el-form-item v-if="pendingTasks.length" label="谁做的">
@@ -391,13 +410,15 @@
                   </span>
                   <el-button link type="primary" @click="addAllocUser(row)">+ 加人</el-button>
                 </div>
-                <div v-for="(u, idx) in row.users" :key="idx" class="alloc-user">
+                <div v-for="(u, idx) in row.users" :key="u.localId" class="alloc-user management-alloc-user">
+                  <span v-if="proxyNarrow" class="management-mobile-label">报工人</span>
                   <el-select v-model="u.userId" filterable placeholder="选人" style="width:180px">
                     <el-option v-for="p in people" :key="p.id" :label="`${p.name}（${p.account}）`" :value="p.id" />
                   </el-select>
+                  <span v-if="proxyNarrow" class="management-mobile-label">良品数量</span>
                   <el-input-number v-model="u.goodQty" :min="0" />
-                  <el-date-picker v-model="u.timeRange" type="datetimerange" value-format="YYYY-MM-DDTHH:mm:ss" start-placeholder="计时开始" end-placeholder="结束" size="small" style="width:330px" />
-                  <el-button link type="danger" :disabled="row.users.length <= 1" @click="row.users.splice(idx, 1)">删</el-button>
+                  <ManagementTimeRange v-model="u.timeRange" :narrow="proxyNarrow" :disabled="batchSubmitting || batchLoading" start-label="本人开始时间" end-label="本人结束时间" />
+                  <el-button link type="danger" :disabled="row.users.length <= 1" @click="row.users.splice(idx, 1)">移除</el-button>
                 </div>
               </div>
             </div>
@@ -405,17 +426,30 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="batchDlg=false">取消</el-button>
+        <el-button :disabled="batchSubmitting" @click="batchDlg=false">取消</el-button>
         <el-button
           type="primary"
           :loading="batchSubmitting"
-          :disabled="!pendingTasks.length"
+          :disabled="!pendingTasks.length || batchLoading || !!batchLoadError"
           @click="onBatchSubmit"
         >确认补报</el-button>
       </template>
     </el-dialog>
-    <el-dialog v-model="pendingDlg" title="待补报开工记录" width="920px">
-      <el-table :data="pendingRows" v-loading="pendingLoading">
+    <el-dialog v-model="pendingDlg" title="待补报开工记录" width="920px" class="report-management-dialog"
+      :fullscreen="proxyNarrow" :style="proxyNarrow ? { height: proxyViewportHeight + 'px' } : {}"
+      :close-on-click-modal="false" :before-close="closePending" @closed="returnFromManagement('pending')">
+      <p v-if="pendingError" role="alert">开工记录加载失败 <el-button link @click="openPending">重试</el-button></p>
+      <p v-if="pendingLoading" role="status">正在加载开工记录…</p>
+      <div v-else-if="proxyNarrow && !pendingError" class="management-records">
+        <p v-if="!pendingRows.length">暂无待补报开工记录</p>
+        <article v-for="row in pendingRows" :key="row.id" class="management-record">
+          <b>{{ row.userName }} · {{ row.operationName }}</b>
+          <div>工单 {{ row.orderNo }}</div><div>{{ row.productName }}</div>
+          <div>开始 {{ row.startTime?.replace('T', ' ') }}</div><div>收尾 {{ row.endTime?.replace('T', ' ') }}</div>
+          <el-button type="primary" plain @click="selectPending(row)">补报</el-button>
+        </article>
+      </div>
+      <el-table v-else-if="!pendingError && !pendingLoading" :data="pendingRows">
         <el-table-column prop="userName" label="人员" />
         <el-table-column prop="orderNo" label="工单" />
         <el-table-column prop="productName" label="产品" />
@@ -425,12 +459,15 @@
         <el-table-column label="时长"><template #default="{row}">{{ Math.ceil((new Date(row.endTime)-new Date(row.startTime))/60000) }}分</template></el-table-column>
         <el-table-column label="操作"><template #default="{row}"><el-button link @click="selectPending(row)">补报</el-button></template></el-table-column>
       </el-table>
+      <template #footer><el-button :disabled="pendingSaving" @click="pendingDlg=false">返回</el-button></template>
     </el-dialog>
-    <el-dialog v-model="pendingEditDlg" title="补报开工记录" width="540px">
+    <el-dialog v-model="pendingEditDlg" title="补报开工记录" width="540px" class="report-management-dialog"
+      :fullscreen="proxyNarrow" :style="proxyNarrow ? { height: proxyViewportHeight + 'px' } : {}"
+      :close-on-click-modal="false" :before-close="closePending">
       <p>{{ pendingSelected?.userName }} · {{ pendingSelected?.orderNo }} · {{ pendingSelected?.operationName }}</p>
-      <el-date-picker v-model="pendingTimes" type="datetimerange" value-format="YYYY-MM-DDTHH:mm:ss" start-placeholder="开始" end-placeholder="结束" />
-      <p>良品数（计时岗可为0） <el-input-number v-model="pendingGood" :min="0" /></p>
-      <template #footer><el-button type="primary" :loading="pendingSaving" @click="savePending">确认补报</el-button></template>
+      <ManagementTimeRange v-model="pendingTimes" :narrow="proxyNarrow" :disabled="pendingSaving" />
+      <p>良品数（计时岗可为0） <el-input-number v-model="pendingGood" :min="0" :disabled="pendingSaving" /></p>
+      <template #footer><el-button :disabled="pendingSaving" @click="pendingEditDlg=false">取消</el-button><el-button type="primary" :loading="pendingSaving" @click="savePending">确认补报</el-button></template>
     </el-dialog>
   </div>
 </template>
@@ -444,6 +481,8 @@ import { getPendingWorkSessions, reportPendingWorkSession } from '@/api/workSess
 import { isUpstreamSoftConfirm } from '@/utils/upstreamConfirm'
 import ValueTip from '@/components/ValueTip.vue'
 import { VALUE_TIPS } from '@/constants/valueTips'
+import ManagementTimeRange from '@/components/ManagementTimeRange.vue'
+import { canOpenReportManagement, isReportManagementEntry, managementTimeError } from '@/utils/reportManagement'
 import { USER_TYPE_OPTIONS, userTypeLabel, userTypeTagType } from '@/constants/userType'
 
 const route = useRoute()
@@ -451,6 +490,22 @@ const router = useRouter()
 const isAdmin = Number(localStorage.getItem('role') || 0) === 1
 const isLeader = Number(localStorage.getItem('role') || 0) === 3
 const canProxy = isAdmin || isLeader
+const managementEntry = computed(() => isReportManagementEntry(route.query))
+const managementAllowed = computed(() => canOpenReportManagement(route.query.action, localStorage.getItem('role')))
+function returnFromManagement(action) {
+  if (action === 'pending') { pendingLoadVersion++; pendingLoading.value = false }
+  if (managementEntry.value && route.query.action === action) router.replace('/h5/home')
+}
+function onProxyClosed() { resetProxy(); returnFromManagement('proxy') }
+function onBatchClosed() { resetBatch(); returnFromManagement('batch') }
+function closeBatch(done) { if (!batchSubmitting.value) done() }
+function closePending(done) { if (!pendingSaving.value) done() }
+const orderOptionsError = ref(false)
+const batchLoading = ref(false)
+const batchLoadError = ref('')
+const pendingError = ref(false)
+let batchLoadVersion = 0
+let pendingLoadVersion = 0
 const list = ref([]), dlg = ref(false), createDlg = ref(false), defectOptions = ref([])
 const logDlg = ref(false), changeLogs = ref([]), logLoading = ref(false)
 const submitting = ref(false)
@@ -489,7 +544,7 @@ onUnmounted(() => {
   proxyMedia.removeEventListener('change', updateProxyViewport)
   window.visualViewport?.removeEventListener('resize', updateProxyViewport)
   window.removeEventListener('resize', updateProxyViewport)
-  proxyOrderVersion++; proxyOpVersion++
+  proxyOrderVersion++; proxyOpVersion++; batchLoadVersion++; pendingLoadVersion++
 })
 let proxyRowSequence = 0
 let proxyOrderVersion = 0
@@ -538,12 +593,22 @@ const pendingSaving = ref(false)
 const pendingRequestId = ref('')
 function timeFields(range) { return range?.length === 2 ? { startTime: range[0], endTime: range[1] } : {} }
 async function openPending() {
+  if (!isAdmin) return
+  const version = ++pendingLoadVersion
   pendingDlg.value = true
   pendingLoading.value = true
-  try { pendingRows.value = (await getPendingWorkSessions()).data || [] }
-  finally { pendingLoading.value = false }
+  pendingError.value = false
+  try {
+    const res = await getPendingWorkSessions()
+    if (version === pendingLoadVersion && pendingDlg.value) pendingRows.value = res.data || []
+  } catch (error) {
+    if (version !== pendingLoadVersion) return
+    pendingRows.value = []; pendingError.value = true
+    console.error('[补报开工记录] 加载待处理记录失败', error)
+  } finally { if (version === pendingLoadVersion) pendingLoading.value = false }
 }
 function selectPending(row) {
+  if (!isAdmin || pendingSaving.value) return
   pendingSelected.value = row
   pendingTimes.value = [row.startTime, row.endTime]
   pendingGood.value = 0
@@ -551,14 +616,17 @@ function selectPending(row) {
   pendingEditDlg.value = true
 }
 async function savePending() {
-  if (!pendingTimes.value?.length) { ElMessage.error('请填写起止时间'); return }
+  if (!isAdmin || pendingSaving.value) return
+  if (!pendingTimes.value?.some(Boolean)) { ElMessage.error('请填写起止时间'); return }
+  const timeError = managementTimeError(pendingTimes.value)
+  if (timeError) { ElMessage.error(timeError); return }
   pendingSaving.value = true
   try {
     await reportPendingWorkSession(pendingSelected.value.id, { ...timeFields(pendingTimes.value), goodQty: pendingGood.value, clientRequestId: pendingRequestId.value })
     ElMessage.success('补报成功')
     pendingEditDlg.value = false
-    await openPending()
-    await load()
+    if (managementEntry.value) pendingDlg.value = false
+    else { await openPending(); await load() }
   } finally { pendingSaving.value = false }
 }
 const batchSubmitting = ref(false)
@@ -681,6 +749,13 @@ function formatDuration(m) {
 }
 
 onMounted(async () => {
+  if (managementEntry.value) {
+    if (!managementAllowed.value) return
+    if (route.query.action === 'proxy') openProxy()
+    else if (route.query.action === 'batch') openBatch()
+    else if (route.query.action === 'pending') openPending()
+    return
+  }
   await Promise.all([load(), loadOrderOptions()])
   const order = route.query.order
   if (order) {
@@ -690,12 +765,14 @@ onMounted(async () => {
 })
 
 async function loadOrderOptions() {
-  const res = await getOrderList({ excludeFinished: true, page: 1, pageSize: 500 })
-  const rows = res.data?.list || []
-  orderOptions.value = rows.map(o => ({
-    value: o.orderNo,
-    label: `${o.orderNo}（${o.productName || ''}）`
-  }))
+  orderOptionsError.value = false
+  try {
+    const res = await getOrderList({ excludeFinished: true, page: 1, pageSize: 500 })
+    orderOptions.value = (res.data?.list || []).map(o => ({ value: o.orderNo, label: `${o.orderNo}（${o.productName || ''}）` }))
+  } catch (error) {
+    orderOptions.value = []; orderOptionsError.value = true
+    console.error('[报工] 加载可选工单失败', error)
+  }
 }
 
 async function load() {
@@ -723,13 +800,7 @@ function onProxyOrderChange() {
   loadProxyOrder()
 }
 
-function onBatchOrderChange(val) {
-  if (!val) {
-    batchDetail.value = null
-    return
-  }
-  loadBatchOrder()
-}
+function onBatchOrderChange() { loadBatchOrder() }
 
 function openCreate(orderNo) {
   resetCreate()
@@ -740,12 +811,14 @@ function openCreate(orderNo) {
 }
 
 function openProxy() {
+  if (!canProxy) return
   resetProxy()
   proxyDlg.value = true
   loadOrderOptions()
 }
 
 function openBatch() {
+  if (!isAdmin) return
   resetBatch()
   batchDlg.value = true
   loadOrderOptions()
@@ -1106,7 +1179,7 @@ async function onProxySubmit() {
     if (unmatched) ElMessage.warning(tip)
     else ElMessage.success(tip)
     proxyDlg.value = false
-    await load()
+    if (!managementEntry.value) await load()
   } catch (error) {
     // 用户取消上游确认不记为接口故障，其他错误由http提示并保留输入和请求标识。
     if (error !== 'cancel' && error !== 'close') console.error('[代报工] 提交失败，保留输入供核对重试', error)
@@ -1169,6 +1242,7 @@ async function onSave() {
 }
 
 function resetBatch() {
+  batchLoadVersion++; batchLoading.value = false; batchLoadError.value = ''
   batchTimes.value = null
   batchDetail.value = null
   batchForm.value = { orderNo: '', goodQty: 1, split: false, allocRows: [] }
@@ -1181,26 +1255,29 @@ async function ensurePeople() {
 }
 
 async function loadBatchOrder() {
+  const version = ++batchLoadVersion
   const no = (batchForm.value.orderNo || '').trim()
-  if (!no) {
-    ElMessage.error('请输入工单编号')
-    return
-  }
-  const res = await getOrderByNo(no)
-  const data = res.data
-  if (data.status === 2 || data.status === 3) {
-    ElMessage.error(data.status === 2 ? '工单已结束，不可补报' : '工单已取消，不可补报')
-    batchDetail.value = null
-    return
-  }
-  batchDetail.value = data
-  // 等 pendingTasks 算好后再设默认数量
-  await Promise.resolve()
-  const min = Math.min(...(data.tasks || [])
-    .map(t => Math.max(0, (t.planQty || 0) - (t.doneQty || 0)))
-    .filter(r => r > 0))
-  batchForm.value.goodQty = Number.isFinite(min) && min > 0 ? min : 1
-  rebuildAllocRows()
+  batchDetail.value = null
+  batchForm.value.allocRows = []
+  batchLoadError.value = ''
+  batchLoading.value = !!no
+  if (!no) return
+  try {
+    const { data } = await getOrderByNo(no)
+    if (version !== batchLoadVersion || !batchDlg.value) return
+    if (data.status === 2 || data.status === 3) {
+      batchLoadError.value = data.status === 2 ? '工单已结束，不可补报' : '工单已取消，不可补报'
+      return
+    }
+    batchDetail.value = data
+    const min = Math.min(...(data.tasks || []).map(t => Math.max(0, (t.planQty || 0) - (t.doneQty || 0))).filter(r => r > 0))
+    batchForm.value.goodQty = Number.isFinite(min) && min > 0 ? min : 1
+    rebuildAllocRows()
+  } catch (error) {
+    if (version !== batchLoadVersion) return
+    batchLoadError.value = '补报工单加载失败，请重试'
+    console.error('[一键补报] 加载工单失败', no, error)
+  } finally { if (version === batchLoadVersion) batchLoading.value = false }
 }
 
 function rebuildAllocRows() {
@@ -1208,12 +1285,12 @@ function rebuildAllocRows() {
     operationId: t.operationId,
     seq: t.seq,
     operationName: t.operationName,
-    users: [{ userId: null, goodQty: batchForm.value.goodQty || 1 }]
+    users: [{ ...newProxyRow(), goodQty: batchForm.value.goodQty || 1 }]
   }))
 }
 
 function addAllocUser(row) {
-  row.users.push({ userId: null, goodQty: 1 })
+  row.users.push({ ...newProxyRow(), goodQty: 1 })
 }
 
 watch(() => batchForm.value.split, async (v) => {
@@ -1231,6 +1308,15 @@ watch(() => batchForm.value.goodQty, (n) => {
 })
 
 async function onBatchSubmit() {
+  if (!isAdmin || batchSubmitting.value || batchLoading.value || batchLoadError.value) return
+  const timeError = managementTimeError(batchTimes.value)
+  if (timeError) { ElMessage.error(timeError); return }
+  for (const row of batchForm.value.split ? batchForm.value.allocRows : []) {
+    for (const user of row.users) {
+      const error = managementTimeError(user.timeRange)
+      if (error) { ElMessage.error(`工序【${row.operationName}】：${error}`); return }
+    }
+  }
   if (!batchDetail.value) {
     ElMessage.error('请先加载工单')
     return
@@ -1285,7 +1371,7 @@ async function onBatchSubmit() {
     const data = res.data || {}
     ElMessage.success(`已为 ${data.operationCount || 0} 道工序生成 ${data.reportCount || 0} 条报工`)
     batchDlg.value = false
-    await load()
+    if (!managementEntry.value) await load()
   } catch {
     // soft 取消或 http 已提示
   } finally {
@@ -1342,5 +1428,32 @@ async function onBatchSubmit() {
   .proxy-dialog .proxy-total { margin-bottom: 10px; text-align: left; }
   .proxy-dialog .proxy-actions .el-button { flex: 1; min-height: 42px; }
   .proxy-dialog .el-input__inner { font-size: 16px; }
+}
+</style>
+
+<style>
+/* 275：只作用于补报弹窗，普通报工和代报沿用原布局。 */
+.el-dialog.report-management-dialog { display: flex; flex-direction: column; max-height: calc(100dvh - 64px); margin-top: 32px; }
+.report-management-dialog .el-dialog__header, .report-management-dialog .el-dialog__footer { flex: none; }
+.report-management-dialog .el-dialog__body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.report-management-dialog .el-form-item__content { min-width: 0; }
+.report-management-dialog p { overflow-wrap: anywhere; }
+.management-entry { padding: 12px; }
+.management-entry a { color: var(--app-primary); text-decoration: none; }
+.management-records { width: 100%; min-width: 0; }
+.management-record { border: 1px solid #dcdfe6; border-radius: 8px; padding: 12px; margin-bottom: 10px; line-height: 1.6; overflow-wrap: anywhere; }
+.management-record .el-button { margin-top: 8px; }
+@media (max-width: 767px) {
+  .el-dialog.report-management-dialog.is-fullscreen { width: 100% !important; max-width: none; max-height: 100dvh; margin: 0 !important; border-radius: 0; padding: 12px 16px; box-sizing: border-box; }
+  .report-management-dialog .el-dialog__body { padding: 8px 0; }
+  .report-management-dialog .el-dialog__footer { padding: 12px 0 max(4px, env(safe-area-inset-bottom)); border-top: 1px solid #ebeef5; }
+  .report-management-dialog .el-form-item__label { padding: 0 0 6px; line-height: 22px; }
+  .report-management-dialog .el-form-item__content { display: block; }
+  .report-management-dialog .hint { display: block; margin: 6px 0 0; line-height: 1.5; }
+  .report-management-dialog .management-alloc-user { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin: 10px 0; border: 1px solid #ebeef5; padding: 10px; border-radius: 6px; }
+  .report-management-dialog .management-alloc-user .el-select, .report-management-dialog .management-alloc-user .el-input-number { width: 100% !important; min-width: 0; }
+  .report-management-dialog .alloc-op-title { flex-wrap: wrap; line-height: 1.5; overflow-wrap: anywhere; }
+  .report-management-dialog .el-input__inner { font-size: 16px; }
+  .report-management-dialog .el-button { min-height: 40px; }
 }
 </style>
