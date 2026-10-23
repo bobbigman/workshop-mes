@@ -175,38 +175,38 @@ async function loadTodaySummary() {
 </script>
 
 <style scoped>
-.h5-page { padding: 0 16px calc(var(--h5-tabbar-height) + 16px + env(safe-area-inset-bottom)); min-height: 100vh; background: #f5f6fa; box-sizing: border-box; color: var(--app-text-1); }
-.header { display: flex; align-items: center; gap: 8px; min-height: 52px; margin: 0 -16px 16px; padding: 0 16px; background: var(--app-card); }
+.h5-page { padding: 0 16px calc(var(--h5-tabbar-height) + 16px + env(safe-area-inset-bottom)); height: 100vh; height: 100dvh; overflow-y: auto; scroll-padding-bottom: calc(var(--h5-tabbar-height) + 16px + env(safe-area-inset-bottom)); background: #f5f6fa; box-sizing: border-box; color: var(--app-text-1); }
+.header { display: flex; align-items: center; gap: 8px; min-height: 48px; margin: 0 -16px 10px; padding: 0 16px; background: var(--app-card); }
 .header :deep(.factory-badge) { flex: 1; min-width: 0; max-width: 150px; padding: 0; background: transparent; border-radius: 0; font-size: 11px; font-weight: 400; line-height: 1.4; }
 h2 { margin: 0; flex-shrink: 0; font-size: 17px; }
 .login-user { margin-left: auto; max-width: 56px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--app-text-2); }
 .header :deep(.h5-logout) { margin-left: 0; flex-shrink: 0; font-size: 12px; min-height: 44px; padding: 6px 0; }
-.scan-btn { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; min-height: 104px; padding: 18px; border: 0; border-radius: 16px; background: linear-gradient(110deg, #0968ff, #3e98ff); color: #fff; text-align: left; cursor: pointer; margin-bottom: 12px; }
+.scan-btn { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; min-height: 88px; padding: 14px; border: 0; border-radius: 16px; background: linear-gradient(110deg, #0968ff, #3e98ff); color: #fff; text-align: left; cursor: pointer; margin-bottom: 10px; }
 .scan-copy { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .scan-copy strong { font-size: 23px; line-height: 1.2; }
 .scan-copy > span { font-size: 12px; line-height: 1.5; }
-.scan-icon { flex-shrink: 0; display: grid; place-items: center; width: 52px; height: 52px; border-radius: 15px; background: #f1f8ff; color: #1677ff; font-size: 30px; }
-.today-summary { margin-bottom: 16px; }
+.scan-icon { flex-shrink: 0; display: grid; place-items: center; width: 48px; height: 48px; border-radius: 15px; background: #f1f8ff; color: #1677ff; font-size: 30px; }
+.today-summary { margin-bottom: 12px; }
 .today-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.today-card { min-width: 0; padding: 14px 8px; border-radius: 14px; text-align: center; }
+.today-card { min-width: 0; padding: 8px 8px; border-radius: 14px; text-align: center; }
 .today-card > span { display: block; font-size: 12px; line-height: 1.5; color: #65758b; }
-.today-card strong { display: block; margin-top: 5px; font-size: 27px; line-height: 1.2; overflow-wrap: anywhere; }
+.today-card strong { display: block; margin-top: 4px; font-size: 27px; line-height: 1.2; overflow-wrap: anywhere; }
 .good { background: #edf3ff; color: #1677ff; }
 .wage { background: #e7f6ee; color: #12975f; }
-.today-tip { margin: 8px 0 0; font-size: 11px; line-height: 1.5; color: #7f899a; }
+.today-tip { margin: 6px 0 0; font-size: 11px; line-height: 1.5; color: #7f899a; }
 .summary-state { padding: 18px 12px; border-radius: 14px; background: #fff; font-size: 14px; }
-.task-summary { background: var(--app-card); border: 1px solid #e9edf3; border-radius: 14px; margin-bottom: 18px; }
-.task-entry { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 52px; padding: 8px 12px; box-sizing: border-box; color: var(--app-text-1); text-decoration: none; }
+.task-summary { background: var(--app-card); border: 1px solid #e9edf3; border-radius: 14px; margin-bottom: 12px; }
+.task-entry { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 8px 12px; box-sizing: border-box; color: var(--app-text-1); text-decoration: none; }
 .task-copy { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; font-size: 12px; overflow-wrap: anywhere; }
 .task-copy strong { font-size: 13px; font-weight: 500; }
 .entry-note { color: var(--app-text-2); }
 .entry-note b { color: var(--app-primary); font-weight: 600; }
 .entry-arrow { flex-shrink: 0; color: var(--app-primary); font-size: 12px; }
 .load-error { margin: 0; padding: 0 12px 12px; font-size: 13px; }
-.block-title { margin: 0 0 10px; font-size: 16px; font-weight: 700; }
-.shortcuts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-.shortcut { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 8px; min-width: 0; min-height: 102px; padding: 12px 3px 10px; box-sizing: border-box; border: 1px solid #e9edf3; border-radius: 14px; background: var(--app-card); color: var(--app-text-1); text-align: center; text-decoration: none; }
-.shortcut-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 14px; font-size: 26px; }
+.block-title { margin: 0 0 8px; font-size: 16px; font-weight: 700; }
+.shortcuts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.shortcut { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 6px; min-width: 0; min-height: 88px; padding: 8px 3px; box-sizing: border-box; border: 1px solid #e9edf3; border-radius: 14px; background: var(--app-card); color: var(--app-text-1); text-align: center; text-decoration: none; }
+.shortcut-icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px; font-size: 26px; }
 .shortcut-label { font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
 button.shortcut { font: inherit; cursor: pointer; }
 .blue { background: #edf3ff; color: #1677ff; }
@@ -218,5 +218,5 @@ button.shortcut { font: inherit; cursor: pointer; }
 .pink { background: #fceef4; color: #e65399; }
 .slate { background: #edf1f7; color: #8190a8; }
 .scan-btn:active, .shortcut:active { opacity: .8; }
-@media (max-width: 350px) { .header { gap: 5px; } .header :deep(.factory-badge) { font-size: 10px; } .login-user { max-width: 36px; } .shortcuts { gap: 8px; } .shortcut-icon { width: 44px; height: 44px; } .shortcut-label { font-size: 13px; } .scan-btn { padding: 16px; } }
+@media (max-width: 350px) { .header { gap: 5px; } .header :deep(.factory-badge) { font-size: 10px; } .login-user { max-width: 36px; } .shortcuts { gap: 8px; } .shortcut-icon { width: 44px; height: 44px; } .shortcut-label { font-size: 13px; } .scan-btn { padding: 14px; } }
 </style>
