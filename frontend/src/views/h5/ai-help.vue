@@ -11,7 +11,11 @@
       <section v-if="questionsOpen" class="question-panel" aria-label="常用问题">
         <div class="question-panel-heading"><span>想了解什么？</span><button type="button" class="panel-toggle" @click="questionsOpen = false">收起</button></div>
         <div class="question-list">
-          <button v-for="(q, index) in examples" :key="q" type="button" class="question-item" :disabled="busy || !ready" @click="useExample(q)"><span class="question-number">{{ String(index + 1).padStart(2, '0') }}</span><span class="question-text">{{ q }}</span></button>
+          <button v-for="(q, index) in examples.slice(0, visibleCount)" :key="q" type="button" class="question-item" :disabled="busy || !ready" @click="useExample(q)"><span class="question-number">{{ String(index + 1).padStart(2, '0') }}</span><span class="question-text">{{ q }}</span></button>
+          <div class="question-more-wrap">
+            <button v-if="examples.length > visibleCount" type="button" class="question-more" :disabled="busy || !ready" @click="expandAll">查看全部 {{ examples.length }} 条</button>
+            <button v-else type="button" class="question-more" :disabled="busy || !ready" @click="collapse">收起</button>
+          </div>
         </div>
       </section>
     </template>
@@ -113,6 +117,9 @@ const QUESTIONS = {
 const selectedRole = ref('boss')
 const questionsOpen = ref(true)
 const examples = computed(() => QUESTIONS[selectedRole.value])
+const visibleCount = ref(3)
+function expandAll() { visibleCount.value = examples.value.length }
+function collapse() { visibleCount.value = 3 }
 const mode = computed(() => selectedRole.value === 'boss' ? 'progress' : 'support')
 let previousMode = mode.value
 
@@ -133,6 +140,7 @@ function onRoleClick(value) {
   if (busy.value) return
   if (selectedRole.value === value) { questionsOpen.value = !questionsOpen.value; return }
   selectedRole.value = value
+  visibleCount.value = 3
   if (mode.value !== previousMode) newChat()
   previousMode = mode.value
   questionsOpen.value = true
@@ -197,6 +205,9 @@ onUnmounted(() => { disposed = true; cancel(); window.visualViewport?.removeEven
 .question-item:disabled { cursor: not-allowed; opacity: .55; }
 .question-number { color: #a0aaba; font-size: 11px; flex: none; padding-top: 1px; }
 .question-text { min-width: 0; }
+.question-more-wrap { margin-top: 6px; }
+.question-more { width: 100%; border: 0; border-radius: 7px; padding: 8px; background: #eef5ff; color: #1685e6; font: inherit; font-size: 13px; cursor: pointer; }
+.question-more:disabled { cursor: not-allowed; opacity: .55; }
 .worker-messages { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .worker-message { background: var(--app-card); border-radius: 8px; padding: 12px; margin: 10px 0; overflow-wrap: anywhere; }
 .worker-message.user { background: var(--app-primary-light); }
