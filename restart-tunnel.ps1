@@ -37,11 +37,20 @@ function Stop-DevBackend {
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
     cmd /c "taskkill /F /FI `"WINDOWTITLE eq MES-后端*`" >nul 2>&1" | Out-Null
     cmd /c "taskkill /F /FI `"WINDOWTITLE eq *dotnet run*`" >nul 2>&1" | Out-Null
+    # 判定"旧后端是否真占用"：看后端 exe 能否独占打开，而不是看进程名。
+    # 杀不掉的空壳进程（线程0/句柄0/内存0）不锁文件，应放行；只有真占用文件才等。
+    $exe = Join-Path $backendDir 'bin\Debug\net8.0\WorkshopMes.exe'
     for ($i = 0; $i -lt 15; $i++) {
-        if (-not (Get-Process WorkshopMes -ErrorAction SilentlyContinue)) { return }
+        try {
+            $f = [IO.File]::Open($exe, 'Open', 'ReadWrite', 'None')
+            $f.Close()
+            return   # 文件未被锁，旧后端已释放，放行
+        } catch {
+            # 文件仍被占用，继续等
+        }
         Start-Sleep -Seconds 1
     }
-    throw '旧后端还在，WorkshopMes.exe 被占用。请关掉标题里带 dotnet run 的窗口；关不掉就右键 stop-dev.bat，选「以管理员身份运行」。'
+    throw '旧后端仍占用 WorkshopMes.exe 文件（非空壳进程）。请先手动结束真正的后端进程，或右键 stop-dev.bat「以管理员身份运行」。'
 }
 
 function Get-CpolarServiceStatus {

@@ -1,0 +1,1 @@
+import{h as o}from"./http-CQ4Lbe_K.js";const e=s=>o.post("/work-session/start",s),a=s=>o.get("/work-session/current",{params:s}),r=()=>o.get("/work-session/pending"),p=(s,t)=>o.post(`/work-session/${s}/report`,t),n=1002;function c(s){return(s==null?void 0:s.code)===n||(s==null?void 0:s.softConfirm)===!0}export{a,r as g,c as i,p as r,e as s};

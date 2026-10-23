@@ -1,5 +1,5 @@
 <template>
-  <button type="button" class="h5-logout" @click="onLogout">退出</button>
+  <button type="button" class="h5-logout" @click="onLogout">退出登录</button>
 </template>
 
 <script setup>
@@ -9,8 +9,8 @@ import 'vant/es/dialog/style'
 import 'vant/es/toast/style'
 import { clearLoginState } from '@/utils/h5Auth'
 
-const props = defineProps({
-  /** 有未提交表单时为 true，退出前确认 */
+defineProps({
+  /** 兼容现有表单传参，退出登录统一使用简短确认 */
   dirty: { type: Boolean, default: false }
 })
 
@@ -18,18 +18,18 @@ const router = useRouter()
 
 async function onLogout() {
   try {
-    if (props.dirty) {
-      await showConfirmDialog({
-        title: '确认退出',
-        message: '当前填写内容未提交，确定退出？'
-      })
-    }
+    await showConfirmDialog({
+      title: '确认退出登录？',
+      confirmButtonText: '退出登录',
+      cancelButtonText: '取消'
+    })
     clearLoginState()
     await router.replace('/login')
   } catch (err) {
     // Vant：点取消会 reject('cancel')
-    if (err === 'cancel' || err?.message === 'cancel') return
-    showToast(err?.message || '退出失败，请重试')
+    if (err === 'cancel' || err === 'close' || err?.message === 'cancel') return
+    console.error('[手机退出登录] 确认或结束登录失败', err)
+    showToast(err?.message || '退出登录失败，请重试')
   }
 }
 </script>

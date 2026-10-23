@@ -6,7 +6,7 @@
         <h1>新手入门</h1>
         <p class="header-desc">照着下面的步骤走一遍，管理员能把厂子配起来，工人能上机报工。</p>
       </div>
-      <router-link :to="returnPath" class="return-link">{{ signedIn ? '返回系统' : '返回登录' }}</router-link>
+      <router-link v-if="!signedIn || route.query.from === 'h5'" :to="returnPath" class="return-link">{{ signedIn ? '返回系统' : '返回登录' }}</router-link>
     </header>
 
     <main>
@@ -62,9 +62,10 @@
 </template>
 
 <script setup>
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 const router = useRouter()
+const route = useRoute()
 const signedIn = !!localStorage.getItem('token')
 const returnPath = signedIn
   ? (Number(localStorage.getItem('role')) === 2 ? '/h5/home' : '/home')

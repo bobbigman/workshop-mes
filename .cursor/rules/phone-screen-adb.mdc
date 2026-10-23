@@ -1,0 +1,36 @@
+---
+description: 真机验证手机画面用 adb 截屏 + UI 树 + 读源码（不要 OCR）；adb 起不来的 TMP/TEMP 坑同 esbuild
+alwaysApply: true
+---
+
+# 手机真机验证（adb 截屏 / UI 树 / 读源码）
+
+要「看 / 读」安卓手机画面验证 H5/PDA 报工端时用这套，**不要 OCR**。完整手册：`docs/开发手册和方案/41-手机画面-ADB截屏与UI树（真机验证操作手册）.md`。
+
+## 核心结论（先记住）
+
+- 手机画面的价值 = **视觉验证**（分辨率/布局/弹窗观感/扫码/触控），本质是"看图"：要人看、或支持图像输入的模型看截图。
+- **读 H5/网页内容不要 OCR**：文字本来就在源码里。三条正路——①读源码 `frontend/src/views/h5/*.vue`；②电脑浏览器开同一 dev server URL；③查后端 API 拿动态数值。
+- 当前模型若不支持图像输入，截屏只能存文件给人看；UI 树 / OCR 都替代不了"视觉验证"。
+
+## 关键命令（PowerShell）
+
+```powershell
+# 本机优先：.tmp\adb；其次 C:\Users\bob\platform-tools-dl；都没有再下到 D:\adb（见 docs/41）
+$adb = 'D:\workspace\pkub\bee\.tmp\adb\platform-tools\adb.exe'
+# 必须先重定向 TMP/TEMP 到可写目录（和 esbuild 那个坑同一根因，见 efficiency.mdc）
+$env:TEMP = "$PWD\.tmp\adbtmp"; $env:TMP = $env:TEMP
+& $adb devices            # <设备号> device 即连上；unauthorized 需手机点「允许 USB 调试」
+# 截屏（两步走，别用 PowerShell 的 > 重定向，会破坏二进制 PNG）
+& $adb shell screencap -p /sdcard/screen.png
+& $adb pull /sdcard/screen.png .tmp\phone-screen.png
+# UI 树（只读原生 App 控件；web view/H5 内部读不到）
+& $adb shell uiautomator dump /sdcard/ui.xml
+& $adb pull /sdcard/ui.xml .tmp\phone-ui.xml
+```
+
+## 坑
+
+- adb 守护进程写 `%TEMP%\adb.log` 报 `Permission denied` → 重定向 TMP/TEMP（同上）。
+- adb 版本冲突 `server version X doesn't match client Y` → `Get-Process adb | Stop-Process -Force` 杀旧 server（HonorSuite/HiSuite 常自带旧版 adb）。
+- 华为/荣耀连 HonorSuite 走 HDB（`hdbtransport.exe`）不是 ADB，需单独装 platform-tools。

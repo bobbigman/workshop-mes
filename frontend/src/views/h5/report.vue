@@ -247,6 +247,8 @@
       </div>
       <DocPreview :blob="previewFile.blob" :file-type="previewFile.fileType" :file-name="previewFile.fileName" />
     </div>
+
+    <WageCelebrate :visible="celebrateVisible" :amount="celebrateAmount" @close="onCelebrateClose" />
   </div>
 </template>
 
@@ -258,7 +260,7 @@ import 'vant/es/toast/style'
 import 'vant/es/image-preview/style'
 import 'vant/es/dialog/style'
 import 'vant/es/number-keyboard/style'
-import { getOrderByNo, submitReport, getDefectsByOp, getCustomFields, getReportCandidates, getTodayPieceSummary } from '@/api/prod'
+import { getOrderByNo, submitReport, getDefectsByOp, getCustomFields, getReportCandidates, getTodayPieceSummary, previewWage } from '@/api/prod'
 import { startWorkSession, getCurrentWorkSession } from '@/api/workSession'
 import { isUpstreamSoftConfirm } from '@/utils/upstreamConfirm'
 import { assign, assignWorkers, assignDepartments, assignSuggest } from '@/api/assign'
@@ -266,6 +268,7 @@ import { getKnowledgeFileByOrder, getKnowledgeFileRaw } from '@/api/knowledge'
 import FactoryBadge from '@/components/FactoryBadge.vue'
 import H5LogoutBtn from '@/components/H5LogoutBtn.vue'
 import DocPreview from '@/components/DocPreview.vue'
+import WageCelebrate from '@/components/WageCelebrate.vue'
 import { getKnowledgeFileType } from '@/utils/knowledgeFile'
 import { canUse, FEATURE, currentTier } from '@/utils/licenseTier'
 
@@ -286,6 +289,8 @@ const loadError = ref(false)
 const canWage = canUse(currentTier(), FEATURE.PieceWage)
 const todayGoodQty = ref(0)
 const todayWage = ref(0)
+const celebrateVisible = ref(false)
+const celebrateAmount = ref(0)
 
 function formatMoney(n) {
   return Number(n || 0).toFixed(2)
@@ -911,6 +916,27 @@ function formatReceipt(data) {
   return `已为 ${list.length} 人分摊，合计良品 ${good}（${reviewLabel(list[0].reviewStatus)}）${miss}`
 }
 
+// 270：从提交响应取「本人本单金额」——单人取 list[0]，多人取 myUserId 那条
+function extractOwnWage(data) {
+  const list = data?.reports || []
+  if (!list.length) return null
+  if (list.length === 1) return list[0].wageAmount ?? null
+  return list.find(r => Number(r.userId) === myUserId)?.wageAmount ?? null
+}
+
+let afterCelebrate = null
+function showCelebrate(w, after) {
+  celebrateAmount.value = w
+  celebrateVisible.value = true
+  afterCelebrate = after || null
+}
+function onCelebrateClose() {
+  celebrateVisible.value = false
+  const fn = afterCelebrate
+  afterCelebrate = null
+  if (typeof fn === 'function') fn()
+}
+
 async function doSubmit(confirmUpstream = false) {
   if (submitting.value || !validate()) return false
   submitting.value = true
@@ -926,6 +952,37 @@ async function doSubmit(confirmUpstream = false) {
   }
 }
 
+/** docs/269：预览用时长——手动填了用填的；计时未填用开工会话已过时长；否则 0 */
+function buildPreviewDuration() {
+  if (durationEdited.value) return (form.value.hours || 0) * 60 + (form.value.minutes || 0)
+  if (clockPriceType.value === 2 && workSession.value?.startTime) {
+    const startMs = new Date(workSession.value.startTime).getTime()
+    const nowMs = clockNow.value + clockOffset.value
+    return Math.max(0, Math.round((nowMs - startMs) / 60000))
+  }
+  return 0
+}
+
+/** docs/269：提交前预览工价，拼进核对弹窗；异常/无价都降级不阻断现场 */
+async function buildPreviewWageLine() {
+  try {
+    const res = await previewWage({
+      orderId: detail.value.id,
+      operationId: Number(form.value.operationId),
+      goodQty: form.value.goodQty || 0,
+      defectQty: form.value.defectQty || 0,
+      durationMinutes: buildPreviewDuration()
+    })
+    const d = res?.data
+    if (d && d.matched && d.wageAmount != null) return `\n预估工资 +¥${Number(d.wageAmount).toFixed(2)}`
+    if (d && !d.matched) return `\n工价未设定，提交后按补录工价自动结算`
+    return ''
+  } catch (e) {
+    console.warn('预览工价失败，已降级', e)
+    return ''
+  }
+}
+
 /** docs/150：soft 先提交；code=1002 弹确认后带 confirmUpstream 重提 */
 async function doSubmitWithUpstreamConfirm() {
   if (submitting.value || reviewing.value) return false
@@ -935,7 +992,8 @@ async function doSubmitWithUpstreamConfirm() {
     const snapshot = JSON.stringify(form.value)
     reviewing.value = true
     try {
-      await showConfirmDialog({ title: '核对本次报工', message: `${detail.value.orderNo} · ${detail.value.productName}\n${currentTask.value?.operationName || ''}\n良品 ${form.value.goodQty} 件，不良 ${form.value.defectQty || 0} 件`, confirmButtonText: '确认提交' })
+      const wageLine = await buildPreviewWageLine()
+      await showConfirmDialog({ title: '核对本次报工', message: `${detail.value.orderNo} · ${detail.value.productName}\n${currentTask.value?.operationName || ''}\n良品 ${form.value.goodQty} 件，不良 ${form.value.defectQty || 0} 件${wageLine}`, confirmButtonText: '确认提交' })
       if (snapshot !== JSON.stringify(form.value)) { showToast('内容已变化，请重新核对'); return false }
     } finally { reviewing.value = false }
   }
@@ -955,7 +1013,12 @@ async function onContinue() {
   try {
     const data = await doSubmitWithUpstreamConfirm()
     if (!data) return
-    showSuccessToast(formatReceipt(data === true ? null : data))
+    const w = data === true ? null : extractOwnWage(data)
+    if (w != null && w > 0) {
+      showCelebrate(w, null)
+    } else {
+      showSuccessToast(formatReceipt(data === true ? null : data))
+    }
     clearQty()
     loadTodaySummary()
     try {
@@ -974,8 +1037,13 @@ async function onSubmit() {
   try {
     const data = await doSubmitWithUpstreamConfirm()
     if (!data) return
-    showSuccessToast(formatReceipt(data === true ? null : data))
-    router.replace(reportBackPath)
+    const w = data === true ? null : extractOwnWage(data)
+    if (w != null && w > 0) {
+      showCelebrate(w, () => router.replace(reportBackPath))
+    } else {
+      showSuccessToast(formatReceipt(data === true ? null : data))
+      router.replace(reportBackPath)
+    }
   } catch {
     // soft 取消或 http 已提示
   }

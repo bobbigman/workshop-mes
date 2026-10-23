@@ -1,0 +1,1 @@
+const r=[{value:0,label:"内部员工"},{value:1,label:"临时用工"},{value:2,label:"外部供应商"}];function n(e){return e===1?"临时用工":e===2?"外部供应商":"内部员工"}function a(e){return e===1?"warning":e===2?"danger":"info"}export{r as U,n as a,a as u};

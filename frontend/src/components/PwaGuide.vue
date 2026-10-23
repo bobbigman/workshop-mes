@@ -12,9 +12,10 @@
 
       <div class="guide-content">
         <div v-if="isAndroid" class="step-block">
-          <p class="step-title">安卓</p>
-          <p class="step-text">右上角菜单「⋮」→ 添加到主屏幕 / 安装应用 → 桌面出现图标</p>
-          <img class="step-img" src="/manual/pwa-android-add.png" alt="安卓：添加到主屏幕示意" />
+          <p class="step-title">安卓（华为 / 荣耀等自带浏览器）</p>
+          <p class="step-text">点浏览器底部右侧小包包（菜单）→ 拉到最底下【其他】→ 点【添加至桌面】</p>
+          <img class="step-img" src="/manual/pwa-honor-menu.png" alt="安卓：点底部小包包菜单" />
+          <img class="step-img" src="/manual/pwa-honor-add.png" alt="安卓：其他栏点添加至桌面" />
         </div>
 
         <div v-if="isApple" class="step-block">
@@ -25,9 +26,10 @@
 
         <template v-if="!isAndroid && !isApple">
           <div class="step-block">
-            <p class="step-title">安卓</p>
-            <p class="step-text">右上角菜单「⋮」→ 添加到主屏幕 / 安装应用 → 桌面出现图标</p>
-            <img class="step-img" src="/manual/pwa-android-add.png" alt="安卓：添加到主屏幕示意" />
+            <p class="step-title">安卓（华为 / 荣耀等自带浏览器）</p>
+            <p class="step-text">点浏览器底部右侧小包包（菜单）→ 拉到最底下【其他】→ 点【添加至桌面】</p>
+            <img class="step-img" src="/manual/pwa-honor-menu.png" alt="安卓：点底部小包包菜单" />
+            <img class="step-img" src="/manual/pwa-honor-add.png" alt="安卓：其他栏点添加至桌面" />
           </div>
           <div class="step-block">
             <p class="step-title">iPhone / iPad</p>

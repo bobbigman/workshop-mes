@@ -1,0 +1,1 @@
+const o="workerViewMode";function s(e){const r=Number(e)===2?2:1;return localStorage.setItem(o,String(r)),r}function t(){return Number(localStorage.getItem(o)||1)===2?2:1}function n(){return Number(localStorage.getItem("role")||0)===2&&t()===2}function a(){return n()?"/h5/tasks":"/h5/home"}export{n as i,s,a as w};

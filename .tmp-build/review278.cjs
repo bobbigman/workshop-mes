@@ -1,0 +1,10 @@
+const fs = require('fs');
+const p='docs/未做指令/278-优化指令-手机工作台彩色八宫格与今日成果前置.md';
+let s=fs.readFileSync(p,'utf8');
+s=s.replace('状态：待实施；2026-10-23 用户要求先出指令，本轮只编写文档，不实施代码、不部署。','状态：审核通过，实施中；2026-10-23 用户授权自动优化、自动落地，不部署。');
+s=s.replace('参考图只用于视觉和排布','最终视觉基准为用户最后提供的豆包精细版：紧凑顶栏、单行任务摘要、独立白色入口卡片、细边框与浅彩色图标底；参考图只用于视觉和排布');
+s=s.replace('建议整格高度80～88px','建议整格高度96～104px（包含白色卡片内边距、图标底块和文字）');
+s=s.replace('本轮交付仅为本指令与设计参考图，不执行上述验收、不声称功能已实现。后续实施时先审指令与代码的一致性，再按清单落地并验证；','本轮已获自动实施授权：修正指令后实施页面、同步文档并按清单验证；');
+fs.writeFileSync(p,s);
+fs.mkdirSync('.tmp-build/278',{recursive:true});
+for(const f of ['frontend/src/views/h5/home.vue','frontend/src/views/h5/more.vue','docs/开发手册和方案/01-PRD需求规格说明书.md','docs/开发手册和方案/31-使用手册-工人（手机端）.md','SupportDocs/22-手机工作台代报与补报入口.md']) fs.copyFileSync(f,'.tmp-build/278/'+f.split('/').pop());

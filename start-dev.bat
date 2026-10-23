@@ -19,8 +19,8 @@ taskkill /F /FI "WINDOWTITLE eq *dotnet run*" >nul 2>&1
 powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process -Filter \"Name='dotnet.exe'\" | Where-Object { $_.CommandLine -match 'dotnet\s+run' -and $_.CommandLine -match '8080' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
 set /a WAIT_N=0
 :wait_unlock
-tasklist /FI "IMAGENAME eq WorkshopMes.exe" | find /I "WorkshopMes.exe" >nul
-if errorlevel 1 goto unlocked
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try{$f=[IO.File]::Open('%~dp0backend\bin\Debug\net8.0\WorkshopMes.exe','Open','ReadWrite','None');$f.Close();exit 0}catch{exit 1}"
+if not errorlevel 1 goto unlocked
 set /a WAIT_N+=1
 if %WAIT_N% GEQ 15 goto still_locked
 timeout /t 1 /nobreak >nul

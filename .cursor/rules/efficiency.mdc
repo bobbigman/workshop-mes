@@ -42,6 +42,16 @@ Grep pattern=...  （无 path，扫进 publish-win64）
 - **禁止**：锁 exe 后闷头编到临时目录当「编过了」、连续第 3、4 次 build、一边等一边再开一轮。
 - **语法/代码错误**同理：修一刀再编算新一轮；若修完仍连续失败满 2 次 → 同样停并报现状，别空转。
 
+### 3.1.1 已知环境坑：esbuild temp 文件 access denied
+
+`npm run build` 报 `[vite:worker] remove C:\Users\...\Temp\esbuild-xxx: Access is denied`（卡在 `pdf.worker.js?worker&url`，2597 modules transformed 已过）：根因是 Windows Defender 实时扫描锁了系统 Temp 里 esbuild 的临时 exe。**不用反复重试**，直接把 TMP/TEMP 指到项目本地再 build：
+
+```powershell
+$env:TMP = "$PWD\.tmp"; $env:TEMP = "$PWD\.tmp"; npm run build
+```
+
+这算一次正式 build，不算空转重试。
+
 ```text
 # ❌ build 锁文件失败 → 再编临时目录 → 再编一遍 → 用户干等十几分钟
 # ✅ build 失败两次（含锁文件）→ 「请先停掉 WorkshopMes，停好了跟我说」→ 等用户

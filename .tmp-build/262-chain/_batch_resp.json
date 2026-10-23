@@ -1,0 +1,1 @@
+{"code":0,"msg":"ok","data":{"list":[{"id":10,"success":true,"message":"已撤回并重算"},{"id":11,"success":true,"message":"已撤回并重算"},{"id":12,"success":true,"message":"已重算"},{"id":99999,"success":false,"message":"工资单不存在或不属于本厂"}],"ok":3,"fail":1}}

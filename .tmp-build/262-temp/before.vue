@@ -1,0 +1,692 @@
+<template>
+  <div class="ai-page">
+    <ValueTip v-if="!isMobile" :text="VALUE_TIPS.aiAssistant" />
+    <div v-if="!isMobile" class="ai-toolbar">
+      <div class="role-tabs" aria-label="选择提问角色">
+        <button v-for="r in ROLES" :key="r.value" type="button" class="role-tab"
+          :class="{ active: selectedRole === r.value }" :disabled="busy"
+          :aria-expanded="selectedRole === r.value && questionsOpen" aria-controls="role-questions"
+          @click="onRoleClick(r.value)">
+          {{ r.label }}<span class="role-chevron" :class="{ expanded: selectedRole === r.value && questionsOpen }" aria-hidden="true">⌄</span>
+        </button>
+      </div>
+      <div class="ai-status">
+        <el-tag v-if="!status.enabled" type="info">已关闭</el-tag>
+        <el-tag v-else-if="!status.configured" type="warning">未配置</el-tag>
+        <el-tag v-else type="success">已就绪</el-tag>
+        <el-button size="small" :disabled="busy" @click="onNewChat">新对话</el-button>
+      </div>
+    </div>
+
+
+    <el-alert v-if="banner" :type="bannerType" show-icon :closable="false" :title="banner" class="mb" />
+
+    <section v-if="questionsOpen && !isMobile" id="role-questions" class="question-panel" aria-label="常用问题" @keydown.esc="questionsOpen = false">
+      <div class="question-panel-heading"><span>想了解什么？</span><el-button text size="small" @click="questionsOpen = false">收起</el-button></div>
+      <div class="question-grid">
+        <button v-for="(q, index) in examples" :key="q" type="button" class="question-item"
+          :disabled="busy || !canChat" @click="useExample(q)">
+          <span class="question-number">{{ String(index + 1).padStart(2, '0') }}</span><span>{{ q }}</span><span class="question-arrow" aria-hidden="true">↗</span>
+        </button>
+      </div>
+    </section>
+
+    <el-drawer v-if="isMobile" v-model="questionsOpen" title="车间常见问题" direction="btt" size="75%" append-to-body>
+      <div class="mobile-question-roles" aria-label="选择提问角色">
+        <el-button v-for="r in ROLES" :key="r.value" :type="selectedRole === r.value ? 'primary' : 'default'"
+          :disabled="busy" @click="selectMobileRole(r.value)">{{ r.label }}</el-button>
+      </div>
+      <div class="question-grid mobile-question-grid">
+        <button v-for="q in examples" :key="q" type="button" class="question-item" :disabled="busy || !canChat" @click="useExample(q)">{{ q }}</button>
+      </div>
+    </el-drawer>
+
+    <div ref="chatRef" class="chat">
+      <div v-if="!messages.length" class="chat-empty">
+        <span class="welcome-avatar" aria-hidden="true">AI</span>
+        <h2>小工单助手</h2>
+        <p>{{ isMobile ? '直接输入问题，或点左下角常见问题' : '选一个角色看看常用问题，也可以直接在下方提问' }}</p>
+      </div>
+      <div v-for="(m, i) in messages" :key="i" class="bubble" :class="m.role">
+        <div class="bubble-role"><span class="message-avatar" aria-hidden="true">{{ m.role === 'user' ? '我' : 'AI' }}</span><span class="message-name">{{ m.role === 'user' ? '我' : '小工单助手' }}</span></div>
+        <div class="bubble-text" :class="{ 'is-md': m.role === 'assistant' }">
+          <AiAnswer v-if="m.role === 'assistant'" :text="presentAiAnswer(m.text, m.sources)" />
+          <template v-else>{{ m.text }}</template>
+        </div>
+
+        <div v-if="m.candidates?.length" class="block">
+          <div class="block-title">请选择</div>
+          <el-button
+            v-for="(c, idx) in m.candidates"
+            :key="idx"
+            size="small"
+            class="cand"
+            :disabled="busy"
+            @click="onSelectCandidate(c)"
+          >
+            <template v-if="c.type === 'product'">{{ c.productCode }} · {{ c.productName }}</template>
+            <template v-else>工序 {{ c.operationCode || c.operationId }} · {{ c.operationName }}</template>
+          </el-button>
+        </div>
+
+        <details v-if="m.workOrders" class="block work-order-data" :open="!hasAnswerTable(m.text)">
+          <summary>工单原始数据 · 共 {{ m.workOrders.total }} 条<span class="muted"> · 查看详情与翻页</span></summary>
+          <div class="block-title">
+            共 {{ m.workOrders.total }} 条
+            <span v-if="filterLabel(m.workOrders)" class="muted">（{{ filterLabel(m.workOrders) }}）</span>
+            <span class="muted"> · 查询时间 {{ m.queriedAt }}</span>
+          </div>
+          <el-table :data="m.workOrders.list" size="small" border>
+            <el-table-column prop="orderNo" label="工单号" min-width="120" />
+            <el-table-column prop="productCode" label="产品编号" width="110" />
+            <el-table-column prop="productName" label="产品" min-width="120" />
+            <el-table-column prop="qty" label="数量" width="70" />
+            <el-table-column prop="doneQty" label="完成" width="70" />
+            <el-table-column label="交期" width="110">
+              <template #default="{ row }">{{ formatDate(row.dueDate) }}</template>
+            </el-table-column>
+            <el-table-column label="状态" width="80">
+              <template #default="{ row }">{{ statusText(row.status) }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="80" fixed="right">
+              <template #default="{ row }">
+                <el-button link type="primary" @click="openOrder(row.id)">详情</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <div class="pager" v-if="m.workOrders.total > m.workOrders.pageSize">
+            <el-pagination
+              layout="prev, pager, next"
+              :total="m.workOrders.total"
+              :page-size="m.workOrders.pageSize"
+              :current-page="m.workOrders.page"
+              @current-change="(p) => onPage(m, p)"
+            />
+          </div>
+        </details>
+
+        <div v-if="m.reportEvidence" class="block">
+          <div class="block-title">
+            报工证据 · {{ m.reportEvidence.order.orderNo }}（{{ m.reportEvidence.order.productCode }} {{ m.reportEvidence.order.productName }}）
+            <span class="muted"> · 状态 {{ statusText(m.reportEvidence.order.status) }}</span>
+            <span class="muted"> · 查询 {{ formatDateTime(m.reportEvidence.order.queriedAt) }}</span>
+            <el-button link type="primary" size="small" :disabled="busy" @click="openOrder(m.reportEvidence.order.id)">详情</el-button>
+          </div>
+
+          <el-alert v-if="m.reportEvidence.note" type="info" :closable="false" :title="m.reportEvidence.note" class="mb" />
+
+          <el-card shadow="never" class="src">
+            <div class="block-title">
+              整单累计：计划 {{ m.reportEvidence.totals.qty }} · 完成 {{ m.reportEvidence.totals.doneQty }}
+            </div>
+            <el-table :data="m.reportEvidence.totals.tasks" size="small" border>
+              <el-table-column prop="operationName" label="工序" min-width="120" />
+              <el-table-column prop="planQty" label="计划" width="70" />
+              <el-table-column prop="doneQty" label="有效良品" width="90" />
+              <el-table-column prop="defectQty" label="有效不良" width="90" />
+            </el-table>
+          </el-card>
+
+          <el-card shadow="never" class="src">
+            <div class="block-title">筛选内按工序汇总（良品：待复核 / 已通过 / 已退回）</div>
+            <el-table :data="m.reportEvidence.summary" size="small" border>
+              <el-table-column prop="operationName" label="工序" min-width="110" />
+              <el-table-column label="待复核良" width="84">
+                <template #default="{ row }">{{ row.pendingGood }}</template>
+              </el-table-column>
+              <el-table-column label="已通过良" width="84">
+                <template #default="{ row }">{{ row.approvedGood }}</template>
+              </el-table-column>
+              <el-table-column label="已退回良" width="84">
+                <template #default="{ row }">{{ row.rejectedGood }}</template>
+              </el-table-column>
+              <el-table-column label="待复核不良" width="90">
+                <template #default="{ row }">{{ row.pendingDefect }}</template>
+              </el-table-column>
+              <el-table-column label="已通过不良" width="90">
+                <template #default="{ row }">{{ row.approvedDefect }}</template>
+              </el-table-column>
+              <el-table-column label="已退回不良" width="90">
+                <template #default="{ row }">{{ row.rejectedDefect }}</template>
+              </el-table-column>
+              <el-table-column label="进度口径" width="84">
+                <template #default="{ row }">{{ row.progressGood }}</template>
+              </el-table-column>
+              <el-table-column label="通过口径" width="84">
+                <template #default="{ row }">{{ row.reportGood }}</template>
+              </el-table-column>
+            </el-table>
+          </el-card>
+
+          <div class="block-title">
+            报工明细 共 {{ m.reportEvidence.total }} 条
+            <span v-if="m.reportEvidence.filter" class="muted">
+              （{{ m.reportEvidence.filter.operationName || '全部工序' }}）
+            </span>
+          </div>
+          <el-table :data="m.reportEvidence.list" size="small" border>
+            <el-table-column label="报工时间" width="150">
+              <template #default="{ row }">{{ formatDateTime(row.reportTime) }}</template>
+            </el-table-column>
+            <el-table-column prop="operationName" label="工序" min-width="100" />
+            <el-table-column prop="userName" label="报工人" width="90" />
+            <el-table-column prop="goodQty" label="良品" width="70" />
+            <el-table-column prop="defectQty" label="不良" width="70" />
+            <el-table-column prop="defectName" label="不良品名" width="110">
+              <template #default="{ row }">{{ row.defectName || '—' }}</template>
+            </el-table-column>
+            <el-table-column label="复核" width="80">
+              <template #default="{ row }">{{ reviewText(row.reviewStatus) }}</template>
+            </el-table-column>
+            <el-table-column prop="rejectReason" label="退回原因" min-width="110">
+              <template #default="{ row }">{{ row.rejectReason || '—' }}</template>
+            </el-table-column>
+            <el-table-column prop="batchNo" label="批次" width="100">
+              <template #default="{ row }">{{ row.batchNo || '—' }}</template>
+            </el-table-column>
+          </el-table>
+          <div class="pager" v-if="m.reportEvidence.total > m.reportEvidence.pageSize">
+            <el-pagination
+              layout="prev, pager, next"
+              :total="m.reportEvidence.total"
+              :page-size="m.reportEvidence.pageSize"
+              :current-page="m.reportEvidence.page"
+              @current-change="(p) => onEvPage(m, p)"
+            />
+          </div>
+        </div>
+
+        <div v-if="visibleAiSources(m.sources).length" class="block">
+          <div class="block-title">来源</div>
+          <el-card v-for="s in visibleAiSources(m.sources)" :key="s.sourceId" shadow="never" class="src">
+            <div>
+              <b>{{ s.title }}</b>
+              <span v-if="s.chapter" class="muted"> · {{ s.chapter }}</span>
+              <span class="muted"> · {{ s.version || '未标注版本' }}</span>
+              <span v-if="s.updatedAt" class="muted"> · 更新 {{ s.updatedAt }}</span>
+              <span class="muted"> · {{ s.sourceId }}</span>
+            </div>
+            <div class="excerpt">{{ s.excerpt }}</div>
+          </el-card>
+        </div>
+
+        <div v-if="m.warnings?.length" class="warn">
+          <div v-for="(w, wi) in m.warnings" :key="wi">{{ w }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="composer">
+      <button v-if="isMobile" class="questions-trigger" type="button" :disabled="busy" @click="questionsOpen = true">常见<br />问题</button>
+      <el-input
+        v-model="input"
+        type="textarea"
+        :autosize="{ minRows: isMobile ? 1 : 3, maxRows: isMobile ? 4 : 6 }"
+        maxlength="2000"
+        :disabled="!canChat || busy"
+        :placeholder="isMobile ? '请输入问题' : '想了解什么？直接问，或点击上方角色选择问题'"
+        @keydown.ctrl.enter="onSend"
+      />
+      <div class="composer-footer">
+        <span class="composer-hint">{{ busy ? '正在回答，可随时停止' : 'Ctrl + Enter 发送' }}</span>
+        <el-button v-if="busy" class="stop-button" @click="onStop"><span class="stop-icon" aria-hidden="true"></span>停止生成</el-button>
+        <el-button v-else type="primary" :disabled="!canChat || !input.trim()" @click="onSend">发送 <span v-if="!isMobile" aria-hidden="true">↑</span></el-button>
+      </div>
+    </div>
+
+    <el-dialog v-model="detailDlg" title="工单详情" width="620px" destroy-on-close>
+      <template v-if="detail">
+        <p>单号：{{ detail.orderNo }} · {{ detail.productCode }} {{ detail.productName }}</p>
+        <p>数量：{{ detail.qty }} · 状态：{{ statusText(detail.status) }} · 交期：{{ formatDate(detail.dueDate) }}</p>
+        <el-table :data="detail.tasks || []" size="small" border>
+          <el-table-column prop="operationName" label="工序" />
+          <el-table-column prop="planQty" label="计划" width="80" />
+          <el-table-column prop="doneQty" label="良品" width="80" />
+          <el-table-column prop="defectQty" label="不良" width="80" />
+        </el-table>
+      </template>
+    </el-dialog>
+  </div>
+</template>
+
+<script setup>
+import { computed, inject, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import { useRouter } from 'vue-router'
+import {
+  deleteAiConversation,
+  getAiStatus,
+  searchAiReportEvidence,
+  searchAiWorkOrders,
+  sendAiMessage
+} from '@/api/aiAssistant'
+import { getOrder } from '@/api/prod'
+import AiAnswer from '@/components/AiAnswer.vue'
+import { hasAnswerTable, formatAiBusinessDate } from '@/utils/aiWorkOrderPresentation'
+import { presentAiAnswer, visibleAiSources } from '@/utils/aiAssistantPresentation'
+import ValueTip from '@/components/ValueTip.vue'
+import { VALUE_TIPS } from '@/constants/valueTips'
+
+const isMobile = ref(window.matchMedia('(max-width: 768px)').matches)
+const mobileMedia = window.matchMedia('(max-width: 768px)')
+const mobileNewChat = inject('aiNewChat', null)
+function updateMobile(event) { isMobile.value = event.matches; questionsOpen.value = false }
+mobileMedia.addEventListener('change', updateMobile)
+onMounted(() => { if (mobileNewChat) mobileNewChat.value = { run: onNewChat, busy } })
+onUnmounted(() => {
+  mobileMedia.removeEventListener('change', updateMobile)
+  if (mobileNewChat) mobileNewChat.value = null
+})
+function selectMobileRole(value) {
+  selectedRole.value = value
+  onRoleChange()
+}
+
+const router = useRouter()
+const role = Number(localStorage.getItem('role') || 0)
+if (role !== 1) {
+  ElMessage.error('仅管理员可使用 AI 助手')
+  router.replace('/order')
+}
+
+const ROLES = [{ value: 'boss', label: '老板' }, { value: 'supervisor', label: '车间主管' }, { value: 'finance', label: '财务' }, { value: 'worker', label: '车间师傅' }, { value: 'engineer', label: 'AI' }]
+const selectedRole = ref('boss')
+const questionsOpen = ref(false)
+const mode = computed(() => selectedRole.value === 'boss' ? 'progress' : 'support')
+const status = ref({ enabled: false, configured: false, model: null })
+const conversationId = ref('')
+const input = ref('')
+const messages = ref([])
+const busy = ref(false)
+const banner = ref('')
+const bannerType = ref('info')
+const chatRef = ref(null)
+let abortCtrl = null
+
+const detailDlg = ref(false)
+const detail = ref(null)
+
+const QUESTIONS = {
+  boss: [
+    '今天要交货的工单有哪几张？',
+    '明天就要交的货，进度到哪了？',
+    '现在有哪几张单已经逾期了？逾期多久？',
+    '客户催货时，执行中的单里哪几张剩得最多？',
+    '刚下的单怎么到现在还没人动？',
+    '现在车间一共在做多少张单？',
+    '临期 3 天内要交的单有哪些？',
+    '被取消的工单有哪些？',
+    '客户在微信上突然问起某单，我在手机上怎么一秒查到？',
+    '做完的工单系统会自动结束吗？'
+  ],
+  supervisor: [
+    '今天到期的单有几张在赶？',
+    '逾期最久的是哪张？卡在哪道工序？',
+    '现在有几条设备异常还没处理？',
+    '拖最久的那条异常是谁报的、谁在修？',
+    '工人不会用手机扫码报工怎么办？',
+    '报工被退回了，工人来找我闹怎么办？',
+    '待复核的报工我该怎么处理？',
+    '工人说自己报错数了，能自己改吗？',
+    '班组长在手机上派工，工人那边能看到吗？',
+    '超报被系统硬拦了，我怎么放行？'
+  ],
+  finance: [
+    '工单计划数和完成数对不上，差在哪？',
+    '不良品会不会被算进完成数里？',
+    '客户投诉了，这活是谁做的、什么时候做的？',
+    '返工重做的件，算不算产量？',
+    '两个人合作做一批，数量怎么分？',
+    '临时工和正式工，系统里怎么区分标签？',
+    '交期被改过，我在哪看记录？',
+    '报工记录能导出 Excel 带去对账吗？',
+    '被退回的报工，会不会被算进完成数里？',
+    '月底对账时，良品+不良合计怎么对得上计划数？'
+  ],
+  worker: [
+    '工人怎么用手机扫码报工？',
+    'PDA 扫码枪怎么用？',
+    '扫了二维码打不开页面怎么办？',
+    '报错数量了，我自己能改吗？',
+    '不良品怎么报？必须填什么？',
+    '一道活分三次做，能分三次报吗？',
+    '班组长派给我的活，手机上在哪看？',
+    '没智能手机的工人怎么报工？',
+    '设备坏了我要怎么上报？',
+    '怎么看这道工序的作业指导书？'
+  ],
+  engineer: [
+    '车间干的活，能跟财务的账串起来吗？',
+    '工人干完活，财务不用再对着 Excel 抄一遍吧？',
+    '老板能不能一张表看清车间干了多少、账上多少钱？',
+    '销售报价的时候，AI 能帮着算算料钱吗？',
+    '材料这阵子涨价了，报价按新价算吗？',
+    '除了金蝶，还能连别的软件吗？',
+    '车间出问题，能自动发消息到班组长手机上吗？',
+    '以后想加新功能，留路子了吗？',
+    'AI 除了查工单，还能帮我们干点啥？'
+  ]
+}
+
+const examples = computed(() => QUESTIONS[selectedRole.value])
+
+const canChat = computed(() => status.value.enabled && status.value.configured)
+
+onMounted(async () => {
+  await refreshStatus()
+})
+
+async function refreshStatus() {
+  try {
+    const res = await getAiStatus()
+    status.value = res.data || { enabled: false, configured: false }
+    if (!status.value.enabled) {
+      banner.value = 'AI 助手已关闭。不影响下单与报工。需要时请联系部署人员开启。'
+      bannerType.value = 'info'
+    } else if (!status.value.configured) {
+      banner.value = 'AI 未配置完成（缺密钥或模型）。请联系部署人员在服务器配置后重启。'
+      bannerType.value = 'warning'
+    } else {
+      banner.value = ''
+    }
+  } catch (e) {
+    banner.value = e.message || '无法获取 AI 状态'
+    bannerType.value = 'error'
+  }
+}
+
+function useExample(q) {
+  if (!canChat.value || busy.value) return
+  questionsOpen.value = false
+  input.value = q
+  return onSend()
+}
+
+async function onNewChat() {
+  const oldConversationId = conversationId.value
+  conversationId.value = ''
+  messages.value = []
+  input.value = ''
+  abortCtrl?.abort()
+  busy.value = false
+  if (oldConversationId) {
+    try {
+      await deleteAiConversation(oldConversationId)
+    } catch {
+      ElMessage.warning('旧会话清理失败，已开始新对话')
+    }
+  }
+}
+
+function onRoleClick(value) {
+  if (busy.value) return
+  if (selectedRole.value === value) {
+    questionsOpen.value = !questionsOpen.value
+    return
+  }
+  selectedRole.value = value
+  onRoleChange()
+  questionsOpen.value = true
+}
+
+let previousMode = mode.value
+function onRoleChange() {
+  if (mode.value !== previousMode) onNewChat()
+  previousMode = mode.value
+}
+
+async function onSend() {
+  if (!canChat.value || busy.value) return
+  const text = input.value.trim()
+  if (!text) return
+
+  questionsOpen.value = false
+  messages.value.push({ role: 'user', text })
+  input.value = ''
+  busy.value = true
+  abortCtrl = new AbortController()
+  await scrollBottom()
+
+  try {
+    const res = await sendAiMessage(
+      {
+        conversationId: conversationId.value || undefined,
+        mode: mode.value,
+        message: text
+      },
+      abortCtrl.signal
+    )
+    applyAssistant(res.data)
+  } catch (e) {
+    if (e.name === 'CanceledError' || e.code === 'ERR_CANCELED') {
+      messages.value.push({ role: 'assistant', text: '已停止。' })
+    } else {
+      messages.value.push({ role: 'assistant', text: e.message || '请求失败' })
+    }
+  } finally {
+    busy.value = false
+    abortCtrl = null
+    await scrollBottom()
+  }
+}
+
+function onStop() {
+  abortCtrl?.abort()
+}
+
+async function onSelectCandidate(c) {
+  if (busy.value) return
+  const label =
+    c.type === 'product'
+      ? `选择产品 ${c.productName || ('编号 ' + c.productCode)}`
+      : `选择工序 ${c.operationName}`
+  messages.value.push({ role: 'user', text: label })
+  busy.value = true
+  abortCtrl = new AbortController()
+  try {
+    const body = {
+      conversationId: conversationId.value || undefined,
+      mode: mode.value,
+      message: label,
+      selectedProductCode: c.type === 'product' ? c.productCode : undefined,
+      selectedOperationId: c.type === 'operation' ? c.operationId : undefined
+    }
+    const res = await sendAiMessage(body, abortCtrl.signal)
+    applyAssistant(res.data)
+  } catch (e) {
+    messages.value.push({ role: 'assistant', text: e.message || '请求失败' })
+  } finally {
+    busy.value = false
+    abortCtrl = null
+    await scrollBottom()
+  }
+}
+
+function applyAssistant(data) {
+  if (!data) return
+  conversationId.value = data.conversationId || conversationId.value
+  messages.value.push({
+    role: 'assistant',
+    text: data.answer || '',
+    candidates: data.candidates || [],
+    sources: data.sources || [],
+    workOrders: data.workOrders || null,
+    reportEvidence: data.reportEvidence || null,
+    warnings: data.warnings || [],
+    queriedAt: data.queriedAt ? formatDateTime(data.queriedAt) : ''
+  })
+}
+
+async function onPage(msg, page) {
+  if (!conversationId.value || busy.value) return
+  busy.value = true
+  try {
+    const res = await searchAiWorkOrders({
+      conversationId: conversationId.value,
+      page,
+      pageSize: msg.workOrders.pageSize,
+      filters: msg.workOrders.filters
+    })
+    msg.workOrders = res.data
+    msg.queriedAt = formatDateTime(new Date().toISOString())
+  } catch { /* http 已提示 */ }
+  finally { busy.value = false }
+}
+
+async function onEvPage(msg, page) {
+  if (!conversationId.value || busy.value) return
+  const ev = msg.reportEvidence
+  if (!ev) return
+  busy.value = true
+  try {
+    const res = await searchAiReportEvidence({
+      conversationId: conversationId.value,
+      workOrderId: ev.order.id,
+      orderNo: ev.order.orderNo,
+      operationId: ev.filter?.operationId ?? null,
+      reportFrom: ev.filter?.reportFrom ?? null,
+      reportToExclusive: ev.filter?.reportToExclusive ?? null,
+      page,
+      pageSize: ev.pageSize
+    })
+    msg.reportEvidence = res.data
+  } catch { /* http 已提示 */ }
+  finally { busy.value = false }
+}
+
+async function openOrder(id) {
+  try {
+    const res = await getOrder(id)
+    detail.value = res.data
+    detailDlg.value = true
+  } catch { /* http 已提示 */ }
+}
+
+function filterLabel(wo) {
+  const f = wo?.filters
+  if (!f) return ''
+  const parts = []
+  if (f.dueFrom || f.dueToExclusive) parts.push(`交期 ${f.dueFrom || '…'} ~ ${f.dueToExclusive || '…'}`)
+  if (f.productCode) parts.push(`产品 ${f.productCode}`)
+  if (f.keyword) parts.push(`关键词 ${f.keyword}`)
+  return parts.join('，')
+}
+
+function statusText(s) {
+  return ({ 0: '未开始', 1: '执行中', 2: '已结束', 3: '已取消' })[s] ?? s
+}
+
+function reviewText(s) {
+  return ({ 0: '待复核', 1: '已通过', 2: '已退回' })[s] ?? s
+}
+
+function formatDate(v) {
+  return formatAiBusinessDate(v)
+}
+
+function formatDateTime(v) {
+  const d = new Date(v)
+  if (Number.isNaN(d.getTime())) return String(v)
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+}
+
+async function scrollBottom() {
+  await nextTick()
+  const el = chatRef.value
+  if (el) el.scrollTop = el.scrollHeight
+}
+</script>
+
+<style scoped>
+.ai-page { display: flex; flex-direction: column; height: calc(100vh - 112px); height: calc(100dvh - 112px); width: 100%; max-width: 1600px; margin: 0 auto; min-width: 0; box-sizing: border-box; overflow: hidden; background: #f5f6f8; border: 1px solid #e5e8ed; border-radius: 12px; }
+.ai-page :deep(.value-tip) { flex-shrink: 0; margin: 0; padding: 12px 24px 0; border: 0; border-radius: 0; background: #fff; color: #86909e; font-size: 12px; }
+.ai-toolbar { display: flex; flex-shrink: 0; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px 24px 16px; background: #fff; border-bottom: 1px solid #e9ecf0; }
+.ai-status { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ai-status :deep(.el-tag) { border: 0; background: transparent; padding: 0; font-size: 12px; }
+.ai-status :deep(.el-button) { border-radius: 7px; border-color: #e5e8ed; color: #667085; }
+.muted { color: #8a939f; font-size: 12px; }
+.mb { flex-shrink: 0; margin: 12px 24px 0; width: auto; }
+.role-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.role-tab { display: flex; align-items: center; gap: 10px; border: 0; border-radius: 7px; padding: 9px 14px; background: transparent; color: #667085; cursor: pointer; font: inherit; font-size: 14px; }
+.role-tab.active { background: #edf5ff; color: #1685e6; font-weight: 600; }
+.role-tab:hover:not(:disabled) { background: #f1f5fa; }
+.role-tab:disabled, .question-item:disabled { cursor: not-allowed; opacity: .55; }
+.role-chevron { color: #a2aab5; transition: transform .15s; }
+.role-chevron.expanded { transform: rotate(180deg); }
+.question-panel { flex-shrink: 0; max-height: 34vh; overflow: auto; margin: 14px 24px 0; padding: 12px 16px 16px; background: #fff; border: 1px solid #e9ecf0; border-radius: 10px; }
+.question-panel-heading { display: flex; justify-content: space-between; align-items: center; color: #7b8593; font-size: 13px; margin-bottom: 8px; }
+.question-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; }
+.question-item { display: flex; align-items: center; gap: 10px; text-align: left; border: 0; border-radius: 7px; padding: 10px; background: #f7f9fc; color: #34445e; font: inherit; font-size: 13px; cursor: pointer; line-height: 1.6; }
+.question-item:hover:not(:disabled) { background: #edf5ff; color: #1685e6; }
+.question-number { color: #a0aaba; font-size: 11px; }
+.question-arrow { margin-left: auto; color: #a1afc4; }
+.role-tab:focus-visible, .question-item:focus-visible { outline: 2px solid #1685e6; outline-offset: 2px; }
+.chat { flex: 1; min-height: 0; min-width: 0; width: 100%; box-sizing: border-box; overflow: auto; padding: 32px clamp(20px, 3vw, 48px); scrollbar-gutter: stable; }
+.chat-empty { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; box-sizing: border-box; padding: 24px 0; text-align: center; }
+.welcome-avatar { display: grid; place-items: center; width: 60px; height: 60px; border-radius: 19px; background: #e5effb; color: #3689d8; font-size: 22px; font-weight: 600; letter-spacing: 1px; }
+.chat-empty h2 { margin: 20px 0 10px; font-size: 23px; font-weight: 600; letter-spacing: 1px; color: #344054; }
+.chat-empty p { margin: 0; color: #929baa; font-size: 14px; line-height: 1.8; }
+.bubble { position: relative; display: flex; flex-direction: column; align-items: flex-start; margin: 0 0 28px; padding-left: 48px; max-width: 1120px; width: 92%; min-width: 0; box-sizing: border-box; }
+.bubble.user { align-items: flex-end; width: 80%; max-width: 860px; padding-left: 0; padding-right: 48px; margin-left: auto; }
+.bubble-role { position: relative; width: 100%; min-height: 18px; font-size: 12px; line-height: 18px; font-weight: 400; color: #9098a4; margin-bottom: 7px; }
+.bubble.user .bubble-role { text-align: right; }
+.message-avatar { position: absolute; top: 0; left: -48px; display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: #e3ebf6; color: #3b79bb; font-size: 12px; font-weight: 600; }
+.bubble.user .message-avatar { left: auto; right: -48px; background: #d9eaf7; color: #367aaf; }
+.bubble-text { box-sizing: border-box; min-width: 0; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; background: #fff; border: 0; border-radius: 4px 14px 14px; padding: 12px 18px; color: #263445; font-size: 15px; line-height: 1.8; }
+.bubble-text.is-md { white-space: normal; padding: 20px 24px; }
+.bubble.user .bubble-text { background: #ccecff; border-radius: 14px 4px 14px 14px; }
+.block { margin-top: 12px; width: 100%; min-width: 0; box-sizing: border-box; }
+.work-order-data { padding: 12px 16px; border: 1px solid #e5eaf2; border-radius: 10px; background: #fff; }
+.work-order-data summary { cursor: pointer; color: #53637b; font-size: 13px; }
+.work-order-data[open] summary { margin-bottom: 14px; }
+.block-title { font-size: 13px; margin-bottom: 6px; }
+.cand { margin: 0 6px 6px 0; }
+.src { margin-bottom: 6px; }
+.excerpt { color: #666; font-size: 12px; margin-top: 6px; white-space: pre-wrap; }
+.warn { color: #b88230; font-size: 12px; margin-top: 8px; }
+.pager { margin-top: 8px; display: flex; justify-content: flex-end; }
+.composer { flex-shrink: 0; padding: 16px 24px 18px; border-top: 1px solid #e3e7ec; background: #fff; }
+.composer:focus-within { border-top-color: #95cafa; }
+.composer :deep(.el-textarea__inner) { box-shadow: none; resize: none; background: transparent; padding: 0 2px 12px; min-height: 82px !important; font-size: 15px; line-height: 1.8; color: #344054; }
+.composer :deep(.el-textarea__inner::placeholder) { color: #a4acb8; }
+.composer :deep(.el-textarea.is-disabled .el-textarea__inner) { background: transparent; }
+.composer-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.composer-hint { color: #a0a8b4; font-size: 12px; }
+.composer-footer .el-button { border-radius: 7px; min-width: 96px; margin-left: 0; height: 34px; }
+.composer-footer :deep(.el-button--primary) { --el-button-bg-color: #1599ed; --el-button-border-color: #1599ed; --el-button-hover-bg-color: #38abf3; --el-button-hover-border-color: #38abf3; }
+.stop-button { color: #53637b; border-color: #d9e0e8; background: #f7f9fc; }
+.stop-icon { display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: currentColor; margin-right: 6px; }
+.mobile-question-roles { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.mobile-question-roles .el-button { margin: 0; min-height: 40px; }
+.mobile-question-grid { grid-template-columns: 1fr; }
+.mobile-question-grid .question-item { min-height: 48px; text-align: left; }
+@media (max-width: 768px) {
+  .ai-page { height: 100%; max-width: none; border: 0; border-radius: 0; }
+  .chat { padding: 16px 10px; overscroll-behavior: contain; }
+  .bubble, .bubble.user { width: 100%; margin-bottom: 16px; }
+  .bubble { padding-left: 40px; }
+  .bubble.user { padding-right: 40px; }
+  .message-avatar { left: -40px; }
+  .bubble.user .message-avatar { right: -40px; }
+  .bubble-role { min-height: 0; height: 0; margin: 0; }
+  .message-name { display: none; }
+  .message-avatar { width: 30px; height: 30px; border-radius: 5px; }
+  .bubble-text, .bubble-text.is-md { padding: 9px 12px; font-size: 16px; line-height: 1.6; border-radius: 5px; }
+  .bubble.user .bubble-text { border-radius: 5px; }
+  .bubble-text :deep(.ai-md) { font-size: 16px; line-height: 1.6; }
+  .bubble-text :deep(.ai-md-p), .bubble-text :deep(.ai-md > .ai-md-p:first-child:not(.is-warn)) { font-size: 16px; line-height: 1.6; margin-bottom: 10px; }
+  .bubble-text :deep(.ai-md > :last-child) { margin-bottom: 0; }
+  .bubble-text :deep(.ai-md-h) { margin-top: 18px; margin-bottom: 8px; }
+  .bubble-text :deep(.ai-md-list) { margin-bottom: 10px; padding-left: 22px; }
+  .bubble-text :deep(.ai-md-list li) { margin: 4px 0; }
+  .composer { display: flex; align-items: flex-end; gap: 8px; padding: 8px 10px max(8px, env(safe-area-inset-bottom)); background: #f7f7f7; }
+  .questions-trigger { flex-shrink: 0; border: 0; background: transparent; color: #53637b; font-size: 12px; min-height: 40px; padding: 0 4px; cursor: pointer; }
+  .composer :deep(.el-textarea__inner) { min-height: 40px !important; padding: 8px 10px; background: #fff; border-radius: 5px; font-size: 16px; line-height: 24px; }
+  .composer-footer { flex-shrink: 0; min-height: 40px; }
+  .composer-hint { display: none; }
+  .composer-footer .el-button { min-width: 56px; height: 40px; padding: 0 10px; }
+  .composer-footer .stop-button { min-width: 76px; }
+}
+
+</style>

@@ -21,6 +21,8 @@ alwaysApply: true
 - `appsettings*.json`、密码、连接串、Token（本机留或另备，不进远程）
 - `backend/_*.json`、`_tok.txt`、`.tmp/` 等调试垃圾（已写入 `.gitignore`）
 - `backend/wwwroot/assets/` 哈希 js/css（构建产物，已 ignore；以 `frontend/src` 为准）
+- 不是源码的安装包和压缩包：`*.vsix`、`*.rar`、`*.7z`，以及 `software/`、`rar/`。本机留着，不提交、不推送。已跟踪的在提交前 `git rm --cached` 拿掉，不删本机文件。
+- 待推送的提交里若已含上述文件，停下来告诉用户，不要推。GitHub 会拒绝超过 100 MB 的文件。改历史或强推须用户另行要求。
 - 不要以整份拷贝文件夹当备份（例如「分析_废弃了」），以远程 `master` 上的提交为准
 
 ## 长期推送授权（2026-10-20 用户明确）

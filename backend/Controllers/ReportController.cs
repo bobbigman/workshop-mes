@@ -55,4 +55,9 @@ public class ReportController : ControllerBase
     [HttpGet("defects/{operationId}")]
     public Task<ApiResult<List<DefectItemDto>>> Defects(long operationId) =>
         _reportService.GetDefectsByOperationAsync(operationId);
+
+    /// <summary>报工提交前工价只读预览（docs/269）：不写库、不触发提交/复核链。</summary>
+    [HttpPost("preview-wage")]
+    public Task<ApiResult<ReportWagePreviewDto>> PreviewWage([FromBody] ReportWagePreviewInputDto dto) =>
+        _reportService.PreviewWageForSubmitAsync(dto, JwtHelper.GetFactoryId(User), JwtHelper.GetUserId(User));
 }

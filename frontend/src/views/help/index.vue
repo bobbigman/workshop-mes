@@ -1,6 +1,6 @@
 <template>
   <div class="manual-page">
-    <header class="manual-header">
+    <header v-if="!signedIn || route.query.from === 'h5'" class="manual-header">
       <div><span class="eyebrow">微聚 · 帮助</span><h1>操作手册</h1></div>
       <router-link :to="returnPath" class="return-link">{{ signedIn ? '返回系统' : '返回登录' }}</router-link>
     </header>

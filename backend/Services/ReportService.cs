@@ -15,6 +15,8 @@ public interface IReportService
     Task<ApiResult<PageResult<ReportListDto>>> QueryAsync(ReportQueryDto query, long factoryId, long? userId = null);
     Task<ApiResult<PageResult<ReportListDto>>> QueryMineAsync(ReportMineQueryDto query, long factoryId, long userId);
     Task<ApiResult<ReportTodaySummaryDto>> TodaySummaryAsync(long factoryId, long userId);
+    /// <summary>报工提交前工价只读预览（docs/269）：只算额，不写库、不校验、不触发提交/复核链。</summary>
+    Task<ApiResult<ReportWagePreviewDto>> PreviewWageForSubmitAsync(ReportWagePreviewInputDto dto, long factoryId, long currentUserId);
     Task<ApiResult<List<ReportChangeLogDto>>> GetChangeLogsAsync(long reportId, long factoryId, long currentUserId);
     Task<ApiResult<List<ReportCandidateDto>>> GetCandidatesAsync(long operationId, long factoryId, long currentUserId);
     Task<ApiResult<List<DefectItemDto>>> GetDefectsByOperationAsync(long operationId);
@@ -51,6 +53,25 @@ public class ReportDto : WorkTimeInput
     public DateTime? ConfirmedAt { get; set; }
     /// <summary>软提示确认后重提：true=跳过 soft 拦截（hard 仍拦）。docs/150。</summary>
     public bool ConfirmUpstream { get; set; }
+}
+
+/// <summary>报工提交前工价只读预览入参（docs/269）。</summary>
+public class ReportWagePreviewInputDto
+{
+    public long OrderId { get; set; }
+    public long OperationId { get; set; }
+    public int GoodQty { get; set; }
+    public int DefectQty { get; set; }
+    public int DurationMinutes { get; set; }
+}
+
+/// <summary>报工提交前工价只读预览出参（docs/269）。</summary>
+public class ReportWagePreviewDto
+{
+    public bool Matched { get; set; }
+    public decimal? UnitPrice { get; set; }
+    public decimal? WageAmount { get; set; }
+    public byte PriceType { get; set; }
 }
 
 public class ReportAssigneeDto : WorkTimeInput
@@ -309,7 +330,7 @@ public class ReportService : IReportService
             foreach (var line in lines)
             {
                 var deptId = await ResolveDeptSnapshotAsync(line.UserId, dto.OperationId);
-                var (unitPrice, wageAmount, priceSnapshot) = await PreviewWageAsync(
+                var (_, unitPrice, wageAmount, priceSnapshot) = await PreviewWageAsync(
                     order.FactoryId, order.ProductId, dto.OperationId, deptId, line.UserId,
                     line.GoodQty, line.DefectQty, times[line.UserId].Minutes, times[line.UserId].ReportTime);
 
@@ -1382,7 +1403,7 @@ public class ReportService : IReportService
         return hit;
     }
 
-    private async Task<(decimal? UnitPrice, decimal? WageAmount, string? Snapshot)> PreviewWageAsync(
+    private async Task<(byte PriceType, decimal? UnitPrice, decimal? WageAmount, string? Snapshot)> PreviewWageAsync(
         long factoryId, long? productId, long operationId, long? departmentId, long userId,
         int goodQty, int defectQty, int durationMinutes, DateTime atTime)
     {
@@ -1394,8 +1415,27 @@ public class ReportService : IReportService
             .FirstOrDefaultAsync();
         var wageCoeff = storedCoeff is > 0m ? WageCoeffHelper.Coerce(storedCoeff.Value) : 1m;
         var calc = PriceRuleMatcher.Calculate(rule, goodQty, defectQty, durationMinutes, wageCoeff);
-        if (!calc.Matched) return (null, null, null);
-        return (calc.UnitPrice, calc.WageAmount, ReportPriceSnapshot.Capture(rule));
+        if (!calc.Matched) return (calc.PriceType, null, null, null);
+        return (calc.PriceType, calc.UnitPrice, calc.WageAmount, ReportPriceSnapshot.Capture(rule));
+    }
+
+    /// <summary>报工提交前工价只读预览（docs/269）：只算额，不写库、不校验权限、不触发提交/复核链。</summary>
+    public async Task<ApiResult<ReportWagePreviewDto>> PreviewWageForSubmitAsync(ReportWagePreviewInputDto dto, long factoryId, long currentUserId)
+    {
+        var order = await _db.WorkOrders.AsNoTracking()
+            .FirstOrDefaultAsync(o => o.Id == dto.OrderId && o.FactoryId == factoryId)
+            ?? throw ThrowHelper.Biz(nameof(PreviewWageForSubmitAsync), "工单不存在");
+        var deptId = await ResolveDeptSnapshotAsync(currentUserId, dto.OperationId);
+        var (priceType, unitPrice, wageAmount, _) = await PreviewWageAsync(
+            factoryId, order.ProductId, dto.OperationId, deptId, currentUserId,
+            dto.GoodQty, dto.DefectQty, dto.DurationMinutes, DateTime.Now);
+        return ApiResult<ReportWagePreviewDto>.Ok(new ReportWagePreviewDto
+        {
+            Matched = unitPrice != null,
+            UnitPrice = unitPrice,
+            WageAmount = wageAmount,
+            PriceType = priceType
+        });
     }
 
     private async Task SaveReportExtAsync(long reportId, Dictionary<long, string>? ext)

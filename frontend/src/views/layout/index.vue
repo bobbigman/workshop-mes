@@ -1,5 +1,6 @@
 <template>
-  <el-container :style="isMobile && $route.path === '/ai-assistant' ? { height: viewportHeight + 'px' } : undefined" class="layout" :class="{ 'is-mobile': isMobile, 'monitor-shell': $route.path === '/execution-monitor', 'ai-mobile-shell': isMobile && $route.path === '/ai-assistant' }">
+  <router-view v-if="standaloneGuide" />
+  <el-container v-else :style="isMobile && $route.path === '/ai-assistant' ? { height: viewportHeight + 'px' } : undefined" class="layout" :class="{ 'is-mobile': isMobile, 'monitor-shell': $route.path === '/execution-monitor', 'ai-mobile-shell': isMobile && $route.path === '/ai-assistant' }">
     <el-aside v-show="!isMobile" width="var(--app-aside-width)" class="aside">
       <div class="logo is-link" @click="goHome">
         <div class="logo-title">{{ factoryName || instanceName }}</div>
@@ -74,7 +75,7 @@
 </template>
 
 <script setup>
-import { ref, provide, onMounted, onUnmounted, watch } from 'vue'
+import { computed, ref, provide, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Iphone } from '@element-plus/icons-vue'
@@ -89,6 +90,9 @@ const aiNewChat = ref(null)
 provide('aiNewChat', aiNewChat)
 const router = useRouter()
 const route = useRoute()
+// 说明页沿用公开/H5入口，只有登录后的后台入口需要系统外壳。
+const standaloneGuide = computed(() => ['/help', '/onboarding', '/advantages'].includes(route.path)
+  && (!localStorage.getItem('token') || route.query.from === 'h5'))
 const userName = ref(localStorage.getItem('userName') || '')
 const instanceName = ref(resolveInstanceLabel(localStorage.getItem('instanceName')))
 const factoryName = ref(localStorage.getItem('factoryName') || '')
@@ -128,7 +132,7 @@ function applyLicenseStatus(data) {
 
 /** docs/141：工人拿手机误开 PC 后台 → 送进报工端 */
 function maybeRedirectWorkerToH5() {
-  if (!isMobile.value) return
+  if (standaloneGuide.value || !isMobile.value) return
   if (role !== 2) return
   if (route.path.startsWith('/h5')) return
   // 273：从手机更多功能明确打开已有只读查询；来源不改变路由/API权限。
@@ -164,7 +168,7 @@ function goH5() {
   router.push('/h5/home')
 }
 
-watch(() => route.path, () => {
+watch(() => route.fullPath, () => {
   drawerOpen.value = false
   maybeRedirectWorkerToH5()
 })
@@ -175,6 +179,14 @@ onMounted(() => {
   window.addEventListener('resize', updateViewportHeight)
   mql = window.matchMedia('(max-width: 768px)')
   mql.addEventListener('change', checkMobile)
+  if (!standaloneGuide.value) loadShellInfo()
+})
+
+watch(standaloneGuide, standalone => {
+  if (!standalone) loadShellInfo()
+})
+
+function loadShellInfo() {
   getInstanceInfo().then(res => {
     if (res.data?.displayName) {
       const label = resolveInstanceLabel(res.data.displayName)
@@ -190,7 +202,7 @@ onMounted(() => {
     // 保留本地 licenseTier 缓存，不因断网清空
     ElMessage.warning('授权状态刷新失败，暂用本地缓存档位')
   })
-})
+}
 
 onUnmounted(() => {
   mql?.removeEventListener('change', checkMobile)

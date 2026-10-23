@@ -6,8 +6,8 @@ import { parseChapters } from '../src/help/parser.js'
 const root = fileURLToPath(new URL('../../', import.meta.url))
 const input = [
   ['start', 'docs/manual/第一次使用.md'],
-  ['pc', 'docs/30-使用手册-管理员（电脑端）.md'],
-  ['mobile', 'docs/31-使用手册-工人（手机端）.md'],
+  ['pc', 'docs/开发手册和方案/30-使用手册-管理员（电脑端）.md'],
+  ['mobile', 'docs/开发手册和方案/31-使用手册-工人（手机端）.md'],
   ['faq', 'docs/manual/遇到问题.md']
 ]
 const chapters = input.flatMap(([group, file]) => parseChapters(readFileSync(resolve(root, file), 'utf8'), group))

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>微聚·报工工作台 V1 模拟效果</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system,'Segoe UI','Microsoft YaHei',sans-serif; background: #eef1f6; padding: 20px; display: flex; justify-content: center; flex-wrap: wrap; gap: 20px; }
+  .phone { width: 380px; background: #fff; border-radius: 36px; box-shadow: 0 8px 30px rgba(0,0,0,.18); overflow: hidden; border: 1px solid #dfe3ea; }
+  .statusbar { background: #0b6bff; color: #fff; font-size: 11px; padding: 8px 18px 6px; display: flex; justify-content: space-between; align-items: center; }
+  .header { background: linear-gradient(135deg,#0b6bff,#2a8bff); color: #fff; padding: 14px 18px 18px; }
+  .head-top { display: flex; justify-content: space-between; align-items: center; font-size: 12px; opacity: .9; }
+  .head-title { font-size: 21px; font-weight: 700; margin-top: 6px; }
+  .head-sub { font-size: 11px; opacity: .85; margin-top: 2px; }
+  .body { padding: 16px 14px 8px; }
+  .hero { background: linear-gradient(135deg,#0b6bff,#3f9dff); border-radius: 14px; padding: 16px 18px; color: #fff; display: flex; align-items: center; justify-content: space-between; }
+  .hero-title { font-size: 18px; font-weight: 700; }
+  .hero-sub { font-size: 11px; opacity: .9; margin-top: 3px; }
+  .hero-icon { width: 46px; height: 46px; background: #fff; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #0b6bff; font-size: 24px; font-weight: 800; }
+  .stats { display: flex; gap: 8px; margin-top: 12px; }
+  .stat { flex: 1; background: #f2f6ff; border-radius: 10px; padding: 10px; text-align: center; }
+  .stat-name { font-size: 11px; color: #6b7a90; }
+  .stat-num { font-size: 20px; font-weight: 700; color: #0b6bff; }
+  .stat-sub { font-size: 10px; color: #98a2af; }
+  .stat.bad { background: #fff3f3; } .stat.bad .stat-num { color: #e5484d; }
+  .stat.money { flex: 1.2; background: #e8f7ef; } .stat.money .stat-num { color: #1e8e57; }
+  .sec-head { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; }
+  .sec-title { font-size: 14px; font-weight: 700; color: #1f2d3d; }
+  .sec-more { font-size: 11px; color: #0b6bff; }
+  .taskbox { margin-top: 8px; background: #fafbfe; border: 1px solid #eef1f5; border-radius: 12px; padding: 12px; }
+  .task-sum { display: flex; justify-content: space-between; font-size: 11px; color: #6b7a90; margin-bottom: 8px; }
+  .task-card { background: #fff; border: 1px solid #e6ebf2; border-radius: 10px; padding: 10px; }
+  .task-tag { display: flex; justify-content: space-between; font-size: 11px; color: #98a2af; }
+  .task-name { font-size: 13px; font-weight: 600; color: #1f2d3d; margin-top: 4px; }
+  .task-plan { font-size: 11px; color: #6b7a90; margin-top: 3px; }
+  .bar { height: 6px; background: #eef1f5; border-radius: 3px; margin-top: 8px; overflow: hidden; }
+  .bar-fill { height: 100%; background: #0b6bff; border-radius: 3px; }
+  .btn-report { background: #0b6bff; color: #fff; font-size: 12px; padding: 5px 14px; border-radius: 7px; display: inline-block; }
+  .grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-top: 10px; text-align: center; }
+  .f-icon { width: 46px; height: 46px; margin: 0 auto; background: #eef4ff; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .f-name { font-size: 11px; color: #3d4a5a; margin-top: 5px; }
+  .f-1 { background: #eef4ff; } .f-2 { background: #e8f7ef; } .f-3 { background: #fff3f3; } .f-4 { background: #f2f0ff; } .f-5 { background: #fff7ec; } .f-6 { background: #e6f6fb; } .f-7 { background: #f2f4f7; } .f-8 { background: #f2f4f7; }
+  .nav { border-top: 1px solid #eef1f5; padding: 10px 0 16px; display: flex; justify-content: space-around; background: #fff; }
+  .nav-item { text-align: center; color: #98a2af; font-size: 11px; }
+  .nav-item.on { color: #0b6bff; }
+  .note { width: 300px; align-self: center; }
+  .note-title { font-size: 15px; font-weight: 700; color: #1f2d3d; margin-bottom: 10px; }
+  .note-item { font-size: 12.5px; color: #3d4a5a; line-height: 1.8; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+  <div class="phone">
+    <div class="statusbar"><span>9:41</span><span>●●● 5G 100%</span></div>
+    <div class="header">
+      <div class="head-top"><span>太阳神厨具五金厂(深圳)</span><span>胡忠谦 ▾</span></div>
+      <div class="head-title">工作台</div>
+      <div class="head-sub">10月23日 星期五 · 下午好</div>
+    </div>
+    <div class="body">
+      <div class="hero">
+        <div>
+          <div class="hero-title">扫码报工</div>
+          <div class="hero-sub">扫工单二维码 · 一键报工</div>
+        </div>
+        <div class="hero-icon">▦</div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="stat-name">今日良品</div><div class="stat-num">128</div><div class="stat-sub">件</div></div>
+        <div class="stat bad"><div class="stat-name">今日不良</div><div class="stat-num">3</div><div class="stat-sub">件</div></div>
+        <div class="stat money"><div class="stat-name">预计计件收入</div><div class="stat-num">¥86.40</div><div class="stat-sub">以工资单为准</div></div>
+      </div>
+      <div class="sec-head"><span class="sec-title">我的任务</span><span class="sec-more">查看全部 ›</span></div>
+      <div class="taskbox">
+        <div class="task-sum"><span><b style="color:#0b6bff;">2</b> 项待报工</span><span><b style="color:#e5484d;">1</b> 项待加工</span></div>
+        <div class="task-card">
+          <div class="task-tag"><span>工单 GD20261023001</span><span style="color:#e5484d;">待报工</span></div>
+          <div class="task-name">不锈钢水杯 · 抛光</div>
+          <div class="task-plan">计划 200 · 已报 120</div>
+          <div class="bar"><div class="bar-fill" style="width:60%;"></div></div>
+          <div style="margin-top:8px;text-align:right;"><span class="btn-report">去报工</span></div>
+        </div>
+      </div>
+      <div class="sec-head"><span class="sec-title">常用功能</span></div>
+      <div class="grid">
+        <div><div class="f-icon f-1">📋</div><div class="f-name">工单</div></div>
+        <div><div class="f-icon f-2">💰</div><div class="f-name">我的工资</div></div>
+        <div><div class="f-icon f-3">⚠️</div><div class="f-name">上报异常</div></div>
+        <div><div class="f-icon f-4">📊</div><div class="f-name">生产报表</div></div>
+        <div><div class="f-icon f-5">🖥️</div><div class="f-name">执行监控</div></div>
+        <div><div class="f-icon f-6">📈</div><div class="f-name">车间看板</div></div>
+        <div><div class="f-icon f-7">❓</div><div class="f-name">帮助</div></div>
+        <div><div class="f-icon f-8">•••</div><div class="f-name">更多功能</div></div>
+      </div>
+    </div>
+    <div class="nav">
+      <div class="nav-item on"><div style="font-size:18px;font-weight:700;">●</div>工作台</div>
+      <div class="nav-item"><div style="font-size:18px;">◫</div>任务</div>
+      <div class="nav-item"><div style="font-size:18px;">✓</div>我的报工</div>
+    </div>
+  </div>
+
+  <div class="note">
+    <div class="note-title">改了什么（比照黑湖）</div>
+    <div class="note-item">▪ <b>扫码报工放大成首屏大按钮</b>（黑湖最高频动作，保持您的差异化入口）</div>
+    <div class="note-item">▪ <b>今日概况升级</b>：良品+不良+计件收入三格，不再是全 0 的空数，工人有获得感（黑湖只给计件预估，您多了良品汇总）</div>
+    <div class="note-item">▪ <b>我的任务改成工单卡片</b>：工单号/产品/工序/计划数/进度条/去报工按钮，任务驱动，学黑湖第一屏看今天干什么</div>
+    <div class="note-item">▪ <b>生产报表/执行监控/车间看板提上首页</b>：不再藏在"更多功能"里（黑湖把看板放手机端）</div>
+    <div class="note-item">▪ 底部导航保留 <b>工作台/任务/我的报工</b></div>
+    <div class="note-item" style="color:#98a2af;margin-top:12px;font-size:11px;">注：模拟图中数值（128/3/¥86.40 等）为示例占位，非真实数据。方案详见同目录 V1-报工工作台-界面方案.md。</div>
+  </div>
+</body>
+</html>

@@ -8,7 +8,7 @@
       </div>
       <div class="header-actions">
         <el-button @click="openNewWindow">新窗口打开</el-button>
-        <router-link :to="returnPath" class="return-link">{{ signedIn ? '返回系统' : '返回登录' }}</router-link>
+        <router-link v-if="!signedIn || route.query.from === 'h5'" :to="returnPath" class="return-link">{{ signedIn ? '返回系统' : '返回登录' }}</router-link>
       </div>
     </header>
 
@@ -146,6 +146,8 @@
 </template>
 
 <script setup>
+import { useRoute } from 'vue-router'
+
 import { onMounted, ref } from 'vue'
 import {
   Timer, Coin, View, Lock, Setting, OfficeBuilding,
@@ -155,6 +157,7 @@ import { VALUE_TIPS } from '@/constants/valueTips'
 import { getInstanceInfo } from '@/api/auth'
 import { creditLine, creditRoles } from '@/utils/instanceDisplay'
 
+const route = useRoute()
 const signedIn = !!localStorage.getItem('token')
 const returnPath = signedIn
   ? (Number(localStorage.getItem('role')) === 2 ? '/h5/home' : '/home')

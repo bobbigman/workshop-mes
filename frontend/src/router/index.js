@@ -3,9 +3,6 @@ import { ElMessage } from 'element-plus'
 import { canUse, FEATURE, currentTier } from '@/utils/licenseTier'
 
 const routes = [
-  { path: '/help', name: 'Help', component: () => import('@/views/help/index.vue'), meta: { title: '操作手册' } },
-  { path: '/advantages', name: 'Advantages', component: () => import('@/views/advantages/index.vue'), meta: { title: '产品优势速览' } },
-  { path: '/onboarding', name: 'Onboarding', component: () => import('@/views/onboarding/index.vue'), meta: { title: '新手入门' } },
   { path: '/login', name: 'Login', component: () => import('@/views/login/index.vue') },
   {
     path: '/',
@@ -43,6 +40,9 @@ const routes = [
       { path: 'mcp-key', name: 'McpKey', component: () => import('@/views/mcp-key/index.vue'), meta: { title: 'MCP 钥匙', adminOnly: true } },
       { path: 'about', name: 'About', component: () => import('@/views/about/index.vue'), meta: { title: '关于' } },
       { path: 'faq', name: 'Faq', component: () => import('@/views/faq/index.vue'), meta: { title: '常见问题（系统能力50问）' } },
+      { path: 'help', name: 'Help', component: () => import('@/views/help/index.vue'), meta: { title: '操作手册' } },
+      { path: 'advantages', name: 'Advantages', component: () => import('@/views/advantages/index.vue'), meta: { title: '产品优势速览' } },
+      { path: 'onboarding', name: 'Onboarding', component: () => import('@/views/onboarding/index.vue'), meta: { title: '新手入门' } },
     ]
   },
   { path: '/h5/more', component: () => import('@/views/h5/more.vue'), meta: { title: '更多功能' } },
