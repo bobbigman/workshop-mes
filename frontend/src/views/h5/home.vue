@@ -26,19 +26,19 @@
       <h3 class="block-title">我的任务</h3>
       <div v-if="!loadError && list.length === 0" class="empty">暂无派给我的或本班组任务，可扫码报工</div>
       <div
-        v-for="(row, index) in list"
+        v-for="row in list"
         :key="row.taskId"
         class="card"
         @click="goReport(row)"
       >
         <div class="row1">
           <span class="tag" :class="'s' + row.orderStatus">{{ statusLabel(row.orderStatus) }}</span>
-          <span class="no">{{ index + 1 }}. {{ row.orderNo }}</span>
+          <span class="no">工单 {{ row.orderNo }}</span>
         </div>
-        <div class="product">{{ row.productName }} · {{ row.operationName }}</div>
+        <div class="product"><template v-if="row.productCode">{{ row.productCode }} · </template>{{ row.productName }} · {{ row.operationName }}</div>
         <div class="meta">
           <span class="remain">剩余 <b>{{ row.remainQty }}</b></span>
-          <span class="time" :class="dueClass(row)">交期 {{ formatDue(row.dueDate) }}</span>
+          <span class="time" :class="dueClass(row)">{{ row.dueState === 'overdue' ? '已逾期 · ' : '交期 ' }}{{ formatDue(row.dueDate) }}</span>
         </div>
         <div class="go">去报工 ›</div>
       </div>
@@ -108,7 +108,7 @@ function formatMoney(n) {
 
 const STATUS = { 0: '未开始', 1: '执行中', 2: '已结束', 3: '已取消' }
 function statusLabel(s) { return STATUS[s] ?? s }
-function formatDue(t) { return t ? String(t).replace('T', ' ').slice(0, 16) : '—' }
+function formatDue(t) { return t ? String(t).replace('T', ' ').slice(0, 10) : '—' }
 function dueClass(row) { return row.dueState === 'overdue' ? 'due-overdue' : row.dueState === 'warning' ? 'due-warning' : '' }
 
 function goReport(row) {
@@ -257,4 +257,15 @@ h2 { margin: 0; font-size: 18px; flex: none; color: var(--app-text-1); }
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+
+/* 任务首屏减少留白，保留触摸尺寸 */
+.scan-btn { height: 48px; margin-bottom: 10px; }
+.today-card { padding: 10px 12px; margin-bottom: 12px; }
+.today-label, .today-val { display: inline; font-size: 15px; }
+.today-label { margin-right: 8px; }
+.today-tip { margin-top: 4px; color: var(--app-text-2); }
+.card { padding: 12px; margin-bottom: 8px; }
+.product { margin-bottom: 6px; }
+.go { margin-top: 4px; min-height: 24px; }
+.meta { flex-wrap: wrap; }
 </style>

@@ -1,5 +1,10 @@
 <template>
   <div class="h5-page">
+    <div class="page-links">
+      <button type="button" class="back-btn" @click="leaveReport(reportBackPath)">‹ 工作台</button>
+      <button type="button" class="back-btn" @click="leaveReport('/h5/abnormal')">异常</button>
+      <button type="button" class="back-btn" @click="leaveReport('/help?topic=mobile/登录和找到自己的工单')">帮助</button>
+    </div>
     <div class="title-row">
       <FactoryBadge />
       <h2 class="order-no">{{ detail?.orderNo || orderNo }}</h2>
@@ -9,55 +14,9 @@
       <template v-if="detail.productCode">{{ detail.productCode }} · </template>{{ detail.productName }}
     </p>
 
-    <div v-if="canWage" class="today-card">
-      <div class="today-label">今日计件</div>
-      <div class="today-val">今日 {{ todayGoodQty }} 件 / ￥{{ formatMoney(todayWage) }}</div>
-      <div class="today-tip">按已复核+待复核报工估算，以工资单为准</div>
-    </div>
-
     <div v-if="loadError" class="load-error">
       <p>无法打开该工单，请返回后重试</p>
       <button type="button" class="btn btn-primary" @click="router.replace(reportBackPath)">返回</button>
-    </div>
-
-    <div class="summary" v-else-if="detail">
-      <div class="summary-row">
-        <div>
-          <span class="k">计划</span>
-          <span class="v">{{ summary.plan }}</span>
-        </div>
-        <div>
-          <span class="k">已完成</span>
-          <span class="v">{{ summary.done }}</span>
-        </div>
-      </div>
-      <div class="remain-block">
-        <div class="k">剩余可报</div>
-        <div class="big">{{ summary.remain }}</div>
-      </div>
-    </div>
-
-    <div class="guide-block" v-if="detail && !loadError">
-      <button type="button" class="guide-toggle" @click="guideVisible = !guideVisible">
-        查看作业指导书 / 图纸{{ guides.length ? `（${guides.length}）` : '' }}
-      </button>
-      <div v-if="guideVisible" class="guide-list">
-        <p v-if="guidesLoadError" class="guide-empty err">
-          作业指导书加载失败
-          <button type="button" class="link-btn" @click="reloadGuides">重试</button>
-        </p>
-        <p v-else-if="guides.length === 0" class="guide-empty">暂无作业指导书 / 图纸</p>
-        <button
-          v-for="g in guides"
-          :key="g.id"
-          type="button"
-          class="guide-item"
-          @click="openGuide(g)"
-        >
-          <span class="guide-name">{{ g.fileName }}</span>
-          <span class="guide-meta">{{ g.refType === 'operation' ? (g.refName || '工序') : '产品' }}{{ g.version ? ' · ' + g.version : '' }}</span>
-        </button>
-      </div>
     </div>
 
     <div v-if="detail && !loadError && noReportableOps" class="no-ops-tip">
@@ -72,6 +31,51 @@
           {{ index + 1 }}. {{ o.operationName }}
         </option>
       </select>
+
+      <div class="summary" aria-label="当前工序进度">
+        <span>计划 <b>{{ summary.plan }}</b></span>
+        <span>已完成 <b>{{ summary.done }}</b></span>
+        <span class="remain">剩余可报 <b>{{ summary.remain }}</b></span>
+      </div>
+      <div v-if="form.operationId" class="work-clock">
+        <van-button v-if="!workSession" block type="primary" :loading="clockLoading" @click="startClock">开工</van-button>
+        <p v-else>作业中… {{ elapsedClock }} <small>提交后结束本次计时</small></p>
+        <p v-if="clockError" role="alert">{{ clockError }} <van-button size="mini" @click="refreshClock">重试</van-button></p>
+        <p v-if="clockPriceType === 2 && !workSession">计时工资，请先开工</p>
+      </div>
+      <label>本次良品</label>
+      <input
+        ref="goodInput"
+        :value="form.goodQty || ''"
+        class="qty-input"
+        type="text"
+        inputmode="none"
+        readonly
+        aria-label="本次良品数量，点击打开数字键盘"
+        placeholder="点击输入数量"
+        :disabled="submitting || reviewing || locked"
+        @click="qtyKeyboardVisible = true"
+      />
+      <div class="stepper">
+        <button type="button" :disabled="!canAdjust" @click="bump(-10)">-10</button>
+        <button type="button" :disabled="!canAdjust" @click="bump(-1)">-1</button>
+        <button type="button" :disabled="!canAdjust" @click="bump(1)">+1</button>
+        <button type="button" :disabled="!canAdjust" @click="bump(10)">+10</button>
+      </div>
+      <button type="button" class="fill-btn" :disabled="!canAdjust" @click="fillRemain">
+        报全部剩余 {{ remainNum }}
+      </button>
+
+      <label>不良品</label>
+      <input v-model.number="form.defectQty" type="number" min="0" />
+
+      <template v-if="Number(form.defectQty) > 0">
+        <label>不良品原因</label>
+        <select v-model="form.defectId">
+          <option :value="null">请选择</option>
+          <option v-for="d in defects" :key="d.id" :value="d.id">{{ d.name }}</option>
+        </select>
+      </template>
 
       <div v-if="canAssign && currentTask" class="assign-box">
         <div class="assign-head">
@@ -170,39 +174,34 @@
         </div>
       </div>
 
-      <label>本次良品</label>
-      <input
-        ref="goodInput"
-        :value="form.goodQty || ''"
-        class="qty-input"
-        type="text"
-        inputmode="none"
-        readonly
-        aria-label="本次良品数量，点击打开数字键盘"
-        placeholder="点击输入数量"
-        :disabled="submitting || reviewing || locked"
-        @click="qtyKeyboardVisible = true"
-      />
-      <div class="stepper">
-        <button type="button" :disabled="!canAdjust" @click="bump(-10)">-10</button>
-        <button type="button" :disabled="!canAdjust" @click="bump(-1)">-1</button>
-        <button type="button" :disabled="!canAdjust" @click="bump(1)">+1</button>
-        <button type="button" :disabled="!canAdjust" @click="bump(10)">+10</button>
+      <div class="guide-block" v-if="detail && !loadError">
+        <button type="button" class="guide-toggle" @click="guideVisible = !guideVisible">
+          查看作业指导书 / 图纸{{ guides.length ? `（${guides.length}）` : '' }}
+        </button>
+        <div v-if="guideVisible" class="guide-list">
+          <p v-if="guidesLoadError" class="guide-empty err">
+            作业指导书加载失败
+            <button type="button" class="link-btn" @click="reloadGuides">重试</button>
+          </p>
+          <p v-else-if="guides.length === 0" class="guide-empty">暂无作业指导书 / 图纸</p>
+          <button
+            v-for="g in guides"
+            :key="g.id"
+            type="button"
+            class="guide-item"
+            @click="openGuide(g)"
+          >
+            <span class="guide-name">{{ g.fileName }}</span>
+            <span class="guide-meta">{{ g.refType === 'operation' ? (g.refName || '工序') : '产品' }}{{ g.version ? ' · ' + g.version : '' }}</span>
+          </button>
+        </div>
       </div>
-      <button type="button" class="fill-btn" :disabled="!canAdjust" @click="fillRemain">
-        报全部剩余 {{ remainNum }}
-      </button>
 
-      <label>不良品</label>
-      <input v-model.number="form.defectQty" type="number" min="0" />
-
-      <template v-if="Number(form.defectQty) > 0">
-        <label>不良品原因</label>
-        <select v-model="form.defectId">
-          <option :value="null">请选择</option>
-          <option v-for="d in defects" :key="d.id" :value="d.id">{{ d.name }}</option>
-        </select>
-      </template>
+      <div v-if="canWage" class="today-card">
+        <div class="today-label">今日计件</div>
+        <div class="today-val">{{ todayGoodQty }} 件 · 预估 ￥{{ formatMoney(todayWage) }}</div>
+        <div class="today-tip">按已复核+待复核报工估算，以工资单为准</div>
+      </div>
 
       <template v-if="reportFieldsLoadError">
         <p class="field-err">
@@ -222,12 +221,6 @@
         </template>
       </template>
 
-      <div v-if="form.operationId" class="work-clock">
-        <van-button v-if="!workSession" block type="primary" :loading="clockLoading" @click="startClock">开工</van-button>
-        <p v-else>作业中… {{ elapsedClock }} <small>提交后结束本次计时</small></p>
-        <p v-if="clockError" role="alert">{{ clockError }} <van-button size="mini" @click="refreshClock">重试</van-button></p>
-        <p v-if="clockPriceType === 2 && !workSession">计时工资，请先开工</p>
-      </div>
       <label>报工时长（未修改则自动计时）</label>
       <div class="duration-row">
         <input v-model.number="form.hours" @input="durationEdited = true" type="number" min="0" max="24" />
@@ -239,13 +232,12 @@
       <p v-if="locked" class="full-tip">该工序已报满，不可继续报工</p>
     </div>
 
-    <div class="action-bar" v-if="detail && !loadError && !noReportableOps">
-      <button class="btn btn-outline" :disabled="submitting || reviewing || locked || clockBlocked" @click="onContinue">继续报工</button>
-      <button class="btn btn-primary" :disabled="submitting || reviewing || locked || clockBlocked" @click="onSubmit">提交报工</button>
+    <div class="action-bar" v-if="detail && !loadError && !noReportableOps && !qtyKeyboardVisible">
+      <button class="btn btn-outline" :disabled="submitting || reviewing || locked || clockBlocked" @click="onContinue">提交并继续</button>
+      <button class="btn btn-primary" :disabled="submitting || reviewing || locked || clockBlocked" @click="onSubmit">提交并返回</button>
     </div>
-    <van-number-keyboard :show="qtyKeyboardVisible" title="本次良品数量" close-button-text="完成"
+    <van-number-keyboard :show="qtyKeyboardVisible" :title="`本次良品：${form.goodQty || 0}`" close-button-text="完成"
       @blur="qtyKeyboardVisible = false" @input="appendGoodQty" @delete="deleteGoodQty" />
-    <TabBar active="home" />
 
     <!-- 内嵌文档预览（PDF/Word）：全屏遮罩层，不跳新窗口、不触发下载 -->
     <div v-if="previewFile" class="doc-overlay">
@@ -271,7 +263,6 @@ import { startWorkSession, getCurrentWorkSession } from '@/api/workSession'
 import { isUpstreamSoftConfirm } from '@/utils/upstreamConfirm'
 import { assign, assignWorkers, assignDepartments, assignSuggest } from '@/api/assign'
 import { getKnowledgeFileByOrder, getKnowledgeFileRaw } from '@/api/knowledge'
-import TabBar from './TabBar.vue'
 import FactoryBadge from '@/components/FactoryBadge.vue'
 import H5LogoutBtn from '@/components/H5LogoutBtn.vue'
 import DocPreview from '@/components/DocPreview.vue'
@@ -281,6 +272,14 @@ import { canUse, FEATURE, currentTier } from '@/utils/licenseTier'
 const route = useRoute()
 const router = useRouter()
 const reportBackPath = '/h5/home'
+async function leaveReport(path) {
+  if (submitting.value || reviewing.value) return
+  if (isDirty.value) {
+    try { await showConfirmDialog({ title: '离开报工', message: '当前有未提交的内容，确定离开？' }) }
+    catch { return }
+  }
+  router.push(path)
+}
 const orderNo = ref(route.query.order || '')
 const detail = ref(null)
 const loadError = ref(false)
@@ -986,7 +985,7 @@ async function onSubmit() {
 <style scoped>
 .h5-page {
   padding: var(--h5-page-padding);
-  padding-bottom: calc(var(--h5-tabbar-height) + var(--h5-action-height) + 28px + env(safe-area-inset-bottom));
+  padding-bottom: calc(var(--h5-action-height) + 32px + env(safe-area-inset-bottom));
   min-height: 100vh;
   background: var(--app-bg);
   box-sizing: border-box;
@@ -1015,13 +1014,6 @@ async function onSubmit() {
 .summary {
   background: var(--app-card); border-radius: var(--h5-card-radius); padding: var(--h5-card-padding);
   margin-bottom: 16px; box-shadow: var(--app-shadow);
-}
-.summary-row { display: flex; justify-content: space-between; gap: 12px; }
-.summary-row .k, .remain-block .k { font-size: 13px; color: var(--app-text-3); }
-.summary-row .v { margin-left: 6px; font-size: 18px; font-weight: 700; color: var(--app-text-1); }
-.remain-block { margin-top: 12px; }
-.remain-block .big {
-  margin-top: 2px; font-size: 40px; font-weight: 700; line-height: 1.1; color: var(--app-primary);
 }
 .form label { display: block; margin: 14px 0 6px; font-size: 13px; color: var(--app-text-2); }
 .form input:not([type="checkbox"]):not([type="radio"]),
@@ -1054,8 +1046,8 @@ async function onSubmit() {
 .duration-row span { flex: none; font-size: 14px; color: var(--app-text-2); }
 .action-bar {
   position: fixed; left: 0; right: 0; z-index: 40;
-  bottom: calc(var(--h5-tabbar-height) + env(safe-area-inset-bottom));
-  display: flex; gap: 10px; padding: 8px 12px; box-sizing: border-box;
+  bottom: 0;
+  display: flex; gap: 10px; padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); box-sizing: border-box;
   background: var(--app-card); border-top: 1px solid var(--app-border);
 }
 .btn {
@@ -1137,4 +1129,22 @@ async function onSubmit() {
   flex: none; border: none; padding: 6px 16px; border-radius: var(--app-radius-sm);
   background: var(--app-primary-light); color: var(--app-primary); font-size: 14px; font-weight: 600;
 }
+
+/* 报工首屏紧凑布局 */
+.page-links { display: flex; gap: 12px; align-items: center; }
+.back-btn { min-height: 44px; border: 0; background: transparent; color: var(--app-primary); font-size: 14px; padding: 0 4px; }
+.back-btn:first-child { margin-right: auto; }
+.summary { display: flex; flex-wrap: wrap; gap: 8px 14px; padding: 10px 0; margin: 0; background: transparent; box-shadow: none; font-size: 13px; color: var(--app-text-2); }
+.summary b { font-size: 17px; color: var(--app-text-1); }
+.summary .remain b { color: var(--app-primary); }
+.form > label:first-child { margin-top: 4px; }
+.today-card { margin: 12px 0; padding: 10px 12px; }
+.today-label, .today-val { display: inline; font-size: 14px; }
+.today-label { margin-right: 8px; }
+.today-tip { color: var(--app-text-2); }
+.guide-block { padding: 0; margin: 8px 0; box-shadow: none; background: transparent; }
+.guide-toggle { height: 44px; text-align: left; padding: 0 12px; font-size: 14px; }
+.work-clock p { margin: 6px 0; font-size: 14px; }
+.form label { margin-top: 10px; }
+.stepper { margin-top: 6px; }
 </style>
