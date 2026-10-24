@@ -118,13 +118,8 @@ public class WorkSessionService(AppDbContext db)
 
     public async Task<byte> PriceTypeAsync(ProdWorkOrder order, long operationId, long userId, DateTime at)
     {
-        if (await new OperationPricingService(db).LockedAsync(order.Id, operationId, order.FactoryId) != null) return 1;
-        var deptIds = await db.DepartmentUsers.AsNoTracking().Where(x => x.UserId == userId)
-            .Select(x => x.DepartmentId).ToListAsync();
-        var dept = await db.OperationDepartments.AsNoTracking().Where(x => x.OperationId == operationId && deptIds.Contains(x.DepartmentId))
-            .OrderBy(x => x.DepartmentId).Select(x => (long?)x.DepartmentId).FirstOrDefaultAsync();
-        var rules = await db.PriceRules.AsNoTracking().Where(x => x.FactoryId == order.FactoryId).ToListAsync();
-        return PriceRuleMatcher.Match(rules, order.FactoryId, order.ProductId, operationId, dept, userId, at)?.PriceType ?? 0;
+        // 报工计价方式一律取本单任务锁价，不按当前价目表或人员猜。
+        return (await new OperationPricingService(db).LockedAsync(order.Id, operationId, order.FactoryId)).PriceType;
     }
 
     public async Task<ResolvedWorkTime> ResolveAsync(ProdWorkOrder order, long operationId, long userId,

@@ -14,13 +14,10 @@ public static class DeleteGuard
                 return null;
 
             case "Product":
-                if (await db.ProductOperationPricings.AnyAsync(m => m.ProductId == id)) return "该产品被工序取价方式引用，请先处理关联";
                 var priceLists = await db.OperationPriceLists.AsNoTracking().ToListAsync();
                 if (priceLists.Any(t => t.ProductId == id || OperationPriceListService.Details(t).Rows.Any(r => r.ProductId == id))) return "该产品被工序价目表引用，请先处理关联";
                 if (await db.WorkOrders.AnyAsync(o => o.ProductId == id))
                     return "该产品已被工单引用，请先删除相关工单";
-                if (await db.PriceRules.AnyAsync(r => r.ProductId == id))
-                    return "该产品已被工价规则引用，请先删除相关工价规则";
                 if (await db.KnowledgeFiles.AnyAsync(f => f.RefType == "product" && f.RefId == id))
                     return "该产品已被知识库文件引用，请先删除相关文件";
                 break;
@@ -32,16 +29,14 @@ public static class DeleteGuard
 
             case "Operation":
                 if (await db.CustomFields.AnyAsync(f => f.OperationId == id)) return "该工序被工艺字段引用，不能删除";
-                if (await db.OperationPriceLists.AnyAsync(t => t.OperationId == id) || await db.ProductOperationPricings.AnyAsync(m => m.OperationId == id))
-                    return "该工序被属性价目表/取价模式引用，不能删除";
+                if (await db.OperationPriceLists.AnyAsync(t => t.OperationId == id))
+                    return "该工序被工序价目表引用，不能删除";
                 if (await db.WorkSessions.AnyAsync(x => x.OperationId == id))
                     return "该工序已有开工记录，请先处理相关工单";
                 if (await db.RoutingSteps.AnyAsync(s => s.OperationId == id))
                     return "该工序已被工艺路线引用，请先删除相关工艺路线";
                 if (await db.Reports.AnyAsync(r => r.OperationId == id))
                     return "该工序已有报工记录，不可删除";
-                if (await db.PriceRules.AnyAsync(r => r.OperationId == id))
-                    return "该工序已被工价规则引用，请先删除相关工价规则";
                 if (await db.KnowledgeFiles.AnyAsync(f => f.RefType == "operation" && f.RefId == id))
                     return "该工序已被知识库文件引用，请先删除相关文件";
                 break;
@@ -62,8 +57,6 @@ public static class DeleteGuard
                     return "该部门被工序设为报工权限，请先调整工序";
                 if (await db.DepartmentUsers.AnyAsync(x => x.DepartmentId == id))
                     return "该部门下还有用户，请先移除";
-                if (await db.PriceRules.AnyAsync(r => r.DepartmentId == id))
-                    return "该部门已被工价规则引用，请先删除相关工价规则";
                 if (await db.WorkOrderOperations.AnyAsync(t => t.AssigneeDepartmentId == id))
                     return "该部门已被派工为班组，请先在工单详情取消派工";
                 break;

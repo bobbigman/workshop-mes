@@ -23,7 +23,8 @@ public class SalaryStatementItem
     public long Id { get; set; }
     public long StatementId { get; set; }
     public long ReportId { get; set; }
-    public long? RuleId { get; set; }
+    /// <summary>新价目表来源 ID（旧工价 rule_id 已删除）。写入新结算必须有值。</summary>
+    public long? PriceListId { get; set; }
     public int CalcQty { get; set; }
     public byte PriceType { get; set; }
     public int DurationMinutes { get; set; }

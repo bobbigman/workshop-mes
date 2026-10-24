@@ -49,7 +49,8 @@ public class WorkOrderStatusCountsDto
 public class WorkOrderCreateDto
 {
     public Dictionary<long, Dictionary<long, string?>>? OperationAttributes { get; set; }
-    public Dictionary<long, ProcessingChoice>? ProcessingChoices { get; set; }
+    /// <summary>工序→预览指纹（quoteToken）；服务端据此校验价目表/属性未变化后锁价。</summary>
+    public Dictionary<long, string>? QuoteTokens { get; set; }
     public long? CopyFromId { get; set; }
     public string? OrderNo { get; set; }             // 可自定义，空则自动生成
     public long ProductId { get; set; }
@@ -67,7 +68,8 @@ public class WorkOrderPlanDto
 public class WorkOrderUpdateDto
 {
     public Dictionary<long, Dictionary<long, string?>>? OperationAttributes { get; set; }
-    public Dictionary<long, ProcessingChoice>? ProcessingChoices { get; set; }
+    /// <summary>工序→预览指纹（quoteToken）；服务端据此校验价目表/属性未变化后锁价。</summary>
+    public Dictionary<long, string>? QuoteTokens { get; set; }
     public string? OrderNo { get; set; }             // 可改
     public long? ProductId { get; set; }             // 可换
     public int? Qty { get; set; }                    // 可改
@@ -568,7 +570,7 @@ public class WorkOrderService : IWorkOrderService
             if (source.ProductId == dto.ProductId) dto.OperationAttributes = await new OperationAttributeService(_db).ReadOrderAsync(source.Id, factoryId);
         }
         await new OperationAttributeService(_db).SaveOrderAsync(order, dto.OperationAttributes);
-        await new OperationPricingService(_db).BindAsync(order, dto.ProcessingChoices);
+        await new OperationPricingService(_db).BindAsync(order, dto.QuoteTokens);
         await SaveExtAsync(order.Id, dto.Ext);
         await tx.CommitAsync();
         return ApiResult<object?>.OkMsg();
@@ -654,7 +656,7 @@ public class WorkOrderService : IWorkOrderService
             await SaveExtAsync(id, dto.Ext);
 
         await new OperationAttributeService(_db).SaveOrderAsync(order, dto.OperationAttributes);
-        await new OperationPricingService(_db).BindAsync(order, dto.ProcessingChoices);
+        await new OperationPricingService(_db).BindAsync(order, dto.QuoteTokens);
         await RecalcStatusAsync(order);
         await tx.CommitAsync();
         return ApiResult<object?>.OkMsg();
@@ -710,21 +712,9 @@ public class WorkOrderService : IWorkOrderService
         var ext = await _db.CustomFieldValues.AsNoTracking()
             .Where(v => v.TargetId == id && fields.Contains(v.FieldId))
             .ToDictionaryAsync(v => v.FieldId, v => v.Value ?? "");
-        var pricing = new OperationPricingService(_db);
-        var selections = new Dictionary<long, ProcessingChoice>();
-        var sourceTasks = await _db.WorkOrderOperations.AsNoTracking().Where(t => t.WorkOrderId == id && t.ProcessingPrice != null).ToListAsync();
-        foreach (var task in sourceTasks)
-        {
-            if (await new OperationPriceListService(_db).IsAttributeAsync(src.ProductId, task.OperationId, factoryId)) continue;
-            if (await _db.ProductOperationPricings.AnyAsync(m => m.FactoryId == factoryId && m.ProductId == src.ProductId && m.OperationId == task.OperationId && !m.AttributePricing)) continue;
-            var old = OperationPricingService.Read<ProcessingQuote>(task.ProcessingPrice!);
-            var quote = await pricing.PreviewAsync(task.OperationId, src.ProductId, factoryId, old.Choice);
-            quote.Choice.QuoteToken = quote.QuoteToken;
-            selections[task.OperationId] = quote.Choice;
-        }
         return await CreateAsync(new WorkOrderCreateDto
         {
-            CopyFromId = id, ProductId = src.ProductId, Qty = src.Qty, Ext = ext, ProcessingChoices = selections
+            CopyFromId = id, ProductId = src.ProductId, Qty = src.Qty, Ext = ext
         }, currentUserId, factoryId);
     }
 

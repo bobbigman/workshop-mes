@@ -14,6 +14,7 @@ public static class OperationPriceListSchema
                 code NVARCHAR(64) NOT NULL,
                 name NVARCHAR(128) NOT NULL,
                 operation_id BIGINT NOT NULL,
+                pricing_type TINYINT NOT NULL DEFAULT 1,
                 status TINYINT NOT NULL DEFAULT 0,
                 effective_from DATE NOT NULL,
                 effective_to DATE NULL,
@@ -27,16 +28,7 @@ public static class OperationPriceListSchema
                 CONSTRAINT uq_operation_price_list_code UNIQUE(factory_id,code)
             );
         END;
-        IF OBJECT_ID('base_product_operation_pricing', 'U') IS NULL
-        BEGIN
-            CREATE TABLE base_product_operation_pricing (
-                id BIGINT IDENTITY(1,1) PRIMARY KEY,
-                factory_id BIGINT NOT NULL,
-                product_id BIGINT NOT NULL,
-                operation_id BIGINT NOT NULL,
-                attribute_pricing BIT NOT NULL DEFAULT 0,
-                CONSTRAINT uq_product_operation_pricing UNIQUE(factory_id,product_id,operation_id)
-            );
-        END;
+        IF OBJECT_ID('base_operation_price_list', 'U') IS NOT NULL AND COL_LENGTH('base_operation_price_list','pricing_type') IS NULL
+            ALTER TABLE base_operation_price_list ADD pricing_type TINYINT NOT NULL DEFAULT 1;
         """;
 }

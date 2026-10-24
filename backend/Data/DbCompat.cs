@@ -264,27 +264,6 @@ IF COL_LENGTH('prod_report', 'confirmed_at') IS NULL
   ALTER TABLE prod_report ADD confirmed_at DATETIME2 NULL;");
 
         await db.Database.ExecuteSqlRawAsync(@"
-IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'base_price_rule')
-BEGIN
-  CREATE TABLE base_price_rule (
-    id             BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_base_price_rule PRIMARY KEY,
-    factory_id     BIGINT NOT NULL,
-    product_id     BIGINT NULL,
-    operation_id   BIGINT NULL,
-    department_id  BIGINT NULL,
-    user_id        BIGINT NULL,
-    price_type     TINYINT NOT NULL,
-    unit_price     DECIMAL(12,4) NOT NULL,
-    deduct_price   DECIMAL(12,4) NULL,
-    effective_from DATETIME2 NOT NULL,
-    effective_to   DATETIME2 NULL,
-    priority       INT NOT NULL CONSTRAINT DF_base_price_rule_pri DEFAULT 0,
-    created_at     DATETIME2 NOT NULL CONSTRAINT DF_base_price_rule_ca DEFAULT SYSDATETIME()
-  );
-  CREATE INDEX ix_price_rule_factory ON base_price_rule(factory_id, effective_from);
-END");
-
-        await db.Database.ExecuteSqlRawAsync(@"
 IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'salary_statement')
 BEGIN
   CREATE TABLE salary_statement (
@@ -355,7 +334,7 @@ BEGIN
     id            BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_salary_statement_item PRIMARY KEY,
     statement_id  BIGINT NOT NULL,
     report_id     BIGINT NOT NULL,
-    rule_id       BIGINT NULL,
+    price_list_id BIGINT NULL,
     calc_qty      INT NOT NULL CONSTRAINT DF_salary_item_qty DEFAULT 0,
     unit_price    DECIMAL(12,4) NOT NULL,
     amount        DECIMAL(12,2) NOT NULL CONSTRAINT DF_salary_item_amt DEFAULT 0,
@@ -684,6 +663,24 @@ BEGIN
     CONSTRAINT UQ_sys_user_favorite_user_menu UNIQUE (user_id, menu_key)
   );
 END");
+
+        // 413：旧工价结构仍在则明确报错，不自动 DROP；由显式迁移 PriceRuleRemovalSchema 清理。
+        var legacyConn = db.Database.GetDbConnection();
+        var legacyWasOpen = legacyConn.State == System.Data.ConnectionState.Open;
+        if (!legacyWasOpen) await legacyConn.OpenAsync();
+        try
+        {
+            await using var cmd = legacyConn.CreateCommand();
+            cmd.CommandText = PriceRuleRemovalSchema.HasLegacySql;
+            var legacy = Convert.ToInt32(await cmd.ExecuteScalarAsync() ?? 0) == 1;
+            if (legacy)
+                throw new InvalidOperationException(
+                    "检测到旧工价结构（base_price_rule / base_product_operation_pricing / pricing_config / rule_id），请先执行 413 清理脚本 PriceRuleRemovalSchema.UpgradeSql（或 backend/scripts/413-drop-legacy-price-rule.sql），再重启。");
+        }
+        finally
+        {
+            if (!legacyWasOpen) await legacyConn.CloseAsync();
+        }
     }
 
     /// <summary>docs/133 回滚：去掉 Pushplus 升表字段与规则扩展列；列不存在则跳过。</summary>

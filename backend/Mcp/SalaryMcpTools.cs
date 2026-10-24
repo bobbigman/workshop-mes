@@ -74,7 +74,7 @@ public class SalaryMcpTools
     }
 
     [McpServerTool(Name = "query_daily_piecework"),
-     Description("当日计件试算（只读、不落库、不生成工资单）。本人+业务时区当天报工，服务端按工价表 PriceRuleMatcher 逐条算，合计=Σ(amount−deduct)；拆分已复核/未复核。口径：按工价表试算、未复核未入账、复核后定。问「这个月工资」请用 query_salary。生产人员/班组长仅本人；需先绑定。")]
+     Description("当日计件试算（只读、不落库、不生成工资单）。本人+业务时区当天报工，服务端按报工锁定的工序价目表快照逐条算，合计=Σ(amount−deduct)；拆分已复核/未复核。口径：按报工快照试算、未复核未入账、复核后定。问「这个月工资」请用 query_salary。生产人员/班组长仅本人；需先绑定。")]
     public async Task<string> QueryDailyPiecework(
         [Description("兼容旧调用保留的参数；车间查询不使用金蝶授权码")] string? authToken = null,
         [Description("渠道，可空")] string? chanType = null,

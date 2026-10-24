@@ -23,8 +23,6 @@ public class AppDbContext : DbContext
     public DbSet<BaseRoutingStep> RoutingSteps => Set<BaseRoutingStep>();
     public DbSet<BaseProduct> Products => Set<BaseProduct>();
     public DbSet<OperationPriceList> OperationPriceLists => Set<OperationPriceList>();
-    public DbSet<ProductOperationPricing> ProductOperationPricings => Set<ProductOperationPricing>();
-    public DbSet<BasePriceRule> PriceRules => Set<BasePriceRule>();
     public DbSet<BaseKnowledgeFile> KnowledgeFiles => Set<BaseKnowledgeFile>();
 
     public DbSet<ProdWorkOrder> WorkOrders => Set<ProdWorkOrder>();
@@ -163,7 +161,6 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<BaseOperation>(e =>
         {
-            e.Property(x => x.PricingConfig).HasColumnName("pricing_config");
             e.ToTable("base_operation");
             e.Property(x => x.FactoryId).HasColumnName("factory_id");
             e.Property(x => x.Code).HasColumnName("code").HasMaxLength(64);
@@ -343,6 +340,7 @@ public class AppDbContext : DbContext
             e.Property(x => x.Code).HasColumnName("code").HasMaxLength(64);
             e.Property(x => x.Name).HasColumnName("name").HasMaxLength(128);
             e.Property(x => x.OperationId).HasColumnName("operation_id");
+            e.Property(x => x.PricingType).HasColumnName("pricing_type").HasDefaultValue((byte)1);
             e.Property(x => x.Status).HasColumnName("status");
             e.Property(x => x.EffectiveFrom).HasColumnName("effective_from").HasColumnType("date");
             e.Property(x => x.EffectiveTo).HasColumnName("effective_to").HasColumnType("date");
@@ -354,33 +352,6 @@ public class AppDbContext : DbContext
             e.Property(x => x.CreatedAt).HasColumnName("created_at");
             e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
             e.HasIndex(x => new { x.FactoryId, x.Code }).IsUnique();
-        });
-        modelBuilder.Entity<ProductOperationPricing>(e =>
-        {
-            e.Property(x => x.Id).HasColumnName("id");
-            e.Property(x => x.FactoryId).HasColumnName("factory_id");
-            e.Property(x => x.ProductId).HasColumnName("product_id");
-            e.Property(x => x.OperationId).HasColumnName("operation_id");
-            e.Property(x => x.AttributePricing).HasColumnName("attribute_pricing");
-            e.HasIndex(x => new { x.FactoryId, x.ProductId, x.OperationId }).IsUnique();
-        });
-
-        modelBuilder.Entity<BasePriceRule>(e =>
-        {
-            e.ToTable("base_price_rule");
-            e.Property(x => x.FactoryId).HasColumnName("factory_id");
-            e.Property(x => x.ProductId).HasColumnName("product_id");
-            e.Property(x => x.OperationId).HasColumnName("operation_id");
-            e.Property(x => x.DepartmentId).HasColumnName("department_id");
-            e.Property(x => x.UserId).HasColumnName("user_id");
-            e.Property(x => x.PriceType).HasColumnName("price_type");
-            e.Property(x => x.UnitPrice).HasColumnName("unit_price").HasPrecision(12, 4);
-            e.Property(x => x.DeductPrice).HasColumnName("deduct_price").HasPrecision(12, 4);
-            e.Property(x => x.EffectiveFrom).HasColumnName("effective_from");
-            e.Property(x => x.EffectiveTo).HasColumnName("effective_to");
-            e.Property(x => x.Priority).HasColumnName("priority");
-            e.Property(x => x.CreatedAt).HasColumnName("created_at");
-            e.HasIndex(x => new { x.FactoryId, x.EffectiveFrom });
         });
 
         modelBuilder.Entity<BaseKnowledgeFile>(e =>
@@ -442,7 +413,7 @@ public class AppDbContext : DbContext
             e.HasIndex(x => x.StatementId);
             e.Property(x => x.StatementId).HasColumnName("statement_id");
             e.Property(x => x.ReportId).HasColumnName("report_id");
-            e.Property(x => x.RuleId).HasColumnName("rule_id");
+            e.Property(x => x.PriceListId).HasColumnName("price_list_id");
             e.Property(x => x.CalcQty).HasColumnName("calc_qty");
             e.Property(x => x.UnitPrice).HasColumnName("unit_price").HasPrecision(12, 4);
             e.Property(x => x.WageCoeff).HasColumnName("wage_coeff").HasPrecision(4, 2);

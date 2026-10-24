@@ -1,9 +1,7 @@
 ﻿<template>
   <div v-loading="loading">
     <template v-if="!editing">
-      <h2>工序价目表列表</h2>
-      <el-alert v-if="legacy.length" type="warning" :closable="false" title="存在旧行级配置待转换，相关工序新单已阻断；请核实后新建表级价目表。" />
-      <div v-if="legacy.length" class="legacy"><span v-for="t in legacy" :key="t.id">{{t.code}}（{{t.rows.length}}行） </span></div>
+      <h2>工序价目表</h2>
       <div class="toolbar">
         <el-input v-model="filters.keyword" clearable placeholder="编号 / 名称" style="width:190px" @keyup.enter="search" />
         <el-select v-model="filters.operationId" clearable placeholder="全部工序" style="width:150px"><el-option v-for="o in operations" :key="o.id" :label="o.name" :value="o.id" /></el-select>
@@ -16,29 +14,31 @@
         <el-table-column label="单据编号" min-width="150"><template #default="{row}"><el-button link type="primary" @click="open(row.id,true)">{{row.code}}</el-button></template></el-table-column>
         <el-table-column prop="name" label="名称" min-width="150" />
         <el-table-column label="价目表类型 / 工序" min-width="150"><template #default="{row}">{{opName(row.operationId)}}</template></el-table-column>
+        <el-table-column label="计价方式" width="95"><template #default="{row}">{{pricingTypes[row.pricingType]}}</template></el-table-column>
         <el-table-column label="产品范围" min-width="180"><template #default="{row}">{{productName(row.productId)}}</template></el-table-column>
         <el-table-column label="明细行数" width="95"><template #default="{row}">{{row.details.rows.length}}</template></el-table-column>
         <el-table-column label="状态" width="95"><template #default="{row}"><el-tag :type="row.status===1?'success':row.status===2?'info':'warning'">{{statuses[row.status]}}</el-tag></template></el-table-column>
         <el-table-column label="生效 ~ 失效" min-width="205"><template #default="{row}">{{day(row.effectiveFrom)}} ~ {{row.effectiveTo?day(row.effectiveTo):'长期'}}</template></el-table-column>
         <el-table-column label="更新时间" min-width="160"><template #default="{row}">{{row.updatedAt?.replace('T',' ').slice(0,19)}}</template></el-table-column>
-        <el-table-column label="操作" width="180" fixed="right"><template #default="{row}"><el-button link type="primary" @click="open(row.id,false)">编辑</el-button><el-button link :disabled="row.details.schemaVersion!==2" @click="copy(row)">复制</el-button><el-button link type="danger" :disabled="row.status!==0||!!row.activatedAt||row.details.schemaVersion!==2" @click="removeTable(row)">删除</el-button></template></el-table-column>
+        <el-table-column label="操作" width="180" fixed="right"><template #default="{row}"><el-button link type="primary" @click="open(row.id,false)">编辑</el-button><el-button link @click="copy(row)">复制</el-button><el-button link type="danger" :disabled="row.status!==0||!!row.activatedAt" @click="removeTable(row)">删除</el-button></template></el-table-column>
       </el-table>
       <el-pagination v-model:current-page="filters.page" :page-size="20" :total="total" layout="prev,pager,next,total" @current-change="load" />
     </template>
     <template v-else>
       <div class="toolbar">
         <h2>工序价目表 <small>{{readonly?'浏览':id?'编辑':'新增'}}</small></h2>
-        <el-button v-if="readonly&&!oldSchema" @click="readonly=false">编辑</el-button>
+        <el-button v-if="readonly" @click="readonly=false">编辑</el-button>
         <el-button v-if="!readonly" type="primary" :loading="saving" @click="save">保存</el-button>
         <el-button v-if="id&&form.status===1" :disabled="saving||dirty()" @click="setStatus(2)">停用</el-button>
-        <el-button v-if="id&&!oldSchema&&form.status===2" :disabled="saving||dirty()" @click="setStatus(1)">启用</el-button>
+        <el-button v-if="id&&form.status===2" :disabled="saving||dirty()" @click="setStatus(1)">启用</el-button>
         <el-button :disabled="saving" @click="back">退出</el-button>
       </div>
-      <el-alert :title="oldSchema?'旧行级配置只读，请核实转换清单后新建表级表。':'产品跟整张表走；无有效专属表才用通用表，专属表缺规格不会回通用表。'" :type="oldSchema?'warning':'info'" :closable="false" />
+      <el-alert title="产品跟整张表走；无有效专属表才用通用表，专属表缺规格不会回通用表。" type="info" :closable="false" />
       <el-form :disabled="readonly||saving" label-width="110px" class="header-form">
         <el-form-item label="单据编号" required><el-input v-model="form.code" :disabled="!!id" maxlength="64" /></el-form-item>
         <el-form-item label="名称" required><el-input v-model="form.name" maxlength="128" /></el-form-item>
         <el-form-item label="价目表类型" required><el-select v-model="form.operationId" :disabled="!!form.activatedAt" filterable @change="operationChanged"><el-option v-for="o in operations" :key="o.id" :value="o.id" :label="o.name" /></el-select><span v-if="form.activatedAt" class="hint">首次启用后工序锁定</span></el-form-item>
+        <el-form-item label="计价方式" required><el-select v-model="form.pricingType" :disabled="!!form.activatedAt" @change="pricingTypeChanged"><el-option v-for="(v,k) in pricingTypes" :key="Number(k)" :value="Number(k)" :label="v" /></el-select><span v-if="form.activatedAt" class="hint">首次启用后计价方式锁定</span></el-form-item>
         <el-form-item label="产品"><el-select v-model="form.productId" filterable clearable placeholder="通用表（不限产品）"><el-option v-for="p in products" :key="p.id" :value="p.id" :label="`${p.code} ${p.name}`" /></el-select></el-form-item>
         <el-form-item label="生效日期" required><el-date-picker v-model="form.effectiveFrom" value-format="YYYY-MM-DD" /></el-form-item>
         <el-form-item label="失效日期"><el-date-picker v-model="form.effectiveTo" value-format="YYYY-MM-DD" clearable /></el-form-item>
@@ -78,7 +78,7 @@
       <p class="hint">不完整草稿可保存；完整草稿保存即启用，启用失败保留原状态。停用表保存仍停用。未确认行请打开行详情补齐；原始分档价仅作备注，不自动参与匹配。</p>
       <h3>取价试算</h3>
       <p class="hint">使用已保存的有效表；未保存修改不参与试算。</p>
-      <div class="toolbar"><el-select v-model="previewProduct" filterable placeholder="试算产品" style="width:300px"><el-option v-for="p in products" :key="p.id" :value="p.id" :label="`${p.code} ${p.name}`" /></el-select><el-button :disabled="!id||oldSchema||dirty()" :loading="previewing" @click="preview">试算</el-button></div>
+      <div class="toolbar"><el-select v-model="previewProduct" filterable placeholder="试算产品" style="width:300px"><el-option v-for="p in products" :key="p.id" :value="p.id" :label="`${p.code} ${p.name}`" /></el-select><el-button :disabled="!id||dirty()" :loading="previewing" @click="preview">试算</el-button></div>
       <el-form label-width="130px"><el-form-item v-for="f in craftFields" :key="f.id" :label="f.fieldName"><el-select v-if="f.fieldType==='single'" v-model="previewAttributes[f.id]" clearable><el-option v-for="v in f.options" :key="v" :value="v" :label="v" /></el-select><el-input v-else v-model="previewAttributes[f.id]" placeholder="实际值，未知留空" /></el-form-item></el-form>
       <el-alert v-if="previewError" :title="previewError" type="error" :closable="false" />
       <template v-if="quote"><p><strong>{{quote.baseName}}：{{quote.unitPrice}}元/{{quote.priceUnit}}</strong>；每{{quote.priceUnit}}对应{{quote.unitsPerPriceUnit}}个报工单位</p><el-table :data="quote.attributeEvidence?.rows" border><el-table-column prop="rowId" label="价格行" /><el-table-column prop="reason" label="结果及原因" /><el-table-column prop="amount" label="原价" /><el-table-column prop="source" label="来源" /></el-table></template>
@@ -107,29 +107,32 @@ import { onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getOperationList,getUnitList,getProductList } from '@/api/base'
 import { getCustomFields } from '@/api/prod'
-import { queryPriceLists,getPriceList,savePriceList,previewAttributePrice,changePriceListStatus,deletePriceList,getLegacyPriceLists } from '@/api/operationPriceList'
+import { queryPriceLists,getPriceList,savePriceList,previewAttributePrice,changePriceListStatus,deletePriceList } from '@/api/operationPriceList'
 import AttributeConditions from '@/components/AttributeConditions.vue'
-const statuses={0:'草稿',1:'启用',2:'停用'},kinds={base:'基础价',extra:'附加价',final:'最终价'}
-const list=ref([]),legacy=ref([]),total=ref(0),filters=ref({page:1}),operations=ref([]),units=ref([]),products=ref([]),allFields=ref([])
+const statuses={0:'草稿',1:'启用',2:'停用'},kinds={base:'基础价',extra:'附加价',final:'最终价'},pricingTypes={1:'计件',2:'计时',3:'单笔固定'}
+const list=ref([]),total=ref(0),filters=ref({page:1}),operations=ref([]),units=ref([]),products=ref([]),allFields=ref([])
 const editing=ref(false),readonly=ref(false),loading=ref(false),saving=ref(false),id=ref(null),form=ref({}),baseline=ref(''),previewProduct=ref(null),previewAttributes=ref({}),previewing=ref(false),previewError=ref(''),quote=ref(null)
 const selected=ref(null),addMenu=ref(false),expanded=ref([]),conditionDialog=ref(false),conditionDraft=ref([]),conditionRow=ref(null),unlimited=ref(false),rowDialog=ref(false),rowDraft=ref(null),rowOriginal=ref(null)
-const oldSchema=computed(()=>form.value.details?.schemaVersion!==2),fields=computed(()=>allFields.value.filter(f=>f.target==='product'||f.operationId===form.value.operationId)),craftFields=computed(()=>fields.value.filter(f=>f.target==='work_order_task'))
+const fields=computed(()=>allFields.value.filter(f=>f.target==='product'||f.operationId===form.value.operationId)),craftFields=computed(()=>fields.value.filter(f=>f.target==='work_order_task'))
 const day=s=>s?.slice(0,10),clone=v=>JSON.parse(JSON.stringify(v)),dirty=()=>editing.value&&!readonly.value&&JSON.stringify(form.value)!==baseline.value
 const opName=id=>operations.value.find(o=>o.id===id)?.name||`工序 ${id}`
 const productName=id=>id?((p=>p?`${p.code} ${p.name}`:`产品 ${id}`)(products.value.find(p=>p.id===id))):'通用表（不限产品）'
 onMounted(async()=>{loading.value=true;try{const [o,u,p,f,c]=await Promise.all([getOperationList({pageSize:1000}),getUnitList(),getProductList({pageSize:1000}),getCustomFields('product'),getCustomFields('work_order_task')]);operations.value=o.data.list;units.value=u.data;products.value=p.data.list;allFields.value=[...f.data,...c.data];await load()}finally{loading.value=false}})
-async function load(){const [r,l]=await Promise.all([queryPriceLists(filters.value),getLegacyPriceLists()]);list.value=r.data.list;total.value=r.data.total;legacy.value=l.data}
+async function load(){const r=await queryPriceLists(filters.value);list.value=r.data.list;total.value=r.data.total}
 async function search(){filters.value.page=1;await load()}
 async function reset(){filters.value={page:1};await load()}
-function create(){id.value=null;form.value={code:'',name:'',operationId:null,productId:null,remark:'',activatedAt:null,status:0,effectiveFrom:new Date().toLocaleDateString('sv-SE'),effectiveTo:null,priceUnit:'',reportUnitId:null,unitsPerPriceUnit:1,expectedVersion:'',details:{schemaVersion:2,requiredFieldIds:[],groups:[],rows:[]}};start(false)}
+function create(){id.value=null;form.value={code:'',name:'',operationId:null,pricingType:1,productId:null,remark:'',activatedAt:null,status:0,effectiveFrom:new Date().toLocaleDateString('sv-SE'),effectiveTo:null,priceUnit:'',reportUnitId:null,unitsPerPriceUnit:1,expectedVersion:'',details:{schemaVersion:2,requiredFieldIds:[],groups:[],rows:[]}};start(false)}
 function start(read){readonly.value=read;editing.value=true;selected.value=null;addMenu.value=false;quote.value=null;previewError.value='';previewAttributes.value={};baseline.value=JSON.stringify(form.value)}
-async function open(key,read){loading.value=true;try{const r=await getPriceList(key);id.value=key;form.value={...r.data,effectiveFrom:day(r.data.effectiveFrom),effectiveTo:day(r.data.effectiveTo),expectedVersion:r.data.version};start(read||r.data.details.schemaVersion!==2)}finally{loading.value=false}}
+async function open(key,read){loading.value=true;try{const r=await getPriceList(key);id.value=key;form.value={...r.data,effectiveFrom:day(r.data.effectiveFrom),effectiveTo:day(r.data.effectiveTo),expectedVersion:r.data.version};start(read)}finally{loading.value=false}}
 async function copy(row){await open(row.id,false);id.value=null;form.value.code='';form.value.name+='（复制）';form.value.status=0;form.value.activatedAt=null;form.value.expectedVersion='';baseline.value=JSON.stringify(form.value)}
 async function confirmLeave(){if(!dirty())return true;try{await ElMessageBox.confirm('有未保存的修改，确认离开？','提示');return true}catch(action){if(action==='cancel'||action==='close')return false;throw action}}
 async function back(){if(await confirmLeave()){editing.value=false;await load()}}
 onBeforeRouteLeave(async()=>saving.value?false:await confirmLeave())
 watch([()=>form.value.operationId,previewProduct,previewAttributes],()=>{quote.value=null;previewError.value=''},{deep:true})
 function operationChanged(){form.value.details.groups=[];form.value.details.requiredFieldIds=[];for(const r of form.value.details.rows){r.conditions=[];r.groupKey=null;r.includedRowIds=[];r.confirmed=false}previewAttributes.value={};ElMessage.info('工序已更换，条件和收费组已清空，请重新配置')}
+function pricingTypeChanged(){if(form.value.pricingType===2){form.value.priceUnit='小时';form.value.unitsPerPriceUnit=1}else if(form.value.pricingType===3){form.value.priceUnit='笔';form.value.unitsPerPriceUnit=1}else if(form.value.priceUnit==='小时'||form.value.priceUnit==='笔'){form.value.priceUnit=''}
+  if(form.value.pricingType!==1){form.value.details.groups=[];for(const r of form.value.details.rows){r.kind='base';r.groupKey=null;r.includedRowIds=[]}}
+  ElMessage.info('计价方式已切换；计时/固定只允许唯一主价，不允许收费组和附加行')}
 async function save(){saving.value=true;try{const payload=clone(form.value);payload.productId=payload.productId||null;const r=await savePriceList(id.value,payload);const saved=(await getPriceList(r.data)).data;editing.value=false;await load();ElMessage.success(`已保存：${statuses[saved.status]}`)}finally{saving.value=false}}
 async function setStatus(status){saving.value=true;try{await changePriceListStatus(id.value,status,form.value.version);await open(id.value,readonly.value);ElMessage.success(status===1?'已启用':'已停用')}finally{saving.value=false}}
 async function removeTable(row){try{await ElMessageBox.confirm(`删除未启用草稿 ${row.code}？`,'删除价目表')}catch(a){if(a==='cancel'||a==='close')return;throw a}await deletePriceList(row.id,row.version);await load();ElMessage.success('已删除')}

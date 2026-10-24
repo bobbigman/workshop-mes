@@ -13,12 +13,30 @@
   },
   "serverVersion": "1.1.395",
   "license": {
-    "tier": "trial",
+    "tier": "flagship",
+    "effectiveTier": "flagship",
+    "status": "disabled",
+    "note": "2026-10-23 由授权操作者改库为旗舰版（LicenseCloud 仍关闭）；PieceWage 已放行",
     "priceSaveResult": {
-      "code": 1,
-      "msg": "当前为入门款，计件工资需企业版及以上",
+      "code": 0,
+      "msg": "ok",
       "data": null
     }
+  },
+  "pricingImport": {
+    "date": "2026-10-24",
+    "rule": "真通用价→HY-001/HY-002(把,1打=12把)；尺寸/骨/布/层/针特定→待产品规格；其他伞型→待产品细分；二折/儿童→HY-003(套换算待定)",
+    "operations": [
+      {"workType": "包装", "operationId": 48, "genericRows": 33, "bases": 66, "putCode": 0, "note": "修正后仅真通用"},
+      {"workType": "缝伞", "operationId": 46, "genericRows": 3, "bases": 6, "putCode": 0},
+      {"workType": "大裁", "operationId": 37, "genericRows": 3, "bases": 6, "putCode": 0},
+      {"workType": "品检", "operationId": 47, "genericRows": 1, "bases": 2, "putCode": 0},
+      {"workType": "合片", "operationId": 42, "genericRows": 0, "bases": 0, "note": "全部特定价，留待产品细分重绑，未空清（校验需≥1基础价）"},
+      {"workType": "小裁", "operationId": 41, "genericRows": 0, "bases": 0, "note": "同上"},
+      {"workType": "打珠尾", "operationId": 45, "genericRows": 0, "bases": 0, "note": "同上"}
+    ],
+    "totalGenericBases": 80,
+    "previewVerified": "合片25寸8K=5元/打，1200把=500元（首轮）；修正后真通用价回查通过"
   },
   "counts": {
     "Department": 10,
@@ -151,5 +169,5 @@
       "reason": "未明确每件对应把数，未擅自换把"
     }
   ],
-  "status": "基础资料及原表已导入；加工计价被入门授权阻止，未保存任何工价"
+  "status": "授权旗舰版；已复核修正：4工序仅保留40条真通用价（80基础价）→HY-001/002；合片/小裁/打珠尾3工序全特定价留待产品细分重绑。去向277条：真通用40、尺寸骨布层针特定87、其他伞型90、二折儿童6、附加价23、打顶打带9、伞带木耳花11、码7、计时1、倍率2、空价1。剩余：产品细分、附加价组结构、打顶打带拆分、伞带木耳花归属 待补"
 }

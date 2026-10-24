@@ -331,8 +331,8 @@ public class ReportService : IReportService
             {
                 var deptId = await ResolveDeptSnapshotAsync(line.UserId, dto.OperationId);
                 var (_, unitPrice, wageAmount, priceSnapshot) = await PreviewWageAsync(
-                    order.FactoryId, order.ProductId, dto.OperationId, deptId, line.UserId,
-                    line.GoodQty, line.DefectQty, times[line.UserId].Minutes, times[line.UserId].ReportTime, order.Id);
+                    order.FactoryId, order.ProductId, dto.OperationId, line.UserId,
+                    line.GoodQty, line.DefectQty, times[line.UserId].Minutes, order.Id);
 
                 var report = new ProdReport
                 {
@@ -1197,7 +1197,6 @@ public class ReportService : IReportService
             if (order.Status >= 2) throw ThrowHelper.BizUser("工单已结束或取消，不可补报");
             var now = DateTime.Now;
             var reportCount = 0;
-            var rules = await _db.PriceRules.AsNoTracking().Where(r => r.FactoryId == order.FactoryId).ToListAsync();
             var coeffUserIds = perOpUsers.Values.SelectMany(v => v.Select(x => x.UserId)).Distinct().ToList();
             var coeffRows = await _db.Users.AsNoTracking()
                 .Where(u => coeffUserIds.Contains(u.Id))
@@ -1211,22 +1210,19 @@ public class ReportService : IReportService
                 if (!perOpUsers.TryGetValue(op.OperationId, out var users))
                     users = new List<(long UserId, int GoodQty)> { (currentUserId, dto.GoodQty) };
 
+                var locked = await new OperationPricingService(_db).LockedAsync(order.Id, op.OperationId, order.FactoryId);
+                var priceType = locked.PriceType;
+
                 foreach (var (uid, qty) in users)
                 {
                     var deptId = await ResolveDeptSnapshotAsync(uid, op.OperationId);
-                    var rule = PriceRuleMatcher.Match(
-                        rules, order.FactoryId, order.ProductId, op.OperationId, deptId, uid, now);
-                    var input = dto.Allocations?.FirstOrDefault(x => x.OperationId == op.OperationId)?.Users.FirstOrDefault(x => x.UserId == uid);
-                    var start = input?.StartTime ?? dto.StartTime;
-                    var end = input?.EndTime ?? dto.EndTime;
-                    var at = end ?? now;
-                    rule = PriceRuleMatcher.Match(rules, order.FactoryId, order.ProductId, op.OperationId, deptId, uid, at);
-                    var lockedPrice = await new OperationPricingService(_db).LockedAsync(order.Id, op.OperationId, order.FactoryId);
-                    if (lockedPrice != null) rule = new BasePriceRule { Id = lockedPrice.RuleId, PriceType = 1, UnitPrice = lockedPrice.UnitPrice, DeductPrice = lockedPrice.DeductPrice };
-                    if (qty == 0 && rule?.PriceType != 2) throw ThrowHelper.BizUser("非计时岗补报良品数必须大于0");
+                    if (qty == 0 && priceType != 2) throw ThrowHelper.BizUser("非计时岗补报良品数必须大于0");
                     ResolvedWorkTime? time = null;
-                    if (rule?.PriceType == 2)
+                    if (priceType == 2)
                     {
+                        var input = dto.Allocations?.FirstOrDefault(x => x.OperationId == op.OperationId)?.Users.FirstOrDefault(x => x.UserId == uid);
+                        var start = input?.StartTime ?? dto.StartTime;
+                        var end = input?.EndTime ?? dto.EndTime;
                         if (!start.HasValue || !end.HasValue) throw ThrowHelper.BizUser("计时补报必须填写开始和结束时间");
                         time = await clock.ResolveAsync(order, op.OperationId, uid, currentUserId,
                             new WorkTimeInput { StartTime = start, EndTime = end }, now);
@@ -1239,7 +1235,6 @@ public class ReportService : IReportService
                             throw ThrowHelper.BizUser($"无该工序报工权限：{target.Name}");
                     }
                     var wageCoeff = coeffMap.GetValueOrDefault(uid, 1m);
-                    var calc = PriceRuleMatcher.Calculate(rule, qty, 0, time?.Minutes ?? 0, wageCoeff, lockedPrice?.Processing?.UnitsPerPriceUnit ?? 1m);
                     var report = new ProdReport
                     {
                         FactoryId = order.FactoryId,
@@ -1253,15 +1248,16 @@ public class ReportService : IReportService
                         BatchNo = batchNo,
                         ProductId = order.ProductId,
                         DepartmentId = deptId,
-                        PriceSnapshot = lockedPrice == null ? ReportPriceSnapshot.Capture(rule) : System.Text.Json.JsonSerializer.Serialize(lockedPrice),
-                        UnitPrice = calc.Matched ? calc.UnitPrice : null,
-                        WageAmount = calc.Matched ? calc.WageAmount : null,
+                        PriceSnapshot = System.Text.Json.JsonSerializer.Serialize(locked),
                         SettledFlag = false,
                         ReviewStatus = 1, // docs/22：管理员批量补报直接已通过
                         ReviewedBy = currentUserId,
                         ReviewedAt = now,
                         ReportTime = time?.ReportTime ?? now
                     };
+                    var calc = ReportPriceSnapshot.Calculate(report, wageCoeff);
+                    report.UnitPrice = calc.UnitPrice;
+                    report.WageAmount = calc.WageAmount;
                     _db.Reports.Add(report);
                     if (time != null) timedReports.Add((report, time));
                     reportCount++;
@@ -1406,26 +1402,28 @@ public class ReportService : IReportService
     }
 
     private async Task<(byte PriceType, decimal? UnitPrice, decimal? WageAmount, string? Snapshot)> PreviewWageAsync(
-        long factoryId, long? productId, long operationId, long? departmentId, long userId,
-        int goodQty, int defectQty, int durationMinutes, DateTime atTime, long orderId)
+        long factoryId, long productId, long operationId, long userId,
+        int goodQty, int defectQty, int durationMinutes, long orderId)
     {
-        var rules = await _db.PriceRules.AsNoTracking().Where(r => r.FactoryId == factoryId).ToListAsync();
-        var rule = PriceRuleMatcher.Match(rules, factoryId, productId, operationId, departmentId, userId, atTime);
         var storedCoeff = await _db.Users.AsNoTracking()
             .Where(u => u.Id == userId)
             .Select(u => (decimal?)u.WageCoeff)
             .FirstOrDefaultAsync();
         var wageCoeff = storedCoeff is > 0m ? WageCoeffHelper.Coerce(storedCoeff.Value) : 1m;
         var locked = await new OperationPricingService(_db).LockedAsync(orderId, operationId, factoryId);
-        if (locked != null)
+        var snapshotJson = System.Text.Json.JsonSerializer.Serialize(locked);
+        var result = ReportPriceSnapshot.Calculate(new ProdReport
         {
-            var result = ReportPriceSnapshot.Calculate(new ProdReport { GoodQty = goodQty, DefectQty = defectQty,
-                PriceSnapshot = System.Text.Json.JsonSerializer.Serialize(locked) }, wageCoeff);
-            return (1, result.UnitPrice, result.WageAmount, System.Text.Json.JsonSerializer.Serialize(locked));
-        }
-        var calc = PriceRuleMatcher.Calculate(rule, goodQty, defectQty, durationMinutes, wageCoeff);
-        if (!calc.Matched) return (calc.PriceType, null, null, null);
-        return (calc.PriceType, calc.UnitPrice, calc.WageAmount, ReportPriceSnapshot.Capture(rule));
+            FactoryId = factoryId,
+            OrderId = orderId,
+            OperationId = operationId,
+            ProductId = productId,
+            GoodQty = goodQty,
+            DefectQty = defectQty,
+            DurationMinutes = durationMinutes,
+            PriceSnapshot = snapshotJson
+        }, wageCoeff);
+        return (locked.PriceType, result.UnitPrice, result.WageAmount, snapshotJson);
     }
 
     /// <summary>报工提交前工价只读预览（docs/269）：只算额，不写库、不校验权限、不触发提交/复核链。</summary>
@@ -1434,10 +1432,9 @@ public class ReportService : IReportService
         var order = await _db.WorkOrders.AsNoTracking()
             .FirstOrDefaultAsync(o => o.Id == dto.OrderId && o.FactoryId == factoryId)
             ?? throw ThrowHelper.Biz(nameof(PreviewWageForSubmitAsync), "工单不存在");
-        var deptId = await ResolveDeptSnapshotAsync(currentUserId, dto.OperationId);
         var (priceType, unitPrice, wageAmount, _) = await PreviewWageAsync(
-            factoryId, order.ProductId, dto.OperationId, deptId, currentUserId,
-            dto.GoodQty, dto.DefectQty, dto.DurationMinutes, DateTime.Now, order.Id);
+            factoryId, order.ProductId, dto.OperationId, currentUserId,
+            dto.GoodQty, dto.DefectQty, dto.DurationMinutes, order.Id);
         return ApiResult<ReportWagePreviewDto>.Ok(new ReportWagePreviewDto
         {
             Matched = unitPrice != null,

@@ -28,18 +28,12 @@ public class OperationPriceListController(AppDbContext db) : ControllerBase
     }
     [HttpGet("{id:long}")]
     public async Task<ApiResult<object>> Get(long id) => ApiResult<object>.Ok(OperationPriceListService.View(await new OperationPriceListService(db).GetAsync(id, JwtHelper.GetFactoryId(User))));
+    [HttpGet("product/{productId:long}")]
+    public async Task<ApiResult<List<object>>> Product(long productId) => ApiResult<List<object>>.Ok(await new OperationPricingService(db).ProductAsync(productId, JwtHelper.GetFactoryId(User)));
     [HttpPost]
     public async Task<ApiResult<long>> Create(PriceListInput input) => ApiResult<long>.Ok(await new OperationPriceListService(db).SaveAsync(null, input, JwtHelper.GetFactoryId(User)));
     [HttpPut("{id:long}")]
     public async Task<ApiResult<long>> Update(long id, PriceListInput input) => ApiResult<long>.Ok(await new OperationPriceListService(db).SaveAsync(id, input, JwtHelper.GetFactoryId(User)));
-    [HttpGet("mode/{productId:long}")]
-    public async Task<ApiResult<object>> Modes(long productId) => ApiResult<object>.Ok(await db.ProductOperationPricings.AsNoTracking().Where(m => m.FactoryId == JwtHelper.GetFactoryId(User) && m.ProductId == productId).Select(m => new { m.OperationId, m.AttributePricing }).ToListAsync());
-    [HttpPut("mode/{productId:long}/{operationId:long}")]
-    public async Task<ApiResult<object?>> Mode(long productId, long operationId, [FromBody] bool enabled)
-    {
-        await new OperationPriceListService(db).SetModeAsync(productId, operationId, JwtHelper.GetFactoryId(User), enabled);
-        return ApiResult<object?>.OkMsg();
-    }
     public record StatusInput(byte Status, string ExpectedVersion);
     [HttpPost("{id:long}/status")]
     public async Task<ApiResult<object?>> Status(long id, StatusInput input)
@@ -52,12 +46,6 @@ public class OperationPriceListController(AppDbContext db) : ControllerBase
     {
         await new OperationPriceListService(db).DeleteAsync(id, expectedVersion, JwtHelper.GetFactoryId(User));
         return ApiResult<object?>.OkMsg();
-    }
-    [HttpGet("legacy-conversion")]
-    public async Task<ApiResult<object>> LegacyConversion()
-    {
-        var tables = await db.OperationPriceLists.AsNoTracking().Where(t => t.FactoryId == JwtHelper.GetFactoryId(User)).ToListAsync();
-        return ApiResult<object>.Ok(tables.Where(t => OperationPriceListService.Details(t).SchemaVersion != 2).Select(t => new { t.FactoryId, t.Id, t.Code, t.OperationId, Rows = OperationPriceListService.Details(t).Rows.Select(r => new { r.RowId, r.ProductId, r.Source }) }));
     }
     public record PreviewInput(long ProductId, long OperationId, DateTime? Date, Dictionary<long, string?>? OperationAttributes = null, long? WorkOrderId = null, string? ExpectedVersion = null);
     [HttpPost("preview")]

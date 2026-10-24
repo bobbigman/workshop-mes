@@ -159,7 +159,7 @@ public class SalaryItemDto
     public int DefectQty { get; set; }
     public int DurationMinutes { get; set; }
     public byte PriceType { get; set; }
-    public long? RuleId { get; set; }
+    public long? PriceListId { get; set; }
     public int CalcQty { get; set; }
     public decimal UnitPrice { get; set; }
     /// <summary>本行实际乘进金额的工价系数快照（docs/225）</summary>
@@ -363,7 +363,7 @@ public partial class SalaryService : ISalaryService
                     {
                         StatementId = statement.Id,
                         ReportId = report.Id,
-                        RuleId = calc.RuleId,
+                        PriceListId = calc.PriceListId,
                         CalcQty = calc.CalcQty,
                         PriceType = calc.PriceType,
                         DurationMinutes = report.DurationMinutes,
@@ -616,7 +616,7 @@ public partial class SalaryService : ISalaryService
                 r.DefectQty,
                 i.DurationMinutes,
                 i.PriceType,
-                i.RuleId,
+                i.PriceListId,
                 i.CalcQty,
                 i.UnitPrice,
                 i.WageCoeff,
@@ -643,14 +643,14 @@ public partial class SalaryService : ISalaryService
             DefectQty = x.DefectQty,
             DurationMinutes = x.DurationMinutes,
             PriceType = x.PriceType,
-            RuleId = x.RuleId,
+            PriceListId = x.PriceListId,
             CalcQty = x.CalcQty,
             UnitPrice = x.UnitPrice,
             WageCoeff = x.WageCoeff,
             Amount = x.Amount,
             DeductAmount = x.DeductAmount,
             NetAmount = x.Amount - x.DeductAmount,
-            Matched = x.RuleId != null,
+            Matched = x.PriceListId != null,
             ReportTime = x.ReportTime
         }).ToList();
 
@@ -734,7 +734,7 @@ public partial class SalaryService : ISalaryService
             var calc = ReportPriceSnapshot.Calculate(report, wageCoeff);
             if (!calc.Matched) unmatched++;
 
-            item.RuleId = calc.RuleId;
+            item.PriceListId = calc.PriceListId;
             item.CalcQty = calc.CalcQty;
             item.PriceType = calc.PriceType;
             item.DurationMinutes = report.DurationMinutes;
@@ -775,7 +775,7 @@ public partial class SalaryService : ISalaryService
             throw ThrowHelper.Biz(nameof(ConfirmAsync), "仅草稿可确认");
 
         var unmatched = await _db.SalaryStatementItems.AsNoTracking()
-            .AnyAsync(i => i.StatementId == id && i.RuleId == null);
+            .AnyAsync(i => i.StatementId == id && i.PriceListId == null);
         if (unmatched)
             throw ThrowHelper.Biz(nameof(ConfirmAsync), "存在未匹配工价的明细，请先补齐工价后再确认");
 

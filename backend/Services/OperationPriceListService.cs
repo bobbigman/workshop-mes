@@ -56,6 +56,8 @@ public class PriceListInput
     public string Code { get; set; } = "";
     public string Name { get; set; } = "";
     public long OperationId { get; set; }
+    /// <summary>计价方式：1计件 2计时 3单笔固定。首次启用后锁定。</summary>
+    public byte PricingType { get; set; } = 1;
     public byte Status { get; set; }
     public DateTime EffectiveFrom { get; set; } = DateTime.Today;
     public DateTime? EffectiveTo { get; set; }
@@ -83,9 +85,15 @@ public class OperationPriceListService(AppDbContext db)
     private static bool Number(string? s, out decimal value) => decimal.TryParse(s, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out value);
     public static AttributePriceDetails Details(OperationPriceList table) => OperationPricingService.Read<AttributePriceDetails>(table.Details);
 
-    public static void Validate(AttributePriceDetails details, IReadOnlyDictionary<long, SysCustomField> fields, bool enabling)
+    public static void Validate(AttributePriceDetails details, IReadOnlyDictionary<long, SysCustomField> fields, bool enabling, byte pricingType = 1)
     {
+        Require(pricingType is 1 or 2 or 3, "计价方式无效");
         Require(details != null && details.SchemaVersion == 2 && details.Rows != null && details.Groups != null && details.RequiredFieldIds != null, "价目表明细结构无效");
+        if (pricingType != 1)
+        {
+            Require(details.Groups.Count == 0, "计时/固定价目表不允许收费组");
+            Require(details.Rows.All(r => r.Kind != "extra"), "计时/固定价目表不允许附加行");
+        }
         Require(details.Groups.All(g => g != null && g.Conditions != null) && details.Rows.All(r => r != null && r.Conditions != null && r.IncludedRowIds != null), "收费组或价格行结构为空");
         Require(details!.Rows.Count <= 1000 && (!enabling || details.Rows.Count > 0), "价目表最多1000行，启用时不得为空");
         Require(details.Groups.Select(g => g.Key).Distinct().Count() == details.Groups.Count && details.Groups.All(g => !string.IsNullOrWhiteSpace(g.Key) && !string.IsNullOrWhiteSpace(g.Name)), "收费组编码重复或为空");
@@ -184,9 +192,10 @@ public class OperationPriceListService(AppDbContext db)
     public static ProcessingQuote Calculate(OperationPriceList table, long productId, long reportUnitId, Dictionary<long, string?> values, Dictionary<long, SysCustomField> fields, DateTime date)
     {
         var details = Details(table);
-        Validate(details, fields, true);
+        Validate(details, fields, true, table.PricingType);
         Require(table.Status == 1 && date.Date >= table.EffectiveFrom.Date && (!table.EffectiveTo.HasValue || date.Date <= table.EffectiveTo.Value.Date), "价目表未启用或不在有效期");
         Require(table.ReportUnitId == reportUnitId && table.UnitsPerPriceUnit > 0, "报工单位或换算不匹配");
+        Require(table.PricingType == 1 || (table.UnitsPerPriceUnit == 1 && table.PriceUnit == (table.PricingType == 2 ? "小时" : "笔")), "计时/固定价目表换算数须为1且计价单位须为小时/笔");
         foreach (var id in details.RequiredFieldIds) Require(values.TryGetValue(id, out var value) && !string.IsNullOrWhiteSpace(value), $"缺少产品属性：{fields[id].FieldName}");
         Require(table.ProductId == null || table.ProductId == productId, "价目表不属于当前产品");
         var applicable = details.Rows;
@@ -194,9 +203,9 @@ public class OperationPriceListService(AppDbContext db)
         Require(primary.Count == 1, primary.Count == 0 ? $"产品{productId}·工序{table.OperationId}·表{table.Code}缺规格的价：{string.Join("；", details.Rows.Where(r => r.Kind != "extra").SelectMany(r => r.Conditions).Select(c => $"{fields[c.FieldId].FieldName}实际={values.GetValueOrDefault(c.FieldId) ?? "未填"}，要求{c.Operator}:{c.Value ?? $"{c.Min}~{c.Max}"}"))}" : "重复命中基础/最终工价，请消除条件冲突");
         var price = primary[0];
         var evidence = new AttributeQuoteEvidence { PriceListId = table.Id, PriceListCode = table.Code, PricingDate = date.Date, Attributes = values.OrderBy(v => v.Key).ToDictionary(v => v.Key, v => v.Value) };
-        var quote = new ProcessingQuote { OperationId = table.OperationId, Version = table.Version, BaseName = $"{table.Code} / {price.RowId}", BasePrice = price.Amount!.Value,
+        var quote = new ProcessingQuote { SchemaVersion = 2, PriceType = table.PricingType, OperationId = table.OperationId, Version = table.Version, BaseName = $"{table.Code} / {price.RowId}", BasePrice = price.Amount!.Value,
             UnitPrice = price.Amount.Value, DeductPrice = price.DeductPrice, PriceUnit = table.PriceUnit, ReportUnitId = table.ReportUnitId, UnitsPerPriceUnit = table.UnitsPerPriceUnit,
-            AttributeEvidence = evidence, Choice = new ProcessingChoice { BaseId = price.RowId } };
+            AttributeEvidence = evidence };
         var chosen = new HashSet<string> { price.RowId };
         var included = new HashSet<string>();
         foreach (var group in details.Groups)
@@ -222,16 +231,6 @@ public class OperationPriceListService(AppDbContext db)
         return quote;
     }
 
-    public async Task<bool> IsAttributeAsync(long productId, long operationId, long factoryId) => await db.ProductOperationPricings.AnyAsync(x => x.FactoryId == factoryId && x.ProductId == productId && x.OperationId == operationId && x.AttributePricing);
-    public async Task SetModeAsync(long productId, long operationId, long factoryId, bool enabled)
-    {
-        var product = await db.Products.AsNoTracking().SingleOrDefaultAsync(p => p.Id == productId && p.FactoryId == factoryId) ?? throw ThrowHelper.BizUser("产品不存在或非本厂");
-        Require(await db.Operations.AnyAsync(o => o.Id == operationId && o.FactoryId == factoryId) && await db.RoutingSteps.AnyAsync(s => s.RoutingId == product.RoutingId && s.OperationId == operationId), "工序不在本厂产品工艺内");
-        var mode = await db.ProductOperationPricings.SingleOrDefaultAsync(x => x.FactoryId == factoryId && x.ProductId == productId && x.OperationId == operationId);
-        if (mode == null) { mode = new() { FactoryId = factoryId, ProductId = productId, OperationId = operationId }; db.ProductOperationPricings.Add(mode); }
-        mode.AttributePricing = enabled;
-        await db.SaveChangesAsync();
-    }
     public static OperationPriceList SelectTable(IEnumerable<OperationPriceList> candidates, long productId, long operationId)
     {
         var all = candidates.ToList();
@@ -274,7 +273,7 @@ public class OperationPriceListService(AppDbContext db)
     }
 
     public async Task<OperationPriceList> GetAsync(long id, long factoryId) => await db.OperationPriceLists.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id && t.FactoryId == factoryId) ?? throw ThrowHelper.BizUser("价目表不存在或非本厂");
-    public static object View(OperationPriceList t) => new { t.Id, t.Code, t.Name, t.OperationId, t.ProductId, t.Remark, t.ActivatedAt, t.Status, t.EffectiveFrom, t.EffectiveTo, t.PriceUnit, t.ReportUnitId, t.UnitsPerPriceUnit, t.Version, Details = Details(t), t.CreatedAt, t.UpdatedAt };
+    public static object View(OperationPriceList t) => new { t.Id, t.Code, t.Name, t.OperationId, t.ProductId, t.PricingType, t.Remark, t.ActivatedAt, t.Status, t.EffectiveFrom, t.EffectiveTo, t.PriceUnit, t.ReportUnitId, t.UnitsPerPriceUnit, t.Version, Details = Details(t), t.CreatedAt, t.UpdatedAt };
     public static bool Incomplete(AttributePriceDetails d) => d.Rows.Count == 0 || d.Rows.Any(r => !r.Confirmed || r.Amount == null || r.Note.Contains("待确认", StringComparison.Ordinal));
 
     // 管理端写操作低频，按厂串行锁避免不同编号插入的范围锁升级死锁。
@@ -288,9 +287,11 @@ public class OperationPriceListService(AppDbContext db)
     public async Task<long> SaveAsync(long? id, PriceListInput input, long factoryId, byte? targetStatus = null)
     {
         Require(!string.IsNullOrWhiteSpace(input.Code) && input.Code.Length <= 64 && !string.IsNullOrWhiteSpace(input.Name) && input.Name.Length <= 128, "编号/名称必填且不得超长");
+        Require(input.PricingType is 1 or 2 or 3, "计价方式无效");
         Require(input.Status <= 2 && (!input.EffectiveTo.HasValue || input.EffectiveTo.Value.Date >= input.EffectiveFrom.Date), "状态或有效日期无效");
         Require(input.Remark != null && input.Remark.Length <= 1000, "表头备注超过1000字");
         Require(!string.IsNullOrWhiteSpace(input.PriceUnit) && input.PriceUnit.Length <= 32 && input.UnitsPerPriceUnit is > 0 and <= 1000000 && decimal.Round(input.UnitsPerPriceUnit, 4) == input.UnitsPerPriceUnit, "计价单位/换算数无效");
+        Require(input.PricingType == 1 || (input.UnitsPerPriceUnit == 1 && input.PriceUnit == (input.PricingType == 2 ? "小时" : "笔")), "计时/固定价目表换算数须为1，计价单位须为小时/笔");
         await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
         await LockFactoryAsync(db, factoryId);
         var table = id.HasValue ? await db.OperationPriceLists.SingleOrDefaultAsync(t => t.Id == id && t.FactoryId == factoryId) ?? throw ThrowHelper.BizUser("价目表不存在或非本厂") : new OperationPriceList { FactoryId = factoryId, CreatedAt = DateTime.Now };
@@ -298,23 +299,24 @@ public class OperationPriceListService(AppDbContext db)
         Require(!id.HasValue || Details(table).SchemaVersion == 2, "旧行级配置待转换，不可直接覆盖，请新建表级价目表");
         Require(!id.HasValue || table.Code == input.Code.Trim(), "已保存价目表编号不能修改，请复制新建");
         Require(table.ActivatedAt == null || table.OperationId == input.OperationId, "价目表首次启用后工序永久锁定，请复制新建");
+        Require(table.ActivatedAt == null || table.PricingType == input.PricingType, "价目表首次启用后计价方式永久锁定，请复制新建");
         Require(await db.Operations.AnyAsync(o => o.Id == input.OperationId && o.FactoryId == factoryId) && await db.Units.AnyAsync(u => u.Id == input.ReportUnitId && u.FactoryId == factoryId), "工序/报工单位不存在或非本厂");
         Require(input.ProductId == null || await db.Products.AnyAsync(p => p.Id == input.ProductId && p.FactoryId == factoryId), "表头产品不存在或非本厂");
         Require(!await db.OperationPriceLists.AnyAsync(t => t.FactoryId == factoryId && t.Code == input.Code.Trim() && t.Id != id), "价目表编号已存在");
         var fields = await new OperationAttributeService(db).FieldsAsync(factoryId, input.OperationId);
-        Validate(input.Details, fields, false);
+        Validate(input.Details, fields, false, input.PricingType);
         var status = targetStatus ?? (table.Status == 2 ? (byte)2 : table.Status == 1 ? (byte)1 : Incomplete(input.Details) ? (byte)0 : (byte)1);
         Require(targetStatus == null || targetStatus is 1 or 2, "状态操作只接受启用或停用");
         Require(targetStatus != 2 || table.Status == 1, "仅启用表可以停用");
         Require(targetStatus != 1 || table.Status == 2, "仅停用表可以重新启用，草稿请保存");
-        Validate(input.Details, fields, status == 1);
+        Validate(input.Details, fields, status == 1, input.PricingType);
         var options = await db.CustomFieldOptions.AsNoTracking().Where(o => fields.Keys.Contains(o.FieldId)).ToListAsync();
         foreach (var c in input.Details.Rows.SelectMany(r => r.Conditions).Concat(input.Details.Groups.SelectMany(g => g.Conditions)))
             if (fields[c.FieldId].FieldType == "single") Require(options.Any(o => o.FieldId == c.FieldId && o.Label == c.Value), "条件单选值不在字段选项内");
         if (status == 1)
             Require(!await db.OperationPriceLists.AnyAsync(t => t.FactoryId == factoryId && t.Id != id && t.OperationId == input.OperationId && t.ProductId == input.ProductId && t.Status == 1 && (!input.EffectiveTo.HasValue || t.EffectiveFrom <= input.EffectiveTo.Value.Date) && (!t.EffectiveTo.HasValue || t.EffectiveTo >= input.EffectiveFrom.Date)), "同产品范围已有日期重叠的启用价目表，请先停用或调整日期");
         table.Code = input.Code.Trim(); table.Name = input.Name.Trim(); table.OperationId = input.OperationId; table.Status = status;
-        table.ProductId = input.ProductId; table.Remark = input.Remark;
+        table.PricingType = input.PricingType; table.ProductId = input.ProductId; table.Remark = input.Remark;
         if (status == 1) table.ActivatedAt ??= DateTime.Now;
         table.EffectiveFrom = input.EffectiveFrom.Date; table.EffectiveTo = input.EffectiveTo?.Date; table.PriceUnit = input.PriceUnit.Trim(); table.ReportUnitId = input.ReportUnitId;
         table.UnitsPerPriceUnit = input.UnitsPerPriceUnit; table.Details = OperationPricingService.Write(input.Details); table.Version = Guid.NewGuid().ToString("N"); table.UpdatedAt = DateTime.Now;
@@ -335,7 +337,7 @@ public class OperationPriceListService(AppDbContext db)
             legacy.Status = 2; legacy.Version = Guid.NewGuid().ToString("N"); legacy.UpdatedAt = DateTime.Now;
             await db.SaveChangesAsync(); await tx.CommitAsync(); return;
         }
-        await SaveAsync(id, new PriceListInput { Code = t.Code, Name = t.Name, OperationId = t.OperationId, ProductId = t.ProductId, Remark = t.Remark, Status = t.Status, EffectiveFrom = t.EffectiveFrom, EffectiveTo = t.EffectiveTo, PriceUnit = t.PriceUnit, ReportUnitId = t.ReportUnitId, UnitsPerPriceUnit = t.UnitsPerPriceUnit, ExpectedVersion = expectedVersion, Details = Details(t) }, factoryId, status);
+        await SaveAsync(id, new PriceListInput { Code = t.Code, Name = t.Name, OperationId = t.OperationId, ProductId = t.ProductId, PricingType = t.PricingType, Remark = t.Remark, Status = t.Status, EffectiveFrom = t.EffectiveFrom, EffectiveTo = t.EffectiveTo, PriceUnit = t.PriceUnit, ReportUnitId = t.ReportUnitId, UnitsPerPriceUnit = t.UnitsPerPriceUnit, ExpectedVersion = expectedVersion, Details = Details(t) }, factoryId, status);
     }
 
     public async Task DeleteAsync(long id, string expectedVersion, long factoryId)

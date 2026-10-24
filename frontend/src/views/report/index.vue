@@ -54,7 +54,7 @@
           <template v-if="row.unitPrice != null">¥{{ Number(row.unitPrice).toFixed(4) }}</template>
           <template v-else>
             <span class="wage-miss">未配工价</span>
-            <el-button v-if="isAdmin" link type="primary" @click="$router.push('/price-rule')">去补价</el-button>
+            <el-button v-if="isAdmin" link type="primary" @click="$router.push('/operation-price-list')">去补价</el-button>
           </template>
         </template>
       </el-table-column>

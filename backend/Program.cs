@@ -171,7 +171,6 @@ try
     builder.Services.AddScoped<IReportIdentityService, ReportIdentityService>();
     builder.Services.AddScoped<IReviewService, ReviewService>();
     builder.Services.AddScoped<IAssignService, AssignService>();
-    builder.Services.AddScoped<IPriceRuleService, PriceRuleService>();
     builder.Services.AddScoped<ISalaryService, SalaryService>();
     builder.Services.AddScoped<IReportStatService, ReportStatService>();
     builder.Services.AddScoped<IExecutionMonitorService, ExecutionMonitorService>();

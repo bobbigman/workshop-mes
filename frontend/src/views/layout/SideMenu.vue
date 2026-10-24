@@ -52,8 +52,7 @@
       <el-menu-item index="/operation"><div class="menu-row"><span class="menu-label">工序</span><MenuStar menu-key="/operation" /></div></el-menu-item>
       <el-menu-item index="/defect"><div class="menu-row"><span class="menu-label">不良品项</span><MenuStar menu-key="/defect" /></div></el-menu-item>
       <el-menu-item index="/unit"><div class="menu-row"><span class="menu-label">单位</span><MenuStar menu-key="/unit" /></div></el-menu-item>
-      <el-menu-item v-if="canWage" index="/operation-price-list"><div class="menu-row"><span class="menu-label">工序价目表列表</span><MenuStar menu-key="/operation-price-list" /></div></el-menu-item>
-      <el-menu-item v-if="canWage" index="/price-rule"><div class="menu-row"><span class="menu-label">工价表</span><MenuStar menu-key="/price-rule" /></div></el-menu-item>
+      <el-menu-item v-if="canWage" index="/operation-price-list"><div class="menu-row"><span class="menu-label">工序价目表</span><MenuStar menu-key="/operation-price-list" /></div></el-menu-item>
     </el-sub-menu>
     <el-sub-menu v-if="role === 1" index="sys-config">
       <template #title>系统配置</template>

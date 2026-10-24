@@ -88,14 +88,14 @@ const adminSteps = [
   },
   {
     title: '填基础资料',
-    desc: '把「单位 → 工序 → 不良品项 → 工艺路线 → 产品 → 工价表」按顺序填一遍。先有单位才有产品，先有工序才能排路线。',
+    desc: '把「单位 → 工序 → 不良品项 → 工艺路线 → 产品 → 工序价目表」按顺序填一遍。先有单位才有产品，先有工序才能排路线。',
     links: [
       { path: '/unit', label: '单位' },
       { path: '/operation', label: '工序' },
       { path: '/defect', label: '不良品项' },
       { path: '/routing', label: '工艺路线' },
       { path: '/product', label: '产品' },
-      { path: '/price-rule', label: '工价表' }
+      { path: '/operation-price-list', label: '工序价目表' }
     ],
     done: '产品定义里有产品、工艺路线能选。'
   },

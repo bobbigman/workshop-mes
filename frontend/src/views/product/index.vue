@@ -56,7 +56,6 @@
         <el-form-item label="单价"><el-input-number v-model="form.price" :min="0" :precision="2" /></el-form-item>
         <ProductAttributes v-model="form.customValues" :fields="attributeFields" />
       </el-form>
-      <ProductPricingModes v-if="editingId" :product-id="editingId" :routing-id="form.routingId" />
       <div v-if="editingId" class="kf-block">
         <div class="kf-title">作业指导书 / 图纸</div>
         <KnowledgeFiles ref-type="product" :ref-id="editingId" />
@@ -71,7 +70,6 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { getProductList, getProduct, createProduct, updateProduct, deleteProduct, getUnitList, getRoutingList, getRouting, getOperationList } from '@/api/base'
-import ProductPricingModes from '@/components/ProductPricingModes.vue'
 import ProductAttributes from '@/components/ProductAttributes.vue'
 import { getCustomFields } from '@/api/prod'
 import RoutingSteps from '@/components/RoutingSteps.vue'

@@ -531,13 +531,13 @@ async function onSave() {
     ElMessage.error('请选择产品并填写数量')
     return
   }
-  let processingChoices
-  try { processingChoices = processingEditor.value?.getChoices() || {} } catch(e) { ElMessage.error(e.message); return }
+  let quoteTokens
+  try { quoteTokens = processingEditor.value?.getQuoteTokens() || {} } catch(e) { ElMessage.error(e.message); return }
   saving.value = true
   try {
     if (editingId.value) {
       const payload = {
-        processingChoices, operationAttributes: processingEditor.value?.getOperationAttributes(),
+        quoteTokens, operationAttributes: processingEditor.value?.getOperationAttributes(),
         orderNo: form.value.orderNo || undefined,
         productId: form.value.productId,
         qty: form.value.qty,
@@ -548,7 +548,7 @@ async function onSave() {
       await updateOrder(editingId.value, payload)
       ElMessage.success('已保存')
     } else {
-      await createOrder({ processingChoices, operationAttributes: processingEditor.value?.getOperationAttributes(), copyFromId: copyFromId.value, orderNo: form.value.orderNo || undefined, productId: form.value.productId, qty: form.value.qty, dueDate: form.value.dueDate || null, ext: form.value.ext })
+      await createOrder({ quoteTokens, operationAttributes: processingEditor.value?.getOperationAttributes(), copyFromId: copyFromId.value, orderNo: form.value.orderNo || undefined, productId: form.value.productId, qty: form.value.qty, dueDate: form.value.dueDate || null, ext: form.value.ext })
       ElMessage.success('创建成功')
     }
     dlg.value = false

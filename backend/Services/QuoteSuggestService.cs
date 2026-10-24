@@ -334,10 +334,6 @@ public class QuoteSuggestService : IQuoteSuggestService
             select new ReportAggRow(pid, r.GoodQty, r.DefectQty, r.DurationMinutes, r.OperationId)
         ).ToListAsync();
 
-        var rules = await _db.PriceRules.AsNoTracking()
-            .Where(r => r.FactoryId == factoryId)
-            .ToListAsync();
-
         var laborRows = new List<QuoteSuggestLaborProductDto>();
         var warnings = new List<string>();
 
@@ -383,7 +379,7 @@ public class QuoteSuggestService : IQuoteSuggestService
                 (decimal)row.TotalDurationMinutes / row.GoodQtyWithDuration, 2, MidpointRounding.AwayFromZero);
 
             var opIds = withDur.Select(x => x.OperationId).Distinct().ToHashSet();
-            var (rate, source) = ResolveHourlyRate(rules, factoryId, p.Id, opIds);
+            var (rate, source) = await ResolveHourlyRateAsync(factoryId, p.Id, opIds);
             row.LaborHourlyRate = rate;
             row.LaborRateSource = source;
             row.LaborCost = Math.Round(row.AvgMinutesPerPiece.Value / 60m * rate, 4, MidpointRounding.AwayFromZero);
@@ -403,32 +399,36 @@ public class QuoteSuggestService : IQuoteSuggestService
             dto.LaborWarning = string.Join("；", warnings.Take(5));
     }
 
-    private (decimal Rate, string Source) ResolveHourlyRate(
-        List<BasePriceRule> rules,
+    private async Task<(decimal Rate, string Source)> ResolveHourlyRateAsync(
         long factoryId,
         long productId,
         HashSet<long> sampleOperationIds)
     {
-        var now = DateTime.Now;
-        var candidates = rules
-            .Where(x => x.FactoryId == factoryId && x.PriceType == 2)
-            .Where(r => r.EffectiveFrom <= now)
-            .Where(r => r.EffectiveTo == null || now < r.EffectiveTo)
-            .Where(r => r.ProductId == null || r.ProductId == productId)
-            .Where(r => r.OperationId == null || sampleOperationIds.Contains(r.OperationId.Value)
-                        || r.ProductId == productId)
-            .Select(r => new
+        var now = DateTime.Today;
+        var candidates = await _db.OperationPriceLists.AsNoTracking()
+            .Where(t => t.FactoryId == factoryId && t.PricingType == 2 && t.Status == 1
+                        && t.EffectiveFrom <= now && (t.EffectiveTo == null || t.EffectiveTo >= now)
+                        && (t.ProductId == null || t.ProductId == productId)
+                        && (sampleOperationIds.Contains(t.OperationId) || t.ProductId == productId))
+            .ToListAsync();
+
+        var selected = candidates
+            .Select(t => new
             {
-                Rule = r,
-                Score = (r.ProductId != null ? 2 : 0) + (r.OperationId != null ? 1 : 0)
+                Table = t,
+                Score = (t.ProductId != null ? 2 : 0) + (sampleOperationIds.Contains(t.OperationId) ? 1 : 0)
             })
             .OrderByDescending(x => x.Score)
-            .ThenBy(x => x.Rule.Priority)
-            .ThenBy(x => x.Rule.Id)
+            .ThenBy(x => x.Table.Id)
             .FirstOrDefault();
 
-        if (candidates != null)
-            return (candidates.Rule.UnitPrice, $"计时工价规则#{candidates.Rule.Id}");
+        if (selected != null)
+        {
+            var baseRow = OperationPriceListService.Details(selected.Table)
+                .Rows.FirstOrDefault(r => r.Kind != "extra" && r.Amount.HasValue);
+            if (baseRow != null)
+                return (baseRow.Amount!.Value, $"计时价目表#{selected.Table.Id}");
+        }
 
         return (_opt.DefaultLaborRatePerHour, "默认人工费率(元/小时)");
     }
