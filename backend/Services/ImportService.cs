@@ -147,11 +147,16 @@ public class ImportService : IImportService
                 if (entityType == "user")
                     await ImportUserAsync(cells, factoryId, userAccountsSeenInFile);
                 else
+                {
+                    await using var tx = await _db.Database.BeginTransactionAsync();
                     await ImportRowAsync(entityType, cells, factoryId);
+                    await tx.CommitAsync();
+                }
                 result.SuccessCount++;
             }
             catch (BusinessException ex)
             {
+                _db.ChangeTracker.Clear();
                 result.FailCount++;
                 result.Errors.Add($"第{excelRow}行：{ex.Message}");
             }

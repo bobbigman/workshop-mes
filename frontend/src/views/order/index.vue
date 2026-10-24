@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div>
     <ValueTip :text="VALUE_TIPS.order" />
     <div class="toolbar">
@@ -537,7 +537,7 @@ async function onSave() {
   try {
     if (editingId.value) {
       const payload = {
-        processingChoices,
+        processingChoices, operationAttributes: processingEditor.value?.getOperationAttributes(),
         orderNo: form.value.orderNo || undefined,
         productId: form.value.productId,
         qty: form.value.qty,
@@ -548,7 +548,7 @@ async function onSave() {
       await updateOrder(editingId.value, payload)
       ElMessage.success('已保存')
     } else {
-      await createOrder({ processingChoices, copyFromId: copyFromId.value, orderNo: form.value.orderNo || undefined, productId: form.value.productId, qty: form.value.qty, dueDate: form.value.dueDate || null, ext: form.value.ext })
+      await createOrder({ processingChoices, operationAttributes: processingEditor.value?.getOperationAttributes(), copyFromId: copyFromId.value, orderNo: form.value.orderNo || undefined, productId: form.value.productId, qty: form.value.qty, dueDate: form.value.dueDate || null, ext: form.value.ext })
       ElMessage.success('创建成功')
     }
     dlg.value = false

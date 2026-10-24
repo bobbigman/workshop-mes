@@ -18,10 +18,12 @@ public class CustomFieldController : ControllerBase
         _svc.QueryByTargetAsync(target, JwtHelper.GetFactoryId(User));
 
     [HttpPost]
+    [Authorize(Roles = "1")]
     public Task<ApiResult<object?>> Create([FromBody] CustomFieldCreateDto dto) =>
         _svc.CreateAsync(dto, JwtHelper.GetFactoryId(User));
 
     [HttpPut("{id}")]
+    [Authorize(Roles = "1")]
     public Task<ApiResult<object?>> Update(long id, [FromBody] CustomFieldCreateDto dto) =>
         _svc.UpdateAsync(id, dto, JwtHelper.GetFactoryId(User));
 

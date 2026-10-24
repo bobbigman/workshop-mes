@@ -23,6 +23,7 @@ public class ProductQueryDto
 
 public class ProductCreateDto
 {
+    public Dictionary<long, string?>? CustomValues { get; set; }
     public bool? IsRiskFocus { get; set; }
     public long? CopyFromId { get; set; }
     public RoutingCreateDto? NewRouting { get; set; }
@@ -49,6 +50,7 @@ public class ProductListDto
 
 public class ProductDetailDto
 {
+    public Dictionary<long, string?>? CustomValues { get; set; }
     public bool IsRiskFocus { get; set; }
     public long Id { get; set; }
     public string Code { get; set; } = "";
@@ -96,6 +98,7 @@ public class ProductService : IProductService
             ?? throw ThrowHelper.Biz(nameof(GetAsync), "产品不存在");
         return ApiResult<ProductDetailDto>.Ok(new ProductDetailDto
         {
+            CustomValues = await new ProductAttributeService(_db).GetAsync(p.Id, factoryId),
             Id = p.Id,
             Code = p.Code,
             Name = p.Name,
@@ -126,7 +129,7 @@ public class ProductService : IProductService
             var result = await new RoutingService(_db).CreateAsync(dto.NewRouting, factoryId);
             routingId = (long)result.Data!;
         }
-        _db.Products.Add(new BaseProduct
+        var product = new BaseProduct
         {
             FactoryId = factoryId,
             Code = dto.Code.Trim(),
@@ -137,8 +140,12 @@ public class ProductService : IProductService
             Price = dto.Price,
             IsRiskFocus = dto.IsRiskFocus ?? false,
             CreatedAt = DateTime.Now
-        });
+        };
+        _db.Products.Add(product);
         await _db.SaveChangesAsync();
+        var attributes = dto.CustomValues;
+        if (attributes == null && dto.CopyFromId.HasValue) attributes = await new ProductAttributeService(_db).GetAsync(dto.CopyFromId.Value, factoryId);
+        await new ProductAttributeService(_db).SaveAsync(product.Id, factoryId, attributes);
         await tx.CommitAsync();
         return ApiResult<object?>.OkMsg();
     }
@@ -153,6 +160,7 @@ public class ProductService : IProductService
 
     public async Task<ApiResult<object?>> UpdateAsync(long id, ProductCreateDto dto, long factoryId)
     {
+        await using var tx = await _db.Database.BeginTransactionAsync();
         await ValidateReferencesAsync(dto, factoryId);
         if (dto.NewRouting != null)
             throw ThrowHelper.Biz(nameof(UpdateAsync), "复制工艺并修改仅用于新建产品");
@@ -170,6 +178,8 @@ public class ProductService : IProductService
         product.Price = dto.Price;
         if (dto.IsRiskFocus.HasValue) product.IsRiskFocus = dto.IsRiskFocus.Value;
         await _db.SaveChangesAsync();
+        await new ProductAttributeService(_db).SaveAsync(product.Id, factoryId, dto.CustomValues);
+        await tx.CommitAsync();
         return ApiResult<object?>.OkMsg();
     }
 

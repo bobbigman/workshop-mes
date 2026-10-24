@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
@@ -49,6 +49,7 @@ public class ProcessingChoice
 public record ProcessingLine(string Group, string Option, decimal Extra, bool Included);
 public class ProcessingQuote
 {
+    public AttributeQuoteEvidence? AttributeEvidence { get; set; }
     public long OperationId { get; set; }
     public string Version { get; set; } = "";
     public ProcessingChoice Choice { get; set; } = new();
@@ -165,10 +166,14 @@ public class OperationPricingService(AppDbContext db)
             ?? throw ThrowHelper.BizUser("产品不存在或不属于本厂");
         var operations = await (from s in db.RoutingSteps.AsNoTracking()
             join o in db.Operations.AsNoTracking() on s.OperationId equals o.Id
-            where s.RoutingId == product.RoutingId && o.FactoryId == factoryId && o.PricingConfig != null
+            where s.RoutingId == product.RoutingId && o.FactoryId == factoryId
             orderby s.Seq select o).ToListAsync();
-        return operations.Select(o => (object)new { o.Id, o.Name, Config = Read<ProcessingConfig>(o.PricingConfig!), product.UnitId }).ToList();
+        var modes = await db.ProductOperationPricings.AsNoTracking().Where(m => m.FactoryId == factoryId && m.ProductId == productId).ToListAsync();
+        return operations.Where(o => modes.Any(m => m.OperationId == o.Id && m.AttributePricing) || (o.PricingConfig != null && !modes.Any(m => m.OperationId == o.Id)))
+            .Select(o => (object)new { o.Id, o.Name, Automatic = modes.Any(m => m.OperationId == o.Id && m.AttributePricing),
+                Config = modes.Any(m => m.OperationId == o.Id) ? null : Read<ProcessingConfig>(o.PricingConfig!), product.UnitId }).ToList();
     }
+
     public async Task<ProcessingQuote> PreviewAsync(long operationId, long productId, long factoryId, ProcessingChoice choice)
     {
         var product = await db.Products.AsNoTracking().FirstOrDefaultAsync(p => p.Id == productId && p.FactoryId == factoryId)
@@ -183,6 +188,17 @@ public class OperationPricingService(AppDbContext db)
         Require(choices == null || choices.Keys.All(id => tasks.Any(t => t.OperationId == id)), "加工选择含非本工单工序");
         foreach (var task in tasks)
         {
+            var attributePricing = new OperationPriceListService(db);
+            if (task.ProcessingPrice == null && await attributePricing.IsAttributeAsync(order.ProductId, task.OperationId, order.FactoryId))
+            {
+                Require(!await db.Reports.AnyAsync(r => r.OrderId == order.Id && r.OperationId == task.OperationId), "该历史工序已有报工，不能中途切换属性工价");
+                var attributes = await new OperationAttributeService(db).GetAsync(task.Id, order.FactoryId, task.OperationId);
+                var automaticQuote = await attributePricing.PreviewAsync(order.ProductId, task.OperationId, order.FactoryId, operationAttributes: attributes);
+                var previewChoice = choices?.GetValueOrDefault(task.OperationId);
+                Require(previewChoice == null || previewChoice.QuoteToken == automaticQuote.QuoteToken, "产品属性或价目表已变化，请重新预览后保存");
+                task.ProcessingPrice = Write(automaticQuote);
+                continue;
+            }
             var choice = choices?.GetValueOrDefault(task.OperationId);
             if (choice != null && task.ProcessingPrice != null)
             {
@@ -191,6 +207,11 @@ public class OperationPricingService(AppDbContext db)
             }
             if (choice == null && task.ProcessingPrice != null) continue;
             if (choice == null && await db.Reports.AnyAsync(r => r.OrderId == order.Id && r.OperationId == task.OperationId)) continue;
+            if (await db.ProductOperationPricings.AnyAsync(m => m.FactoryId == order.FactoryId && m.ProductId == order.ProductId && m.OperationId == task.OperationId && !m.AttributePricing))
+            {
+                Require(choice == null, "当前工序使用普通工价，不接受旧加工选择");
+                continue;
+            }
             var config = await GetAsync(task.OperationId, order.FactoryId);
             if (config == null)
             {
@@ -219,6 +240,10 @@ public class OperationPricingService(AppDbContext db)
             Require(currentUnit == quote.ReportUnitId, "产品报工单位与锁价依据不一致，请核查单位；不可自动套价");
             return new ReportPriceSnapshot(-task.Id, 1, quote.UnitPrice, quote.DeductPrice) { Processing = quote };
         }
+        var productId = await db.WorkOrders.Where(o => o.Id == orderId && o.FactoryId == factoryId).Select(o => o.ProductId).FirstOrDefaultAsync();
+        if (await new OperationPriceListService(db).IsAttributeAsync(productId, operationId, factoryId))
+            throw ThrowHelper.BizUser("属性计价工序未锁价，请管理员核查工单，不可退回普通工价");
+        if (await db.ProductOperationPricings.AnyAsync(m => m.FactoryId == factoryId && m.ProductId == productId && m.OperationId == operationId && !m.AttributePricing)) return null;
         if ((await GetAsync(operationId, factoryId)) != null)
         {
             // 已有旧报工的历史任务继续旧计价，不能半途切换口径；无报工任务须先补齐锁价。

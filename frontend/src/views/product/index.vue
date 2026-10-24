@@ -54,7 +54,9 @@
         </template>
         <el-form-item label="供应商"><el-input v-model="form.supplier" /></el-form-item>
         <el-form-item label="单价"><el-input-number v-model="form.price" :min="0" :precision="2" /></el-form-item>
+        <ProductAttributes v-model="form.customValues" :fields="attributeFields" />
       </el-form>
+      <ProductPricingModes v-if="editingId" :product-id="editingId" :routing-id="form.routingId" />
       <div v-if="editingId" class="kf-block">
         <div class="kf-title">作业指导书 / 图纸</div>
         <KnowledgeFiles ref-type="product" :ref-id="editingId" />
@@ -69,6 +71,9 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { getProductList, getProduct, createProduct, updateProduct, deleteProduct, getUnitList, getRoutingList, getRouting, getOperationList } from '@/api/base'
+import ProductPricingModes from '@/components/ProductPricingModes.vue'
+import ProductAttributes from '@/components/ProductAttributes.vue'
+import { getCustomFields } from '@/api/prod'
 import RoutingSteps from '@/components/RoutingSteps.vue'
 import ImportDialog from '@/components/ImportDialog.vue'
 import KnowledgeFiles from '@/components/KnowledgeFiles.vue'
@@ -77,10 +82,12 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 const isAdmin = Number(localStorage.getItem('role')) === 1
 const copyFromId = ref(null), saving = ref(false), loadingRouting = ref(false)
 const list = ref([]), keyword = ref(''), dlg = ref(false), editingId = ref(null)
-const form = ref({ code: '', name: '', unitId: null, routingId: null, supplier: '', price: null, isRiskFocus: false })
+const form = ref({ code: '', name: '', unitId: null, routingId: null, supplier: '', price: null, isRiskFocus: false, customValues: {} })
+const attributeFields = ref([])
 const unitOptions = ref([]), routingOptions = ref([]), opOptions = ref([])
 
 onMounted(async () => {
+  attributeFields.value = (await getCustomFields('product')).data || []
   await load()
   unitOptions.value = (await getUnitList()).data || []
   routingOptions.value = ((await getRoutingList({ page: 1, pageSize: 200 })).data.list) || []
@@ -93,7 +100,7 @@ async function load() {
 function openCreate() {
   copyFromId.value = null
   editingId.value = null
-  form.value = { code: '', name: '', unitId: null, routingId: null, supplier: '', price: null, isRiskFocus: false }
+  form.value = { code: '', name: '', unitId: null, routingId: null, supplier: '', price: null, isRiskFocus: false, customValues: {} }
   dlg.value = true
 }
 async function openEdit(row) {
@@ -101,7 +108,7 @@ async function openEdit(row) {
   const res = await getProduct(row.id)
   editingId.value = row.id
   const d = res.data
-  form.value = { code: d.code, name: d.name, unitId: d.unitId, routingId: d.routingId, supplier: d.supplier, price: d.price, isRiskFocus: !!d.isRiskFocus }
+  form.value = { code: d.code, name: d.name, unitId: d.unitId, routingId: d.routingId, supplier: d.supplier, price: d.price, isRiskFocus: !!d.isRiskFocus, customValues: d.customValues || {} }
   dlg.value = true
 }
 async function openCopy(row) {
@@ -126,8 +133,9 @@ async function onSave() {
   }
   saving.value = true
   try {
-    if (editingId.value) await updateProduct(editingId.value, form.value)
-    else await createProduct({ ...form.value, copyFromId: copyFromId.value })
+    const payload = { ...form.value, customValues: Object.fromEntries(Object.entries(form.value.customValues || {}).map(([k,v])=>[k,v==null?null:String(v)])) }
+    if (editingId.value) await updateProduct(editingId.value, payload)
+    else await createProduct({ ...payload, copyFromId: copyFromId.value })
     ElMessage.success('保存成功'); dlg.value = false
     await load()
     if (form.value.newRouting) routingOptions.value = (await getRoutingList({ page: 1, pageSize: 200 })).data.list || []

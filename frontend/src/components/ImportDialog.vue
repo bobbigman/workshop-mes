@@ -15,9 +15,10 @@
           <el-button type="success" :loading="uploading">上传文件</el-button>
         </el-upload>
       </div>
+      <el-button v-if="pendingFile && result?.failCount===0" type="primary" :loading="uploading" @click="commitFile">预检通过，正式导入</el-button>
       <div v-if="result" class="result">
         <p>
-          成功 <strong>{{ result.successCount }}</strong> 条 /
+          {{ pendingFile ? '预检可导入' : '成功' }} <strong>{{ result.successCount }}</strong> 条 /
           失败 <strong>{{ result.failCount }}</strong> 条
         </p>
         <el-input
@@ -51,13 +52,16 @@ const dlg = ref(false)
 const downloading = ref(false)
 const uploading = ref(false)
 const result = ref(null)
+const pendingFile = ref(null)
 
 function open() {
   result.value = null
+  pendingFile.value = null
   dlg.value = true
 }
 
 function onClosed() {
+  pendingFile.value = null
   result.value = null
 }
 
@@ -89,7 +93,10 @@ async function onFile(file) {
   try {
     const fd = new FormData()
     fd.append('file', raw)
-    const res = await uploadImport(props.entityType, fd)
+    const preview = ['product','operationPriceList'].includes(props.entityType)
+    pendingFile.value = null
+    const res = await uploadImport(props.entityType, fd, preview)
+    if(preview){result.value=res.data;if(!res.data.failCount)pendingFile.value=raw;return}
     result.value = res.data || { successCount: 0, failCount: 0, errors: [] }
     if (result.value.successCount > 0) {
       ElMessage.success(`成功导入 ${result.value.successCount} 条`)
@@ -100,6 +107,12 @@ async function onFile(file) {
   } finally {
     uploading.value = false
   }
+}
+
+async function commitFile(){
+  if(!pendingFile.value||uploading.value)return
+  uploading.value=true
+  try{const fd=new FormData();fd.append('file',pendingFile.value);result.value=(await uploadImport(props.entityType,fd)).data;pendingFile.value=null;if(result.value.successCount){ElMessage.success('导入完成');emit('done')}}finally{uploading.value=false}
 }
 
 async function copyErrors() {

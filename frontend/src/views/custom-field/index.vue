@@ -3,14 +3,14 @@
     <div class="toolbar">
       <el-select v-model="target" style="width:160px" @change="load">
         <el-option value="work_order" label="工单" />
-        <el-option value="product" label="产品" />
+        <el-option value="product" label="产品" /><el-option value="work_order_task" label="工单工序工艺" />
         <el-option value="operation" label="工序" />
         <el-option value="report" label="报工" />
       </el-select>
       <el-button type="success" @click="openCreate">+ 添加字段</el-button>
     </div>
     <el-table :data="list">
-      <el-table-column prop="fieldName" label="字段名称" />
+      <el-table-column prop="fieldName" label="字段名称" /><el-table-column v-if="target==='work_order_task'" label="所属工序"><template #default="{row}">{{operations.find(o=>o.id===row.operationId)?.name}}</template></el-table-column>
       <el-table-column prop="fieldKey" label="编码" width="120">
         <template #default="{ row }">{{ row.fieldKey || '—' }}</template>
       </el-table-column>
@@ -32,7 +32,7 @@
     </el-table>
 
     <el-dialog v-model="dlg" :title="editingId ? '编辑自定义字段' : '创建自定义字段'" width="480px">
-      <el-form :model="form" label-width="120px">
+      <el-form :model="form" label-width="120px"><el-form-item v-if="target==='work_order_task'" label="所属工序" required><el-select v-model="form.operationId" :disabled="!!editingId" filterable><el-option v-for="o in operations" :key="o.id" :value="o.id" :label="o.name" /></el-select></el-form-item>
         <el-form-item label="字段名称" required>
           <el-input v-model="form.fieldName" placeholder="如：颜色" />
         </el-form-item>
@@ -40,6 +40,9 @@
           <el-input v-model="form.fieldKey" placeholder="可选；色码填 color / spec" />
           <div class="hint">小写字母开头；色码汇总认 color（颜色）、spec（规格/尺码）。空=普通字段</div>
         </el-form-item>
+        <el-form-item v-if="target==='product'||target==='work_order_task'" label="属性单位"><el-input v-model="form.unitText" placeholder="如寸、片" /></el-form-item>
+        <el-form-item v-if="target==='product'||target==='work_order_task'" label="属性说明"><el-input v-model="form.description" /></el-form-item>
+        <el-form-item v-if="target==='product'||target==='work_order_task'" label="取价关键属性"><el-switch v-model="form.pricingRequired" /></el-form-item>
         <el-form-item label="字段类型" required>
           <el-select v-model="form.fieldType" style="width:100%" :disabled="!!editingId">
             <el-option value="single" label="单选" />
@@ -69,6 +72,8 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { getOperationList } from '@/api/base'
+const operations=ref([])
 import { getCustomFields, createCustomField, updateCustomField, deleteCustomField } from '@/api/prod'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -99,7 +104,7 @@ async function onDelete(row) {
 const typeMap = { single: '单选', text: '文本', number: '数字' }
 function typeLabel(t) { return typeMap[t] || t }
 
-onMounted(load)
+onMounted(async()=>{operations.value=(await getOperationList({pageSize:1000})).data.list;await load()})
 
 async function load() {
   const res = await getCustomFields(target.value)
@@ -115,7 +120,7 @@ function openCreate() {
 function openEdit(row) {
   editingId.value = row.id
   form.value = {
-    fieldName: row.fieldName,
+    operationId: row.operationId, fieldName: row.fieldName, unitText: row.unitText, description: row.description, pricingRequired: row.pricingRequired,
     fieldKey: row.fieldKey || '',
     fieldType: row.fieldType,
     options: row.options && row.options.length ? [...row.options] : [''],
@@ -134,7 +139,7 @@ async function onSave() {
     return
   }
   const payload = {
-    target: target.value,
+    target: target.value, operationId: target.value==='work_order_task'?form.value.operationId:null, unitText: form.value.unitText, description: form.value.description, pricingRequired: !!form.value.pricingRequired,
     fieldName: form.value.fieldName.trim(),
     fieldKey: (form.value.fieldKey || '').trim(),
     fieldType: form.value.fieldType,
@@ -156,4 +161,3 @@ async function onSave() {
 .opt-row { display: flex; gap: 8px; margin-bottom: 6px; }
 .hint { color: #909399; font-size: 12px; }
 </style>
-

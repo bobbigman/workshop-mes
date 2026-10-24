@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using ahu.MicrosoftMes.Models;
 
 namespace ahu.MicrosoftMes.Data;
@@ -22,6 +22,8 @@ public class AppDbContext : DbContext
     public DbSet<BaseRouting> Routings => Set<BaseRouting>();
     public DbSet<BaseRoutingStep> RoutingSteps => Set<BaseRoutingStep>();
     public DbSet<BaseProduct> Products => Set<BaseProduct>();
+    public DbSet<OperationPriceList> OperationPriceLists => Set<OperationPriceList>();
+    public DbSet<ProductOperationPricing> ProductOperationPricings => Set<ProductOperationPricing>();
     public DbSet<BasePriceRule> PriceRules => Set<BasePriceRule>();
     public DbSet<BaseKnowledgeFile> KnowledgeFiles => Set<BaseKnowledgeFile>();
 
@@ -330,6 +332,39 @@ public class AppDbContext : DbContext
             e.Property(x => x.HandleNote).HasColumnName("handle_note").HasMaxLength(256);
         });
 
+        modelBuilder.Entity<OperationPriceList>(e =>
+        {
+            e.Property(x => x.ProductId).HasColumnName("product_id");
+            e.Property(x => x.Remark).HasColumnName("remark").HasMaxLength(1000);
+            e.Property(x => x.ActivatedAt).HasColumnName("activated_at");
+            e.HasIndex(x => new { x.FactoryId, x.OperationId, x.ProductId, x.Status, x.EffectiveFrom, x.EffectiveTo }).HasDatabaseName("ix_operation_price_list_scope");
+            e.Property(x => x.Id).HasColumnName("id");
+            e.Property(x => x.FactoryId).HasColumnName("factory_id");
+            e.Property(x => x.Code).HasColumnName("code").HasMaxLength(64);
+            e.Property(x => x.Name).HasColumnName("name").HasMaxLength(128);
+            e.Property(x => x.OperationId).HasColumnName("operation_id");
+            e.Property(x => x.Status).HasColumnName("status");
+            e.Property(x => x.EffectiveFrom).HasColumnName("effective_from").HasColumnType("date");
+            e.Property(x => x.EffectiveTo).HasColumnName("effective_to").HasColumnType("date");
+            e.Property(x => x.PriceUnit).HasColumnName("price_unit").HasMaxLength(32);
+            e.Property(x => x.ReportUnitId).HasColumnName("report_unit_id");
+            e.Property(x => x.UnitsPerPriceUnit).HasColumnName("units_per_price_unit").HasPrecision(12,4);
+            e.Property(x => x.Version).HasColumnName("version").HasMaxLength(32).IsConcurrencyToken();
+            e.Property(x => x.Details).HasColumnName("details");
+            e.Property(x => x.CreatedAt).HasColumnName("created_at");
+            e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+            e.HasIndex(x => new { x.FactoryId, x.Code }).IsUnique();
+        });
+        modelBuilder.Entity<ProductOperationPricing>(e =>
+        {
+            e.Property(x => x.Id).HasColumnName("id");
+            e.Property(x => x.FactoryId).HasColumnName("factory_id");
+            e.Property(x => x.ProductId).HasColumnName("product_id");
+            e.Property(x => x.OperationId).HasColumnName("operation_id");
+            e.Property(x => x.AttributePricing).HasColumnName("attribute_pricing");
+            e.HasIndex(x => new { x.FactoryId, x.ProductId, x.OperationId }).IsUnique();
+        });
+
         modelBuilder.Entity<BasePriceRule>(e =>
         {
             e.ToTable("base_price_rule");
@@ -418,11 +453,16 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<SysCustomField>(e =>
         {
             e.ToTable("sys_custom_field");
+            e.Property(x => x.OperationId).HasColumnName("operation_id");
+            e.HasIndex(x => new { x.FactoryId, x.Target, x.OperationId, x.FieldKey }).IsUnique().HasFilter("field_key IS NOT NULL").HasDatabaseName("ux_custom_field_scope_key");
             e.Property(x => x.FactoryId).HasColumnName("factory_id");
             e.Property(x => x.Target).HasColumnName("target").HasMaxLength(32);
             e.Property(x => x.FieldName).HasColumnName("field_name").HasMaxLength(64);
             e.Property(x => x.FieldType).HasColumnName("field_type").HasMaxLength(16);
             e.Property(x => x.FieldKey).HasColumnName("field_key").HasMaxLength(32);
+            e.Property(x => x.UnitText).HasColumnName("unit_text").HasMaxLength(16);
+            e.Property(x => x.Description).HasColumnName("description").HasMaxLength(256);
+            e.Property(x => x.PricingRequired).HasColumnName("pricing_required");
             e.Property(x => x.ShowInOrderList).HasColumnName("show_in_order_list");
             e.Property(x => x.CreatedAt).HasColumnName("created_at");
         });

@@ -16,11 +16,15 @@ public interface ICustomFieldService
 
 public class CustomFieldCreateDto
 {
+    public long? OperationId { get; set; }
     public string Target { get; set; } = "";
     public string FieldName { get; set; } = "";
     public string FieldType { get; set; } = "";
     /// <summary>业务编码；空=普通字段。色码约定 color/spec。</summary>
     public string? FieldKey { get; set; }
+    public string? UnitText { get; set; }
+    public string? Description { get; set; }
+    public bool PricingRequired { get; set; }
     public List<string> Options { get; set; } = new();
     /// <summary>省略时：创建默认关闭；更新保留原值。仅 work_order 可设为 true。</summary>
     public bool? ShowInOrderList { get; set; }
@@ -29,10 +33,14 @@ public class CustomFieldCreateDto
 public class CustomFieldDto
 {
     public long Id { get; set; }
+    public long? OperationId { get; set; }
     public string Target { get; set; } = "";
     public string FieldName { get; set; } = "";
     public string FieldType { get; set; } = "";
     public string? FieldKey { get; set; }
+    public string? UnitText { get; set; }
+    public string? Description { get; set; }
+    public bool PricingRequired { get; set; }
     public bool ShowInOrderList { get; set; }
     public List<string> Options { get; set; } = new();
 }
@@ -56,10 +64,10 @@ public class CustomFieldService : ICustomFieldService
         var list = fields.Select(f => new CustomFieldDto
         {
             Id = f.Id,
-            Target = f.Target,
+            Target = f.Target, OperationId = f.OperationId,
             FieldName = f.FieldName,
             FieldType = f.FieldType,
-            FieldKey = f.FieldKey,
+            FieldKey = f.FieldKey, UnitText = f.UnitText, Description = f.Description, PricingRequired = f.PricingRequired,
             ShowInOrderList = f.ShowInOrderList,
             Options = opts.Where(o => o.FieldId == f.Id).Select(o => o.Label).ToList()
         }).ToList();
@@ -69,6 +77,10 @@ public class CustomFieldService : ICustomFieldService
 
     public async Task<ApiResult<object?>> CreateAsync(CustomFieldCreateDto dto, long factoryId)
     {
+        await using var tx = await _db.Database.BeginTransactionAsync();
+        await OperationPriceListService.LockFactoryAsync(_db, factoryId);
+        ValidateMetadata(dto);
+        await ValidateOperationAsync(dto, factoryId);
         if (string.IsNullOrWhiteSpace(dto.FieldName) || string.IsNullOrWhiteSpace(dto.FieldType))
             throw ThrowHelper.Biz(nameof(CreateAsync), "字段名称和类型不能为空");
 
@@ -80,15 +92,15 @@ public class CustomFieldService : ICustomFieldService
             throw ThrowHelper.Biz(nameof(CreateAsync), "仅工单自定义字段可开启「在工单列表显示」");
 
         var fieldKey = NormalizeFieldKey(dto.FieldKey);
-        await EnsureFieldKeyUniqueAsync(factoryId, dto.Target, fieldKey, excludeId: null);
+        await EnsureFieldKeyUniqueAsync(factoryId, dto.Target, fieldKey, excludeId: null, operationId: dto.OperationId);
 
         var field = new SysCustomField
         {
             FactoryId = factoryId,
-            Target = dto.Target,
+            Target = dto.Target, OperationId = dto.OperationId,
             FieldName = dto.FieldName.Trim(),
             FieldType = dto.FieldType,
-            FieldKey = fieldKey,
+            FieldKey = fieldKey, UnitText = dto.UnitText, Description = dto.Description, PricingRequired = dto.PricingRequired,
             ShowInOrderList = show,
             CreatedAt = DateTime.Now
         };
@@ -109,15 +121,19 @@ public class CustomFieldService : ICustomFieldService
             }
             await _db.SaveChangesAsync();
         }
+        await tx.CommitAsync();
         return ApiResult<object?>.OkMsg();
     }
 
     public async Task<ApiResult<object?>> DeleteAsync(long id, long factoryId)
     {
         await using var transaction = await _db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+        await OperationPriceListService.LockFactoryAsync(_db, factoryId);
         var field = await _db.CustomFields.FirstOrDefaultAsync(f => f.Id == id && f.FactoryId == factoryId)
             ?? throw ThrowHelper.Biz(nameof(DeleteAsync), "字段不存在");
 
+        if (await ReferencedByPriceListAsync(field))
+            throw ThrowHelper.BizUser("字段已被工序价目表引用，不能删除");
         if (await _db.CustomFieldValues.AnyAsync(v => v.FieldId == id))
             throw ThrowHelper.Biz(nameof(DeleteAsync), $"字段“{field.FieldName}”已有业务数据，不能删除");
 
@@ -131,9 +147,17 @@ public class CustomFieldService : ICustomFieldService
 
     public async Task<ApiResult<object?>> UpdateAsync(long id, CustomFieldCreateDto dto, long factoryId)
     {
+        await using var tx = await _db.Database.BeginTransactionAsync();
+        await OperationPriceListService.LockFactoryAsync(_db, factoryId);
         var field = await _db.CustomFields.FirstOrDefaultAsync(f => f.Id == id && f.FactoryId == factoryId)
             ?? throw ThrowHelper.Biz(nameof(UpdateAsync), "字段不存在");
 
+        if (string.IsNullOrEmpty(dto.Target)) { dto.Target = field.Target; dto.OperationId = field.OperationId; }
+        if (string.IsNullOrEmpty(dto.FieldType)) dto.FieldType = field.FieldType;
+        ValidateMetadata(dto);
+        await ValidateOperationAsync(dto, factoryId);
+        if (field.Target != dto.Target || field.OperationId != dto.OperationId || field.FieldType != dto.FieldType)
+            throw ThrowHelper.BizUser("字段归属、工序和类型不能修改，请新建字段");
         if (string.IsNullOrWhiteSpace(dto.FieldName))
             throw ThrowHelper.Biz(nameof(UpdateAsync), "字段名称不能为空");
 
@@ -143,10 +167,19 @@ public class CustomFieldService : ICustomFieldService
                 throw ThrowHelper.Biz(nameof(UpdateAsync), "单选字段必须添加选项");
         }
 
+        if (await ReferencedByPriceListAsync(field))
+        {
+            if (NormalizeFieldKey(dto.FieldKey) != field.FieldKey)
+                throw ThrowHelper.BizUser("字段已被工序价目表引用，不能修改编码");
+            var oldOptions = await _db.CustomFieldOptions.Where(o => o.FieldId == id).OrderBy(o => o.Seq).Select(o => o.Label).ToListAsync();
+            if (field.FieldType == "single" && oldOptions.Except(dto.Options.Select(x => x.Trim())).Any())
+                throw ThrowHelper.BizUser("字段已被价目表引用，不能移除已有选项");
+        }
+        field.UnitText = dto.UnitText; field.Description = dto.Description; field.PricingRequired = dto.PricingRequired;
         field.FieldName = dto.FieldName.Trim();
 
         var fieldKey = NormalizeFieldKey(dto.FieldKey);
-        await EnsureFieldKeyUniqueAsync(factoryId, field.Target, fieldKey, excludeId: id);
+        await EnsureFieldKeyUniqueAsync(factoryId, field.Target, fieldKey, excludeId: id, operationId: field.OperationId);
         field.FieldKey = fieldKey;
 
         if (dto.ShowInOrderList.HasValue)
@@ -173,7 +206,32 @@ public class CustomFieldService : ICustomFieldService
         }
 
         await _db.SaveChangesAsync();
+        await tx.CommitAsync();
         return ApiResult<object?>.OkMsg();
+    }
+
+    private async Task ValidateOperationAsync(CustomFieldCreateDto dto, long factoryId)
+    {
+        if (dto.Target == "work_order_task")
+        {
+            if (!dto.OperationId.HasValue || !await _db.Operations.AnyAsync(o => o.Id == dto.OperationId && o.FactoryId == factoryId))
+                throw ThrowHelper.BizUser("工序工艺字段必须指定本厂工序");
+        }
+        else if (dto.OperationId.HasValue) throw ThrowHelper.BizUser("只有工序工艺字段可以指定所属工序");
+    }
+
+    private static void ValidateMetadata(CustomFieldCreateDto dto)
+    {
+        if (dto.Target is not ("product" or "work_order" or "operation" or "report" or "work_order_task") || dto.FieldType is not ("text" or "number" or "single")) throw ThrowHelper.BizUser("字段归属或类型无效");
+        if (dto.FieldName.Length > 64 || dto.UnitText?.Length > 16 || dto.Description?.Length > 256) throw ThrowHelper.BizUser("字段名称/单位/说明超过长度限制");
+        if (dto.Options == null || dto.Options.Any(o => string.IsNullOrWhiteSpace(o) || o.Length > 64) || dto.Options.Select(o=>o.Trim()).Distinct().Count() != dto.Options.Count) throw ThrowHelper.BizUser("选项为空、重复或超过64字");
+    }
+
+    private async Task<bool> ReferencedByPriceListAsync(SysCustomField field)
+    {
+        if (field.Target is not ("product" or "work_order_task")) return false;
+        var tables = await _db.OperationPriceLists.AsNoTracking().Where(t => t.FactoryId == field.FactoryId).ToListAsync();
+        return tables.Select(OperationPriceListService.Details).Any(d => d.RequiredFieldIds.Contains(field.Id) || d.Rows.SelectMany(r => r.Conditions).Concat(d.Groups.SelectMany(g => g.Conditions)).Any(c => c.FieldId == field.Id));
     }
 
     /// <summary>空/空白 → null；否则小写校验格式。</summary>
@@ -186,12 +244,12 @@ public class CustomFieldService : ICustomFieldService
         return key;
     }
 
-    private async Task EnsureFieldKeyUniqueAsync(long factoryId, string target, string? fieldKey, long? excludeId)
+    private async Task EnsureFieldKeyUniqueAsync(long factoryId, string target, string? fieldKey, long? excludeId, long? operationId)
     {
         if (fieldKey == null) return;
         var exists = await _db.CustomFields.AsNoTracking()
             .AnyAsync(f => f.FactoryId == factoryId
-                           && f.Target == target
+                           && f.Target == target && f.OperationId == operationId
                            && f.FieldKey == fieldKey
                            && (!excludeId.HasValue || f.Id != excludeId.Value));
         if (exists)

@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using ahu.MicrosoftMes.Data;
 
 namespace ahu.MicrosoftMes.Services;
@@ -14,6 +14,9 @@ public static class DeleteGuard
                 return null;
 
             case "Product":
+                if (await db.ProductOperationPricings.AnyAsync(m => m.ProductId == id)) return "该产品被工序取价方式引用，请先处理关联";
+                var priceLists = await db.OperationPriceLists.AsNoTracking().ToListAsync();
+                if (priceLists.Any(t => t.ProductId == id || OperationPriceListService.Details(t).Rows.Any(r => r.ProductId == id))) return "该产品被工序价目表引用，请先处理关联";
                 if (await db.WorkOrders.AnyAsync(o => o.ProductId == id))
                     return "该产品已被工单引用，请先删除相关工单";
                 if (await db.PriceRules.AnyAsync(r => r.ProductId == id))
@@ -28,6 +31,9 @@ public static class DeleteGuard
                 break;
 
             case "Operation":
+                if (await db.CustomFields.AnyAsync(f => f.OperationId == id)) return "该工序被工艺字段引用，不能删除";
+                if (await db.OperationPriceLists.AnyAsync(t => t.OperationId == id) || await db.ProductOperationPricings.AnyAsync(m => m.OperationId == id))
+                    return "该工序被属性价目表/取价模式引用，不能删除";
                 if (await db.WorkSessions.AnyAsync(x => x.OperationId == id))
                     return "该工序已有开工记录，请先处理相关工单";
                 if (await db.RoutingSteps.AnyAsync(s => s.OperationId == id))
@@ -46,6 +52,7 @@ public static class DeleteGuard
                 break;
 
             case "Unit":
+                if (await db.OperationPriceLists.AnyAsync(t => t.ReportUnitId == id)) return "该单位被工序价目表引用，不能删除";
                 if (await db.Products.AnyAsync(p => p.UnitId == id))
                     return "该单位已被产品引用，请先删除相关产品";
                 break;

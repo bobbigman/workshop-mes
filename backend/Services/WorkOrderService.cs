@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using ahu.MicrosoftMes.Common;
 using ahu.MicrosoftMes.Data;
 using ahu.MicrosoftMes.Models;
@@ -48,6 +48,7 @@ public class WorkOrderStatusCountsDto
 
 public class WorkOrderCreateDto
 {
+    public Dictionary<long, Dictionary<long, string?>>? OperationAttributes { get; set; }
     public Dictionary<long, ProcessingChoice>? ProcessingChoices { get; set; }
     public long? CopyFromId { get; set; }
     public string? OrderNo { get; set; }             // 可自定义，空则自动生成
@@ -65,6 +66,7 @@ public class WorkOrderPlanDto
 
 public class WorkOrderUpdateDto
 {
+    public Dictionary<long, Dictionary<long, string?>>? OperationAttributes { get; set; }
     public Dictionary<long, ProcessingChoice>? ProcessingChoices { get; set; }
     public string? OrderNo { get; set; }             // 可改
     public long? ProductId { get; set; }             // 可换
@@ -106,6 +108,7 @@ public class WorkOrderListDto
 
 public class WorkOrderTaskDto
 {
+    public Dictionary<long, string?> OperationAttributes { get; set; } = new();
     public bool HasReports { get; set; }
     public ProcessingQuote? ProcessingPrice { get; set; }
     public long Id { get; set; }               // prod_work_order_operation.id；旧数据兜底临时任务为 0
@@ -484,6 +487,8 @@ public class WorkOrderService : IWorkOrderService
         var deptNames = deptIds.Count > 0
             ? await _db.Departments.AsNoTracking().Where(d => deptIds.Contains(d.Id)).ToDictionaryAsync(d => d.Id, d => d.Name)
             : new Dictionary<long, string>();
+        var taskAttributes = new Dictionary<long, Dictionary<long, string?>>();
+        foreach (var task in tasks) taskAttributes[task.Id] = await new OperationAttributeService(_db).GetAsync(task.Id, order.FactoryId, task.OperationId);
         return tasks.Select(t =>
         {
             var list = assigneeRows.Where(a => a.Item1 == t.Id)
@@ -501,6 +506,7 @@ public class WorkOrderService : IWorkOrderService
             return new WorkOrderTaskDto
             {
                 Id = t.Id,
+                OperationAttributes = taskAttributes[t.Id],
                 HasReports = reportedOps.Contains(t.OperationId),
                 ProcessingPrice = t.ProcessingPrice == null ? null : OperationPricingService.Read<ProcessingQuote>(t.ProcessingPrice),
                 OperationId = t.OperationId,
@@ -556,6 +562,12 @@ public class WorkOrderService : IWorkOrderService
         await _db.SaveChangesAsync();
 
         await SyncTasksAsync(order, product.RoutingId, dto.Qty, null);
+        if (dto.CopyFromId.HasValue && dto.OperationAttributes == null)
+        {
+            var source = await _db.WorkOrders.AsNoTracking().SingleAsync(o => o.Id == dto.CopyFromId && o.FactoryId == factoryId);
+            if (source.ProductId == dto.ProductId) dto.OperationAttributes = await new OperationAttributeService(_db).ReadOrderAsync(source.Id, factoryId);
+        }
+        await new OperationAttributeService(_db).SaveOrderAsync(order, dto.OperationAttributes);
         await new OperationPricingService(_db).BindAsync(order, dto.ProcessingChoices);
         await SaveExtAsync(order.Id, dto.Ext);
         await tx.CommitAsync();
@@ -641,6 +653,7 @@ public class WorkOrderService : IWorkOrderService
         if (dto.Ext != null)
             await SaveExtAsync(id, dto.Ext);
 
+        await new OperationAttributeService(_db).SaveOrderAsync(order, dto.OperationAttributes);
         await new OperationPricingService(_db).BindAsync(order, dto.ProcessingChoices);
         await RecalcStatusAsync(order);
         await tx.CommitAsync();
@@ -702,6 +715,8 @@ public class WorkOrderService : IWorkOrderService
         var sourceTasks = await _db.WorkOrderOperations.AsNoTracking().Where(t => t.WorkOrderId == id && t.ProcessingPrice != null).ToListAsync();
         foreach (var task in sourceTasks)
         {
+            if (await new OperationPriceListService(_db).IsAttributeAsync(src.ProductId, task.OperationId, factoryId)) continue;
+            if (await _db.ProductOperationPricings.AnyAsync(m => m.FactoryId == factoryId && m.ProductId == src.ProductId && m.OperationId == task.OperationId && !m.AttributePricing)) continue;
             var old = OperationPricingService.Read<ProcessingQuote>(task.ProcessingPrice!);
             var quote = await pricing.PreviewAsync(task.OperationId, src.ProductId, factoryId, old.Choice);
             quote.Choice.QuoteToken = quote.QuoteToken;
@@ -720,8 +735,9 @@ public class WorkOrderService : IWorkOrderService
 
         _db.WorkSessions.RemoveRange(_db.WorkSessions.Where(x => x.WorkOrderId == id));
         _db.Reports.RemoveRange(_db.Reports.Where(r => r.OrderId == id));
+        await new OperationAttributeService(_db).RemoveTasksAsync(id, order.FactoryId);
         _db.WorkOrderOperations.RemoveRange(_db.WorkOrderOperations.Where(t => t.WorkOrderId == id));
-        _db.CustomFieldValues.RemoveRange(_db.CustomFieldValues.Where(v => v.TargetId == id));
+        _db.CustomFieldValues.RemoveRange(_db.CustomFieldValues.Where(v => v.TargetId == id && _db.CustomFields.Any(f => f.Id == v.FieldId && f.FactoryId == order.FactoryId && f.Target == "work_order")));
         _db.WorkOrders.Remove(order);
         await _db.SaveChangesAsync();
         return ApiResult<object?>.OkMsg();
@@ -788,6 +804,7 @@ public class WorkOrderService : IWorkOrderService
             await _db.SaveChangesAsync();
             return;
         }
+        await new OperationAttributeService(_db).RemoveTasksAsync(order.Id, order.FactoryId);
         _db.WorkOrderOperations.RemoveRange(_db.WorkOrderOperations.Where(t => t.WorkOrderId == order.Id));
         await _db.SaveChangesAsync();
 

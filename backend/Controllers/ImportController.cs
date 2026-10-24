@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ahu.MicrosoftMes.Common;
+using ahu.MicrosoftMes.Data;
 using ahu.MicrosoftMes.Services;
 
 namespace ahu.MicrosoftMes.Controllers;
@@ -11,22 +12,31 @@ namespace ahu.MicrosoftMes.Controllers;
 public class ImportController : ControllerBase
 {
     private readonly IImportService _svc;
-    public ImportController(IImportService svc) { _svc = svc; }
+    private readonly AppDbContext _db;
+    private readonly ILicenseTierService _license;
+    public ImportController(IImportService svc, AppDbContext db, ILicenseTierService license) { _svc = svc; _db = db; _license = license; }
 
     [HttpGet("template")]
     public async Task<IActionResult> DownloadTemplate([FromQuery] string entityType)
     {
-        var bytes = await _svc.DownloadTemplateAsync(entityType);
+        var fid = JwtHelper.GetFactoryId(User);
+        if (entityType == "operationPriceList") await _license.EnsureFeatureAsync(fid, LicenseFeature.PieceWage);
+        var bytes = entityType is "product" or "operationPriceList" ? await new AttributeImportService(_db).TemplateAsync(entityType, fid) : await _svc.DownloadTemplateAsync(entityType);
         return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"{entityType}_template.xlsx");
     }
 
     [HttpPost("upload")]
-    public async Task<ApiResult<ImportResultDto>> Upload([FromQuery] string entityType, IFormFile file)
+    [Authorize(Roles = "1")]
+    public async Task<ApiResult<ImportResultDto>> Upload([FromQuery] string entityType, IFormFile file, [FromQuery] bool preview = false)
     {
         if (file == null || file.Length == 0)
             throw ThrowHelper.Biz(nameof(Upload), "上传文件为空");
         using var ms = new MemoryStream();
         await file.CopyToAsync(ms);
-        return await _svc.ImportAsync(entityType, ms.ToArray(), JwtHelper.GetFactoryId(User));
+        var fid = JwtHelper.GetFactoryId(User);
+        if (entityType is "operationPriceList" or "priceRule") await _license.EnsureFeatureAsync(fid, LicenseFeature.PieceWage);
+        if (entityType is "product" or "operationPriceList") return await new AttributeImportService(_db).ImportAsync(entityType, ms.ToArray(), fid, preview);
+        if (preview) throw ThrowHelper.BizUser("此导入类型暂不支持预检");
+        return await _svc.ImportAsync(entityType, ms.ToArray(), fid);
     }
 }

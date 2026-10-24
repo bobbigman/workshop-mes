@@ -58,4 +58,4 @@ export const getReportQtySetting = () => http.get('/ReportQtySetting')
 export const saveReportQtySetting = (data) => http.put('/ReportQtySetting', data)
 
 export const downloadTemplate = (entityType) => http.get('/Import/template', { params: { entityType }, responseType: 'blob' })
-export const uploadImport = (entityType, formData) => http.post(`/Import/upload?entityType=${entityType}`, formData)
+export const uploadImport = (entityType, formData, preview = false) => http.post(`/Import/upload?entityType=${entityType}&preview=${preview}`, formData)

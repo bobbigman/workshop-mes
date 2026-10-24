@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 
 namespace ahu.MicrosoftMes.Data;
 
@@ -55,6 +55,9 @@ END");
 
         // 班组长派工执行人（docs/29）：工单工序加一列，空=未派工
         await db.Database.ExecuteSqlRawAsync(ProcessingPriceSchema.UpgradeSql);
+        await db.Database.ExecuteSqlRawAsync(OperationPriceListSchema.UpgradeSql);
+        await db.Database.ExecuteSqlRawAsync(OperationPriceTableScopeSchema.AddColumnsSql);
+        await db.Database.ExecuteSqlRawAsync(OperationPriceTableScopeSchema.FinalizeSql);
         await db.Database.ExecuteSqlRawAsync(@"
 IF COL_LENGTH('prod_work_order_operation', 'assignee_user_id') IS NULL
 BEGIN
