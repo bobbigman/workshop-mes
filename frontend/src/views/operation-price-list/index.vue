@@ -31,7 +31,7 @@
         <el-button v-if="!readonly" type="primary" :loading="saving" @click="save">保存</el-button>
         <el-button v-if="id&&form.status===1" :disabled="saving||dirty()" @click="setStatus(2)">停用</el-button>
         <el-button v-if="id&&form.status===2" :disabled="saving||dirty()" @click="setStatus(1)">启用</el-button>
-        <el-button :disabled="saving" @click="back">退出</el-button>
+        <el-button :disabled="saving" @click="back">返回列表</el-button>
       </div>
       <el-alert title="产品跟整张表走；无有效专属表才用通用表，专属表缺规格不会回通用表。" type="info" :closable="false" />
       <el-form :disabled="readonly||saving" label-width="110px" class="header-form">
