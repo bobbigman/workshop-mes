@@ -2,9 +2,7 @@ using System.Data;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 using Microsoft.Data.SqlClient;
-using Microsoft.EntityFrameworkCore;
 using ahu.MicrosoftMes.Common;
-using ahu.MicrosoftMes.Data;
 
 namespace ahu.MicrosoftMes.Services;
 
@@ -38,12 +36,12 @@ public class DiagSqlService : IDiagSqlService
         @"\b(INSERT|UPDATE|DELETE|MERGE|DROP|ALTER|CREATE|TRUNCATE|EXEC|EXECUTE|GRANT|REVOKE|BACKUP|RESTORE|SHUTDOWN|DBCC|OPENROWSET|OPENDATASOURCE|XP_)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
-    private readonly AppDbContext _db;
+    private readonly ConfiguredSqlConnection _connection;
     private readonly ILogger<DiagSqlService> _log;
 
-    public DiagSqlService(AppDbContext db, ILogger<DiagSqlService> log)
+    public DiagSqlService(ConfiguredSqlConnection connection, ILogger<DiagSqlService> log)
     {
-        _db = db;
+        _connection = connection;
         _log = log;
     }
 
@@ -58,15 +56,12 @@ public class DiagSqlService : IDiagSqlService
         var normalized = NormalizeForCheck(raw);
         EnsureSelectOnly(normalized);
 
-        var cs = _db.Database.GetDbConnection().ConnectionString
-            ?? throw ThrowHelper.General(nameof(QueryAsync), "数据库连接串为空");
-
         _log.LogInformation("DiagSql userId={UserId} sqlChars={Len}", userId, raw.Length);
 
         var sw = Stopwatch.StartNew();
         try
         {
-            await using var conn = new SqlConnection(cs);
+            await using var conn = _connection.Create();
             await conn.OpenAsync(ct);
             await using var cmd = new SqlCommand(raw, conn)
             {

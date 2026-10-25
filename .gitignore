@@ -76,3 +76,4 @@ docs/服务器信息/AI助手APIKey部署配置说明.md
 backend/WorkshopMes-update-*.zip
 **/__pycache__/
 backend/appsettings.json.bak
+backend/appsettings_server.json

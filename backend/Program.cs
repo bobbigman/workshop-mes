@@ -226,6 +226,7 @@ try
     builder.Services.AddScoped<IAiAssistantService, AiAssistantService>();
     builder.Services.AddScoped<WorkerHelpService>();
     builder.Services.AddScoped<IDiagSqlService, DiagSqlService>();
+    builder.Services.AddSingleton<ConfiguredSqlConnection>();
     builder.Services.AddSingleton<MaintenanceSqlPlans>();
     builder.Services.AddScoped<MaintenanceSqlService>();
 

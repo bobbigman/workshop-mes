@@ -2,9 +2,7 @@ using System.Data;
 using System.Security.Cryptography;
 using System.Text;
 using ahu.MicrosoftMes.Common;
-using ahu.MicrosoftMes.Data;
 using Microsoft.Data.SqlClient;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace ahu.MicrosoftMes.Services;
@@ -40,17 +38,17 @@ public sealed record MaintenanceSqlResultSet(List<string> Columns, List<List<obj
 public sealed record MaintenanceSqlResult(string Server, string Database, string SqlHash,
     int RecordsAffected, List<MaintenanceSqlResultSet> Results, bool Truncated);
 
-public sealed class MaintenanceSqlService(AppDbContext db, MaintenanceSqlPlans plans, ILogger<MaintenanceSqlService> log)
+public sealed class MaintenanceSqlService(ConfiguredSqlConnection connection, MaintenanceSqlPlans plans, ILogger<MaintenanceSqlService> log)
 {
     public static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
-    private string ConnectionString => db.Database.GetDbConnection().ConnectionString;
+    private string ConnectionString => connection.ConnectionString;
     private string Scope(string identity) => Hash(ConnectionString + "\n" + identity);
 
     public async Task<object> PrepareAsync(string sql, string identity, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(sql) || sql.Length > 64000)
             throw ThrowHelper.BizUser("维护SQL不能为空，最多64000字符；不支持GO等客户端指令");
-        await using var conn = new SqlConnection(ConnectionString);
+        await using var conn = connection.Create();
         try
         {
             await conn.OpenAsync(ct);
@@ -76,7 +74,7 @@ public sealed class MaintenanceSqlService(AppDbContext db, MaintenanceSqlPlans p
             throw ThrowHelper.BizUser("请提供准备步骤返回的SQL确认凭据");
         var plan = plans.Take(confirmationToken, Scope(identity));
         log.LogWarning("SQL维护开始 identity={Identity} server={Server} database={Database} sqlHash={SqlHash}", identity, plan.Server, plan.Database, plan.SqlHash);
-        await using var conn = new SqlConnection(ConnectionString);
+        await using var conn = connection.Create();
         try
         {
             await conn.OpenAsync(ct);

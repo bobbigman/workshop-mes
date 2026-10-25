@@ -53,6 +53,40 @@ public class MaintenanceSqlTests
     }
 
     [Fact]
+    public void NewSqlConnections_KeepConfiguredCredentials_AndDoNotShareMutableState()
+    {
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:Default"] = "Server=unused;Database=WorkshopMes;User Id=test-user;Password=test-only;Persist Security Info=False"
+        }).Build();
+        var factory = new ConfiguredSqlConnection(config);
+        using var first = factory.Create();
+        // 模拟EF连接公开的连接串不再有密码；新连接仍从有效配置构建。
+        first.ConnectionString = "Server=unused;Database=WorkshopMes;User Id=test-user";
+        using var second = factory.Create();
+        var builder = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(second.ConnectionString);
+        Assert.Equal("test-only", builder.Password);
+        Assert.False(builder.PersistSecurityInfo);
+        Assert.NotSame(first, second);
+        Assert.DoesNotContain("Password", first.ConnectionString, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void NewSqlConnections_UseEffectiveConfigurationOverrides()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:Default"] = "Server=old;Database=old" })
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:Default"] = "Server=actual;Database=current;User Id=test-user;Password=test-only" }).Build();
+        using var connection = new ConfiguredSqlConnection(config).Create();
+        Assert.Equal("actual", connection.DataSource);
+        Assert.Equal("current", connection.Database);
+    }
+
+    [Fact]
+    public void NewSqlConnections_MissingConfigurationFailsWithoutFallback()
+        => Assert.ThrowsAny<Exception>(() => new ConfiguredSqlConnection(new ConfigurationBuilder().Build()).Create());
+
+    [Fact]
     public void Plan_BindsExactSqlAndScope_AndIsSingleUse()
     {
         using var cache = new MemoryCache(new MemoryCacheOptions());
