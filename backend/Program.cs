@@ -87,6 +87,7 @@ try
     builder.Services.AddHostedService<TrialAccountCleanupService>();
 
     builder.Services.AddMemoryCache();
+    builder.Services.AddSingleton<PriceChangeDraftStore>();
     builder.Services.AddControllers();
     builder.Services.AddEndpointsApiExplorer();
     if (instanceOpt.EnableSwagger)
@@ -316,6 +317,8 @@ try
             Console.WriteLine("正在连接数据库并初始化…");
             db.Database.EnsureCreated();
             await DbCompat.EnsureAsync(db);
+            await db.Database.ExecuteSqlRawAsync(PriceChangeSchema.UpgradeSql);
+            await PriceTimelineService.InitializeAsync(db);
 
             if (instanceOpt.BootstrapOnStartup)
                 await InstanceBootstrap.EnsureAsync(db, instanceOpt, logger);

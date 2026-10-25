@@ -193,7 +193,7 @@
       <el-table :data="detail.tasks" class="detail-tasks">
         <el-table-column prop="seq" label="序" width="50" />
         <el-table-column prop="operationName" label="工序" />
-        <el-table-column v-if="isAdmin" label="加工要求 / 锁定工价" min-width="240">
+        <el-table-column v-if="isAdmin" label="加工要求 / 预算工价" min-width="240">
           <template #default="{row}"><template v-if="row.processingPrice">
             <div>{{ row.processingPrice.baseName }} · {{ row.processingPrice.unitPrice }}元/{{ row.processingPrice.priceUnit }}</div>
             <div v-for="(l,i) in row.processingPrice.lines" :key="i">{{ l.group }}：{{ l.option }}{{ l.included?'（已含）':'' }}</div>

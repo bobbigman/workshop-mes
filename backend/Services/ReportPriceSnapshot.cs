@@ -5,12 +5,24 @@ namespace ahu.MicrosoftMes.Services;
 
 public sealed record ReportPriceSnapshot(long PriceListId, byte PriceType, decimal UnitPrice, decimal? DeductPrice)
 {
+    public sealed record CoefficientChange(DateTime ChangedAt,long OperatorId,string Source,decimal? BeforeCoeff,decimal? BeforeAmount,decimal AfterCoeff,decimal AfterAmount);
+    public List<CoefficientChange>? CoefficientHistory { get; init; }
+    public long? PriceRevisionId { get; init; }
+    public decimal? AppliedWageCoeff { get; init; }
     public int SchemaVersion { get; init; } = 2;
     public ProcessingQuote? Processing { get; init; }
+    public static string WithCoefficient(ProdReport report,decimal coeff,decimal amount,long actor,string source)
+    {
+        var snapshot=OperationPricingService.Read<ReportPriceSnapshot>(report.PriceSnapshot!);
+        var history=snapshot.CoefficientHistory?.ToList() ?? new();
+        if(snapshot.AppliedWageCoeff!=coeff || report.WageAmount!=amount)
+            history.Add(new(DateTime.Now,actor,source,snapshot.AppliedWageCoeff,report.WageAmount,coeff,amount));
+        return OperationPricingService.Write(snapshot with {AppliedWageCoeff=coeff,CoefficientHistory=history.Count==0?null:history});
+    }
     public static WageCalculator.CalcResult Calculate(ProdReport report, decimal wageCoeff)
     {
         ReportPriceSnapshot? snapshot;
-        try { snapshot = string.IsNullOrWhiteSpace(report.PriceSnapshot) ? null : JsonSerializer.Deserialize<ReportPriceSnapshot>(report.PriceSnapshot); }
+        try { snapshot = string.IsNullOrWhiteSpace(report.PriceSnapshot) ? null : JsonSerializer.Deserialize<ReportPriceSnapshot>(report.PriceSnapshot, OperationPricingService.Json); }
         catch (JsonException ex) { throw ThrowHelper.BizUser($"报工{report.Id}价目表快照损坏，无法计算工资：{ex.Message}"); }
         if (snapshot?.SchemaVersion != 2 || snapshot.PriceListId <= 0 || snapshot.Processing == null)
             throw ThrowHelper.BizUser($"报工{report.Id}缺少新版价目表快照，禁止使用当前价补算");

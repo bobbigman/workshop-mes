@@ -203,7 +203,7 @@ public class OperationPriceListService(AppDbContext db)
         Require(primary.Count == 1, primary.Count == 0 ? $"产品{productId}·工序{table.OperationId}·表{table.Code}缺规格的价：{string.Join("；", details.Rows.Where(r => r.Kind != "extra").SelectMany(r => r.Conditions).Select(c => $"{fields[c.FieldId].FieldName}实际={values.GetValueOrDefault(c.FieldId) ?? "未填"}，要求{c.Operator}:{c.Value ?? $"{c.Min}~{c.Max}"}"))}" : "重复命中基础/最终工价，请消除条件冲突");
         var price = primary[0];
         var evidence = new AttributeQuoteEvidence { PriceListId = table.Id, PriceListCode = table.Code, PricingDate = date.Date, Attributes = values.OrderBy(v => v.Key).ToDictionary(v => v.Key, v => v.Value) };
-        var quote = new ProcessingQuote { SchemaVersion = 2, PriceType = table.PricingType, OperationId = table.OperationId, Version = table.Version, BaseName = $"{table.Code} / {price.RowId}", BasePrice = price.Amount!.Value,
+        var quote = new ProcessingQuote { SchemaVersion = 2, FactoryId = table.FactoryId, ProductId = productId, PriceType = table.PricingType, OperationId = table.OperationId, Version = table.Version, BaseName = $"{table.Code} / {price.RowId}", BasePrice = price.Amount!.Value,
             UnitPrice = price.Amount.Value, DeductPrice = price.DeductPrice, PriceUnit = table.PriceUnit, ReportUnitId = table.ReportUnitId, UnitsPerPriceUnit = table.UnitsPerPriceUnit,
             AttributeEvidence = evidence };
         var chosen = new HashSet<string> { price.RowId };
@@ -254,12 +254,9 @@ public class OperationPriceListService(AppDbContext db)
             Require(await db.WorkOrders.AnyAsync(o => o.Id == workOrderId && o.FactoryId == factoryId && o.ProductId == productId), "工单不存在、产品不一致或非本厂");
             var task = await db.WorkOrderOperations.AsNoTracking().SingleOrDefaultAsync(t => t.WorkOrderId == workOrderId && t.OperationId == operationId) ?? throw ThrowHelper.BizUser("工序不属于当前工单");
             Require(task.ProcessingPrice != null, "该单没有可靠锁价，请使用新建/复制流程");
-            return OperationPricingService.Read<ProcessingQuote>(task.ProcessingPrice!);
+            return await new OperationPricingService(db).BudgetAsync(workOrderId.Value,operationId,factoryId);
         }
         var day = (date ?? DateTime.Today).Date;
-        var tables = await db.OperationPriceLists.AsNoTracking().Where(t => t.FactoryId == factoryId && t.OperationId == operationId && t.Status == 1 && t.EffectiveFrom <= day && (t.EffectiveTo == null || t.EffectiveTo >= day)).ToListAsync();
-        var table = SelectTable(tables, productId, operationId);
-        Require(expectedVersion == null || table.Version == expectedVersion, "价目表已变化，请重新预览");
         var attrs = new OperationAttributeService(db);
         var fields = await attrs.FieldsAsync(factoryId, operationId);
         var values = await new ProductAttributeService(db).GetAsync(productId, factoryId);
@@ -269,7 +266,9 @@ public class OperationPriceListService(AppDbContext db)
             var f = fields[id];
             if (f.FieldType == "single") Require(await db.CustomFieldOptions.AnyAsync(o => o.FieldId == id && o.Label == value), $"属性{f.FieldName}的选项无效");
         }
-        return Calculate(table, productId, p.UnitId ?? 0, values, fields, day);
+        var quote = await new PriceTimelineService(db).QuoteAsync(factoryId,productId,operationId,p.UnitId ?? 0,values,day);
+        Require(expectedVersion == null || quote.Version == expectedVersion, "价目表已变化，请重新预览");
+        return quote;
     }
 
     public async Task<OperationPriceList> GetAsync(long id, long factoryId) => await db.OperationPriceLists.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id && t.FactoryId == factoryId) ?? throw ThrowHelper.BizUser("价目表不存在或非本厂");
@@ -315,13 +314,25 @@ public class OperationPriceListService(AppDbContext db)
             if (fields[c.FieldId].FieldType == "single") Require(options.Any(o => o.FieldId == c.FieldId && o.Label == c.Value), "条件单选值不在字段选项内");
         if (status == 1)
             Require(!await db.OperationPriceLists.AnyAsync(t => t.FactoryId == factoryId && t.Id != id && t.OperationId == input.OperationId && t.ProductId == input.ProductId && t.Status == 1 && (!input.EffectiveTo.HasValue || t.EffectiveFrom <= input.EffectiveTo.Value.Date) && (!t.EffectiveTo.HasValue || t.EffectiveTo >= input.EffectiveFrom.Date)), "同产品范围已有日期重叠的启用价目表，请先停用或调整日期");
+        var timeline = new PriceTimelineService(db);
+        if (id.HasValue)
+        {
+            if (table.ActivatedAt != null || table.Status == 1)
+            {
+                var priorRows = Details(table).Rows.ToDictionary(x => x.RowId);
+                Require(input.Details.Rows.All(x => !priorRows.TryGetValue(x.RowId,out var prior) || (x.Amount == prior.Amount && x.DeductPrice == prior.DeductPrice)), "已启用价表的价格请通过调整工价修改");
+            }
+            await timeline.EnsureBaselineAsync(table);
+        }
         table.Code = input.Code.Trim(); table.Name = input.Name.Trim(); table.OperationId = input.OperationId; table.Status = status;
         table.PricingType = input.PricingType; table.ProductId = input.ProductId; table.Remark = input.Remark;
         if (status == 1) table.ActivatedAt ??= DateTime.Now;
         table.EffectiveFrom = input.EffectiveFrom.Date; table.EffectiveTo = input.EffectiveTo?.Date; table.PriceUnit = input.PriceUnit.Trim(); table.ReportUnitId = input.ReportUnitId;
         table.UnitsPerPriceUnit = input.UnitsPerPriceUnit; table.Details = OperationPricingService.Write(input.Details); table.Version = Guid.NewGuid().ToString("N"); table.UpdatedAt = DateTime.Now;
         if (!id.HasValue) db.OperationPriceLists.Add(table);
-        await db.SaveChangesAsync(); await tx.CommitAsync(); return table.Id;
+        await db.SaveChangesAsync();
+        await timeline.RecordAsync(table, id.HasValue ? (table.EffectiveFrom > PriceTimelineService.Today ? table.EffectiveFrom : PriceTimelineService.Today) : table.EffectiveFrom, 0, fields);
+        await tx.CommitAsync(); return table.Id;
     }
 
     public async Task SetStatusAsync(long id, byte status, string expectedVersion, long factoryId)
@@ -350,6 +361,7 @@ public class OperationPriceListService(AppDbContext db)
         // 快照JSON为自包含依据；保守检查全部当前任务引用，不能因草稿状态误删。
         var snapshots = await db.WorkOrderOperations.Where(x => x.ProcessingPrice != null && db.WorkOrders.Any(o => o.Id == x.WorkOrderId && o.FactoryId == factoryId)).Select(x => x.ProcessingPrice!).ToListAsync();
         Require(!snapshots.Any(x => OperationPricingService.Read<ProcessingQuote>(x).AttributeEvidence?.PriceListId == id), "价目表已有工单引用，不能删除");
+        db.OperationPriceRevisions.RemoveRange(await db.OperationPriceRevisions.Where(x => x.FactoryId == factoryId && x.PriceListId == id).ToListAsync());
         db.OperationPriceLists.Remove(t); await db.SaveChangesAsync(); await tx.CommitAsync();
     }
 }

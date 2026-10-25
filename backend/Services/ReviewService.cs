@@ -315,6 +315,8 @@ public class ReviewService : IReviewService
 
     public async Task<ApiResult<object?>> ApproveAsync(long id, long factoryId, long currentUserId)
     {
+        await using var tx = await _db.Database.BeginTransactionAsync();
+        await OperationPriceListService.LockFactoryAsync(_db,factoryId);
         var report = await LoadAndAuthorizeAsync(id, factoryId, currentUserId, nameof(ApproveAsync));
         if (report.ReviewStatus != 0)
             throw ThrowHelper.Biz(nameof(ApproveAsync), "仅待复核记录可通过");
@@ -324,6 +326,7 @@ public class ReviewService : IReviewService
         report.ReviewedAt = DateTime.Now;
         report.RejectReason = null;
         await _db.SaveChangesAsync();
+        await tx.CommitAsync();
         return ApiResult<object?>.OkMsg();
     }
 
@@ -334,6 +337,7 @@ public class ReviewService : IReviewService
             throw ThrowHelper.Biz(nameof(RejectAsync), "退回原因须 1～256 字");
 
         await using var tx = await _db.Database.BeginTransactionAsync();
+        await OperationPriceListService.LockFactoryAsync(_db,factoryId);
         var report = await LoadAndAuthorizeAsync(id, factoryId, currentUserId, nameof(RejectAsync));
         // 允许从待复核或已通过退回（纠错）；已退回重复退回无意义
         if (report.ReviewStatus == 2)
@@ -361,6 +365,8 @@ public class ReviewService : IReviewService
 
     public async Task<ApiResult<object?>> BatchApproveAsync(BatchApproveDto dto, long factoryId, long currentUserId)
     {
+        await using var tx = await _db.Database.BeginTransactionAsync();
+        await OperationPriceListService.LockFactoryAsync(_db,factoryId);
         if (dto.Ids == null || dto.Ids.Count == 0)
             throw ThrowHelper.Biz(nameof(BatchApproveAsync), "请选择待复核记录");
 
@@ -397,6 +403,7 @@ public class ReviewService : IReviewService
             n++;
         }
         await _db.SaveChangesAsync();
+        await tx.CommitAsync();
         return ApiResult<object?>.Ok(new { approved = n });
     }
 

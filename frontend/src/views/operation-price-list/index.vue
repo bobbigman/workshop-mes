@@ -1,5 +1,7 @@
 ﻿<template>
   <div v-loading="loading">
+    <PriceChangeDialog v-model="adjustVisible" :table-id="adjustId" @done="adjusted" />
+    <PriceChangeHistory v-model="historyVisible" :table-id="historyId" />
     <template v-if="!editing">
       <h2>工序价目表</h2>
       <div class="toolbar">
@@ -20,7 +22,7 @@
         <el-table-column label="状态" width="95"><template #default="{row}"><el-tag :type="row.status===1?'success':row.status===2?'info':'warning'">{{statuses[row.status]}}</el-tag></template></el-table-column>
         <el-table-column label="生效 ~ 失效" min-width="205"><template #default="{row}">{{day(row.effectiveFrom)}} ~ {{row.effectiveTo?day(row.effectiveTo):'长期'}}</template></el-table-column>
         <el-table-column label="更新时间" min-width="160"><template #default="{row}">{{row.updatedAt?.replace('T',' ').slice(0,19)}}</template></el-table-column>
-        <el-table-column label="操作" width="180" fixed="right"><template #default="{row}"><el-button link type="primary" @click="open(row.id,false)">编辑</el-button><el-button link @click="copy(row)">复制</el-button><el-button link type="danger" :disabled="row.status!==0||!!row.activatedAt" @click="removeTable(row)">删除</el-button></template></el-table-column>
+        <el-table-column label="操作" width="330" fixed="right"><template #default="{row}"><el-button link type="primary" @click="open(row.id,false)">编辑</el-button><el-button v-if="row.status===1" link type="primary" @click="adjustId=row.id;adjustVisible=true">调整工价</el-button><el-button link @click="historyId=row.id;historyVisible=true">调价记录</el-button><el-button link @click="copy(row)">复制</el-button><el-button link type="danger" :disabled="row.status!==0||!!row.activatedAt" @click="removeTable(row)">删除</el-button></template></el-table-column>
       </el-table>
       <el-pagination v-model:current-page="filters.page" :page-size="20" :total="total" layout="prev,pager,next,total" @current-change="load" />
     </template>
@@ -29,6 +31,7 @@
         <h2>工序价目表 <small>{{readonly?'浏览':id?'编辑':'新增'}}</small></h2>
         <el-button v-if="readonly" @click="readonly=false">编辑</el-button>
         <el-button v-if="!readonly" type="primary" :loading="saving" @click="save">保存</el-button>
+        <el-button v-if="id&&form.status===1" :disabled="saving||dirty()" @click="adjustId=id;adjustVisible=true">调整工价</el-button>
         <el-button v-if="id&&form.status===1" :disabled="saving||dirty()" @click="setStatus(2)">停用</el-button>
         <el-button v-if="id&&form.status===2" :disabled="saving||dirty()" @click="setStatus(1)">启用</el-button>
         <el-button :disabled="saving" @click="back">返回列表</el-button>
@@ -67,14 +70,14 @@
           <el-button @click="addMenu=!addMenu">新增行 ▾</el-button>
           <template v-if="addMenu"><el-button @click="addRow(false)">新增行</el-button><el-button @click="addRow(true)">插入行</el-button></template>
           <el-button :disabled="!selected" @click="duplicate">复制选中行</el-button><el-button type="danger" plain :disabled="!selected" @click="removeRow">删除行</el-button>
-          <span class="hint">点击行号或规格维护价格性质、包含项、不良扣价和确认信息。</span>
+          <span class="hint">点击行号或规格维护价格性质、包含项和确认信息；已启用价表的金额与不良扣价请点“调整工价”。</span>
         </div>
         <el-table :data="form.details.rows" border stripe row-key="rowId" highlight-current-row @current-change="r=>selected=r" class="price-table">
           <el-table-column label="行号" width="65"><template #default="{row,$index}"><span v-if="readonly" class="copyable">{{$index+1}}</span><el-button v-else link type="primary" @click="editRow(row)">{{$index+1}}</el-button></template></el-table-column>
           <el-table-column label="品名规格" min-width="175"><template #default="{row}"><span v-if="readonly" class="copyable">{{row.label||'未填写规格'}}</span><el-button v-else link type="primary" @click="editRow(row)">{{row.label||'未填写规格（点击编辑）'}}</el-button><div class="hint">{{kinds[row.kind]}} · {{row.confirmed&&row.amount!=null?'已确认':'待确认 / 未定价'}}</div></template></el-table-column>
           <el-table-column label="取价条件" min-width="230"><template #default="{row}"><span v-if="readonly" class="copyable">{{summary(row.conditions)}}</span><el-button v-else link type="primary" @click="editConditions(row)">{{summary(row.conditions)}}</el-button></template></el-table-column>
           <el-table-column label="属性区间" min-width="155"><template #default="{row}">{{summary(row.conditions.filter(c=>c.operator==='range'))==='不限'?'—':summary(row.conditions.filter(c=>c.operator==='range'))}}</template></el-table-column>
-          <el-table-column label="单价" width="145"><template #default="{row}"><span v-if="readonly" class="copyable">{{row.amount??'未定价'}}</span><el-input-number v-else v-model="row.amount" :controls="false" :precision="4" :min="0" :max="1000000" style="width:125px" /></template></el-table-column>
+          <el-table-column label="单价" width="145"><template #default="{row}"><span v-if="readonly" class="copyable">{{row.amount??'未定价'}}</span><el-input-number v-else v-model="row.amount" :disabled="priceFrozen(row.rowId)" :controls="false" :precision="4" :min="0" :max="1000000" style="width:125px" /></template></el-table-column>
           <el-table-column label="单位" width="80"><template #default>{{form.priceUnit||'未设'}}</template></el-table-column>
           <el-table-column label="收费组" min-width="150"><template #default="{row}"><span v-if="readonly&&row.kind==='extra'" class="copyable">{{form.details.groups.find(g=>g.key===row.groupKey)?.name||row.groupKey||'未选择'}}</span><el-select v-else-if="row.kind==='extra'" v-model="row.groupKey" placeholder="请选择"><el-option v-for="g in form.details.groups" :key="g.key" :value="g.key" :label="g.name" /></el-select><span v-else>—</span></template></el-table-column>
         </el-table>
@@ -96,7 +99,7 @@
       <el-form v-if="rowDraft" :disabled="readonly" label-width="115px">
         <el-form-item label="行标识">{{rowDraft.rowId}}</el-form-item><el-form-item label="品名规格"><el-input v-model="rowDraft.label" maxlength="256" /></el-form-item>
         <el-form-item label="价格性质"><el-select v-model="rowDraft.kind"><el-option v-for="(v,k) in kinds" :key="k" :value="k" :label="v" /></el-select></el-form-item>
-        <el-form-item v-if="rowDraft.kind!=='extra'" label="不良扣价"><el-input-number v-model="rowDraft.deductPrice" :min="0" :precision="4" :max="1000000" /></el-form-item>
+        <el-form-item v-if="rowDraft.kind!=='extra'" label="不良扣价"><el-input-number v-model="rowDraft.deductPrice" :disabled="priceFrozen(rowDraft.rowId)" :min="0" :precision="4" :max="1000000" /></el-form-item>
         <el-form-item v-if="rowDraft.kind!=='extra'" label="已包含附加项"><el-select v-model="rowDraft.includedRowIds" multiple><el-option v-for="r in form.details.rows.filter(r=>r.kind==='extra'&&r.rowId!==rowDraft.rowId)" :key="r.rowId" :value="r.rowId" :label="r.label||r.rowId" /></el-select></el-form-item>
         <el-form-item label="已确认"><el-checkbox v-model="rowDraft.confirmed">价格及收费口径已确认</el-checkbox></el-form-item>
         <el-form-item label="来源" required><el-input v-model="rowDraft.source" placeholder="原表工作表及行号，或人工维护依据" /></el-form-item><el-form-item label="原始备注"><el-input v-model="rowDraft.note" type="textarea" /></el-form-item>
@@ -107,6 +110,11 @@
 </template>
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
+import PriceChangeDialog from './PriceChangeDialog.vue'
+import PriceChangeHistory from './PriceChangeHistory.vue'
+const historyVisible=ref(false),historyId=ref(null)
+const adjustVisible=ref(false), adjustId=ref(null)
+async function adjusted(){await load();if(editing.value&&id.value) await open(id.value,true)}
 import { onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getOperationList,getUnitList,getProductList } from '@/api/base'
@@ -119,6 +127,7 @@ const editing=ref(false),readonly=ref(false),loading=ref(false),saving=ref(false
 const selected=ref(null),addMenu=ref(false),expanded=ref([]),conditionDialog=ref(false),conditionDraft=ref([]),conditionRow=ref(null),unlimited=ref(false),rowDialog=ref(false),rowDraft=ref(null),rowOriginal=ref(null)
 const fields=computed(()=>allFields.value.filter(f=>f.target==='product'||f.operationId===form.value.operationId)),craftFields=computed(()=>fields.value.filter(f=>f.target==='work_order_task'))
 const day=s=>s?.slice(0,10),clone=v=>JSON.parse(JSON.stringify(v)),dirty=()=>editing.value&&!readonly.value&&JSON.stringify(form.value)!==baseline.value
+const priceFrozen=rowId=>!!form.value.activatedAt&&!!baseline.value&&JSON.parse(baseline.value).details.rows.some(r=>r.rowId===rowId)
 const opName=id=>operations.value.find(o=>o.id===id)?.name||`工序 ${id}`
 const productName=id=>id?((p=>p?`${p.code} ${p.name}`:`产品 ${id}`)(products.value.find(p=>p.id===id))):'通用表（不限产品）'
 const browseHeader=computed(()=>[

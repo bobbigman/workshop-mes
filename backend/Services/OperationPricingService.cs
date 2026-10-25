@@ -9,6 +9,8 @@ namespace ahu.MicrosoftMes.Services;
 public record ProcessingLine(string Group, string Option, decimal Extra, bool Included);
 public class ProcessingQuote
 {
+    public long? PriceRevisionId { get; set; }
+    public Dictionary<long, SysCustomField>? FieldDefinitions { get; set; }
     public int SchemaVersion { get; set; }
     public long FactoryId { get; set; }
     public long ProductId { get; set; }
@@ -61,8 +63,8 @@ public class OperationPricingService(AppDbContext db)
         {
             if (task.ProcessingPrice != null)
             {
-                var locked = await LockedAsync(order.Id, task.OperationId, order.FactoryId);
-                OperationPriceListService.Require(tokens == null || !tokens.TryGetValue(task.OperationId, out var token) || token == locked.Processing!.QuoteToken, "已有工序锁价不可替换，请新建或复制工单");
+                var budget = await BudgetAsync(order.Id,task.OperationId,order.FactoryId);
+                OperationPriceListService.Require(tokens == null || !tokens.TryGetValue(task.OperationId, out var token) || token == budget.QuoteToken, "已有工序锁价不可替换，请新建或复制工单");
                 continue;
             }
             OperationPriceListService.Require(!await db.Reports.AnyAsync(r => r.OrderId == order.Id && r.OperationId == task.OperationId), "已有报工但没有新版锁价，不能补套当前价，请核查开发测试单");
@@ -74,15 +76,23 @@ public class OperationPricingService(AppDbContext db)
         await db.SaveChangesAsync();
     }
 
-    public async Task<ReportPriceSnapshot> LockedAsync(long orderId, long operationId, long factoryId)
+    public async Task<ProcessingQuote> BudgetAsync(long orderId, long operationId, long factoryId)
     {
         var order = await db.WorkOrders.AsNoTracking().SingleOrDefaultAsync(o => o.Id == orderId && o.FactoryId == factoryId) ?? throw ThrowHelper.BizUser("工单不存在或非本厂");
         var task = await db.WorkOrderOperations.AsNoTracking().SingleOrDefaultAsync(t => t.WorkOrderId == orderId && t.OperationId == operationId);
         OperationPriceListService.Require(task?.ProcessingPrice != null, $"工单{order.OrderNo}·工序{operationId}缺少价目表锁价，不可回退或按零价报工");
         var quote = Read<ProcessingQuote>(task!.ProcessingPrice!); ValidateQuote(quote);
         OperationPriceListService.Require(quote.FactoryId == factoryId && quote.ProductId == order.ProductId && quote.OperationId == operationId, "锁价来源与本厂产品工序不一致");
-        var unit = await db.Products.Where(p => p.Id == order.ProductId && p.FactoryId == factoryId).Select(p => p.UnitId).SingleAsync();
-        OperationPriceListService.Require(unit == quote.ReportUnitId, "产品报工单位与锁价依据不一致，不能自动套价");
-        return new ReportPriceSnapshot(quote.AttributeEvidence!.PriceListId, quote.PriceType, quote.UnitPrice, quote.DeductPrice) { Processing = quote };
+        return quote;
+    }
+
+    public async Task<ReportPriceSnapshot> LockedAsync(long orderId,long operationId,long factoryId,DateTime? date=null)
+    {
+        var quote = await BudgetAsync(orderId,operationId,factoryId);
+        OperationPriceListService.Require(quote.AttributeEvidence != null, "缺少原始产品工艺属性");
+        quote = await new PriceTimelineService(db).QuoteAsync(factoryId,quote.ProductId,operationId,quote.ReportUnitId,
+            quote.AttributeEvidence!.Attributes,date ?? DateTime.Now);
+        return new ReportPriceSnapshot(quote.AttributeEvidence!.PriceListId, quote.PriceType, quote.UnitPrice, quote.DeductPrice)
+            { Processing = quote, PriceRevisionId = quote.PriceRevisionId };
     }
 }

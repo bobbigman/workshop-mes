@@ -84,14 +84,14 @@ http.interceptors.response.use(
       if (raw.startsWith('<')) {
         const tip = `接口返回非 JSON（可能路由未注册或静态页兜底）${traceSuffix(res.headers)}`
         showApiError(tip)
-        return Promise.reject(new Error(tip))
+        return Promise.reject(Object.assign(new Error(tip), { response: res }))
       }
       try {
         body = JSON.parse(body)
       } catch {
         const tip = `接口返回无法解析的文本${traceSuffix(res.headers)}`
         showApiError(tip)
-        return Promise.reject(new Error(tip))
+        return Promise.reject(Object.assign(new Error(tip), { response: res }))
       }
     }
     if (body && body.code !== 0) {
@@ -106,7 +106,7 @@ http.interceptors.response.use(
         ? withTraceIfLong(body.msg, res.headers)
         : fallbackFailTip(res.headers)
       showApiError(tip)
-      return Promise.reject(new Error(tip))
+      return Promise.reject(Object.assign(new Error(tip), { response: res }))
     }
     return body
   },
@@ -143,7 +143,7 @@ http.interceptors.response.use(
     } else tip = err.message || `网络或服务器异常${traceSuffix(headers)}`
     if (!tip) tip = fallbackFailTip(headers)
     showApiError(tip)
-    return Promise.reject(new Error(tip))
+    return Promise.reject(Object.assign(new Error(tip), { response: err.response, code: err.code }))
   }
 )
 

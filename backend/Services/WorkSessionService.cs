@@ -119,7 +119,7 @@ public class WorkSessionService(AppDbContext db)
     public async Task<byte> PriceTypeAsync(ProdWorkOrder order, long operationId, long userId, DateTime at)
     {
         // 报工计价方式一律取本单任务锁价，不按当前价目表或人员猜。
-        return (await new OperationPricingService(db).LockedAsync(order.Id, operationId, order.FactoryId)).PriceType;
+        return (await new OperationPricingService(db).LockedAsync(order.Id, operationId, order.FactoryId, at)).PriceType;
     }
 
     public async Task<ResolvedWorkTime> ResolveAsync(ProdWorkOrder order, long operationId, long userId,

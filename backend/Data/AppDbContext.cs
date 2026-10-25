@@ -23,6 +23,8 @@ public class AppDbContext : DbContext
     public DbSet<BaseRoutingStep> RoutingSteps => Set<BaseRoutingStep>();
     public DbSet<BaseProduct> Products => Set<BaseProduct>();
     public DbSet<OperationPriceList> OperationPriceLists => Set<OperationPriceList>();
+    public DbSet<OperationPriceRevision> OperationPriceRevisions => Set<OperationPriceRevision>();
+    public DbSet<OperationPriceChange> OperationPriceChanges => Set<OperationPriceChange>();
     public DbSet<BaseKnowledgeFile> KnowledgeFiles => Set<BaseKnowledgeFile>();
 
     public DbSet<ProdWorkOrder> WorkOrders => Set<ProdWorkOrder>();
@@ -57,6 +59,17 @@ public class AppDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+        modelBuilder.Entity<OperationPriceRevision>(e =>
+        {
+            e.HasIndex(x => new { x.FactoryId, x.OperationId, x.EffectiveFrom, x.EffectiveTo, x.Superseded }).HasDatabaseName("ix_price_revision_scope");
+            e.HasIndex(x => new { x.FactoryId, x.PriceListId }).HasDatabaseName("ix_price_revision_parent");
+            if (Database.IsSqlServer()) { e.Property(x => x.EffectiveFrom).HasColumnType("date"); e.Property(x => x.EffectiveTo).HasColumnType("date"); }
+        });
+        modelBuilder.Entity<OperationPriceChange>(e =>
+        {
+            e.HasIndex(x => new { x.FactoryId, x.RequestId }).IsUnique().HasDatabaseName("uq_price_change_request");
+            if (Database.IsSqlServer()) e.Property(x => x.EffectiveFrom).HasColumnType("date");
+        });
 
         modelBuilder.Entity<SysWechatAlertRule>(e => {
             e.HasIndex(x => new { x.FactoryId, x.Enabled }).HasDatabaseName("ix_wechat_rule_factory");

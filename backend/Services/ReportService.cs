@@ -285,6 +285,7 @@ public class ReportService : IReportService
         await using var tx = await _db.Database.BeginTransactionAsync();
         try
         {
+            await OperationPriceListService.LockFactoryAsync(_db, order.FactoryId);
             // 锁工单行，防并发超额
             await WechatEventService.LockOrderAsync(_db, order);
             var beforeStatus = order.Status;
@@ -332,7 +333,7 @@ public class ReportService : IReportService
                 var deptId = await ResolveDeptSnapshotAsync(line.UserId, dto.OperationId);
                 var (_, unitPrice, wageAmount, priceSnapshot) = await PreviewWageAsync(
                     order.FactoryId, order.ProductId, dto.OperationId, line.UserId,
-                    line.GoodQty, line.DefectQty, times[line.UserId].Minutes, order.Id);
+                    line.GoodQty, line.DefectQty, times[line.UserId].Minutes, order.Id, times[line.UserId].ReportTime);
 
                 var report = new ProdReport
                 {
@@ -946,6 +947,7 @@ public class ReportService : IReportService
     {
         await using var tx = await _db.Database.BeginTransactionAsync();
         var actor = await _db.Users.AsNoTracking().FirstAsync(x => x.Id == currentUserId);
+        await OperationPriceListService.LockFactoryAsync(_db, actor.FactoryId);
         var report = await _db.Reports.FirstOrDefaultAsync(x => x.Id == id && x.FactoryId == actor.FactoryId)
             ?? throw ThrowHelper.BizUser("报工记录不存在");
         if (actor.Role != 1 && report.UserId != currentUserId) throw ThrowHelper.BizUser("不可撤回他人报工");
@@ -969,7 +971,9 @@ public class ReportService : IReportService
     public async Task<ApiResult<object?>> UpdateAsync(long id, ReportDto dto, long currentUserId)
     {
         await using var tx = await _db.Database.BeginTransactionAsync();
-        var report = await _db.Reports.FirstOrDefaultAsync(r => r.Id == id)
+        var actorFactory = await _db.Users.Where(x => x.Id == currentUserId).Select(x => x.FactoryId).SingleAsync();
+        await OperationPriceListService.LockFactoryAsync(_db,actorFactory);
+        var report = await _db.Reports.FirstOrDefaultAsync(r => r.Id == id && r.FactoryId == actorFactory)
             ?? throw ThrowHelper.Biz(nameof(UpdateAsync), "报工记录不存在");
 
         // 管理员可改任意；班组长/工人仅本人（docs/22）
@@ -1028,6 +1032,7 @@ public class ReportService : IReportService
         // docs/266：改数量、时长仍沿用原工价；缺失快照阻断。
         var storedCoeff = await _db.Users.Where(u => u.Id == report.UserId).Select(u => u.WageCoeff).SingleAsync();
         var calc = ReportPriceSnapshot.Calculate(report, WageCoeffHelper.Coerce(storedCoeff));
+        report.PriceSnapshot = ReportPriceSnapshot.WithCoefficient(report,calc.WageCoeff,calc.WageAmount,currentUserId,"report-edit");
         report.UnitPrice = calc.UnitPrice;
         report.WageAmount = calc.WageAmount;
 
@@ -1171,6 +1176,7 @@ public class ReportService : IReportService
         await using var tx = await _db.Database.BeginTransactionAsync();
         try
         {
+            await OperationPriceListService.LockFactoryAsync(_db, order.FactoryId);
             // 工单行 UPDLOCK，防两人同时补报超数（docs/17 §2）
             await WechatEventService.LockOrderAsync(_db, order);
             var beforeStatus = order.Status;
@@ -1210,8 +1216,8 @@ public class ReportService : IReportService
                 if (!perOpUsers.TryGetValue(op.OperationId, out var users))
                     users = new List<(long UserId, int GoodQty)> { (currentUserId, dto.GoodQty) };
 
-                var locked = await new OperationPricingService(_db).LockedAsync(order.Id, op.OperationId, order.FactoryId);
-                var priceType = locked.PriceType;
+                var budget = await new OperationPricingService(_db).BudgetAsync(order.Id, op.OperationId, order.FactoryId);
+                var priceType = budget.PriceType;
 
                 foreach (var (uid, qty) in users)
                 {
@@ -1235,6 +1241,7 @@ public class ReportService : IReportService
                             throw ThrowHelper.BizUser($"无该工序报工权限：{target.Name}");
                     }
                     var wageCoeff = coeffMap.GetValueOrDefault(uid, 1m);
+                    var locked = (await new OperationPricingService(_db).LockedAsync(order.Id,op.OperationId,order.FactoryId,time?.ReportTime ?? now)) with { AppliedWageCoeff = budget.PriceType == 3 ? 1m : wageCoeff };
                     var report = new ProdReport
                     {
                         FactoryId = order.FactoryId,
@@ -1403,14 +1410,15 @@ public class ReportService : IReportService
 
     private async Task<(byte PriceType, decimal? UnitPrice, decimal? WageAmount, string? Snapshot)> PreviewWageAsync(
         long factoryId, long productId, long operationId, long userId,
-        int goodQty, int defectQty, int durationMinutes, long orderId)
+        int goodQty, int defectQty, int durationMinutes, long orderId, DateTime? reportTime = null)
     {
         var storedCoeff = await _db.Users.AsNoTracking()
             .Where(u => u.Id == userId)
             .Select(u => (decimal?)u.WageCoeff)
             .FirstOrDefaultAsync();
         var wageCoeff = storedCoeff is > 0m ? WageCoeffHelper.Coerce(storedCoeff.Value) : 1m;
-        var locked = await new OperationPricingService(_db).LockedAsync(orderId, operationId, factoryId);
+        var locked = await new OperationPricingService(_db).LockedAsync(orderId, operationId, factoryId, reportTime);
+        locked = locked with { AppliedWageCoeff = locked.PriceType == 3 ? 1m : wageCoeff };
         var snapshotJson = System.Text.Json.JsonSerializer.Serialize(locked);
         var result = ReportPriceSnapshot.Calculate(new ProdReport
         {

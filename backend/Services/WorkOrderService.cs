@@ -529,6 +529,7 @@ public class WorkOrderService : IWorkOrderService
     public async Task<ApiResult<object?>> CreateAsync(WorkOrderCreateDto dto, long currentUserId, long factoryId)
     {
         await using var tx = await _db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+        await OperationPriceListService.LockFactoryAsync(_db,factoryId);
         if (dto.CopyFromId.HasValue && !await _db.WorkOrders.AnyAsync(o => o.Id == dto.CopyFromId && o.FactoryId == factoryId))
             throw ThrowHelper.Biz(nameof(CreateAsync), "复制来源工单不存在或不属于本厂");
         var product = await _db.Products.FirstOrDefaultAsync(p => p.Id == dto.ProductId && p.FactoryId == factoryId)
@@ -579,6 +580,7 @@ public class WorkOrderService : IWorkOrderService
     public async Task<ApiResult<object?>> UpdateAsync(long id, WorkOrderUpdateDto dto, long factoryId)
     {
         await using var tx = await _db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+        await OperationPriceListService.LockFactoryAsync(_db,factoryId);
         var order = await _db.WorkOrders.FirstOrDefaultAsync(o => o.Id == id && o.FactoryId == factoryId)
             ?? throw ThrowHelper.Biz(nameof(UpdateAsync), "工单不存在");
 
@@ -665,6 +667,7 @@ public class WorkOrderService : IWorkOrderService
     public async Task<ApiResult<object?>> TransitionAsync(long id, string action, long factoryId)
     {
         await using var tx = await _db.Database.BeginTransactionAsync();
+        await OperationPriceListService.LockFactoryAsync(_db,factoryId);
         var order = await _db.WorkOrders.FirstOrDefaultAsync(o => o.Id == id && o.FactoryId == factoryId)
             ?? throw ThrowHelper.Biz(nameof(TransitionAsync), "工单不存在");
 
@@ -837,6 +840,7 @@ public class WorkOrderService : IWorkOrderService
     public async Task RecalcStatusAsync(ProdWorkOrder order)
     {
         await using var ownedTx = _db.Database.CurrentTransaction == null ? await _db.Database.BeginTransactionAsync() : null;
+        await OperationPriceListService.LockFactoryAsync(_db,order.FactoryId);
         await WechatEventService.LockOrderAsync(_db, order);
         var beforeStatus = order.Status;
         if (order.Status == 3) return;

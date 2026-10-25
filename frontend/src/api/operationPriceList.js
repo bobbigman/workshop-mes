@@ -8,3 +8,9 @@ export const getProductOperations = id => http.get(`/operation-price-list/produc
 
 export const changePriceListStatus = (id, status, expectedVersion) => http.post(`/operation-price-list/${id}/status`, { status, expectedVersion })
 export const deletePriceList = (id, expectedVersion) => http.delete(`/operation-price-list/${id}`, { params: { expectedVersion } })
+
+export const previewPriceChange = (id, data) => http.post(`/operation-price-list/${id}/price-change/preview`, data)
+export const commitPriceChange = (id, data) => http.post(`/operation-price-list/${id}/price-change/commit`, data)
+export const getPriceChange = id => http.get(`/operation-price-list/price-change/${id}`)
+
+export const listPriceChanges = (id, page) => http.get(`/operation-price-list/${id}/price-changes`, { params: { page } })

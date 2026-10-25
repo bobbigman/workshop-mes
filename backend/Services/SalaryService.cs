@@ -306,6 +306,8 @@ public partial class SalaryService : ISalaryService
             throw ThrowHelper.Biz(nameof(GenerateAsync), "周期值不能为空");
         var (start, end) = ParsePeriod(dto.PeriodType, periodValue, nameof(GenerateAsync));
 
+        await using var tx = await _db.Database.BeginTransactionAsync();
+        await OperationPriceListService.LockFactoryAsync(_db,factoryId);
         // docs/21：只取已复核通过且未结算
         var reportsQ = _db.Reports.Where(r =>
             r.FactoryId == factoryId
@@ -332,7 +334,6 @@ public partial class SalaryService : ISalaryService
             _ = ReportPriceSnapshot.Calculate(report, coeffMap.GetValueOrDefault(report.UserId, 1m));
         var now = DateTime.Now;
 
-        await using var tx = await _db.Database.BeginTransactionAsync();
         try
         {
             var created = 0;
@@ -374,6 +375,7 @@ public partial class SalaryService : ISalaryService
                     });
 
                     // 回填预览快照，不置 settled
+                    report.PriceSnapshot = ReportPriceSnapshot.WithCoefficient(report,calc.WageCoeff,calc.WageAmount,0,"salary-generate");
                     report.UnitPrice = calc.Matched ? calc.UnitPrice : null;
                     report.WageAmount = calc.Matched ? calc.WageAmount : null;
                     total += calc.WageAmount;
@@ -671,6 +673,8 @@ public partial class SalaryService : ISalaryService
 
     public async Task<ApiResult<object?>> UpdateComponentsAsync(long id, SalaryComponentsDto dto, long factoryId, long operatorUserId)
     {
+        await using var tx = await _db.Database.BeginTransactionAsync();
+        await OperationPriceListService.LockFactoryAsync(_db,factoryId);
         // docs/136：手工列已移除；旧端仍传字段则忽略，不报错
         _ = dto;
         var statement = await _db.SalaryStatements
@@ -688,6 +692,7 @@ public partial class SalaryService : ISalaryService
         var piecework = await SumPieceworkAsync(id);
         statement.TotalAmount = piecework;
         await _db.SaveChangesAsync();
+        await tx.CommitAsync();
 
         _logger.LogInformation(
             "工资单 components 已忽略手工字段（docs/136） statementId={Id} operator={Op} total={Total}",
@@ -703,6 +708,8 @@ public partial class SalaryService : ISalaryService
     /// <summary>草稿按报工工价快照原地重算计件明细（docs/133/136）。</summary>
     public async Task<ApiResult<object?>> RecalcDraftAsync(long id, long factoryId, long operatorUserId)
     {
+        await using var tx = await _db.Database.BeginTransactionAsync();
+        await OperationPriceListService.LockFactoryAsync(_db,factoryId);
         var statement = await _db.SalaryStatements
             .FirstOrDefaultAsync(s => s.Id == id && s.FactoryId == factoryId)
             ?? throw ThrowHelper.Biz(nameof(RecalcDraftAsync), "工资单不存在");
@@ -743,6 +750,7 @@ public partial class SalaryService : ISalaryService
             item.Amount = calc.Amount;
             item.DeductAmount = calc.DeductAmount;
 
+            report.PriceSnapshot = ReportPriceSnapshot.WithCoefficient(report,calc.WageCoeff,calc.WageAmount,operatorUserId,"salary-recalculate");
             report.UnitPrice = calc.Matched ? calc.UnitPrice : null;
             report.WageAmount = calc.Matched ? calc.WageAmount : null;
             pieceworkSum += calc.WageAmount;
@@ -753,6 +761,7 @@ public partial class SalaryService : ISalaryService
         statement.TotalAmount = CalcTotalAmount(piecework);
 
         await _db.SaveChangesAsync();
+        await tx.CommitAsync();
 
         _logger.LogInformation(
             "草稿工资单已重算 statementId={Id} operator={Op} unmatched={Unmatched} piecework={Piece} totalBefore={Before} totalAfter={After}",
@@ -768,6 +777,8 @@ public partial class SalaryService : ISalaryService
 
     public async Task<ApiResult<object?>> ConfirmAsync(long id, long factoryId)
     {
+        await using var tx = await _db.Database.BeginTransactionAsync();
+        await OperationPriceListService.LockFactoryAsync(_db,factoryId);
         var statement = await _db.SalaryStatements
             .FirstOrDefaultAsync(s => s.Id == id && s.FactoryId == factoryId)
             ?? throw ThrowHelper.Biz(nameof(ConfirmAsync), "工资单不存在");
@@ -782,7 +793,6 @@ public partial class SalaryService : ISalaryService
         var reportIds = await _db.SalaryStatementItems.AsNoTracking()
             .Where(i => i.StatementId == id).Select(i => i.ReportId).ToListAsync();
 
-        await using var tx = await _db.Database.BeginTransactionAsync();
         try
         {
             // UPDLOCK 冻结报工行（docs/21）；id 来自库内主键，逐条参数化
@@ -815,6 +825,8 @@ public partial class SalaryService : ISalaryService
     /// </summary>
     public async Task<ApiResult<object?>> RevokeAsync(long id, long factoryId, long operatorUserId)
     {
+        await using var tx = await _db.Database.BeginTransactionAsync();
+        await OperationPriceListService.LockFactoryAsync(_db,factoryId);
         var statement = await _db.SalaryStatements
             .FirstOrDefaultAsync(s => s.Id == id && s.FactoryId == factoryId)
             ?? throw ThrowHelper.Biz(nameof(RevokeAsync), "工资单不存在");
@@ -833,7 +845,6 @@ public partial class SalaryService : ISalaryService
         var auditPeriodType = statement.PeriodType;
         var auditPeriodValue = statement.PeriodValue;
 
-        await using var tx = await _db.Database.BeginTransactionAsync();
         try
         {
             foreach (var rid in reportIds)
@@ -967,6 +978,8 @@ public partial class SalaryService : ISalaryService
 
     public async Task<ApiResult<object?>> DeleteDraftAsync(long id, long factoryId)
     {
+        await using var tx = await _db.Database.BeginTransactionAsync();
+        await OperationPriceListService.LockFactoryAsync(_db,factoryId);
         var statement = await _db.SalaryStatements
             .FirstOrDefaultAsync(s => s.Id == id && s.FactoryId == factoryId)
             ?? throw ThrowHelper.Biz(nameof(DeleteDraftAsync), "工资单不存在");
@@ -977,6 +990,7 @@ public partial class SalaryService : ISalaryService
         _db.SalaryStatementItems.RemoveRange(items);
         _db.SalaryStatements.Remove(statement);
         await _db.SaveChangesAsync();
+        await tx.CommitAsync();
         return ApiResult<object?>.OkMsg();
     }
 
