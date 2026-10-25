@@ -47,6 +47,8 @@
 
 ### 2026-10-25 远程首次启用后的连接修复
 
+后续现场验证：用户更新修复包后，prepare/execute两步均成功；实际连接WIN-S8B0B5KANV5 / WorkShopMes，完成只读查询、完整分段导出和414事务预检。414因检测到44条工单任务引用主动抛错回滚，未执行业务删除。已实际验证维护连接与事务脚本的引用阻断；成功提交业务删除、结果截断等其他场景仍未标通过。
+
 远程入口和独立维护密钥验证已通过，Prepare阶段曾报sa登录失败，没有执行待提交SQL。检查发现维护工具与只读诊断接口均从当前EF连接读取ConnectionString；该连接已被MCP入口用于查询账套，SQL客户端默认Persist Security Info=False会在打开连接后移除密码，复制该字符串新开连接会丢失凭据。修复为统一从后端有效IConfiguration的ConnectionStrings:Default新建连接，保留环境配置覆盖，不开启Persist Security Info、不改服务器密码或登录权限。新增3项凭据保留、配置覆盖与缺配置拒绝检查，共37项检查通过。服务器须更新修复包后再验证；此时尚未完成远程SQL执行。
 
 `backend.Tests`完整工程目前被既有`OperationPricingTests`引用已删除的`ProcessingConfig/ProcessingChoice`阻断，与本次维护工具无关，未声称全套测试通过。独立入口 `tests/MaintenanceSqlChecks`直接运行同一批xUnit断言，避开本机VSTest监视父进程时的Win32拒绝访问；构建后运行 `dotnet tests/MaintenanceSqlChecks/bin/Debug/net8.0/MaintenanceSqlChecks.dll`，结果34通过、0失败。
