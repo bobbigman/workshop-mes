@@ -33,8 +33,12 @@
         <el-button v-if="id&&form.status===2" :disabled="saving||dirty()" @click="setStatus(1)">启用</el-button>
         <el-button :disabled="saving" @click="back">返回列表</el-button>
       </div>
+      <el-alert v-if="readonly" class="browse-notice" title="当前为浏览模式，内容可选中复制。如需修改，请点击上方【编辑】按钮。" type="info" show-icon :closable="false" />
       <el-alert title="产品跟整张表走；无有效专属表才用通用表，专属表缺规格不会回通用表。" type="info" :closable="false" />
-      <el-form :disabled="readonly||saving" label-width="110px" class="header-form">
+      <el-form v-if="readonly" label-width="110px" class="header-form browse-content">
+        <el-form-item v-for="item in browseHeader" :key="item.label" :label="item.label" :class="{wide:item.label==='备注'}"><span class="copyable">{{item.value??'—'}}</span></el-form-item>
+      </el-form>
+      <el-form v-else :disabled="saving" label-width="110px" class="header-form">
         <el-form-item label="单据编号" required><el-input v-model="form.code" :disabled="!!id" maxlength="64" /></el-form-item>
         <el-form-item label="名称" required><el-input v-model="form.name" maxlength="128" /></el-form-item>
         <el-form-item label="价目表类型" required><el-select v-model="form.operationId" :disabled="!!form.activatedAt" filterable @change="operationChanged"><el-option v-for="o in operations" :key="o.id" :value="o.id" :label="o.name" /></el-select><span v-if="form.activatedAt" class="hint">首次启用后工序锁定</span></el-form-item>
@@ -50,29 +54,29 @@
       </el-form>
       <el-form :disabled="readonly||saving">
         <el-collapse v-model="expanded"><el-collapse-item title="收费组（组内唯一，不同适用组按已确认规则累计）" name="groups">
-          <el-button @click="addGroup">新增收费组</el-button>
+          <el-button v-if="!readonly" @click="addGroup">新增收费组</el-button>
           <el-table :data="form.details.groups" border>
-            <el-table-column label="编码" width="150"><template #default="{row}"><el-input v-model="row.key" :disabled="form.details.rows.some(r=>r.groupKey===row.key)" /></template></el-table-column>
-            <el-table-column label="名称" width="150"><template #default="{row}"><el-input v-model="row.name" /></template></el-table-column>
-            <el-table-column label="适用条件"><template #default="{row}"><AttributeConditions v-model="row.conditions" :fields="fields" /></template></el-table-column>
-            <el-table-column label="必须命中" width="100"><template #default="{row}"><el-checkbox v-model="row.required" /></template></el-table-column>
-            <el-table-column width="75"><template #default="{row}"><el-button link type="danger" @click="removeGroup(row)">删除</el-button></template></el-table-column>
+            <el-table-column label="编码" width="150"><template #default="{row}"><span v-if="readonly" class="copyable">{{row.key}}</span><el-input v-else v-model="row.key" :disabled="form.details.rows.some(r=>r.groupKey===row.key)" /></template></el-table-column>
+            <el-table-column label="名称" width="150"><template #default="{row}"><span v-if="readonly" class="copyable">{{row.name}}</span><el-input v-else v-model="row.name" /></template></el-table-column>
+            <el-table-column label="适用条件"><template #default="{row}"><span v-if="readonly" class="copyable">{{summary(row.conditions)}}</span><AttributeConditions v-else v-model="row.conditions" :fields="fields" /></template></el-table-column>
+            <el-table-column label="必须命中" width="100"><template #default="{row}"><span v-if="readonly" class="copyable">{{row.required?'是':'否'}}</span><el-checkbox v-else v-model="row.required" /></template></el-table-column>
+            <el-table-column v-if="!readonly" width="75"><template #default="{row}"><el-button link type="danger" @click="removeGroup(row)">删除</el-button></template></el-table-column>
           </el-table>
         </el-collapse-item></el-collapse>
-        <div class="toolbar body-tools">
+        <div v-if="!readonly" class="toolbar body-tools">
           <el-button @click="addMenu=!addMenu">新增行 ▾</el-button>
           <template v-if="addMenu"><el-button @click="addRow(false)">新增行</el-button><el-button @click="addRow(true)">插入行</el-button></template>
           <el-button :disabled="!selected" @click="duplicate">复制选中行</el-button><el-button type="danger" plain :disabled="!selected" @click="removeRow">删除行</el-button>
           <span class="hint">点击行号或规格维护价格性质、包含项、不良扣价和确认信息。</span>
         </div>
         <el-table :data="form.details.rows" border stripe row-key="rowId" highlight-current-row @current-change="r=>selected=r" class="price-table">
-          <el-table-column label="行号" width="65"><template #default="{row,$index}"><el-button link type="primary" @click="editRow(row)">{{$index+1}}</el-button></template></el-table-column>
-          <el-table-column label="品名规格" min-width="175"><template #default="{row}"><el-button link type="primary" @click="editRow(row)">{{row.label||'未填写规格（点击编辑）'}}</el-button><div class="hint">{{kinds[row.kind]}} · {{row.confirmed&&row.amount!=null?'已确认':'待确认 / 未定价'}}</div></template></el-table-column>
-          <el-table-column label="取价条件" min-width="230"><template #default="{row}"><el-button link type="primary" @click="editConditions(row)">{{summary(row.conditions)}}</el-button></template></el-table-column>
+          <el-table-column label="行号" width="65"><template #default="{row,$index}"><span v-if="readonly" class="copyable">{{$index+1}}</span><el-button v-else link type="primary" @click="editRow(row)">{{$index+1}}</el-button></template></el-table-column>
+          <el-table-column label="品名规格" min-width="175"><template #default="{row}"><span v-if="readonly" class="copyable">{{row.label||'未填写规格'}}</span><el-button v-else link type="primary" @click="editRow(row)">{{row.label||'未填写规格（点击编辑）'}}</el-button><div class="hint">{{kinds[row.kind]}} · {{row.confirmed&&row.amount!=null?'已确认':'待确认 / 未定价'}}</div></template></el-table-column>
+          <el-table-column label="取价条件" min-width="230"><template #default="{row}"><span v-if="readonly" class="copyable">{{summary(row.conditions)}}</span><el-button v-else link type="primary" @click="editConditions(row)">{{summary(row.conditions)}}</el-button></template></el-table-column>
           <el-table-column label="属性区间" min-width="155"><template #default="{row}">{{summary(row.conditions.filter(c=>c.operator==='range'))==='不限'?'—':summary(row.conditions.filter(c=>c.operator==='range'))}}</template></el-table-column>
-          <el-table-column label="单价" width="145"><template #default="{row}"><el-input-number v-model="row.amount" :controls="false" :precision="4" :min="0" :max="1000000" style="width:125px" /></template></el-table-column>
+          <el-table-column label="单价" width="145"><template #default="{row}"><span v-if="readonly" class="copyable">{{row.amount??'未定价'}}</span><el-input-number v-else v-model="row.amount" :controls="false" :precision="4" :min="0" :max="1000000" style="width:125px" /></template></el-table-column>
           <el-table-column label="单位" width="80"><template #default>{{form.priceUnit||'未设'}}</template></el-table-column>
-          <el-table-column label="收费组" min-width="150"><template #default="{row}"><el-select v-if="row.kind==='extra'" v-model="row.groupKey" placeholder="请选择"><el-option v-for="g in form.details.groups" :key="g.key" :value="g.key" :label="g.name" /></el-select><span v-else>—</span></template></el-table-column>
+          <el-table-column label="收费组" min-width="150"><template #default="{row}"><span v-if="readonly&&row.kind==='extra'" class="copyable">{{form.details.groups.find(g=>g.key===row.groupKey)?.name||row.groupKey||'未选择'}}</span><el-select v-else-if="row.kind==='extra'" v-model="row.groupKey" placeholder="请选择"><el-option v-for="g in form.details.groups" :key="g.key" :value="g.key" :label="g.name" /></el-select><span v-else>—</span></template></el-table-column>
         </el-table>
       </el-form>
       <p class="hint">不完整草稿可保存；完整草稿保存即启用，启用失败保留原状态。停用表保存仍停用。未确认行请打开行详情补齐；原始分档价仅作备注，不自动参与匹配。</p>
@@ -117,6 +121,15 @@ const fields=computed(()=>allFields.value.filter(f=>f.target==='product'||f.oper
 const day=s=>s?.slice(0,10),clone=v=>JSON.parse(JSON.stringify(v)),dirty=()=>editing.value&&!readonly.value&&JSON.stringify(form.value)!==baseline.value
 const opName=id=>operations.value.find(o=>o.id===id)?.name||`工序 ${id}`
 const productName=id=>id?((p=>p?`${p.code} ${p.name}`:`产品 ${id}`)(products.value.find(p=>p.id===id))):'通用表（不限产品）'
+const browseHeader=computed(()=>[
+  {label:'单据编号',value:form.value.code},{label:'名称',value:form.value.name},
+  {label:'价目表类型',value:opName(form.value.operationId)},{label:'计价方式',value:pricingTypes[form.value.pricingType]},
+  {label:'产品',value:productName(form.value.productId)},{label:'生效日期',value:form.value.effectiveFrom},
+  {label:'失效日期',value:form.value.effectiveTo||'长期'},{label:'计价单位',value:form.value.priceUnit},
+  {label:'报工单位',value:units.value.find(u=>u.id===form.value.reportUnitId)?.name||form.value.reportUnitId},
+  {label:'换算数量',value:form.value.unitsPerPriceUnit},{label:'状态',value:statuses[form.value.status]},
+  {label:'备注',value:form.value.remark||'—'}
+])
 onMounted(async()=>{loading.value=true;try{const [o,u,p,f,c]=await Promise.all([getOperationList({pageSize:1000}),getUnitList(),getProductList({pageSize:1000}),getCustomFields('product'),getCustomFields('work_order_task')]);operations.value=o.data.list;units.value=u.data;products.value=p.data.list;allFields.value=[...f.data,...c.data];await load()}finally{loading.value=false}})
 async function load(){const r=await queryPriceLists(filters.value);list.value=r.data.list;total.value=r.data.total}
 async function search(){filters.value.page=1;await load()}
@@ -149,5 +162,6 @@ function summary(cs){return cs.map(c=>`${fields.value.find(f=>f.id===c.fieldId)?
 async function preview(){quote.value=null;previewError.value='';if(!previewProduct.value||!form.value.operationId){ElMessage.error('请选择产品和工序');return}previewing.value=true;try{quote.value=(await previewAttributePrice({productId:previewProduct.value,operationId:form.value.operationId,operationAttributes:previewAttributes.value})).data}catch(e){previewError.value=e.message||'试算失败'}finally{previewing.value=false}}
 </script>
 <style scoped>
+.browse-notice{margin-bottom:12px}.copyable,.browse-content{user-select:text;cursor:text;overflow-wrap:anywhere;white-space:pre-wrap}.price-table :deep(.cell){user-select:text}
 .toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:16px 0}.toolbar h2{flex:1;margin:0}h2 small{font-size:14px;color:#606266}.header-form{display:grid;grid-template-columns:repeat(3,minmax(230px,1fr));margin-top:20px;gap:0 16px}.wide{grid-column:span 2}.hint,.legacy{font-size:12px;color:#606266;line-height:1.8}.legacy{padding:10px}.header-form .el-select{width:100%}.el-pagination{margin-top:16px}.body-tools{padding-top:12px}@media(max-width:1100px){.header-form{grid-template-columns:repeat(2,minmax(230px,1fr))}}
 </style>
