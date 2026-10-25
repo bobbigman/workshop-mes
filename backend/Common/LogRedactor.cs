@@ -18,7 +18,7 @@ public static class LogRedactor
     {
         "password", "pwd", "secret", "client_secret", "corpsecret", "token",
         "access_token", "refresh_token", "authorization", "cookie", "set-cookie",
-        "api_key", "apikey", "api-key", "x-api-key", "webhook_key", "webhookKey",
+        "api_key", "apikey", "api-key", "x-api-key", "x-maintenance-key", "webhook_key", "webhookKey",
         "factorySelectionToken", "lookupToken", "reportAccessToken", "verificationCode", "confirmToken", "candidateListToken"
     };
 
