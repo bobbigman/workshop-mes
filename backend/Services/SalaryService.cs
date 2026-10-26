@@ -39,6 +39,10 @@ public interface ISalaryService
     /// <summary>工资按色码汇总（docs/103）。</summary>
     Task<ApiResult<SalarySkuSummaryDto>> SkuSummaryAsync(SalarySkuSummaryQueryDto query, long factoryId);
     Task<(byte[] Content, string FileName)> ExportSkuSummaryCsvAsync(SalarySkuSummaryQueryDto query, long factoryId);
+    /// <summary>按工单查累计工资（docs/420）：工序/人拆分 + 应付/未复核。</summary>
+    Task<ApiResult<SalaryWorkOrderSummaryDto>> WorkOrderSummaryAsync(long? orderId, string? orderNo, long factoryId);
+    /// <summary>已完工工单应付台账（docs/420）：本厂 status=2。</summary>
+    Task<ApiResult<SalaryCompletedWorkOrdersDto>> CompletedWorkOrdersAsync(long factoryId);
 }
 
 public class SalaryGenerateDto

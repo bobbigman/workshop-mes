@@ -1,7 +1,7 @@
 {
   "name": "workshop-mes-frontend",
   "private": true,
-  "version": "1.1.405",
+  "version": "1.1.425",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -14,6 +14,8 @@ public class AiToolDispatcher
     private readonly KnowledgeFileParser _parser;
     private readonly SupportDocumentService _supportDocs;
     private readonly IAiReportEvidenceService _reportEvidence;
+    private readonly ISalaryService _salary;
+    private readonly ILicenseTierService _license;
     private readonly AiOptions _opt;
     private readonly ILogger<AiToolDispatcher> _logger;
 
@@ -23,6 +25,8 @@ public class AiToolDispatcher
         KnowledgeFileParser parser,
         SupportDocumentService supportDocs,
         IAiReportEvidenceService reportEvidence,
+        ISalaryService salary,
+        ILicenseTierService license,
         IOptions<AiOptions> opt,
         ILogger<AiToolDispatcher> logger)
     {
@@ -31,6 +35,8 @@ public class AiToolDispatcher
         _parser = parser;
         _supportDocs = supportDocs;
         _reportEvidence = reportEvidence;
+        _salary = salary;
+        _license = license;
         _opt = opt.Value;
         _logger = logger;
     }
@@ -44,7 +50,9 @@ public class AiToolDispatcher
             return new[]
             {
                 SearchWorkOrdersTool(),
-                ProgressTool()
+                ProgressTool(),
+                WorkOrderPayableTool(),
+                CompletedWorkOrdersPayableTool()
             };
         }
 
@@ -56,7 +64,9 @@ public class AiToolDispatcher
                 SearchWorkOrdersTool(),
                 ProgressTool(),
                 ReportEvidenceTool(),
-                SearchAbnormalTool()
+                SearchAbnormalTool(),
+                WorkOrderPayableTool(),
+                CompletedWorkOrdersPayableTool()
             };
         }
 
@@ -201,7 +211,7 @@ public class AiToolDispatcher
         });
 
     private static DeepSeekToolDef ReportEvidenceTool() =>
-        Tool("get_work_order_report_evidence", "查询某工单的报工证据：整单完成数、按工序的待复核/已通过/已退回良品不良品汇总、报工明细与分页。workOrderId 或精确 orderNo 至少一个；时间 reportFrom/reportToExclusive 为半开区间。", new
+        Tool("get_work_order_report_evidence", "查询某工单的报工证据：整单完成数、按工序的待复核/已通过/已退回良品不良品汇总、报工明细与分页。workOrderId 或精确 orderNo 至少一个；时间 reportFrom/reportToExclusive 为半开区间。不含工资金额。", new
         {
             type = "object",
             properties = new
@@ -215,6 +225,31 @@ public class AiToolDispatcher
                 pageSize = new { type = "integer", description = "每页条数，默认20最大50" }
             }
         });
+
+    /// <summary>docs/421：单工单应付（复用 420，口语「计件工资」= payableTotal）。</summary>
+    private static DeepSeekToolDef WorkOrderPayableTool() =>
+        Tool("get_work_order_payable",
+            "查询某工单累计应付工资（计件+计时+固定合计=payableTotal；另有未复核金额）。orderId 与 orderNo 至少一个；都有则 orderId 优先。仅管理员且需计件工资许可。金额已按系统口径算好，禁止自行用良品×单价重算。",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    orderId = new { type = "integer", description = "工单ID，优先" },
+                    orderNo = new { type = "string", description = "精确工单号" }
+                }
+            });
+
+    /// <summary>docs/421：已完工工单应付台账合计。</summary>
+    private static DeepSeekToolDef CompletedWorkOrdersPayableTool() =>
+        Tool("get_completed_work_orders_payable",
+            "查询本厂全部已结束(status=2)工单的应付工资台账与总合计 payableTotal。仅管理员且需计件工资许可。问「完成工单要付多少」用本工具。",
+            new
+            {
+                type = "object",
+                properties = new { },
+                additionalProperties = false
+            });
 
     public async Task<string> DispatchAsync(
         string toolName,
@@ -237,6 +272,8 @@ public class AiToolDispatcher
             "search_support_docs" => await SearchSupportDocsAsync(root, session, ct),
             "get_work_order_report_evidence" => await GetReportEvidenceAsync(root, session, ct),
             "search_abnormal" => await SearchAbnormalAsync(root, session, ct),
+            "get_work_order_payable" => await GetWorkOrderPayableAsync(root, session, ct),
+            "get_completed_work_orders_payable" => await GetCompletedWorkOrdersPayableAsync(session, ct),
             "resolve_product" => await ResolveProductAsync(root, session, ct),
             "get_production_guide" => await GetGuideAsync(root, session, ct),
             _ => throw ThrowHelper.BizUser("不支持的操作，请换个问法")
@@ -246,11 +283,16 @@ public class AiToolDispatcher
     private static readonly Dictionary<string, HashSet<string>> ModeTools = new(StringComparer.OrdinalIgnoreCase)
     {
         ["worker-help"] = new(StringComparer.OrdinalIgnoreCase) { "search_support_docs" },
-        ["progress"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "search_work_orders", "get_work_order_progress" },
+        ["progress"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "search_work_orders", "get_work_order_progress",
+            "get_work_order_payable", "get_completed_work_orders_payable"
+        },
         ["guide"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "resolve_product", "get_production_guide" },
         ["support"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "search_support_docs", "search_work_orders", "get_work_order_progress", "get_work_order_report_evidence", "search_abnormal"
+            "search_support_docs", "search_work_orders", "get_work_order_progress", "get_work_order_report_evidence", "search_abnormal",
+            "get_work_order_payable", "get_completed_work_orders_payable"
         }
     };
 
@@ -402,6 +444,85 @@ public class AiToolDispatcher
             PageSize = pageSize,
             Filters = filters
         };
+    }
+
+    private async Task EnsureAdminPieceWageAsync(AiSessionState session, CancellationToken ct)
+    {
+        var role = await _db.Users.AsNoTracking()
+            .Where(u => u.Id == session.UserId)
+            .Select(u => (byte?)u.Role)
+            .FirstOrDefaultAsync(ct);
+        if (role != 1)
+            throw ThrowHelper.BizUser("仅管理员可查询工单应付工资");
+        await _license.EnsureFeatureAsync(session.FactoryId, LicenseFeature.PieceWage);
+    }
+
+    private async Task<string> GetWorkOrderPayableAsync(JsonElement root, AiSessionState session, CancellationToken ct)
+    {
+        await EnsureAdminPieceWageAsync(session, ct);
+        long? orderId = root.TryGetProperty("orderId", out var oid) && oid.ValueKind == JsonValueKind.Number
+            ? oid.GetInt64() : null;
+        // 兼容模型误传 workOrderId
+        if (orderId == null && root.TryGetProperty("workOrderId", out var wid) && wid.ValueKind == JsonValueKind.Number)
+            orderId = wid.GetInt64();
+        var orderNo = GetString(root, "orderNo");
+        var res = await _salary.WorkOrderSummaryAsync(orderId, orderNo, session.FactoryId);
+        if (res.Code != 0 || res.Data == null)
+            return JsonSerializer.Serialize(new { ok = false, msg = res.Msg });
+        var d = res.Data;
+        return JsonSerializer.Serialize(new
+        {
+            ok = true,
+            evidenceId = "sal_wo_" + d.OrderId,
+            orderId = d.OrderId,
+            orderNo = d.OrderNo,
+            productCode = d.ProductCode,
+            productName = d.ProductName,
+            qty = d.Qty,
+            status = d.Status,
+            reviewedGoodQty = d.ReviewedGoodQty,
+            payableTotal = d.PayableTotal,
+            unreviewedAmount = d.UnreviewedAmount,
+            unpricedCount = d.UnpricedCount,
+            unknownPriceTypeAmount = d.UnknownPriceTypeAmount,
+            queriedAt = d.QueriedAt,
+            hint = "口语「计件工资」请报 payableTotal（含计件/计时/固定）；未复核金额不计入应付",
+            byOperation = d.ByOperation.Select(x => new { x.Name, x.PieceAmount, x.TimeAmount, x.FixedAmount, x.Subtotal }).ToList(),
+            byUser = d.ByUser.Select(x => new { x.Name, x.PieceAmount, x.TimeAmount, x.FixedAmount, x.Subtotal }).ToList()
+        });
+    }
+
+    private async Task<string> GetCompletedWorkOrdersPayableAsync(AiSessionState session, CancellationToken ct)
+    {
+        await EnsureAdminPieceWageAsync(session, ct);
+        var res = await _salary.CompletedWorkOrdersAsync(session.FactoryId);
+        if (res.Code != 0 || res.Data == null)
+            return JsonSerializer.Serialize(new { ok = false, msg = res.Msg });
+        var d = res.Data;
+        const int maxRows = 30;
+        var rows = d.List.Take(maxRows).Select(x => new
+        {
+            x.OrderNo,
+            x.ProductCode,
+            x.ProductName,
+            x.Qty,
+            x.PayableTotal,
+            x.UnreviewedAmount
+        }).ToList();
+        return JsonSerializer.Serialize(new
+        {
+            ok = true,
+            evidenceId = "sal_done_" + session.FactoryId,
+            payableTotal = d.PayableTotal,
+            unreviewedAmount = d.UnreviewedAmount,
+            unpricedCount = d.UnpricedCount,
+            unknownPriceTypeAmount = d.UnknownPriceTypeAmount,
+            totalRows = d.List.Count,
+            truncated = d.List.Count > maxRows,
+            queriedAt = d.QueriedAt,
+            hint = "已完工应付总合计=payableTotal；仅含 status=2；取消工单不在内",
+            list = rows
+        });
     }
 
     private async Task<string> GetProgressAsync(JsonElement root, AiSessionState session, CancellationToken ct)

@@ -172,7 +172,7 @@ public class AiSessionLifecycleTests
         var sessions = new AiSessionStore(options);
         var client = new ScriptedClient();
         var support = new SupportDocumentService(options, NullLogger<SupportDocumentService>.Instance);
-        var tools = new AiToolDispatcher(null!, null!, null!, support, null!, options, NullLogger<AiToolDispatcher>.Instance);
+        var tools = new AiToolDispatcher(null!, null!, null!, support, null!, null!, null!, options, NullLogger<AiToolDispatcher>.Instance);
         return (new AiAssistantService(options, client, sessions, tools, null!,
             NullLogger<AiAssistantService>.Instance), sessions, client);
     }

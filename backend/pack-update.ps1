@@ -79,15 +79,49 @@ if (Test-Path (Join-Path $out "_s10_evidence")) { Remove-Item (Join-Path $out "_
 
 Write-Host "== 3/4 write apply script + readme =="
 Copy-Item (Join-Path $backend "apply-update.bat") (Join-Path $out "apply-update.bat") -Force
-Copy-Item (Join-Path $backend "update-readme.txt") (Join-Path $out "README-update.txt") -Force
+
+# 包版本以实际编出的 DLL 为准：version.txt 在构建时已被 bump 到下一版，不能用它。
+$verFile = Join-Path $out "WorkshopMes.dll"
+if (-not (Test-Path $verFile)) { throw "WorkshopMes.dll missing in pack: $verFile" }
+$fv = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($verFile).FileVersion
+if ([string]::IsNullOrWhiteSpace($fv)) { throw "WorkshopMes.dll has no FileVersion" }
+$fvParts = $fv.Split('.')
+if ($fvParts.Length -lt 3) { throw "unexpected FileVersion format: $fv" }
+$packVer = "$($fvParts[0]).$($fvParts[1]).$($fvParts[2])"
+
+# 说明文件里的版本号必须等于本次包版本，否则现场核对登录页版本号会对不上。
+# 历史上说明文件长期滞后（如包 1.1.400 时仍写 1.1.395），故在此强制戳版并对不上就抛。
+# 注意：本 .ps1 是 UTF-8 无 BOM，Windows PowerShell 5.1 按 ANSI 解码脚本，
+# 中文字面量会变成乱码导致正则匹配失败，因此锚点用码点构造，报错信息用 ASCII。
+$readmeDst = Join-Path $out "README-update.txt"
+$readmeSrc = Join-Path $backend "update-readme.txt"
+$readmeTxt = [System.IO.File]::ReadAllText($readmeSrc, [System.Text.Encoding]::UTF8)
+$anchor = [string][char]0x7248 + [char]0x672C   # "版本"
+$mFunc = [regex]::Match($readmeTxt, [regex]::Escape($anchor) + '\s*\d+\.\d+\.\d+')
+$mPage = [regex]::Match($readmeTxt, 'v\d+\.\d+\.\d+')
+if (-not $mFunc.Success -or -not $mPage.Success) {
+  throw ("update-readme.txt has no stampable version marker (need one '" + $anchor + " x.y.z' and one 'vx.y.z'): " + $readmeSrc)
+}
+$verPat = [regex]'\d+\.\d+\.\d+'
+Write-Host ("stamp readme version: {0} / {1} -> {2}" -f $verPat.Match($mFunc.Value).Value, $mPage.Value, $packVer)
+# 用匹配到的偏移量做精确替换（替换串是纯版本号，无 $ 需转义）；
+# 从后往前改，避免前一处替换改变后一处的偏移。
+$oldFunc = $verPat.Replace($mFunc.Value, $packVer, 1)
+$oldPage = $verPat.Replace($mPage.Value, $packVer, 1)
+if ($mPage.Index -gt $mFunc.Index) {
+  $readmeTxt = $readmeTxt.Substring(0, $mPage.Index) + $oldPage + $readmeTxt.Substring($mPage.Index + $mPage.Length)
+  $readmeTxt = $readmeTxt.Substring(0, $mFunc.Index) + $oldFunc + $readmeTxt.Substring($mFunc.Index + $mFunc.Length)
+}
+else {
+  $readmeTxt = $readmeTxt.Substring(0, $mFunc.Index) + $oldFunc + $readmeTxt.Substring($mFunc.Index + $mFunc.Length)
+  $readmeTxt = $readmeTxt.Substring(0, $mPage.Index) + $oldPage + $readmeTxt.Substring($mPage.Index + $mPage.Length)
+}
+[System.IO.File]::WriteAllText($readmeDst, $readmeTxt, [System.Text.UTF8Encoding]::new($false))
 
 $mb = [math]::Round((Get-ChildItem $out -Recurse -File | Measure-Object Length -Sum).Sum / 1MB, 1)
-$verFile = Join-Path $out "WorkshopMes.dll"
-$ver = if (Test-Path $verFile) {
-  [System.Diagnostics.FileVersionInfo]::GetVersionInfo($verFile).ProductVersion
-} else { "?" }
+$ver = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($verFile).ProductVersion
 Write-Host ""
 Write-Host "OK: $out"
-Write-Host "Size ~ ${mb} MB / version $ver"
+Write-Host "Size ~ ${mb} MB / version $ver (pack $packVer)"
 Write-Host "Copy the whole publish-update folder to the customer server."
 Write-Host "On server: run apply-update.bat (see README-update.txt)."

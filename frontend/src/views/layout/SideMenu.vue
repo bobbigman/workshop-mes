@@ -63,7 +63,6 @@
       <el-menu-item index="/worker-view"><div class="menu-row"><span class="menu-label">工人手机视角</span><MenuStar menu-key="/worker-view" /></div></el-menu-item>
       <el-menu-item index="/report-upstream"><div class="menu-row"><span class="menu-label">报工上级校验</span><MenuStar menu-key="/report-upstream" /></div></el-menu-item>
       <el-menu-item index="/report-qty"><div class="menu-row"><span class="menu-label">报工数量设置</span><MenuStar menu-key="/report-qty" /></div></el-menu-item>
-      <el-menu-item index="/ai-assistant"><div class="menu-row"><span class="menu-label">AI 助手</span><MenuStar menu-key="/ai-assistant" /></div></el-menu-item>
       <el-menu-item index="/login-setting"><div class="menu-row"><span class="menu-label">登录页图片</span><MenuStar menu-key="/login-setting" /></div></el-menu-item>
       <el-menu-item index="/mcp-key"><div class="menu-row"><span class="menu-label">MCP 钥匙</span><MenuStar menu-key="/mcp-key" /></div></el-menu-item>
     </el-sub-menu>
@@ -83,6 +82,7 @@
     </el-sub-menu>
     <el-sub-menu index="help">
       <template #title>帮助</template>
+      <el-menu-item v-if="role === 1" index="/ai-assistant"><div class="menu-row"><span class="menu-label">AI 助手</span><MenuStar menu-key="/ai-assistant" /></div></el-menu-item>
       <el-menu-item index="/help"><div class="menu-row"><span class="menu-label">操作手册</span><MenuStar menu-key="/help" /></div></el-menu-item>
       <el-menu-item index="/onboarding"><div class="menu-row"><span class="menu-label">新手入门</span><MenuStar menu-key="/onboarding" /></div></el-menu-item>
       <el-menu-item index="/faq"><div class="menu-row"><span class="menu-label">常见问题（系统能力50问）</span><MenuStar menu-key="/faq" /></div></el-menu-item>

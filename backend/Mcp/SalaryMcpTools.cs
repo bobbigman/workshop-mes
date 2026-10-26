@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Text.Json;
+using ahu.MicrosoftMes.Common;
 using ahu.MicrosoftMes.Services;
 using ModelContextProtocol.Server;
 
@@ -14,18 +15,21 @@ public class SalaryMcpTools
     };
 
     private readonly ISalaryService _salaryService;
+    private readonly ILicenseTierService _license;
     private readonly IMcpRequestContext _mcpCtx;
     private readonly IMcpWxBindService _wxBind;
     private readonly IConfiguration _config;
 
     public SalaryMcpTools(
         ISalaryService salaryService,
+        ILicenseTierService license,
         IMcpAuthService authService,
         IMcpRequestContext mcpCtx,
         IMcpWxBindService wxBind,
         IConfiguration config)
     {
         _salaryService = salaryService;
+        _license = license;
         _mcpCtx = mcpCtx;
         _wxBind = wxBind;
         _config = config;
@@ -127,5 +131,51 @@ public class SalaryMcpTools
             msg = "ok",
             data
         }, JsonOpts);
+    }
+
+    [McpServerTool(Name = "get_work_order_payable"),
+     Description("按工单查累计应付工资（docs/420/421，只读）。口语「计件工资」= payableTotal（计件+计时+固定）。仅管理员；需计件工资许可。orderId 优先于 orderNo。")]
+    public async Task<string> GetWorkOrderPayable(
+        [Description("工单号，与 orderId 至少一个")] string? orderNo = null,
+        [Description("工单ID，优先")] long? orderId = null,
+        [Description("渠道，可空")] string? chanType = null,
+        [Description("会话身份，可空")] string? sessionId = null)
+    {
+        var access = await McpDataAccess.ResolveAsync(_wxBind, _config, chanType, sessionId, adminOnly: true);
+        if (access.Hint != null) return access.Hint;
+
+        long factoryId = _mcpCtx.RequireFactoryId(nameof(GetWorkOrderPayable));
+        try
+        {
+            await _license.EnsureFeatureAsync(factoryId, LicenseFeature.PieceWage);
+            var result = await _salaryService.WorkOrderSummaryAsync(orderId, orderNo, factoryId);
+            return JsonSerializer.Serialize(new { code = result.Code, msg = result.Msg, data = result.Data }, JsonOpts);
+        }
+        catch (BusinessException ex)
+        {
+            return JsonSerializer.Serialize(new { code = ex.Code == 0 ? 1 : ex.Code, msg = ex.Message }, JsonOpts);
+        }
+    }
+
+    [McpServerTool(Name = "get_completed_work_orders_payable"),
+     Description("已完工工单应付台账与总合计（docs/420/421，只读）。问「完成工单要付多少」用本工具。仅管理员；需计件工资许可。")]
+    public async Task<string> GetCompletedWorkOrdersPayable(
+        [Description("渠道，可空")] string? chanType = null,
+        [Description("会话身份，可空")] string? sessionId = null)
+    {
+        var access = await McpDataAccess.ResolveAsync(_wxBind, _config, chanType, sessionId, adminOnly: true);
+        if (access.Hint != null) return access.Hint;
+
+        long factoryId = _mcpCtx.RequireFactoryId(nameof(GetCompletedWorkOrdersPayable));
+        try
+        {
+            await _license.EnsureFeatureAsync(factoryId, LicenseFeature.PieceWage);
+            var result = await _salaryService.CompletedWorkOrdersAsync(factoryId);
+            return JsonSerializer.Serialize(new { code = result.Code, msg = result.Msg, data = result.Data }, JsonOpts);
+        }
+        catch (BusinessException ex)
+        {
+            return JsonSerializer.Serialize(new { code = ex.Code == 0 ? 1 : ex.Code, msg = ex.Message }, JsonOpts);
+        }
     }
 }

@@ -31,7 +31,7 @@ public class AiGreetingTests
         var sessions = new AiSessionStore(options);
         var client = new CapturingClient();
         // 可控模型不调用工具；无需数据库或外部模型服务。
-        var tools = new AiToolDispatcher(null!, null!, null!, null!, null!, options,
+        var tools = new AiToolDispatcher(null!, null!, null!, null!, null!, null!, null!, options,
             NullLogger<AiToolDispatcher>.Instance);
         var service = new AiAssistantService(options, client, sessions, tools, null!,
             NullLogger<AiAssistantService>.Instance);

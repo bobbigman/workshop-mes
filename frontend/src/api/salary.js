@@ -18,3 +18,7 @@ export const exportSalarySkuSummary = (params) => http.get('/Salary/sku-summary/
 
 export const getMyStatements = (params) => http.get('/Salary/my-statements', { params })
 export const getMyStatementItems = (id) => http.get(`/Salary/my-statements/${id}/items`)
+/** 按工单累计工资（docs/420） */
+export const getSalaryWorkOrder = (params) => http.get('/Salary/workOrder', { params })
+/** 已完工工单应付台账（docs/420） */
+export const getSalaryCompletedWorkOrders = () => http.get('/Salary/completedWorkOrders')

@@ -52,6 +52,17 @@ public class SalaryController : ControllerBase
         return File(content, "text/csv; charset=utf-8", fileName);
     }
 
+    /// <summary>按工单累计工资（docs/420）：工序/人拆分；orderId 优先于 orderNo。</summary>
+    [HttpGet("workOrder")]
+    public Task<ApiResult<SalaryWorkOrderSummaryDto>> WorkOrder(
+        [FromQuery] long? orderId, [FromQuery] string? orderNo) =>
+        _svc.WorkOrderSummaryAsync(orderId, orderNo, JwtHelper.GetFactoryId(User));
+
+    /// <summary>已完工工单应付台账（docs/420）：本厂 status=2。</summary>
+    [HttpGet("completedWorkOrders")]
+    public Task<ApiResult<SalaryCompletedWorkOrdersDto>> CompletedWorkOrders() =>
+        _svc.CompletedWorkOrdersAsync(JwtHelper.GetFactoryId(User));
+
     [HttpGet]
     public Task<ApiResult<PageResult<SalaryListDto>>> Query([FromQuery] SalaryQueryDto query) =>
         _svc.QueryAsync(query, JwtHelper.GetFactoryId(User));

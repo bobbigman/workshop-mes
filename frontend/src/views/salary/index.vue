@@ -1,6 +1,12 @@
 <template>
   <div>
     <ValueTip :text="VALUE_TIPS.salary" />
+    <el-tabs v-model="mainTab" @tab-change="onMainTabChange">
+      <el-tab-pane label="工资单" name="statements" />
+      <el-tab-pane label="按工单" name="workOrder" />
+    </el-tabs>
+
+    <template v-if="mainTab === 'statements'">
     <div class="toolbar">
       <el-select v-model="q.periodType" style="width:100px" @change="onPeriodChange">
         <el-option :value="1" label="按月" />
@@ -156,6 +162,122 @@
       </el-table>
       <div v-if="itemTotal > itemRows.length" class="items-foot">共 {{ itemTotal }} 条，当前显示 {{ itemRows.length }} 条</div>
     </div>
+    </template>
+
+    <!-- docs/420：按工单查累计 + 已完工应付台账 -->
+    <template v-else>
+      <div class="wo-block">
+        <div class="wo-title">按工单查累计工资</div>
+        <div class="toolbar">
+          <el-select
+            v-model="woOrderNo"
+            filterable
+            clearable
+            placeholder="选择工单（可输入筛选）"
+            style="width:360px"
+            :loading="woOptionsLoading"
+            @change="onWoOrderChange"
+          >
+            <el-option
+              v-for="o in woOptions"
+              :key="o.id"
+              :label="woOptionLabel(o)"
+              :value="o.orderNo"
+            />
+          </el-select>
+          <el-button type="primary" :loading="woLoading" @click="onQueryWorkOrder">查询</el-button>
+        </div>
+        <template v-if="woSummary">
+          <div class="wo-meta">
+            <span>工单 {{ woSummary.orderNo }}</span>
+            <span>{{ woSummary.productCode }} {{ woSummary.productName }}</span>
+            <span>下单 {{ woSummary.qty }}</span>
+            <span>已复核良品 {{ woSummary.reviewedGoodQty }}</span>
+            <span class="wo-time">查询 {{ formatQueryTime(woSummary.queriedAt) }}</span>
+          </div>
+          <el-alert
+            v-if="woSummary.unpricedCount > 0"
+            type="warning"
+            :closable="false"
+            show-icon
+            class="wo-alert"
+            :title="`部分报工未计价（${woSummary.unpricedCount} 笔按 0 计入）`"
+          />
+          <el-alert
+            v-if="Number(woSummary.unknownPriceTypeAmount) > 0"
+            type="info"
+            :closable="false"
+            show-icon
+            class="wo-alert"
+            :title="`未知计价方式金额 ¥${fmtMoney(woSummary.unknownPriceTypeAmount)}（已计入小计，未进计件/计时/固定列）`"
+          />
+          <div class="summary-grid wo-summary-grid">
+            <div class="summary-item summary-total">
+              <div class="summary-label">应付合计</div>
+              <div class="summary-value">¥{{ fmtMoney(woSummary.payableTotal) }}</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-label">未复核金额</div>
+              <div class="summary-value">¥{{ fmtMoney(woSummary.unreviewedAmount) }}</div>
+            </div>
+          </div>
+          <div class="wo-sub">按工序</div>
+          <el-table :data="woSummary.byOperation || []" size="small" empty-text="暂无已复核工资">
+            <el-table-column prop="name" label="工序" min-width="100" />
+            <el-table-column label="计件" width="90"><template #default="{ row }">{{ fmtMoney(row.pieceAmount) }}</template></el-table-column>
+            <el-table-column label="计时" width="90"><template #default="{ row }">{{ fmtMoney(row.timeAmount) }}</template></el-table-column>
+            <el-table-column label="固定" width="90"><template #default="{ row }">{{ fmtMoney(row.fixedAmount) }}</template></el-table-column>
+            <el-table-column label="小计" width="100"><template #default="{ row }">{{ fmtMoney(row.subtotal) }}</template></el-table-column>
+          </el-table>
+          <div class="wo-sub">按人员</div>
+          <el-table :data="woSummary.byUser || []" size="small" empty-text="暂无已复核工资">
+            <el-table-column prop="name" label="人员" min-width="100" />
+            <el-table-column label="计件" width="90"><template #default="{ row }">{{ fmtMoney(row.pieceAmount) }}</template></el-table-column>
+            <el-table-column label="计时" width="90"><template #default="{ row }">{{ fmtMoney(row.timeAmount) }}</template></el-table-column>
+            <el-table-column label="固定" width="90"><template #default="{ row }">{{ fmtMoney(row.fixedAmount) }}</template></el-table-column>
+            <el-table-column label="小计" width="100"><template #default="{ row }">{{ fmtMoney(row.subtotal) }}</template></el-table-column>
+          </el-table>
+        </template>
+      </div>
+
+      <div class="wo-block">
+        <div class="wo-title-row">
+          <div class="wo-title">已完工工单应付台账</div>
+          <el-button :loading="ledgerLoading" @click="loadCompletedLedger">刷新</el-button>
+        </div>
+        <el-alert
+          v-if="ledger && ledger.unpricedCount > 0"
+          type="warning"
+          :closable="false"
+          show-icon
+          class="wo-alert"
+          :title="`台账内有 ${ledger.unpricedCount} 笔报工未计价`"
+        />
+        <el-table
+          :data="ledger?.list || []"
+          size="small"
+          empty-text="暂无已完工工单"
+          max-height="420"
+        >
+          <el-table-column prop="orderNo" label="工单号" width="130" />
+          <el-table-column label="产品" min-width="160">
+            <template #default="{ row }">{{ row.productCode }} {{ row.productName }}</template>
+          </el-table-column>
+          <el-table-column prop="qty" label="数量" width="80" />
+          <el-table-column label="应付合计" width="110">
+            <template #default="{ row }">{{ fmtMoney(row.payableTotal) }}</template>
+          </el-table-column>
+          <el-table-column label="未复核金额" width="110">
+            <template #default="{ row }">{{ fmtMoney(row.unreviewedAmount) }}</template>
+          </el-table-column>
+        </el-table>
+        <div v-if="ledger" class="wo-ledger-foot">
+          <span>应付总合计 <b>¥{{ fmtMoney(ledger.payableTotal) }}</b></span>
+          <span>未复核合计 ¥{{ fmtMoney(ledger.unreviewedAmount) }}</span>
+          <span class="wo-time">查询 {{ formatQueryTime(ledger.queriedAt) }}</span>
+        </div>
+      </div>
+    </template>
 
     <el-dialog v-model="genDlg" title="生成工资单" width="420px">
       <el-form label-width="90px">
@@ -233,8 +355,10 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import {
   generateSalary, getSalaryList, getSalary,
   confirmSalary, recalcSalary, revokeSalary, batchRecalcSalary, deleteSalary, exportSalary,
-  getSalaryItems, exportSalaryItems
+  getSalaryItems, exportSalaryItems,
+  getSalaryWorkOrder, getSalaryCompletedWorkOrders
 } from '@/api/salary'
+import { getOrderList } from '@/api/prod'
 import { getUserList } from '@/api/sys'
 import { getOperationList } from '@/api/base'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -245,6 +369,7 @@ import { USER_TYPE_OPTIONS, userTypeLabel, userTypeTagType } from '@/constants/u
 
 const now = new Date()
 const defaultPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+const mainTab = ref('statements')
 const q = ref({ periodType: 1, periodValue: defaultPeriod, status: null, userType: null, page: 1, pageSize: 20 })
 const keyword = ref('')
 const list = ref([])
@@ -257,6 +382,22 @@ const genDlg = ref(false)
 const gen = ref({ periodType: 1, periodValue: defaultPeriod, userId: null })
 const detailDlg = ref(false)
 const detail = ref(null)
+
+const woOrderNo = ref('')
+const woOptions = ref([])
+const woOptionsLoading = ref(false)
+const woLoading = ref(false)
+const woSummary = ref(null)
+const ledgerLoading = ref(false)
+const ledger = ref(null)
+let ledgerLoaded = false
+let woOptionsLoaded = false
+const WO_STATUS = { 0: '未开始', 1: '执行中', 2: '已结束' }
+function woOptionLabel(o) {
+  const st = WO_STATUS[o.status] ?? o.status
+  const product = [o.productCode, o.productName].filter(Boolean).join(' ')
+  return product ? `${o.orderNo} · ${product}（${st}）` : `${o.orderNo}（${st}）`
+}
 
 const itemQ = ref({ operationId: null, userType: null })
 const itemRange = ref(null)
@@ -286,6 +427,69 @@ function fmtMoney(v) {
   const n = Number(v)
   if (Number.isNaN(n)) return '0.00'
   return n.toFixed(2)
+}
+
+function formatQueryTime(v) {
+  if (!v) return ''
+  const d = new Date(v)
+  if (Number.isNaN(d.getTime())) return String(v)
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+}
+
+async function onMainTabChange(name) {
+  if (name !== 'workOrder') return
+  await Promise.all([
+    woOptionsLoaded ? Promise.resolve() : loadWoOptions(),
+    ledgerLoaded ? Promise.resolve() : loadCompletedLedger()
+  ])
+}
+
+function onWoOrderChange(val) {
+  if (!val) {
+    woSummary.value = null
+    return
+  }
+  onQueryWorkOrder()
+}
+
+async function loadWoOptions() {
+  woOptionsLoading.value = true
+  try {
+    const res = await getOrderList({ page: 1, pageSize: 500, excludeCancelled: true })
+    woOptions.value = res.data?.list || []
+    woOptionsLoaded = true
+  } finally {
+    woOptionsLoading.value = false
+  }
+}
+
+async function onQueryWorkOrder() {
+  const orderNo = woOrderNo.value?.trim()
+  if (!orderNo) {
+    ElMessage.error('请选择工单')
+    return
+  }
+  woLoading.value = true
+  try {
+    const res = await getSalaryWorkOrder({ orderNo })
+    woSummary.value = res.data || null
+  } catch {
+    woSummary.value = null
+  } finally {
+    woLoading.value = false
+  }
+}
+
+async function loadCompletedLedger() {
+  ledgerLoading.value = true
+  try {
+    const res = await getSalaryCompletedWorkOrders()
+    ledger.value = res.data || null
+    ledgerLoaded = true
+  } finally {
+    ledgerLoading.value = false
+  }
 }
 
 function buildListParams() {
@@ -580,4 +784,22 @@ async function onExportItems() {
   font-size: 22px; font-weight: 700; color: var(--el-color-primary); margin-bottom: 8px;
 }
 .card-actions { display: flex; flex-wrap: wrap; gap: 2px; margin: 0 -4px; }
+
+.wo-block { margin-bottom: 28px; }
+.wo-title { font-weight: 600; font-size: 15px; margin-bottom: 10px; }
+.wo-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.wo-title-row .wo-title { margin-bottom: 0; }
+.wo-meta {
+  display: flex; flex-wrap: wrap; gap: 12px 16px;
+  font-size: 13px; color: var(--el-text-color-regular); margin-bottom: 10px;
+}
+.wo-time { color: var(--el-text-color-secondary); font-size: 12px; }
+.wo-alert { margin-bottom: 10px; }
+.wo-summary-grid { grid-template-columns: 1fr 1fr; max-width: 480px; }
+.wo-sub { font-weight: 600; margin: 14px 0 8px; font-size: 13px; }
+.wo-ledger-foot {
+  margin-top: 12px; display: flex; flex-wrap: wrap; gap: 16px;
+  align-items: center; font-size: 14px;
+}
+.wo-ledger-foot b { color: var(--el-color-primary); font-size: 18px; }
 </style>

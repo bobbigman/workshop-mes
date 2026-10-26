@@ -54,7 +54,7 @@ public class WorkerHelpTests
         var opt = OptionsForTests(); var store = new AiSessionStore(opt); var model = new Model();
         var docs = new SupportDocumentService(opt, NullLogger<SupportDocumentService>.Instance);
         // 所有业务依赖故意为空；只要错误调用业务工具，测试立即失败。
-        var tools = new AiToolDispatcher(null!, null!, null!, docs, null!, opt, NullLogger<AiToolDispatcher>.Instance);
+        var tools = new AiToolDispatcher(null!, null!, null!, docs, null!, null!, null!, opt, NullLogger<AiToolDispatcher>.Instance);
         return (new AiAssistantService(opt, model, store, tools, null!, NullLogger<AiAssistantService>.Instance), store, model, tools);
     }
 
@@ -73,7 +73,7 @@ public class WorkerHelpTests
     {
         var (_, _, _, tools) = Build(); var s = new AiSessionState { Mode = WorkerHelpPolicy.Mode };
         Assert.Single(tools.ToolsForMode(s.Mode));
-        foreach (var name in new[] { "search_work_orders", "search_abnormal", "get_work_order_report_evidence", "resolve_product", "get_production_guide" })
+        foreach (var name in new[] { "search_work_orders", "search_abnormal", "get_work_order_report_evidence", "get_work_order_payable", "get_completed_work_orders_payable", "resolve_product", "get_production_guide" })
             await Assert.ThrowsAsync<BusinessException>(() => tools.DispatchAsync(name, "{}", s, default));
         await Assert.ThrowsAsync<BusinessException>(() => tools.DispatchAsync("search_support_docs", "{\"query\":\"扫码\",\"factoryId\":9}", s, default));
     }

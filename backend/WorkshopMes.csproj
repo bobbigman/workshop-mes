@@ -54,5 +54,7 @@
     <None Update="scripts/129-WechatEvents-部署.md" CopyToPublishDirectory="PreserveNewest" />
     <None Update="scripts/131-wechat-group-webhook.sql" CopyToPublishDirectory="PreserveNewest" />
     <None Update="scripts/141-wechat-webhook-only.sql" CopyToPublishDirectory="PreserveNewest" />
+    <!-- 413：本版本启动会检测旧工价结构并阻断（DbCompat），迁移脚本必须随包交付 -->
+    <None Update="scripts/413-drop-legacy-price-rule.sql" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

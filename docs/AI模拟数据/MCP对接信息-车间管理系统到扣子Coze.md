@@ -65,6 +65,8 @@ Body:   { "factoryId": 4, "keyAlias": "coze-hy001", "expireAt": null, "remark": 
 | `calc_schedule_priority`    | 计算工单排产优先级 / 建议开工顺序        | 演示模式可空授权码           |
 | `query_salary`              | 查已生成工资单；含 summary 本期扣款拆分  | 生产人员/班组长仅本人（148）   |
 | `query_daily_piecework`     | 当日计件试算（只读不落库）             | 「今天工资」用；需绑定本人       |
+| `get_work_order_payable`    | 按工单累计应付（docs/420/421）         | 仅管理员；口语计件=payableTotal |
+| `get_completed_work_orders_payable` | 已完工工单应付台账与总合计     | 仅管理员；「完成工单要付多少」   |
 | `get_report_link_by_identity` | 按手机号/账号/姓名发免密报工链接       | docs/215            |
 | `start_auth`                | 发起金蝶账号授权（返回 H5 授权链接）      | 非演示需先手机号绑定          |
 | `bind_wechat`               | 用手机号绑定当前会话到本厂账号           | 非演示模式调用前需绑定         |

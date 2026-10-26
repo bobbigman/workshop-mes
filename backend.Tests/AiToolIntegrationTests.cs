@@ -80,8 +80,17 @@ public class AiToolIntegrationTests
         var parser = new KnowledgeFileParser(new ConfigurationBuilder().Build());
         var supportDocs = new SupportDocumentService(aiOptions, NullLogger<SupportDocumentService>.Instance);
         var reportEvidence = new AiReportEvidenceService(db, workOrders, aiOptions, NullLogger<AiReportEvidenceService>.Instance);
-        var dispatcher = new AiToolDispatcher(db, workOrders, parser, supportDocs, reportEvidence, aiOptions, NullLogger<AiToolDispatcher>.Instance);
+        var salary = new SalaryService(db, NullLogger<SalaryService>.Instance);
+        var license = new AllowAllLicense();
+        var dispatcher = new AiToolDispatcher(db, workOrders, parser, supportDocs, reportEvidence, salary, license, aiOptions, NullLogger<AiToolDispatcher>.Instance);
         return (db, dispatcher);
+    }
+
+    private sealed class AllowAllLicense : ILicenseTierService
+    {
+        public Task<LicenseTier> GetTierAsync(long factoryId) => Task.FromResult(LicenseTier.Flagship);
+        public Task<bool> CanUseAsync(long factoryId, LicenseFeature feature) => Task.FromResult(true);
+        public Task EnsureFeatureAsync(long factoryId, LicenseFeature feature) => Task.CompletedTask;
     }
 
     private static (AppDbContext db, AiAssistantService svc, AiSessionStore sessions) BuildAssistant(
@@ -94,7 +103,9 @@ public class AiToolIntegrationTests
         var parser = new KnowledgeFileParser(new ConfigurationBuilder().Build());
         var supportDocs = new SupportDocumentService(aiOptions, NullLogger<SupportDocumentService>.Instance);
         var reportEvidence = new AiReportEvidenceService(db, workOrders, aiOptions, NullLogger<AiReportEvidenceService>.Instance);
-        var dispatcher = new AiToolDispatcher(db, workOrders, parser, supportDocs, reportEvidence, aiOptions, NullLogger<AiToolDispatcher>.Instance);
+        var salary = new SalaryService(db, NullLogger<SalaryService>.Instance);
+        var license = new AllowAllLicense();
+        var dispatcher = new AiToolDispatcher(db, workOrders, parser, supportDocs, reportEvidence, salary, license, aiOptions, NullLogger<AiToolDispatcher>.Instance);
         var sessions = new AiSessionStore(aiOptions);
         var svc = new AiAssistantService(aiOptions, client, sessions, dispatcher, reportEvidence, NullLogger<AiAssistantService>.Instance);
         return (db, svc, sessions);
@@ -266,18 +277,34 @@ public class AiToolIntegrationTests
         Assert.Equal(0, g.Code);
     }
 
-    // ============ 工具定义：support 模式暴露的四个工具 ============
+    // ============ 工具定义：support / progress 白名单（docs/421 增工资两工具） ============
 
     [Fact]
     public void SupportMode_ToolsAreWhitelisted()
     {
         var (_, d) = BuildDispatcher(_fx, null);
         var names = d.ToolsForMode("support").Select(t => t.Function.Name).ToHashSet();
-        Assert.Equal(4, names.Count);
         Assert.Contains("search_support_docs", names);
         Assert.Contains("search_work_orders", names);
         Assert.Contains("get_work_order_progress", names);
         Assert.Contains("get_work_order_report_evidence", names);
+        Assert.Contains("search_abnormal", names);
+        Assert.Contains("get_work_order_payable", names);
+        Assert.Contains("get_completed_work_orders_payable", names);
+        Assert.Equal(7, names.Count);
+    }
+
+    [Fact]
+    public void ProgressMode_IncludesPayableTools()
+    {
+        var (_, d) = BuildDispatcher(_fx, null);
+        var names = d.ToolsForMode("progress").Select(t => t.Function.Name).ToHashSet();
+        Assert.Contains("search_work_orders", names);
+        Assert.Contains("get_work_order_progress", names);
+        Assert.Contains("get_work_order_payable", names);
+        Assert.Contains("get_completed_work_orders_payable", names);
+        Assert.Equal(4, names.Count);
+        Assert.DoesNotContain("get_work_order_report_evidence", names);
     }
 
     // ============ S07：模型失败仍保留真实证据 ============
