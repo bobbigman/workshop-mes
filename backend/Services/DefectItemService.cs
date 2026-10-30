@@ -37,7 +37,7 @@ public class DefectItemService : IDefectItemService
     public async Task<ApiResult<object?>> CreateAsync(DefectItemDto dto, long factoryId)
     {
         if (string.IsNullOrWhiteSpace(dto.Name))
-            throw ThrowHelper.Biz(nameof(CreateAsync), "不良品项名称不能为空");
+            throw ThrowHelper.Biz(nameof(CreateAsync), "新增不良品项时名称不能为空，请填写不良品项名称后再保存。");
         _db.DefectItems.Add(new BaseDefectItem { FactoryId = factoryId, Name = dto.Name.Trim(), CreatedAt = DateTime.Now });
         await _db.SaveChangesAsync();
         return ApiResult<object?>.OkMsg();
@@ -48,7 +48,7 @@ public class DefectItemService : IDefectItemService
         if (string.IsNullOrWhiteSpace(dto.Name))
             throw ThrowHelper.Biz(nameof(UpdateAsync), "不良品项名称不能为空");
         var entity = await _db.DefectItems.FirstOrDefaultAsync(d => d.Id == id && d.FactoryId == factoryId)
-            ?? throw ThrowHelper.Biz(nameof(UpdateAsync), "不良品项不存在");
+            ?? throw ThrowHelper.Biz(nameof(UpdateAsync), "要修改的不良品项在系统中找不到，可能已被删除，请刷新列表确认数据后重试。");
         entity.Name = dto.Name.Trim();
         await _db.SaveChangesAsync();
         return ApiResult<object?>.OkMsg();

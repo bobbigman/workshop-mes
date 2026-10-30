@@ -62,7 +62,7 @@ async function load(b) {
     if (props.fileType === 'pdf') await loadPdf(buf)
     else if (props.fileType === 'docx') await loadDocx(buf)
   } catch (e) {
-    error.value = (props.fileType === 'pdf' ? 'PDF' : 'Word') + ' 打开失败'
+    error.value = (props.fileType === 'pdf' ? 'PDF' : 'Word') + ' 文件文件打开失败，请检查文件格式是否正确，或联系管理员确认文件是否完整。，请检查文件格式是否正确，或联系管理员确认文件是否完整。'
     console.error('[DocPreview] 打开失败', e)
   } finally {
     loading.value = false

@@ -1,9 +1,9 @@
 <template>
   <main class="h5-help-page worker-chat" :style="{ height: height + 'px' }">
     <header class="h5-help-header"><router-link to="/h5/home">‹ 返回工作台</router-link><h1>AI操作帮助</h1><van-button size="small" :disabled="busy || ending" @click="newChat">新对话</van-button></header>
-    <p v-if="statusLoading" role="status">正在检查AI状态…</p>
-    <p v-else-if="statusError" class="help-error" role="alert">AI状态加载失败 <van-button size="small" @click="loadStatus">重试</van-button></p>
-    <p v-else-if="!ready" role="status">{{ status.enabled ? 'AI尚未配置，请联系管理员' : 'AI操作帮助已关闭' }}</p>
+    <p v-if="statusLoading" role="status">正在连接AI助手，请稍等…</p>
+    <p v-else-if="statusError" class="help-error" role="alert">AI助手连接不上，请检查网络后点重试；多次失败找管理员看看。 <van-button size="small" @click="loadStatus">重试</van-button></p>
+    <p v-else-if="!ready" role="status">{{ status.enabled ? 'AI助手还没开通，请联系管理员在后台开启。' : 'AI操作帮助功能目前已关闭，需要的话找管理员重新开启。' }}</p>
     <template v-else>
       <div class="role-tabs" aria-label="选择提问角色">
         <button v-for="r in ROLES" :key="r.value" type="button" class="role-tab" :class="{ active: selectedRole === r.value }" :disabled="busy" @click="onRoleClick(r.value)">{{ r.label }}</button>
@@ -133,7 +133,7 @@ const identity = localStorage.getItem('token')
 function checkIdentity() {
   if (identity === localStorage.getItem('token')) return
   cancel(); conversationId = ''; messages.value = []; draft.value = ''
-  error.value = '登录身份已变化，请返回工作台重新打开帮助'
+  error.value = '你的登录账号变了，请先回到工作台，再重新打开AI帮助。'
 }
 function resize() { height.value = window.visualViewport?.height || window.innerHeight }
 function onRoleClick(value) {
@@ -173,7 +173,7 @@ async function send() {
   } catch (err) {
     if (disposed) return
     messages.value.pop()
-    error.value = controller.signal.aborted ? '本次已取消，问题已保留，可重试' : '回答失败，问题已保留。可重试或新建对话'
+    error.value = controller.signal.aborted ? '这次回答已取消，你输入的问题还在，可以重新发送试试。' : 'AI回答失败了，你输入的问题还在。可以点重试，或者换个新对话再问。'
     console.error('[AI操作帮助] 发送未完成', err)
   } finally { busy.value = false }
 }

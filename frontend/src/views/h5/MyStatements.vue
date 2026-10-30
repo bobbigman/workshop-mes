@@ -13,7 +13,7 @@
     </form>
     <p v-if="loading" role="status">加载中…</p>
     <div v-else-if="error" role="alert">{{ error }} <button @click="load(lastLatest)">重试</button></div>
-    <p v-else-if="!statement">暂无已确认工资记录</p>
+    <p v-else-if="!statement">还没有确认过的工资单。工资单由管理员确认后才会显示在这里，有疑问找班组长或管理员了解。</p>
     <template v-else>
       <div class="summary">
         <strong>{{ statement.periodValue }} · {{ statement.periodType === 1 ? '月结' : '周结' }}</strong>
@@ -23,7 +23,7 @@
         <button @click="expanded = !expanded">{{ expanded ? '收起明细' : '查看明细' }}</button>
       </div>
       <template v-if="expanded">
-        <p v-if="!items.length">暂无明细</p>
+        <p v-if="!items.length">这条工资单暂时没有明细记录。如果刚确认过，稍后下拉刷新看看；还是没有就找管理员。</p>
         <article v-for="item in items" :key="item.id" class="item">
           <strong>{{ item.operationName }}</strong> · {{ item.orderNo }}
           <div>{{ calculation(item) }} = ¥{{ money(item.amount) }}</div>
@@ -59,7 +59,7 @@ function resetPeriod() {
   periodValue.value = ''
 }
 function calculation(item) {
-  const coeff = Number(item.wageCoeff) !== 1 ? ` × 系数${item.wageCoeff}` : ''
+  const coeff = Number(item.wageCoeff) !== 1 ? ` × 倍数${item.wageCoeff}` : ''
   if (item.priceType === 1) return `${item.goodQty}件 × ${money(item.unitPrice)}元/件${coeff}`
   if (item.priceType === 2) {
     const minutes = item.durationMinutes
@@ -67,7 +67,7 @@ function calculation(item) {
     return `${duration} × ${money(item.unitPrice)}元/小时${coeff}`
   }
   if (item.priceType === 3) return `固定${money(item.unitPrice)}元`
-  return '历史记录／计价方式未记录'
+  return '这条记录的计件单价没记全，请联系管理员补一下。'
 }
 async function load(latest = false) {
   const current = ++request
@@ -89,7 +89,7 @@ async function load(latest = false) {
     periodType.value = selected.periodType
     periodValue.value = selected.periodValue
   } catch (e) {
-    if (current === request) error.value = e.response?.data?.msg || e.message || '工资单加载失败，请重试'
+    if (current === request) error.value = e.response?.data?.msg || e.message || '工资单加载不出来，可能是网络问题，请检查一下网络再刷新；反复失败找管理员看看。'
   } finally {
     if (current === request) loading.value = false
   }

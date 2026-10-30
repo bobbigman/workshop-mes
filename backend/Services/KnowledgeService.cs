@@ -65,7 +65,7 @@ public class KnowledgeService : IKnowledgeService
                 .FirstOrDefaultAsync(p => p.FactoryId == factoryId && p.Name.Contains(productName!));
 
         if (product == null)
-            throw ThrowHelper.Biz(nameof(QueryProductionGuideAsync), $"未找到产品（编号/名称：{productCode ?? productName}）");
+            throw ThrowHelper.Biz(nameof(QueryProductionGuideAsync), $"在知识库中找不到匹配的产品（编号/名称：{productCode ?? productName}）。请核对产品编号或名称是否正确，或到「产品定义」中核实该产品是否存在。");
 
         // 顺工艺路线：routing_id -> base_routing_step -> base_operation
         var routingNames = new List<string>();
@@ -104,7 +104,7 @@ public class KnowledgeService : IKnowledgeService
             var op = await _db.Operations.AsNoTracking()
                 .FirstOrDefaultAsync(o => o.FactoryId == factoryId && o.Name.Contains(operationName));
             if (op == null)
-                throw ThrowHelper.Biz(nameof(QueryProductionGuideAsync), $"未找到工序：{operationName}");
+                throw ThrowHelper.Biz(nameof(QueryProductionGuideAsync), $"在知识库中找不到匹配的工序：{operationName}。请核对工序名称是否正确，或到「工序」中核实该工序是否存在。");
             filterOperationId = op.Id;
             opNameById[op.Id] = op.Name;
         }

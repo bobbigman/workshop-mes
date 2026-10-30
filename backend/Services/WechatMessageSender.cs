@@ -35,10 +35,10 @@ public class WechatMessageSender(AppDbContext db, IHttpClientFactory http, ILice
             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         if (users.Length == 0 || users.Any(x => x.StartsWith('@')))
-            throw ThrowHelper.BizUser("请填写企微成员 UserId，禁止 @all");
+            throw ThrowHelper.BizUser("企微消息接收人须填写具体的成员 UserId，不能使用 @all 群发所有人，请修正接收人列表。");
         var result = string.Join('|', users);
         if (result.Length > 512 || users.Length > 1000)
-            throw ThrowHelper.BizUser("企微接收人过长（最多 512 字符）");
+            throw ThrowHelper.BizUser("企微接收人列表过长，最多支持512个字符，请缩减接收人数量后重试。");
         return result;
     }
 
@@ -48,7 +48,7 @@ public class WechatMessageSender(AppDbContext db, IHttpClientFactory http, ILice
         var users = value.Split(['|', ',', '，', ';', '；', ' ', '\r', '\n'],
             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (users.Any(x => x.StartsWith('@') && x != "@all"))
-            throw ThrowHelper.BizUser("群内成员请填写企微 UserId，或 @all 代表全体");
+            throw ThrowHelper.BizUser("群消息接收人须填写企微成员 UserId，或使用 @all 代表群内全体成员，请修正接收人格式。");
         if (users.Contains("@all")) return "@all";
         return NormalizeUsers(value);
     }
@@ -69,7 +69,7 @@ public class WechatMessageSender(AppDbContext db, IHttpClientFactory http, ILice
                 !uri.Host.Equals("qyapi.weixin.qq.com", StringComparison.OrdinalIgnoreCase) ||
                 uri.AbsolutePath != "/cgi-bin/webhook/send" || !uri.IsDefaultPort ||
                 !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Fragment))
-                throw ThrowHelper.BizUser("请粘贴企业微信官方 HTTPS 群机器人 Webhook 链接");
+                throw ThrowHelper.BizUser("请粘贴企业微信群机器人的完整 HTTPS Webhook 链接。获取方式：在企业微信群聊中添加群机器人，复制其Webhook地址。");
             raw = "";
             var query = uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries);
             foreach (var part in query)
@@ -82,7 +82,7 @@ public class WechatMessageSender(AppDbContext db, IHttpClientFactory http, ILice
             }
         }
         if (raw.Length is 0 or > 200 || raw.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '-' && c != '_'))
-            throw ThrowHelper.BizUser("群机器人 Webhook 无效：请粘贴完整链接或其中的 key");
+            throw ThrowHelper.BizUser("群机器人Webhook无法识别，请检查是否粘贴了完整链接或其中的key部分，可重新从企业微信群机器人设置中复制最新地址。");
         return raw;
     }
 

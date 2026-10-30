@@ -45,16 +45,16 @@ public class FactoryService : IFactoryService
         var code = (dto.FactoryCode ?? "").Trim();
         var name = (dto.FactoryName ?? "").Trim();
         if (string.IsNullOrWhiteSpace(code))
-            throw ThrowHelper.BizUser("账套代码不能为空");
+            throw ThrowHelper.BizUser("新建工厂时账套代码为必填项。请填写账套代码后再保存。");
         if (string.IsNullOrWhiteSpace(name))
-            throw ThrowHelper.BizUser("工厂名称不能为空");
+            throw ThrowHelper.BizUser("新建工厂时工厂名称为必填项。请填写工厂名称后再保存。");
         if (code.Length > 64)
-            throw ThrowHelper.BizUser("账套代码过长");
+            throw ThrowHelper.BizUser("账套代码超过了长度上限。请缩短账套代码后重新保存。");
         if (name.Length > 128)
-            throw ThrowHelper.BizUser("工厂名称过长");
+            throw ThrowHelper.BizUser("工厂名称超过了长度上限。请缩短工厂名称后重新保存。");
 
         if (await _db.Factories.AnyAsync(f => f.FactoryCode == code))
-            throw ThrowHelper.BizUser("账套代码已存在，请换一个");
+            throw ThrowHelper.BizUser("该账套代码已被其他工厂占用。请换一个不重复的账套代码后重新保存。");
 
         var factory = await SeedData.SeedFactoryAsync(_db, code, name);
 

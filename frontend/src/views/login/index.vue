@@ -148,7 +148,7 @@ const logoOk = ref(true)
 /** 角落版本号：只认 package.json → vite define 注入的 __APP_VERSION__，不被后端实例信息覆盖 */
 const appVersionLabel = (() => {
   const raw = typeof __APP_VERSION__ !== 'undefined' ? String(__APP_VERSION__ || '').trim() : ''
-  if (!raw) throw new Error('[登录页] 未注入 __APP_VERSION__，请检查 vite.config.js define 与 package.json version')
+  if (!raw) throw new Error('页面加载异常，请刷新重试。')
   return raw.startsWith('v') || raw.startsWith('V') ? raw : `v${raw}`
 })()
 const formRef = ref(null)
@@ -316,7 +316,7 @@ async function onClearCache() {
   if (loading.value || clearing.value) return
   try {
     await ElMessageBox.confirm(
-      '将清除本站缓存并刷新页面，未提交的账号密码需重新输入，已登录状态保留。是否继续？',
+      '将清除本站临时保存的内容并刷新页面，未提交的账号密码需重新输入，已登录状态保留。是否继续？',
       '清除本地缓存',
       { confirmButtonText: '继续', cancelButtonText: '取消', type: 'warning' }
     )
@@ -328,7 +328,7 @@ async function onClearCache() {
   try {
     const result = await runClearBrowserCache({ requestClear: requestClearBrowserCache })
     if (!result.ok) {
-      ElMessage.error(result.message || '清缓存失败')
+      ElMessage.error(result.message || '清除本地数据失败，请手动刷新页面重试；若仍失败联系管理员。')
       return
     }
     if (result.limited) {
@@ -339,7 +339,7 @@ async function onClearCache() {
     ElMessage.success(result.message)
     doRefreshAfterClear()
   } catch (err) {
-    ElMessage.error(err?.message || '清缓存失败')
+    ElMessage.error(err?.message || '清除本地数据失败，请手动刷新页面重试；若仍失败联系管理员。')
   } finally {
     clearing.value = false
   }
@@ -402,7 +402,7 @@ async function onLogin() {
       selectToken.value = res.data.selectToken || ''
       candidates.value = res.data.candidates || []
       if (!selectToken.value || candidates.value.length < 2) {
-        ElMessage.error('选厂信息无效，请重新登录')
+        ElMessage.error('选厂信息无效，请返回登录页重新选择工厂并登录。')
         return
       }
       step.value = 'selectFactory'
@@ -413,7 +413,7 @@ async function onLogin() {
       await goAfterLogin(res.data)
     } catch (error) {
       console.error('[登录页] 身份验证成功后打开目标页面失败', error)
-      ElMessage.error('账号验证成功，但页面加载失败，请刷新后重试')
+      ElMessage.error('账号验证成功但页面加载失败，请刷新页面重试；若仍失败联系管理员检查后端服务。')
     }
   } finally {
     loading.value = false
@@ -425,7 +425,7 @@ async function onSelectFactory(factoryCode) {
   if (loading.value || clearing.value) return
   const code = String(factoryCode || '').trim()
   if (!code || !selectToken.value) {
-    ElMessage.error('选厂凭证无效，请重新登录')
+    ElMessage.error('选厂凭证无效，请返回登录页重新登录。')
     backToCredentials()
     return
   }
@@ -441,7 +441,7 @@ async function onSelectFactory(factoryCode) {
       await goAfterLogin(res.data)
     } catch (error) {
       console.error('[登录页] 选厂成功后打开目标页面失败', error)
-      ElMessage.error('账号验证成功，但页面加载失败，请刷新后重试')
+      ElMessage.error('账号验证成功但页面加载失败，请刷新页面重试；若仍失败联系管理员检查后端服务。')
     }
   } catch {
     // 过期/复用/伪造：回账密态，http 拦截器已提示

@@ -47,11 +47,11 @@ public class ReportQtySettingService : IReportQtySettingService
     public async Task<ApiResult<object?>> SaveAsync(ReportQtySettingDto dto, long factoryId, byte role)
     {
         if (role != 1)
-            throw ThrowHelper.BizUser("仅管理员可修改报工数量设置");
+            throw ThrowHelper.BizUser("你没有权限修改报工数量设置，只有管理员才能改，请联系管理员处理。");
         if (dto == null)
-            throw ThrowHelper.Biz(nameof(SaveAsync), "报工数量设置为空");
+            throw ThrowHelper.Biz(nameof(SaveAsync), "保存报工数量设置前，请确认内容不为空。");
         if (dto.OverrunRatio < 0 || dto.OverrunRatio > 999)
-            throw ThrowHelper.BizUser("允许超报比例须为 0～999 的整数");
+            throw ThrowHelper.BizUser("允许超报比例请填写0到999之间的整数。");
 
         var row = await _db.ReportQtySettings.FirstOrDefaultAsync(x => x.FactoryId == factoryId);
         if (row == null)

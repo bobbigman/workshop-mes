@@ -2,14 +2,14 @@
   <el-card class="message-rules">
     <template #header>消息规则与发送记录</template>
     <el-alert type="info" :closable="false" show-icon>
-      报工和工单变化可自动提醒。通常在每分钟任务的下一轮发送；交期与事件共用每日额度，测试消息不计额度。
-      不良率按每条新增报工记录计算，严格大于阈值才提醒。多人报工会分别提醒。
+      报工和工单状态有变化时会自动发提醒消息，通常在下一轮定时检查时发出。交期预警和事件提醒共用每天的发送额度；测试消息不占用额度。
+      每新增一条报工都会单独计算不良率，只有超过设定阈值才会提醒；多人分别报工时各自判断、分别提醒。
     </el-alert>
     <el-alert v-if="rules.some(row => row.targetChannel !== 'group')" type="warning" :closable="false" show-icon style="margin-top:12px">
-      旧会话规则已停用。可查看原配置，请按原模板和成员重新建立群机器人规则；历史记录保留。
+      旧会话规则已停用，可点开查看原来的设置作参考。请到消息规则页按原来的消息格式和接收人重新新建群机器人规则；历史发送记录仍然保留。
     </el-alert>
     <el-alert v-if="rules.some(row => row.targetChannel === 'group' && !row.webhookKey && !defaultWebhookConfigured)" type="warning" :closable="false" show-icon style="margin-top:12px">
-      部分群规则未配置发送目标，请填写本规则 Webhook 或保存全局默认 Webhook。
+      部分群规则还没设置发送地址，请填写该规则的群机器人地址，或在消息提醒设置里保存全厂默认地址。
     </el-alert>
     <el-tabs v-model="tab">
       <el-tab-pane label="消息规则" name="rules">
@@ -17,12 +17,12 @@
           <el-button type="primary" @click="openRule()">新建规则</el-button>
           <el-button :loading="loading" @click="loadRules">刷新</el-button>
         </div>
-        <mes-table table-key="views/wechat-alert/MessageRules:1" :data="rules" v-loading="loading" empty-text="暂无规则，新建后只匹配后续业务事件">
+        <mes-table table-key="views/wechat-alert/MessageRules:1" :data="rules" v-loading="loading" empty-text="还没有消息规则。点「新建规则」创建一条即可；创建后只对之后发生的报工、工单事件生效。">
           <el-table-column prop="name" label="规则名称" min-width="130" />
           <el-table-column label="事件" min-width="110"><template #default="{ row }">{{ events[row.eventType] }}</template></el-table-column>
-          <el-table-column label="通道" width="100"><template #default="{ row }">{{ row.targetChannel === 'group' ? '群消息' : '旧规则（停用）' }}</template></el-table-column>
+          <el-table-column label="发送方式" width="100"><template #default="{ row }">{{ row.targetChannel === 'group' ? '群消息' : '旧规则（停用）' }}</template></el-table-column>
           <el-table-column label="条件" min-width="150"><template #default="{ row }">{{ conditionText(row) }}</template></el-table-column>
-          <el-table-column label="接收人/@人" min-width="160" show-overflow-tooltip><template #default="{ row }">{{ row.toUser || (row.targetChannel === 'group' ? '只发群，不 @' : '原默认接收人') }}</template></el-table-column>
+          <el-table-column label="接收人/@人" min-width="160" show-overflow-tooltip><template #default="{ row }">{{ row.toUser || (row.targetChannel === 'group' ? '只发群，不 @' : '沿用旧版默认接收人') }}</template></el-table-column>
           <el-table-column label="状态" width="80"><template #default="{ row }"><el-tag :type="row.enabled ? 'success' : 'info'">{{ row.targetChannel !== 'group' ? '已停用' : row.enabled ? '启用' : '停用' }}</el-tag></template></el-table-column>
           <el-table-column label="操作" width="150"><template #default="{ row }">
             <el-button link type="primary" @click="openRule(row)">{{ row.targetChannel === 'group' ? '编辑' : '查看' }}</el-button>
@@ -32,7 +32,7 @@
       </el-tab-pane>
       <el-tab-pane label="发送记录" name="deliveries">
         <div class="toolbar"><el-button :loading="loadingDeliveries" @click="loadDeliveries">刷新记录</el-button></div>
-        <mes-table table-key="views/wechat-alert/MessageRules:2" :data="deliveries" v-loading="loadingDeliveries" empty-text="暂无事件发送记录">
+        <mes-table table-key="views/wechat-alert/MessageRules:2" :data="deliveries" v-loading="loadingDeliveries" empty-text="暂无发送记录。当报工、工单变更等事件触发规则后，这里会显示每次发送的结果。">
           <el-table-column prop="ruleName" label="规则" min-width="110" />
           <el-table-column label="事件" min-width="110"><template #default="{ row }">{{ events[row.eventType] }}</template></el-table-column>
           <el-table-column label="发生时间" min-width="160"><template #default="{ row }">{{ formatTime(row.occurredAt) }}</template></el-table-column>
@@ -49,12 +49,12 @@
       </el-tab-pane>
     </el-tabs>
     <el-dialog v-model="ruleDialog" :title="ruleId ? '编辑规则' : '新建规则'" width="640px" :close-on-click-modal="false">
-      <el-alert v-if="legacyRule" type="warning" :closable="false">旧规则仅供查看，请关闭后新建群机器人规则。</el-alert>
+      <el-alert v-if="legacyRule" type="warning" :closable="false">这条旧规则只能查看、不能编辑。请关闭本弹窗后，点「新建规则」创建新的群机器人规则。</el-alert>
       <el-form label-width="110px" :disabled="legacyRule">
         <el-form-item label="规则名称" required><el-input v-model="form.name" maxlength="64" show-word-limit /></el-form-item>
         <el-form-item label="事件" required><el-select v-model="form.eventType" @change="changeEvent"><el-option v-for="(label, key) in events" :key="key" :label="label" :value="key" /></el-select></el-form-item>
-        <el-form-item label="发送到">群机器人 Webhook</el-form-item>
-        <el-form-item v-if="!legacyRule" label="本规则 Webhook"><el-input v-model="form.webhookKey" type="password" show-password placeholder="留空用全厂默认；******** 表示不修改；清空恢复默认" clearable /></el-form-item>
+        <el-form-item label="发送到">群机器人地址</el-form-item>
+        <el-form-item v-if="!legacyRule" label="本规则发送地址"><el-input v-model="form.webhookKey" type="password" show-password placeholder="不填则使用全厂默认地址；显示 ******** 表示已有设置、本次未改动；清空输入框即可恢复默认。" clearable /></el-form-item>
         <el-form-item v-if="form.eventType === 'report_created'" label="条件">
           <el-select v-model="form.conditionType" @change="changeCondition"><el-option label="每次提醒" value="always" /><el-option label="本次不良率超过阈值" value="defect_rate" /></el-select>
         </el-form-item>
@@ -67,13 +67,13 @@
           </el-select>
         </el-form-item>
         <el-form-item v-if="form.conditionType === 'defect_rate'" label="不良率阈值"><el-input-number v-model="form.threshold" :min="0" :max="100" :precision="2" /> %</el-form-item>
-        <el-form-item label="群内 @人"><el-input v-model="form.toUser" maxlength="512" placeholder="选填企微 UserId，逗号分隔；支持 @all；留空只发群，不继承默认成员" /></el-form-item>
+        <el-form-item label="群内 @人"><el-input v-model="form.toUser" maxlength="512" placeholder="选填企业微信用户ID，多个用英文逗号分隔；填 @all 可提醒群内所有人；留空则只发群消息、不单独提醒任何人。" /></el-form-item>
         <el-form-item label="消息模板" required><el-input v-model="form.template" type="textarea" :rows="4" maxlength="1000" show-word-limit /></el-form-item>
         <el-form-item label="可用占位符"><div class="tokens"><el-button v-for="token in placeholders" :key="token" size="small" @click="form.template += `{${token}}`">{{ tokenText(token) }}</el-button></div></el-form-item>
         <el-form-item label="预览（示例）"><pre class="preview">{{ preview }}</pre></el-form-item>
-        <el-form-item label="启用"><el-switch v-model="form.enabled" /><span class="hint">须有本规则或全局默认 Webhook；总开关关闭时不会发送</span></el-form-item>
+        <el-form-item label="启用"><el-switch v-model="form.enabled" /><span class="hint">必须为本规则或全厂默认配好群机器人地址才能发送；消息提醒总开关关闭时，规则不会发出消息。</span></el-form-item>
       </el-form>
-      <el-alert type="info" :closable="false">编辑只影响后续事件；停用会取消尚未发送项，正在发送的消息可能已被企微接受。</el-alert>
+      <el-alert type="info" :closable="false">编辑规则只影响之后的新事件；停用会取消尚未发出的消息，正在发送中的消息可能已被企业微信接收。</el-alert>
       <template #footer><el-button @click="ruleDialog = false">取消</el-button><el-button type="primary" :loading="saving" :disabled="legacyRule" @click="saveRule">保存</el-button></template>
     </el-dialog>
     <el-dialog v-model="detailDialog" title="发送详情" width="760px">
@@ -82,7 +82,7 @@
         <p>状态：{{ statuses[detail.status] }}；累计尝试：{{ detail.attempts }}；失败接收人：{{ detail.failedUsers || '无' }}</p>
         <p v-if="detail.handledAt">管理员 #{{ detail.handledBy }} 于 {{ formatTime(detail.handledAt) }}：{{ detail.handlingNote }}</p>
         <pre v-if="detail.error" class="preview">{{ detail.error }}</pre>
-        <mes-table table-key="views/wechat-alert/MessageRules:3" :data="attempts" empty-text="尚未尝试发送">
+        <mes-table table-key="views/wechat-alert/MessageRules:3" :data="attempts" empty-text="这条规则还没有发送过。事件触发后，这里会显示每次发送的详细记录。">
           <el-table-column label="时间" min-width="160"><template #default="{ row }">{{ formatTime(row.createdAt) }}</template></el-table-column>
           <el-table-column prop="toUser" label="本次接收人" min-width="140" show-overflow-tooltip />
           <el-table-column label="结果" width="110"><template #default="{ row }">{{ statuses[row.outcome] || row.outcome }}</template></el-table-column>
@@ -91,10 +91,10 @@
       </template>
     </el-dialog>
     <el-dialog v-model="verifyDialog" title="核实未知发送结果" width="540px" :close-on-click-modal="false">
-      <p>请与接收人核实。这条消息可能已送达，直接重发可能产生重复通知。</p>
-      <p v-if="!verifyCanRequeue">旧会话通道已停止，仅可确认已发送；未收到的记录保持未知，不重新排队。</p>
+      <p>请先和接收人核实。消息可能已经送达，直接重发可能造成重复通知。</p>
+      <p v-if="!verifyCanRequeue">旧会话发送方式已停用，只能确认是否已发送；没收到的记录保持未知状态，不会重新排队发送。</p>
       <el-radio-group v-model="verification.sent"><el-radio :value="true">确认已发送</el-radio><el-radio v-if="verifyCanRequeue" :value="false">确认未发送，重新排队</el-radio></el-radio-group>
-      <el-input v-model="verification.note" type="textarea" :rows="3" maxlength="256" placeholder="填写核实说明（必填）" style="margin-top:16px" />
+      <el-input v-model="verification.note" type="textarea" :rows="3" maxlength="256" placeholder="填写核实说明（必填），例如：已与张三确认收到消息，例如：已与张三确认收到消息" style="margin-top:16px" />
       <template #footer><el-button @click="verifyDialog = false">取消</el-button><el-button type="primary" :loading="acting" @click="verify">保存核实结果</el-button></template>
     </el-dialog>
   </el-card>
@@ -144,14 +144,14 @@ function changeEvent() { form.value.conditionType = 'always'; form.value.thresho
 async function saveRule() {
   if (legacyRule.value) return
   form.value.targetChannel = 'group'
-  if (!form.value.name.trim() || !form.value.template.trim()) return ElMessage.warning('请填写规则名称和消息模板')
-  if ([...form.value.template.matchAll(/\{([^{}]+)\}/g)].some(m => !placeholders.value.includes(m[1]))) return ElMessage.warning('模板含该事件不支持的占位符')
+  if (!form.value.name.trim() || !form.value.template.trim()) return ElMessage.warning('规则名称和消息内容都不能为空，请分别填写后再保存。')
+  if ([...form.value.template.matchAll(/\{([^{}]+)\}/g)].some(m => !placeholders.value.includes(m[1]))) return ElMessage.warning('消息内容里含有当前事件不支持的变量，请对照可用变量列表删除不支持的内容后重试。')
   saving.value = true
   try { if (ruleId.value) await updateWechatRule(ruleId.value, { ...form.value }); else await createWechatRule({ ...form.value }); ruleDialog.value = false; ElMessage.success('规则已保存'); await loadRules() } finally { saving.value = false }
 }
 async function toggleRule(row) {
   if (row.enabled) {
-    try { await ElMessageBox.confirm('停用会取消尚未发送项；重新启用只匹配新事件。', '停用规则', { type: 'warning' }) }
+    try { await ElMessageBox.confirm('停用会取消尚未发出的消息；重新启用后只对新事件生效。', '停用规则', { type: 'warning' }) }
     catch (error) { if (error === 'cancel' || error === 'close') return; throw error }
   }
   saving.value = true
@@ -160,13 +160,13 @@ async function toggleRule(row) {
 async function showDetail(row) { const res = await getWechatAttempts(row.id); attempts.value = res.data || []; detail.value = row; detailDialog.value = true }
 async function retry(row) {
   acting.value = true
-  try { await retryWechatDelivery(row.id); ElMessage.success('已重新排队'); await loadDeliveries() } finally { acting.value = false }
+  try { await retryWechatDelivery(row.id); ElMessage.success('已重新加入发送队列，稍后会自动重试发送，请耐心等待。'); await loadDeliveries() } finally { acting.value = false }
 }
 function openVerify(row) { verifyId.value = row.id; verification.value = { sent: true, note: '' }; verifyDialog.value = true }
 async function verify() {
-  if (!verification.value.note.trim()) return ElMessage.warning('请填写核实说明')
+  if (!verification.value.note.trim()) return ElMessage.warning('请填写核实说明，用于记录本次核实结果和处理意见，方便日后追溯。，用于记录本次核实结果和处理意见，方便日后追溯。')
   acting.value = true
-  try { await verifyWechatDelivery(verifyId.value, { ...verification.value }); verifyDialog.value = false; ElMessage.success('核实结果已保存'); await loadDeliveries() } finally { acting.value = false }
+  try { await verifyWechatDelivery(verifyId.value, { ...verification.value }); verifyDialog.value = false; ElMessage.success('核实结果已保存，可在发送记录列表中查看该条消息的最新状态。，可在发送记录列表中查看该条消息的最新状态。'); await loadDeliveries() } finally { acting.value = false }
 }
 </script>
 

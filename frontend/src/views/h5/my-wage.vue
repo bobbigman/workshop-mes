@@ -23,10 +23,10 @@
 
     <div v-if="loading" class="state">加载中…</div>
     <div v-else-if="loadError" class="state err">
-      加载失败，请重试
+      数据加载失败，请检查网络后刷新重试；反复失败找管理员处理。
       <button type="button" class="btn-sm" @click="reload">重试</button>
     </div>
-    <div v-else-if="list.length === 0" class="state">该周期没有报工</div>
+    <div v-else-if="list.length === 0" class="state">这个时间段内没有报工记录。如果确实报过工，请换个时间段查看，或找管理员核实。</div>
 
     <div v-for="row in list" :key="row.reportId" class="card" :class="{ muted: !row.countedInTotal }">
       <div class="row1">
@@ -46,7 +46,7 @@
       </div>
       <div class="money">
         <span v-if="row.unitPrice != null">单价 ¥{{ formatMoney(row.unitPrice) }}</span>
-        <span v-else class="wage-miss">未配工价</span>
+        <span v-else class="wage-miss">这道工序还没定单价，找管理员设一下。</span>
         <span class="amt" :class="{ dim: !row.countedInTotal }">
           {{ row.amount != null ? '¥' + formatMoney(row.amount) : '—' }}
         </span>
@@ -54,7 +54,7 @@
       <div class="time">{{ formatTime(row.reportTime) }}</div>
     </div>
 
-    <p class="tip">已结算显示工资单固化金额；未结算显示报工快照。待复核/退回不计入合计。</p>
+    <p class="tip">已结算的按工资单上的金额显示；还没结算的按你报工时的数据估算。待复核和被退回的不算在内。</p>
     <MyStatements />
     <TabBar active="home" />
   </div>

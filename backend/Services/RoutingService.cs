@@ -86,7 +86,7 @@ public class RoutingService : IRoutingService
     public async Task<ApiResult<RoutingDetailDto>> GetAsync(long id, long factoryId)
     {
         var r = await _db.Routings.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id && x.FactoryId == factoryId)
-            ?? throw ThrowHelper.Biz(nameof(GetAsync), "工艺路线不存在");
+            ?? throw ThrowHelper.Biz(nameof(GetAsync), "指定的工艺路线在系统中不存在。请到「工艺路线」列表核对编号是否正确。");
         var steps = await _db.RoutingSteps.AsNoTracking()
             .Where(s => s.RoutingId == id).OrderBy(s => s.Seq)
             .Select(s => new RoutingStepDto { OperationId = s.OperationId, Seq = s.Seq }).ToListAsync();
@@ -103,11 +103,11 @@ public class RoutingService : IRoutingService
     {
         await using var ownedTx = _db.Database.CurrentTransaction == null ? await _db.Database.BeginTransactionAsync() : null;
         if (dto.CopyFromId.HasValue && !await _db.Routings.AnyAsync(r => r.Id == dto.CopyFromId && r.FactoryId == factoryId))
-            throw ThrowHelper.Biz(nameof(CreateAsync), "复制来源工艺路线不存在或不属于本厂");
+            throw ThrowHelper.Biz(nameof(CreateAsync), "复制工艺路线时指定的来源路线不存在或不属于本厂。请到「工艺路线」确认来源路线编号正确且归属本厂。");
         if (string.IsNullOrWhiteSpace(dto.Code) || string.IsNullOrWhiteSpace(dto.Name))
-            throw ThrowHelper.Biz(nameof(CreateAsync), "路线编号和名称不能为空");
+            throw ThrowHelper.Biz(nameof(CreateAsync), "工艺路线的编号和名称都必须填写。请填写完整的路线编号和名称后再保存。");
         if (dto.Steps == null || dto.Steps.Count == 0)
-            throw ThrowHelper.Biz(nameof(CreateAsync), "请至少添加一道工序");
+            throw ThrowHelper.Biz(nameof(CreateAsync), "工艺路线至少要包含一道工序。请在路线中添加至少一个工序步骤后再保存。");
         await ValidateStepsAsync(dto.Steps, factoryId);
 
         var routing = new BaseRouting
@@ -128,9 +128,9 @@ public class RoutingService : IRoutingService
     {
         var ids = steps.Select(s => s.OperationId).Distinct().ToList();
         if (ids.Count != steps.Count)
-            throw ThrowHelper.Biz(nameof(ValidateStepsAsync), "同一路线不能重复选择同一道工序");
+            throw ThrowHelper.Biz(nameof(ValidateStepsAsync), "同一条工艺路线中不能重复添加同一道工序。请检查工序列表，移除重复工序条目。");
         if (await _db.Operations.CountAsync(o => o.FactoryId == factoryId && ids.Contains(o.Id)) != ids.Count)
-            throw ThrowHelper.Biz(nameof(ValidateStepsAsync), "工序不存在或不属于本厂");
+            throw ThrowHelper.Biz(nameof(ValidateStepsAsync), "路线中添加的某道工序不存在或不属于本厂。请到「工序」确认该工序已创建且归属本厂，再回路线编辑页修正。");
     }
 
     public async Task<ApiResult<object?>> UpdateAsync(long id, RoutingCreateDto dto, long factoryId)

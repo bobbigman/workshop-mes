@@ -67,7 +67,7 @@ public partial class SalaryService
         await TenantDataGuard.WorkOrdersAsync(_db, factoryId, orderId.HasValue ? new[] { orderId.Value } : null);
         var trimmedNo = orderNo?.Trim();
         if (!orderId.HasValue && string.IsNullOrEmpty(trimmedNo))
-            throw ThrowHelper.BizUser("请输入工单号");
+            throw ThrowHelper.BizUser("请输入工单号后再查询。");
 
         ProdWorkOrder? order;
         if (orderId.HasValue)
@@ -82,9 +82,9 @@ public partial class SalaryService
         }
 
         if (order == null)
-            throw ThrowHelper.BizUser("工单不存在或无权限");
+            throw ThrowHelper.BizUser("该工单号查不到，请核对后重新输入；若当前账号无权查看，请联系管理员授权。");
         if (order.Status == 3)
-            throw ThrowHelper.BizUser("工单已取消，不纳入本查询");
+            throw ThrowHelper.BizUser("该工单已作废，不参与工资汇总。如需恢复，请到「工单」恢复后再查。");
 
         var product = await _db.Products.AsNoTracking()
             .Where(p => p.Id == order.ProductId && p.FactoryId == factoryId)
@@ -230,7 +230,7 @@ public partial class SalaryService
         {
             if (r.ReviewStatus is not (0 or 1 or 2))
                 throw ThrowHelper.Biz(nameof(AggregateRows),
-                    $"报工{r.ReportId}复核状态异常({r.ReviewStatus})，无法汇总工单工资");
+                    $"报工{r.ReportId}的复核状态异常（{r.ReviewStatus}），无法汇总工单工资，请修正后再汇总。");
 
             if (r.ReviewStatus == 2) continue;
 

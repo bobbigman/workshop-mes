@@ -15,12 +15,12 @@
     </p>
 
     <div v-if="loadError" class="load-error">
-      <p>无法打开该工单，请返回后重试</p>
+      <p>这张工单打不开了，可能已被删除或链接有误。请返回工作台重新扫码试试。</p>
       <button type="button" class="btn btn-primary" @click="router.replace(reportBackPath)">返回</button>
     </div>
 
     <div v-if="detail && !loadError && noReportableOps" class="no-ops-tip">
-      该工单当前没有你可报的工序
+      这张工单里没有你能报的工序了：可能前面的工序还没做完，或者你所在部门没有这道工序的报工权限。找班组长确认一下。
     </div>
 
     <div class="form" v-if="detail && !loadError && !noReportableOps">
@@ -42,7 +42,7 @@
         <van-button v-if="!workSession" block type="primary" :loading="clockLoading" @click="startClock">开工</van-button>
         <p v-else>作业中… {{ elapsedClock }} <small>提交后结束本次计时</small></p>
         <p v-if="clockError" role="alert">{{ clockError }} <van-button size="mini" @click="refreshClock">重试</van-button></p>
-        <p v-if="clockPriceType === 2 && !workSession">计时工资，请先开工</p>
+        <p v-if="clockPriceType === 2 && !workSession">这道工序是按时间算工资的，请先点「开工」开始计时。</p>
       </div>
       <label>本次良品</label>
       <input
@@ -86,7 +86,7 @@
           </button>
         </div>
         <div v-if="assignPanelOpen" class="assign-panel">
-          <p class="share-hint">个人可多选，或选一个班组（互斥）。清空即取消。派工不拦报工。</p>
+          <p class="share-hint">可以选多个人，也可以选一个班组（二选一）。不选就是取消派工。派工不影响正常报工。</p>
           <div class="assign-mode">
             <label><input type="radio" value="person" v-model="assignMode" /> 个人</label>
             <label><input type="radio" value="dept" v-model="assignMode" /> 班组</label>
@@ -107,7 +107,7 @@
               </button>
             </div>
             <p v-if="assignSuggestError" class="share-hint err">
-              推荐名单加载失败
+              推荐人员列表加载失败，请刷新重试；反复失败找管理员处理。
               <button type="button" class="link-btn" @click="loadAssignSuggest">重试</button>
             </p>
             <label v-for="w in assignWorkersList" :key="w.id" class="share-person">
@@ -115,7 +115,7 @@
               {{ w.name }}
             </label>
             <p v-if="assignWorkersError" class="share-hint err">
-              工人列表加载失败
+              工人列表加载失败，请刷新重试；反复失败找管理员处理。，请刷新重试；反复失败找管理员处理。
               <button type="button" class="link-btn" @click="loadAssignWorkers">重试</button>
             </p>
           </template>
@@ -124,9 +124,9 @@
               <input type="radio" name="assignDept" :value="d.id" v-model="assignSelectedDeptId" />
               {{ d.name }}
             </label>
-            <p v-if="!assignDeptList.length && !assignDeptError" class="share-hint">暂无可派班组（需工序已配报工权限部门）</p>
+            <p v-if="!assignDeptList.length && !assignDeptError" class="share-hint">暂时没有可派的班组。如果需要派工，请找管理员在后台给这道工序安排好能报工的部门。</p>
             <p v-if="assignDeptError" class="share-hint err">
-              班组列表加载失败
+              班组列表加载失败，请刷新重试；反复失败找管理员处理。，请刷新重试；反复失败找管理员处理。
               <button type="button" class="link-btn" @click="loadAssignDepts">重试</button>
             </p>
           </template>
@@ -141,7 +141,7 @@
         多人共同报工
       </label>
       <div v-if="shareEnabled" class="share-box">
-        <p class="share-hint">勾选参与人（须含自己）。按工时填分钟；选平均按良品数平分，旁边是分到的个数。</p>
+        <p class="share-hint">勾选一起干活的人（必须包括你自己）。按工时分配就填每人干了多少分钟；选平均分配就按良品数平分，旁边会显示每人分到几个。</p>
         <div class="share-mode">
           <label><input type="radio" :value="1" v-model.number="shareMode" /> 平均</label>
           <label><input type="radio" :value="2" v-model.number="shareMode" /> 按工时</label>
@@ -164,10 +164,10 @@
           </template>
         </label>
         <p v-if="candidatesLoadError" class="share-hint err">
-          参与人列表加载失败
+          参与人名单没加载出来，稍等刷新试试，还不行就找管理员。
           <button type="button" class="link-btn" @click="reloadCandidates">重试</button>
         </p>
-        <p v-else-if="candidates.length === 0" class="share-hint">该工序暂无可选参与人</p>
+        <p v-else-if="candidates.length === 0" class="share-hint">这道工序目前没有可以一起报工的人，只能你自己报。</p>
         <div v-if="sharePreview.length" class="share-preview">
           <div v-for="p in sharePreview" :key="p.userId" class="share-preview-row">
             {{ p.name }}：良品 {{ p.good }} 个 / 不良 {{ p.defect }} 个
@@ -181,10 +181,10 @@
         </button>
         <div v-if="guideVisible" class="guide-list">
           <p v-if="guidesLoadError" class="guide-empty err">
-            作业指导书加载失败
+            作业指导书暂时打不开，不影响报工。如需查看图纸，请稍后刷新或找班组长确认。
             <button type="button" class="link-btn" @click="reloadGuides">重试</button>
           </p>
-          <p v-else-if="guides.length === 0" class="guide-empty">暂无作业指导书 / 图纸</p>
+          <p v-else-if="guides.length === 0" class="guide-empty">这道工序还没有挂作业指导书或图纸。如需要，请联系管理员在后台上传。</p>
           <button
             v-for="g in guides"
             :key="g.id"
@@ -201,12 +201,12 @@
       <div v-if="canWage" class="today-card">
         <div class="today-label">今日计件</div>
         <div class="today-val">{{ todayGoodQty }} 件 · 预估 ￥{{ formatMoney(todayWage) }}</div>
-        <div class="today-tip">按已复核+待复核报工估算，以工资单为准</div>
+        <div class="today-tip">这里是大概数，实际工资以工资单为准。</div>
       </div>
 
       <template v-if="reportFieldsLoadError">
         <p class="field-err">
-          自定义字段加载失败，仍可报工
+          附加信息加载失败，不影响正常报工，请放心继续操作。
           <button type="button" class="link-btn" @click="loadReportFields">重试</button>
         </p>
       </template>
@@ -222,7 +222,7 @@
         </template>
       </template>
 
-      <label>报工时长（未修改则自动计时）</label>
+      <label>报工时长（不改就自动按计时算）</label>
       <div class="duration-row">
         <input v-model.number="form.hours" @input="durationEdited = true" type="number" min="0" max="24" />
         <span>小时</span>
@@ -230,7 +230,7 @@
         <span>分钟</span>
       </div>
 
-      <p v-if="locked" class="full-tip">该工序已报满，不可继续报工</p>
+      <p v-if="locked" class="full-tip">这道工序的数量已经报够了，不能再报了；如果有问题，找班组长或管理员处理。</p>
     </div>
 
     <div class="action-bar" v-if="detail && !loadError && !noReportableOps && !qtyKeyboardVisible">
@@ -280,7 +280,7 @@ const reportBackPath = '/h5/home'
 async function leaveReport(path) {
   if (submitting.value || reviewing.value) return
   if (isDirty.value) {
-    try { await showConfirmDialog({ title: '离开报工', message: '当前有未提交的内容，确定离开？' }) }
+    try { await showConfirmDialog({ title: '离开报工', message: '你填的内容还没提交，确定要离开吗？离开后填好的内容会丢失。' }) }
     catch { return }
   }
   router.push(path)
@@ -349,7 +349,7 @@ async function refreshClock() {
     clockPriceType.value = res.data?.priceType || 0
     clockOffset.value = new Date(res.data.serverTime).getTime() - Date.now()
   } catch (e) {
-    if (version === clockRequest) clockError.value = e?.msg || e?.message || '加载开工记录失败'
+    if (version === clockRequest) clockError.value = e?.msg || e?.message || '开工记录加载失败，请下拉刷新重试；反复失败请截图发给管理员查看。'
   } finally { if (version === clockRequest) clockLoading.value = false }
 }
 async function startClock() {
@@ -357,7 +357,7 @@ async function startClock() {
   try {
     await startWorkSession({ workOrderId: detail.value.id, operationId: Number(form.value.operationId) })
     await refreshClock()
-  } catch (e) { showToast(e?.msg || e?.message || '开工失败') }
+  } catch (e) { showToast(e?.msg || e?.message || '开工失败，请检查网络后重试；还不行请联系管理员查看你的报工权限或工单状态。，请检查网络后重试；还不行请联系管理员查看你的报工权限或工单状态。') }
   finally { clockLoading.value = false }
 }
 watch(() => [detail.value?.id, form.value.operationId], refreshClock)
@@ -404,7 +404,7 @@ const currentTask = computed(() => {
 
 const assignLabel = computed(() => {
   const t = currentTask.value
-  if (!t) return '未派工'
+  if (!t) return '未派工。。'
   if (t.assigneeDepartmentId) return t.assigneeName || `班组·${t.assigneeDepartmentName || ''}`
   const list = t.assignees || []
   if (list.length) return list.map(a => a.userName || a.userId).join('、')
@@ -520,7 +520,7 @@ watch(() => form.value.defectQty, (n) => {
 function appendGoodQty(key) {
   if (submitting.value || reviewing.value || locked.value || !/^[0-9]$/.test(String(key))) return
   const n = Number(`${Number(form.value.goodQty) || ''}${key}`)
-  if (!Number.isSafeInteger(n) || n > 2147483647) { showToast('数量过大，请核对'); return }
+  if (!Number.isSafeInteger(n) || n > 2147483647) { showToast('数量填太大了，请检查一下是不是多输了数字。'); return }
   form.value.goodQty = n
 }
 function deleteGoodQty() {
@@ -544,7 +544,7 @@ function fillRemain() {
 
 onMounted(async () => {
   if (!orderNo.value) {
-    showToast('缺少工单号')
+    showToast('没有工单号，没法报工。请先扫码或手动输入工单号再报工。')
     router.replace(reportBackPath)
     return
   }
@@ -607,7 +607,7 @@ async function loadReportFields() {
     }
     form.value.ext = ext
   } catch {
-    showToast('自定义字段加载失败，仍可正常报工')
+    showToast('附加信息加载失败，不影响报工，请放心继续。')
     reportFields.value = []
     reportFieldsLoadError.value = true
   }
@@ -622,7 +622,7 @@ async function reloadGuides() {
   } catch {
     guides.value = []
     guidesLoadError.value = true
-    showToast('作业指导书加载失败')
+    showToast('作业指导书暂时打不开，不影响报工。如需查看图纸，请稍后刷新或找班组长确认。')
   }
 }
 
@@ -664,7 +664,7 @@ async function openGuide(file) {
     }
   } catch (error) {
     console.error('[H5 作业指导书] 预览失败', error)
-    showToast('预览失败，请稍后重试')
+    showToast('预览没打开成功，等一下再点试试。')
   }
 }
 
@@ -687,7 +687,7 @@ async function reloadCandidates() {
   } catch {
     candidates.value = []
     candidatesLoadError.value = true
-    showToast('参与人列表加载失败')
+    showToast('参与人名单没加载出来，稍等刷新试试，还不行就找管理员。')
   }
 }
 
@@ -803,7 +803,7 @@ async function loadAssignDepts() {
 async function saveAssign() {
   const t = currentTask.value
   if (!t?.id) {
-    showToast('该工序暂无可派工任务行')
+    showToast('这道工序目前没有分配给你的任务。请联系班组长确认是否已派工，或换一道工序报工。')
     return
   }
   assignSaving.value = true
@@ -822,7 +822,7 @@ async function saveAssign() {
     syncAssignSelection()
     assignPanelOpen.value = false
   } catch (e) {
-    showToast(e?.msg || e?.message || '派工失败')
+    showToast(e?.msg || e?.message || '派工失败，请检查网络后重试；还不行请联系管理员确认工序和人员安排是否正确。，请检查网络后重试；还不行请联系管理员确认工序和人员安排是否正确。')
   } finally {
     assignSaving.value = false
   }
@@ -831,24 +831,24 @@ async function saveAssign() {
 function validate() {
   if (!form.value.operationId) { showToast('请选择工序'); return false }
   if (form.value.defectQty > 0 && !form.value.defectId) {
-    showToast('有不良品时必须选择不良品原因')
+    showToast('填了不良品数量就得选一个不良原因，不然没法提交。')
     return false
   }
   if (shareEnabled.value) {
     const ids = [...new Set(participantIds.value.map(Number))]
-    if (ids.length < 1) { showToast('请勾选参与人'); return false }
+    if (ids.length < 1) { showToast('多人报工时要先勾选一起干活的人。'); return false }
     if (myUserId && !ids.includes(myUserId)) {
-      showToast('参与人须包含自己'); return false
+      showToast('多人报工时别忘了把自己也勾上。'); return false
     }
   }
   const hours = form.value.hours || 0
   const minutes = form.value.minutes || 0
   if (hours < 0 || minutes < 0 || minutes > 59) {
-    showToast('时长填写不正确')
+    showToast('时长格式不对，请按时长填写；也可以直接留空让系统自动计时。')
     return false
   }
   if (hours * 60 + minutes > 1440) {
-    showToast('单次报工时长不能超过24小时')
+    showToast('一次报工的时长最多填24小时，超过了请拆成多次报。')
     return false
   }
   return true
@@ -909,7 +909,7 @@ function formatReceipt(data) {
   const list = data?.reports || []
   if (!list.length) return '报工成功'
   const unmatched = list.some(r => r.unitPrice == null)
-  const miss = unmatched ? ' · 未配工价' : ''
+  const miss = unmatched ? ' · 这道工序还没定单价。' : ''
   if (list.length === 1) {
     const r = list[0]
     return `${r.operationName || '工序'} 良品${r.goodQty} 不良${r.defectQty}（${reviewLabel(r.reviewStatus)}）${miss}`
@@ -977,7 +977,7 @@ async function buildPreviewWageLine() {
     })
     const d = res?.data
     if (d && d.matched && d.wageAmount != null) return `\n预估工资 +¥${Number(d.wageAmount).toFixed(2)}`
-    if (d && !d.matched) return `\n工价未设定，提交后按补录工价自动结算`
+    if (d && !d.matched) return `这道工序还没定单价，提交后会按补录的单价自动算工资。`
     return ''
   } catch (e) {
     console.warn('预览工价失败，已降级', e)
@@ -996,7 +996,7 @@ async function doSubmitWithUpstreamConfirm() {
     try {
       const wageLine = await buildPreviewWageLine()
       await showConfirmDialog({ title: '核对本次报工', message: `${detail.value.orderNo} · ${detail.value.productName}\n${currentTask.value?.operationName || ''}\n良品 ${form.value.goodQty} 件，不良 ${form.value.defectQty || 0} 件${wageLine}`, confirmButtonText: '确认提交' })
-      if (snapshot !== JSON.stringify(form.value)) { showToast('内容已变化，请重新核对'); return false }
+      if (snapshot !== JSON.stringify(form.value)) { showToast('刚才填的内容有变动，请重新看一下再提交。'); return false }
     } finally { reviewing.value = false }
   }
   try {
@@ -1004,8 +1004,8 @@ async function doSubmitWithUpstreamConfirm() {
   } catch (e) {
     if (!isUpstreamSoftConfirm(e)) throw e
     await showConfirmDialog({
-      title: '上级工序提示',
-      message: e.message || '紧邻上一道复核通过量不足，是否继续报工？'
+      title: '上一道工序数量提醒',
+      message: e.message || '上一道工序审核通过的数量不够你做这次的量，确定要继续报吗？'
     })
     return await doSubmit(true)
   }
@@ -1026,7 +1026,7 @@ async function onContinue() {
     try {
       await reloadDetail()
     } catch {
-      showToast('报工已成功，进度刷新失败，请返回后重进')
+      showToast('报工已成功提交！但页面数据没刷新，请返回上一页再重新进来查看最新进度。')
     }
     await nextTick()
     goodInput.value?.focus()

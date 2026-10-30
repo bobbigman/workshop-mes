@@ -53,9 +53,9 @@ public class AiAssistantService : IAiAssistantService
     {
         var traceId = Guid.NewGuid().ToString("N");
         if (!_opt.Enabled)
-            throw ThrowHelper.BizUser("AI 助手已关闭，不影响下单与报工");
+            throw ThrowHelper.BizUser("AI助手功能已关闭，不影响正常下单和报工，可以继续使用其他功能；如需开启请联系管理员。");
         if (!_opt.IsConfigured || !_opt.HasModel)
-            throw ThrowHelper.BizUser("AI 服务尚未配置完成，请联系管理员");
+            throw ThrowHelper.BizUser("AI服务尚未完成设置，请到系统设置中填写AI服务的访问Key和模型信息，并完成连接测试。");
 
         var sw = System.Diagnostics.Stopwatch.StartNew();
         try
@@ -98,15 +98,15 @@ public class AiAssistantService : IAiAssistantService
 
         var mode = (req.Mode ?? "").Trim().ToLowerInvariant();
         if (mode is not ("progress" or "guide" or "support" or "worker-help"))
-            throw ThrowHelper.BizUser("不支持的操作类型，请换个问法");
+            throw ThrowHelper.BizUser("当前AI不支持该操作，请调整提问方式或查阅使用手册。");
 
         await _tools.EnsureAccessAsync(userId, factoryId, mode, ct);
 
         var message = (req.Message ?? "").Trim();
         if (string.IsNullOrEmpty(message))
-            throw ThrowHelper.BizUser("消息不能为空");
+            throw ThrowHelper.BizUser("请输入要发送的消息内容，不能发空消息。");
         if (message.Length > _opt.MaxInputChars)
-            throw ThrowHelper.BizUser($"消息过长，最多 {_opt.MaxInputChars} 字");
+            throw ThrowHelper.BizUser($"消息太长了，请缩短一些再发送，不要超过 {_opt.MaxInputChars} 字。");
 
         AiSessionState session;
         var isNewConversation = string.IsNullOrWhiteSpace(req.ConversationId);
@@ -119,11 +119,11 @@ public class AiAssistantService : IAiAssistantService
         {
             session = _sessions.GetOwned(req.ConversationId!, factoryId, userId);
             if (!string.Equals(session.Mode, mode, StringComparison.OrdinalIgnoreCase))
-                throw ThrowHelper.BizUser("切换模式请新建对话");
+                throw ThrowHelper.BizUser("要切换对话模式需要新开一个对话，当前对话不能中途切换；请点击新建对话重新开始。");
         }
 
         if (!isNewConversation && !_sessions.TryBeginGenerate(session))
-            throw ThrowHelper.BizUser("正在处理中，请勿重复提交");
+            throw ThrowHelper.BizUser("上一条消息还在处理中，请等它回复完再发新的，不要连续点击发送。");
 
         var workerMessages = mode == WorkerHelpPolicy.Mode ? session.Messages.ToList() : null;
         var workerTurnCount = session.UserTurnCount;
@@ -139,7 +139,7 @@ public class AiAssistantService : IAiAssistantService
                     ? "本会话已有回答，本轮直接接着回答，不重复称呼、问好或自我介绍。"
                     : "这是本会话首次回答：若用户未明确提供称呼，开头用‘师傅您好，’；有明确称呼则用该称呼问好。问好后直接给结论，不加‘以下是为您查询到的相关情况’等套话。");
             if (session.UserTurnCount >= _opt.MaxTurnsPerSession)
-                throw ThrowHelper.BizUser($"本会话已达 {_opt.MaxTurnsPerSession} 轮，请新建对话");
+                throw ThrowHelper.BizUser($"这个对话已经聊到 {_opt.MaxTurnsPerSession} 轮上限了，请新建一个对话继续提问。");
 
             // 点选：只认本会话服务端候选
             if (!string.IsNullOrWhiteSpace(req.SelectedProductCode))
@@ -147,14 +147,14 @@ public class AiAssistantService : IAiAssistantService
                 var code = req.SelectedProductCode.Trim();
                 if (!session.Candidates.Any(c => c.Type == "product"
                         && string.Equals(c.ProductCode, code, StringComparison.OrdinalIgnoreCase)))
-                    throw ThrowHelper.BizUser("所选产品不在本轮候选中，请重新搜索");
+                    throw ThrowHelper.BizUser("所选产品不在本轮候选结果中，请重新搜索产品名称或编号后再选择。");
                 message = $"{message}\n（用户已选定产品编号：{code}）";
             }
             if (req.SelectedOperationId != null)
             {
                 var oid = req.SelectedOperationId.Value;
                 if (!session.Candidates.Any(c => c.Type == "operation" && c.OperationId == oid))
-                    throw ThrowHelper.BizUser("所选工序不在本轮候选中，请重新搜索");
+                    throw ThrowHelper.BizUser("所选工序不在本轮候选结果中，请重新搜索工序名称后再选择。");
                 message = $"{message}\n（用户已选定工序Id：{oid}）";
             }
 
@@ -235,17 +235,17 @@ public class AiAssistantService : IAiAssistantService
                     // 用户取消：不写入未完成助手回答
                     session.Messages.RemoveAt(session.Messages.Count - 1);
                     session.UserTurnCount = Math.Max(0, session.UserTurnCount - 1);
-                    throw ThrowHelper.BizUser("已取消");
+                    throw ThrowHelper.BizUser("操作已取消，可以重新发起。");
                 }
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "AI模型调用失败 trace={TraceId}", traceId);
                     // S07：模型失败但本轮已查到真实证据时，保留证据并明确失败，不吞异常也不丢弃已获证据
-                    if (mode == WorkerHelpPolicy.Mode) throw ThrowHelper.BizUser("AI操作帮助暂时不可用，请重试或查看手册");
+                    if (mode == WorkerHelpPolicy.Mode) throw ThrowHelper.BizUser("AI操作帮助暂时不可用，请稍后重试；若持续异常请检查AI服务设置和网络连通性。");
                     if (HasEvidence(session))
                     {
                         finalAnswer = "模型调用失败，未能生成解释；以下为已查询到的真实证据，请人工核对。";
-                        warnings.Add("AI 服务暂时不可用，请稍后重试");
+                        warnings.Add("AI服务暂时不可用，可能是网络波动或服务端异常，请稍后重试；若持续失败请检查AI访问Key和服务地址设置。");
                         break;
                     }
                     throw ThrowHelper.BizUser("AI 服务暂时不可用，请稍后重试");
@@ -380,7 +380,7 @@ public class AiAssistantService : IAiAssistantService
         {
             var session = _sessions.GetOwned(req.ConversationId!, factoryId, userId);
             filters = req.Filters ?? session.LastFilters
-                ?? throw ThrowHelper.BizUser("缺少查询条件，请先通过对话筛选工单");
+                ?? throw ThrowHelper.BizUser("缺少查询条件，请先提供工单号、产品或日期等信息后再搜索。");
             if (req.Filters == null && session.LastFilters != null)
                 filters = session.LastFilters;
         }
@@ -407,10 +407,10 @@ public class AiAssistantService : IAiAssistantService
         EnsureEnabled();
         await _tools.EnsureAccessAsync(userId, factoryId, "support", ct);
         if (string.IsNullOrWhiteSpace(req.ConversationId))
-            throw ThrowHelper.BizUser("会话信息缺失，请重新发起提问");
+            throw ThrowHelper.BizUser("会话信息缺失，请重新发起提问。");
         var session = _sessions.GetOwned(req.ConversationId!, factoryId, userId); // 校验会话归属 + 工厂 + 用户
         if (!string.Equals(session.Mode, "support", StringComparison.OrdinalIgnoreCase))
-            throw ThrowHelper.BizUser("仅智能客服会话可查询报工证据");
+            throw ThrowHelper.BizUser("这个查询只能在智能客服对话里使用，请到智能客服窗口重新提问。");
 
         // 不信任前端此前已查过：重新按参数校验并查询（非法时间/倒置/工序/分页在服务内拒绝）
         var evidence = await _reportEvidence.GetEvidenceAsync(

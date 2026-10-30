@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using ahu.MicrosoftMes.Common;
 using ahu.MicrosoftMes.Data;
@@ -32,7 +32,7 @@ public class ReportIdentityDirectory : IReportIdentityDirectory
         .FirstOrDefaultAsync(u => u.FactoryId == factoryId && u.Id == userId);
     public async Task<string> FactoryNameAsync(long factoryId) => await _db.Factories.AsNoTracking()
         .Where(f => f.Id == factoryId).Select(f => f.FactoryName).FirstOrDefaultAsync()
-        ?? throw ThrowHelper.BizUser("当前工厂不存在，请检查MCP连接");
+        ?? throw ThrowHelper.BizUser("系统连不上工厂数据，可能是对接服务断了。请联系管理员检查系统对接是否正常。");
     public async Task<string> FactoryCodeAsync(long factoryId) => await _db.Factories.AsNoTracking()
         .Where(f => f.Id == factoryId).Select(f => f.FactoryCode).FirstOrDefaultAsync() ?? "";
 }
@@ -55,7 +55,7 @@ public class ReportIdentityTickets
     private static string RandomToken() => Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
     private string Key(string prefix, string token)
     {
-        if (string.IsNullOrEmpty(token) || token.Length != 64 || !token.All(Uri.IsHexDigit)) throw ThrowHelper.BizUser("授权凭证无效，请重新验证");
+        if (string.IsNullOrEmpty(token) || token.Length != 64 || !token.All(Uri.IsHexDigit)) throw ThrowHelper.BizUser("你的登录凭证失效了，请重新验证身份后再操作。");
         return _ticketNamespace + ":" + prefix + ":" + token;
     }
     public string Create(long factoryId, long userId, string name, string factoryName, long? originFactoryId = null)
@@ -76,10 +76,10 @@ public class ReportIdentityTickets
         {
             var key = Key("factories", token);
             if (!_cache.TryGetValue(key, out FactorySelection? selection) || selection == null || selection.ExpiresAt <= Now)
-                throw ThrowHelper.BizUser("工厂选择已过期或已使用，请重新按姓名或手机号查找");
-            if (selection.OriginFactoryId != originFactoryId) throw ThrowHelper.BizUser("工厂选择凭证不属于当前MCP入口");
+                throw ThrowHelper.BizUser("你之前的工厂选择已经过期或用过了，请重新按姓名或手机号查找工厂。");
+            if (selection.OriginFactoryId != originFactoryId) throw ThrowHelper.BizUser("你的工厂选择凭证和当前入口不匹配，请重新从头验证身份。");
             var option = selection.Options.FirstOrDefault(o => o.Number == number)
-                ?? throw ThrowHelper.BizUser("工厂序号不在实际匹配列表中，请重新选择");
+                ?? throw ThrowHelper.BizUser("你选的工厂不在可选列表里，请重新查看列表并选择正确的工厂。");
             _cache.Remove(key);
             return option;
         }
@@ -89,7 +89,7 @@ public class ReportIdentityTickets
         if (!_cache.TryGetValue(Key("lookup", token), out Pending? pending) || pending == null ||
             pending.Lookup.ExpiresAt <= Now || pending.Redeemed || pending.Attempts >= 5
             || pending.Version != Version(pending.Lookup.FactoryId, pending.Lookup.UserId))
-            throw ThrowHelper.BizUser("验证链接已过期、已使用或已作废，请让机器人重新定位员工");
+            throw ThrowHelper.BizUser("验证链接已经过期、用过或被作废了。请让机器人重新给你发一条验证链接。");
         return pending;
     }
     public ReportLookup Read(string token) { lock (_sync) return PendingFor(token).Lookup; }
@@ -99,7 +99,7 @@ public class ReportIdentityTickets
         {
             var pending = PendingFor(token);
             if (pending.Lookup.FactoryId != factoryId || pending.Lookup.UserId != userId)
-                throw ThrowHelper.BizUser("当前登录账号与待验证员工或工厂不一致，请切换到本人的正确账号");
+                throw ThrowHelper.BizUser("你现在登录的账号和要验证的员工不是同一个人，请切换到本人的正确账号后再验证。");
             pending.Code = RandomNumberGenerator.GetInt32(100_000_000).ToString("D8");
             pending.CodeExpires = Now.AddMinutes(5);
             pending.Lookup = pending.Lookup with { ExpiresAt = pending.CodeExpires };
@@ -112,14 +112,14 @@ public class ReportIdentityTickets
         lock (_sync)
         {
             var pending = PendingFor(token);
-            if (pending.Lookup.OriginFactoryId != factoryId) throw ThrowHelper.BizUser("验证凭证不属于当前MCP入口");
-            if (pending.Code == null) throw ThrowHelper.BizUser("请先打开验证页，登录本人账号并点击确认授权，再提供验证码");
-            if (pending.CodeExpires <= Now) throw ThrowHelper.BizUser("验证码已过期，请重新打开验证页确认授权");
+            if (pending.Lookup.OriginFactoryId != factoryId) throw ThrowHelper.BizUser("你的验证凭证和当前入口不匹配，请重新从头走一遍验证流程。");
+            if (pending.Code == null) throw ThrowHelper.BizUser("请先打开验证页面，用本人账号登录并点确认授权，然后再回来填验证码。");
+            if (pending.CodeExpires <= Now) throw ThrowHelper.BizUser("验证码已经过期了，请重新打开验证页面确认授权，获取新的验证码。");
             if (string.IsNullOrEmpty(code) || !Regex.IsMatch(code, "^[0-9]{8}$") || !CryptographicOperations.FixedTimeEquals(
                     System.Text.Encoding.UTF8.GetBytes(code), System.Text.Encoding.UTF8.GetBytes(pending.Code)))
             {
                 pending.Attempts++;
-                throw ThrowHelper.BizUser(pending.Attempts >= 5 ? "验证码错误已达5次，本次验证作废，请重新定位员工" : "验证码不正确，请核对验证页上的8位验证码");
+                throw ThrowHelper.BizUser(pending.Attempts >= 5 ? "验证码输错太多次了，这次验证已作废。请重新让机器人发新的验证码，核对清楚再输入。" : "验证码不正确，请核对验证页上的8位验证码");
             }
             var access = RandomToken();
             var grant = new ReportLoginGrant(pending.Lookup.FactoryId, pending.Lookup.UserId, Guid.NewGuid().ToString("N"), Now.AddMinutes(30), pending.Lookup.OriginFactoryId);
@@ -133,8 +133,8 @@ public class ReportIdentityTickets
     public ReportLoginGrant Resolve(string token, long factoryId)
     {
         if (!_cache.TryGetValue(Key("grant", token), out ReportLoginGrant? grant) || grant == null || grant.ExpiresAt <= Now)
-            throw ThrowHelper.BizUser("报工登录授权已失效，请重新验证身份");
-        if (grant.OriginFactoryId != factoryId) throw ThrowHelper.BizUser("报工登录授权不属于当前MCP入口");
+            throw ThrowHelper.BizUser("你的报工登录授权已经失效了，请重新验证身份后再报工。");
+        if (grant.OriginFactoryId != factoryId) throw ThrowHelper.BizUser("你的报工授权和当前入口不匹配，请重新从头验证身份。");
         if (!_cache.TryGetValue(Key("grant-version", token), out string? version) || version != Version(grant.FactoryId, grant.UserId))
             throw ThrowHelper.BizUser("授权已撤销，请重新验证身份。");
         return grant;
@@ -150,7 +150,7 @@ public class ReportIdentityTickets
         {
             var key = $"report-identity:password:{factoryId}:{userId}";
             if (_cache.TryGetValue($"report-identity:password:{factoryId}:{userId}", out int failures) && failures >= 5)
-                throw ThrowHelper.BizUser("本账号授权密码错误次数过多，请5分钟后再试");
+                throw ThrowHelper.BizUser("密码输错次数太多了，账号被临时锁定，请等5分钟后再试。");
             _cache.Set(key, failures + 1, TimeSpan.FromMinutes(5));
         }
     }
@@ -196,17 +196,17 @@ public class ReportIdentityService : IReportIdentityService
             if (!string.IsNullOrWhiteSpace(displayName) || !string.IsNullOrWhiteSpace(phone) || factorySelectionToken == null || factoryNumber == null)
                 throw ThrowHelper.BizUser("选择工厂时只传本次选择凭证和工厂序号，不混填姓名或手机号");
             var option = _tickets.SelectFactory(factorySelectionToken, factoryId, factoryNumber.Value);
-            if (option.UserId == null) return new { state = "contact_admin", msg = "该工厂内同手机号对应多个账号，请联系管理员核对，不能自动选择员工" };
+            if (option.UserId == null) return new { state = "contact_admin", msg = "这个工厂里同一个手机号对应了好几个账号，系统没法自动判断你是谁。请联系管理员核对员工资料，清理重复账号。" };
             var selected = await _directory.GetAsync(option.FactoryId, option.UserId.Value);
             EnsureActive(selected, option.FactoryId);
             return await LoginRequiredAsync(factoryId, selected!);
         }
         var name = string.IsNullOrWhiteSpace(displayName) ? null : displayName.Trim();
         var digits = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim();
-        if (name?.Length > 100) throw ThrowHelper.BizUser("姓名不能超过100字");
+        if (name?.Length > 100) throw ThrowHelper.BizUser("姓名输入太长了，最多100个字，请缩短后重新输入。");
         if (digits != null && !Regex.IsMatch(digits, "^([0-9]{6}|1[0-9]{10})$"))
-            throw ThrowHelper.BizUser("请提供手机号后6位，或完整11位手机号");
-        if (name == null && digits == null) return new { state = "need_phone_suffix", msg = "请提供您的姓名或手机号后6位" };
+            throw ThrowHelper.BizUser("请提供你的手机号后6位，或者完整的11位手机号，方便系统找到你的账号。");
+        if (name == null && digits == null) return new { state = "need_phone_suffix", msg = "请输入你的姓名或手机号后6位，系统需要这些信息来找到你的账号。" };
         // 246：入口钥匙不替用户决定目标厂。这里只做有限身份定位，不返回任务或授予权限。
         var matches = await _directory.FindAsync(null, name, digits);
         if (matches.Count != 1)
@@ -214,10 +214,10 @@ public class ReportIdentityService : IReportIdentityService
             if (digits?.Length == 11)
             {
                 if (matches.Count == 0 || matches.Count > 100)
-                    return new { state = "contact_admin", msg = "完整手机号未匹配有效员工或匹配项过多，请联系管理员核对员工资料" };
+                    return new { state = "contact_admin", msg = "用完整手机号没找到你的员工信息，或者匹配到太多人了。请联系管理员核对员工资料里的手机号是否正确。" };
                 var groups = matches.GroupBy(u => u.FactoryId).ToArray();
                 if (groups.Length == 1)
-                    return new { state = "contact_admin", msg = "同一工厂内完整手机号对应多个账号，请联系管理员核对，不能自动选择员工" };
+                    return new { state = "contact_admin", msg = "这个工厂里同一个手机号对应了好几个账号，系统没法自动判断你是谁。请联系管理员核对员工资料。" };
                 var options = new List<ReportFactoryOption>();
                 foreach (var group in groups)
                     options.Add(new ReportFactoryOption(options.Count + 1, group.Key, group.Count() == 1 ? group.Single().Id : null,
@@ -230,8 +230,8 @@ public class ReportIdentityService : IReportIdentityService
                     msg = "完整手机号匹配到多个工厂，请按实际列表选择本次报工的工厂序号" };
             }
             if (digits != null)
-                return new { state = "need_full_phone", msg = "手机号后6位未唯一匹配，请提供完整11位手机号" };
-            return new { state = "need_phone_suffix", msg = "姓名未唯一匹配，请提供手机号后6位" };
+                return new { state = "need_full_phone", msg = "手机号后6位匹配到了多个人，没法确定你是谁。请提供完整的11位手机号再试。" };
+            return new { state = "need_phone_suffix", msg = "光靠姓名匹配到了多个人，没法确定你是谁。请再提供手机号后6位帮助定位。" };
         }
         var user = matches[0];
         EnsureActive(user, user.FactoryId);
@@ -244,7 +244,7 @@ public class ReportIdentityService : IReportIdentityService
         if (string.IsNullOrEmpty(baseUrl)) baseUrl = (_config["Instance:PublicBaseUrl"] ?? "").Trim().TrimEnd('/');
         if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri) || uri.Scheme != "https" || uri.IsLoopback ||
             !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment))
-            throw ThrowHelper.BizUser("请管理员将Mcp:AuthBaseUrl配置为当前手机可访问的HTTPS地址，不能使用localhost");
+            throw ThrowHelper.BizUser("请把手机能访问的网址（以http或https开头）填好，不能用本机地址。");
         var token = _tickets.Create(user.FactoryId, user.Id, user.Name, factoryName, originFactoryId);
         return new { state = "login_required", userName = user.Name, factoryName, lookupToken = token,
             authorizationUrl = $"{baseUrl}/#/h5/report-authorize?t={token}", expireMinutes = 10,
@@ -265,7 +265,7 @@ public class ReportIdentityService : IReportIdentityService
         var user = await _directory.GetAsync(factoryId, userId);
         if (string.IsNullOrEmpty(password) || user == null || !PasswordHelper.Verify(password, user.Password))
         {
-            throw ThrowHelper.BizUser("登录密码不正确，请仅在本验证页核对密码，不要发给机器人");
+            throw ThrowHelper.BizUser("密码输入不正确。请只在验证页面上核对密码，不要把密码发给机器人或其他人。");
         }
         _tickets.ClearPasswordAttempts(factoryId, userId);
         return _tickets.Approve(lookupToken, factoryId, userId);
@@ -278,7 +278,7 @@ public class ReportIdentityService : IReportIdentityService
         EnsureActive(user, lookup.FactoryId);
         var result = _tickets.Redeem(lookupToken, factoryId, code);
         return new { reportAccessToken = result.Token, userName = user!.Name, expiresAt = result.Grant.ExpiresAt,
-            expireMinutes = 30, msg = "身份验证成功；后续报工工具携带reportAccessToken，不向用户展示凭证，仍须预览与确认。" };
+            expireMinutes = 30, msg = "身份验证成功了，可以正常报工了。后续报工会自动带上凭证，不需要你再手动操作。" };
     }
     public async Task<(ReportLoginGrant Grant, SysUser User)> ResolveAsync(long factoryId, string accessToken)
     {
@@ -290,6 +290,6 @@ public class ReportIdentityService : IReportIdentityService
     private static void EnsureActive(SysUser? user, long factoryId)
     {
         if (user == null || user.FactoryId != factoryId || user.Status != 1 || user.UserType == UserTypeHelper.External || user.Role is not (1 or 2 or 3))
-            throw ThrowHelper.BizUser("该员工账号不存在、已停用或不可登录，请联系管理员");
+            throw ThrowHelper.BizUser("你的员工账号不存在、已停用或不能登录，请联系管理员检查你的账号状态。");
     }
 }

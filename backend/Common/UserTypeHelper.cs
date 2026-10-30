@@ -26,7 +26,7 @@ public static class UserTypeHelper
     public static void EnsureValid(byte userType, string where)
     {
         if (userType is not (Internal or Temp or External))
-            throw ThrowHelper.Biz(where, "人员类型无效：须为 0内部员工 / 1临时用工 / 2外部供应商");
+            throw ThrowHelper.Biz(where, "人员类型只能是内部员工、临时用工或外部供应商之一。请到「用户」编辑该人员，把类型改成这三种之一。");
     }
 
     /// <summary>导入列解析：空→内部；内部/临时/外部及全称/数字；无法识别整行报错。</summary>
@@ -43,6 +43,6 @@ public static class UserTypeHelper
         if (s is "2" or "外部" or "外部供应商")
             return External;
 
-        throw ThrowHelper.Biz(nameof(ParseImport), $"人员类型无法识别：{s}（请填 内部/临时/外部）");
+        throw ThrowHelper.Biz(nameof(ParseImport), $"导入文件里的人员类型填得不对：{s}。请把该列改成「内部」「临时」或「外部」后重新上传。");
     }
 }

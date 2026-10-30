@@ -18,17 +18,17 @@ public class OperationAttributeService(AppDbContext db)
         var result = new Dictionary<long, string?>();
         foreach (var (id, raw) in input ?? new())
         {
-            OperationPriceListService.Require(fields.TryGetValue(id, out var field), "工艺字段不存在、非本厂或不属于当前工序，不能覆盖产品固有属性");
+            OperationPriceListService.Require(fields.TryGetValue(id, out var field), "指定的工艺字段不存在、不属于本厂或不属于当前工序。请到「自定义字段」核对字段归属和关联工序是否正确；注意工艺字段不能覆盖产品固有属性。");
             var value = string.IsNullOrWhiteSpace(raw) ? null : raw.Trim();
-            OperationPriceListService.Require(value?.Length is not > 256, $"工艺属性{field!.FieldName}超过256字");
+            OperationPriceListService.Require(value?.Length is not > 256, $"工艺属性{field!.FieldName}超过了256个字。请缩短内容后重新保存。");
             if (value != null && field.FieldType == "number")
             {
-                OperationPriceListService.Require(decimal.TryParse(value, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var number) && number >= 0, $"{field.FieldName}须为非负数字");
-                OperationPriceListService.Require(field.FieldKey is not ("rib_count" or "print_panels") || decimal.Truncate(number) == number, $"{field.FieldName}须为整数");
+                OperationPriceListService.Require(decimal.TryParse(value, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var number) && number >= 0, $"{field.FieldName}必须填非负数字。请检查输入值，确保填入不小于0的数字后重新保存。");
+                OperationPriceListService.Require(field.FieldKey is not ("rib_count" or "print_panels") || decimal.Truncate(number) == number, $"{field.FieldName}必须填整数。请去掉小数部分，填入整数值后重新保存。");
                 value = number.ToString(CultureInfo.InvariantCulture);
             }
             if (value != null && field.FieldType == "single")
-                OperationPriceListService.Require(await db.CustomFieldOptions.AnyAsync(o => o.FieldId == id && o.Label == value), $"{field.FieldName}不在允许选项内");
+                OperationPriceListService.Require(await db.CustomFieldOptions.AnyAsync(o => o.FieldId == id && o.Label == value), $"{field.FieldName}填的值不在允许选项内。请从下拉列表中选择有效选项，不要手动输入超出范围的值。");
             result[id] = value;
         }
         return result;
@@ -44,7 +44,7 @@ public class OperationAttributeService(AppDbContext db)
     {
         if (inputs == null) return;
         var tasks = await db.WorkOrderOperations.Where(t => t.WorkOrderId == order.Id).ToListAsync();
-        OperationPriceListService.Require(inputs.Keys.All(id => tasks.Any(t => t.OperationId == id)), "工艺输入含非本工单工序");
+        OperationPriceListService.Require(inputs.Keys.All(id => tasks.Any(t => t.OperationId == id)), "提交的工艺资料里包含了不属于当前工单的工序。请检查提交内容，确保所有工序都属于这张工单后再保存。");
         foreach (var (operationId, input) in inputs)
         {
             var task = tasks.Single(t => t.OperationId == operationId);
@@ -52,7 +52,7 @@ public class OperationAttributeService(AppDbContext db)
             var old = await GetAsync(task.Id, order.FactoryId, operationId);
             if (task.ProcessingPrice != null)
             {
-                OperationPriceListService.Require(values.Count(v => v.Value != null) == old.Count && values.Where(v => v.Value != null).All(v => old.GetValueOrDefault(v.Key) == v.Value), "本工序已锁价，不能修改工艺属性，请新建或复制工单");
+                OperationPriceListService.Require(values.Count(v => v.Value != null) == old.Count && values.Where(v => v.Value != null).All(v => old.GetValueOrDefault(v.Key) == v.Value), "这道工序的价格已锁进工单，工艺属性不能再改。要改请新建或复制一张工单。");
                 continue;
             }
             var ids = db.CustomFields.Where(f => f.FactoryId == order.FactoryId && f.Target == "work_order_task" && f.OperationId == operationId).Select(f => f.Id);

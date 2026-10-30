@@ -37,6 +37,7 @@
     >
       <div class="row1">
         <span class="tag" :class="'s' + row.status">{{ statusLabel(row.status) }}</span>
+        <span v-if="row.reopened && row.status === 1" class="tag reopen">已重新打开</span>
         <span class="no">{{ row.orderNo }}</span>
       </div>
       <div class="product">
@@ -93,7 +94,7 @@ const tabs = ref([
   { key: '2', label: '已结束', count: 0 }
 ])
 
-const STATUS = { 0: '未开始', 1: '执行中', 2: '已结束', 3: '已取消' }
+const STATUS = { 0: '未开始', 1: '执行中', 2: '已结束', 3: '已作废' }
 function statusLabel(s) { return STATUS[s] ?? s }
 function formatDue(t) { return t ? String(t).replace('T', ' ').slice(0, 16) : '—' }
 function dueClass(row) { return row.dueState === 'overdue' ? 'due-overdue' : row.dueState === 'warning' ? 'due-warning' : '' }
@@ -110,7 +111,7 @@ function opLine(row) {
   const ops = row.ops || []
   if (!ops.length) return ''
   const idx = ops.findIndex(o => o.planQty > 0 && (o.doneQty || 0) < o.planQty)
-  if (idx < 0) return '工序已完成'
+  if (idx < 0) return '这道工序已经做完了。'
   const cur = ops[idx].operationName
   const next = ops[idx + 1]?.operationName
   return next ? `当前工序：${cur}　下道：${next}` : `当前工序：${cur}`
@@ -239,6 +240,7 @@ h2 { margin: 0; font-size: 18px; flex: none; color: var(--app-text-1); }
 .tag.s0 { background: var(--app-border-light); color: var(--app-text-2); }
 .tag.s1 { background: var(--app-primary-light); color: var(--app-primary); }
 .tag.s2 { background: color-mix(in srgb, var(--app-success) 14%, var(--app-card)); color: var(--app-success); }
+.tag.reopen { background: var(--app-border-light); color: var(--app-text-2); }
 .product { overflow-wrap: anywhere; font-size: 16px; font-weight: 600; color: var(--app-text-1); margin-bottom: 12px; }
 .product .code { margin-right: 6px; }
 .progress-head {

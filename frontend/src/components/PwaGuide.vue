@@ -13,7 +13,7 @@
       <div class="guide-content">
         <div v-if="isAndroid" class="step-block">
           <p class="step-title">安卓（华为 / 荣耀等自带浏览器）</p>
-          <p class="step-text">点浏览器底部右侧小包包（菜单）→ 拉到最底下【其他】→ 点【添加至桌面】</p>
+          <p class="step-text">点浏览器底部右侧小包包（菜单）→ 拉到最底下【其他】→ 点【添加至桌面】（不同手机菜单名称可能略有差异）（不同手机菜单名称可能略有差异）</p>
           <img class="step-img" src="/manual/pwa-honor-menu.png" alt="安卓：点底部小包包菜单" />
           <img class="step-img" src="/manual/pwa-honor-add.png" alt="安卓：其他栏点添加至桌面" />
         </div>

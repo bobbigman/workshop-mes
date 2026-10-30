@@ -148,7 +148,7 @@ public class AiReportEvidenceService : IAiReportEvidenceService
         // 整单累计：复用原服务口径（与 progress 工具一致）
         var detailRes = await _workOrders.GetAsync(order.Id, factoryId);
         var detail = detailRes.Data
-            ?? throw ThrowHelper.Biz(nameof(GetEvidenceAsync), "工单详情读取失败");
+            ?? throw ThrowHelper.Biz(nameof(GetEvidenceAsync), "工单详情读取失败，可能是数据异常。请联系管理员检查这张工单的数据是否完整。");
         var doneQty = detail.Tasks.Count > 0 ? detail.Tasks.Min(t => t.DoneQty) : 0;
 
         // 工序必须属于该工单
@@ -156,7 +156,7 @@ public class AiReportEvidenceService : IAiReportEvidenceService
         if (operationId != null)
         {
             var task = detail.Tasks.FirstOrDefault(t => t.OperationId == operationId.Value)
-                ?? throw ThrowHelper.Biz(nameof(GetEvidenceAsync), "该工序不属于此工单");
+                ?? throw ThrowHelper.Biz(nameof(GetEvidenceAsync), "你查的这道工序不属于这张工单，请确认工单号和工序是否对应后重新查询。");
             opName = task.OperationName;
         }
 
@@ -318,6 +318,6 @@ public class AiReportEvidenceService : IAiReportEvidenceService
             if (order == null) order = byNo;
         }
 
-        return order ?? throw ThrowHelper.Biz(nameof(LocateOrderAsync), "未找到工单，请提供 workOrderId 或精确 orderNo");
+        return order ?? throw ThrowHelper.Biz(nameof(LocateOrderAsync), "没有找到对应的工单。请确认工单号是否输入正确，或联系管理员核实工单是否存在。");
     }
 }

@@ -304,10 +304,10 @@ public partial class SalaryService : ISalaryService
     public async Task<ApiResult<object?>> GenerateAsync(SalaryGenerateDto dto, long factoryId)
     {
         if (dto.PeriodType is not (1 or 2))
-            throw ThrowHelper.Biz(nameof(GenerateAsync), "周期类型须为 1月 / 2周");
+            throw ThrowHelper.Biz(nameof(GenerateAsync), "工资结算周期类型只支持「月」和「双周」两种。请选择其中一种。");
         var periodValue = (dto.PeriodValue ?? "").Trim();
         if (string.IsNullOrEmpty(periodValue))
-            throw ThrowHelper.Biz(nameof(GenerateAsync), "周期值不能为空");
+            throw ThrowHelper.Biz(nameof(GenerateAsync), "工资结算周期值不能为空。请选择或输入具体结算周期后再生成。");
         var (start, end) = ParsePeriod(dto.PeriodType, periodValue, nameof(GenerateAsync));
 
         await using var tx = await _db.Database.BeginTransactionAsync();
@@ -323,7 +323,7 @@ public partial class SalaryService : ISalaryService
 
         var reports = await reportsQ.OrderBy(r => r.UserId).ThenBy(r => r.ReportTime).ToListAsync();
         if (reports.Count == 0)
-            throw ThrowHelper.Biz(nameof(GenerateAsync), "该周期无可结算报工（须已复核通过且未结算）");
+            throw ThrowHelper.Biz(nameof(GenerateAsync), "请确认这个周期内有已复核通过且未结算的报工记录，再生成工资单。");
 
         var userIds = reports.Select(r => r.UserId).Distinct().ToList();
         var existed = await _db.SalaryStatements.AsNoTracking()
@@ -331,7 +331,7 @@ public partial class SalaryService : ISalaryService
                         && s.PeriodValue == periodValue && userIds.Contains(s.UserId))
             .Select(s => s.UserId).ToListAsync();
         if (existed.Count > 0)
-            throw ThrowHelper.Biz(nameof(GenerateAsync), "部分人员该周期工资单已存在，请先删除草稿后再生成");
+            throw ThrowHelper.Biz(nameof(GenerateAsync), "请先删掉已有的草稿工资单，然后再生成新的。");
 
         var coeffMap = await LoadWageCoeffMapAsync(userIds);
         foreach (var report in reports)
@@ -602,7 +602,7 @@ public partial class SalaryService : ISalaryService
     {
         var s = await _db.SalaryStatements.AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == id && x.FactoryId == factoryId)
-            ?? throw ThrowHelper.Biz(nameof(GetAsync), "工资单不存在");
+            ?? throw ThrowHelper.Biz(nameof(GetAsync), "这张工资单找不到了，可能已被删除。请刷新列表查看最新工资单，或联系管理员确认。");
         var userName = await _db.Users.AsNoTracking().Where(u => u.Id == s.UserId).Select(u => u.Name).FirstOrDefaultAsync() ?? "";
         var rawItems = await (
             from i in _db.SalaryStatementItems.AsNoTracking()
@@ -690,7 +690,7 @@ public partial class SalaryService : ISalaryService
             _logger.LogWarning(
                 "工资单 components 被拒（非草稿） statementId={Id} status={Status} operator={Op}",
                 id, statement.Status, operatorUserId);
-            throw ThrowHelper.BizUser("已确认工资单不能修改");
+            throw ThrowHelper.BizUser("这张工资单已经确认了，不能再修改。如需修改请先撤回确认再改。");
         }
 
         var piecework = await SumPieceworkAsync(id);
@@ -718,7 +718,7 @@ public partial class SalaryService : ISalaryService
             .FirstOrDefaultAsync(s => s.Id == id && s.FactoryId == factoryId)
             ?? throw ThrowHelper.Biz(nameof(RecalcDraftAsync), "工资单不存在");
         if (statement.Status != 0)
-            throw ThrowHelper.Biz(nameof(RecalcDraftAsync), "仅草稿可重算；已确认请先撤回");
+            throw ThrowHelper.Biz(nameof(RecalcDraftAsync), "只有草稿状态的工资单才能重算。这张已确认的工资单需要先撤回确认，才能重新计算。");
 
         var items = await _db.SalaryStatementItems.Where(i => i.StatementId == id).ToListAsync();
         var reportIds = items.Select(i => i.ReportId).Distinct().ToList();
@@ -730,7 +730,7 @@ public partial class SalaryService : ISalaryService
         {
             if (!reports.ContainsKey(item.ReportId))
                 throw ThrowHelper.Biz(nameof(RecalcDraftAsync),
-                    $"明细关联报工不存在 reportId={item.ReportId} statementId={id}");
+                    $"请检查工资单明细关联的报工记录是否还存在：reportId={item.ReportId} statementId={id}");
         }
 
         var wageCoeff = await LoadWageCoeffAsync(statement.UserId);
@@ -787,12 +787,12 @@ public partial class SalaryService : ISalaryService
             .FirstOrDefaultAsync(s => s.Id == id && s.FactoryId == factoryId)
             ?? throw ThrowHelper.Biz(nameof(ConfirmAsync), "工资单不存在");
         if (statement.Status != 0)
-            throw ThrowHelper.Biz(nameof(ConfirmAsync), "仅草稿可确认");
+            throw ThrowHelper.Biz(nameof(ConfirmAsync), "只有草稿状态的工资单才能确认。请确认当前工资单处于草稿状态；已确认的工资单不能重复确认。");
 
         var unmatched = await _db.SalaryStatementItems.AsNoTracking()
             .AnyAsync(i => i.StatementId == id && i.PriceListId == null);
         if (unmatched)
-            throw ThrowHelper.Biz(nameof(ConfirmAsync), "存在未匹配工价的明细，请先补齐工价后再确认");
+            throw ThrowHelper.Biz(nameof(ConfirmAsync), "工资单中有明细行没匹配到工价，不能直接确认。请先补齐所有明细行的工价，确保每行都有对应单价后再确认。");
 
         var reportIds = await _db.SalaryStatementItems.AsNoTracking()
             .Where(i => i.StatementId == id).Select(i => i.ReportId).ToListAsync();
@@ -836,9 +836,9 @@ public partial class SalaryService : ISalaryService
             ?? throw ThrowHelper.Biz(nameof(RevokeAsync), "工资单不存在");
 
         if (statement.Status == 2)
-            throw ThrowHelper.Biz(nameof(RevokeAsync), "已发放工资单不可撤回");
+            throw ThrowHelper.Biz(nameof(RevokeAsync), "这张工资单已经发放了，不能撤回，如有问题请联系管理员处理。");
         if (statement.Status != 1)
-            throw ThrowHelper.Biz(nameof(RevokeAsync), "仅已确认工资单可撤回");
+            throw ThrowHelper.Biz(nameof(RevokeAsync), "只有已确认状态的工资单才能撤回，草稿或已发放的工资单不能撤回。");
 
         var reportIds = await _db.SalaryStatementItems.AsNoTracking()
             .Where(i => i.StatementId == id)
@@ -886,7 +886,7 @@ public partial class SalaryService : ISalaryService
         long[] ids, long factoryId, long operatorUserId, byte operatorRole)
     {
         if (ids == null || ids.Length == 0)
-            throw ThrowHelper.Biz(nameof(BatchRecalcAsync), "请至少选择一张工资单");
+            throw ThrowHelper.Biz(nameof(BatchRecalcAsync), "请至少勾选一张工资单，再执行批量重算。");
 
         var results = new List<SalaryBatchRecalcResultItem>();
         var isAdmin = operatorRole == 1;
@@ -988,7 +988,7 @@ public partial class SalaryService : ISalaryService
             .FirstOrDefaultAsync(s => s.Id == id && s.FactoryId == factoryId)
             ?? throw ThrowHelper.Biz(nameof(DeleteDraftAsync), "工资单不存在");
         if (statement.Status != 0)
-            throw ThrowHelper.Biz(nameof(DeleteDraftAsync), "仅草稿可删除");
+            throw ThrowHelper.Biz(nameof(DeleteDraftAsync), "只有草稿状态的工资单才能删除。已确认的工资单不能删除；如需作废，请联系技术人员处理。");
 
         var items = await _db.SalaryStatementItems.Where(i => i.StatementId == id).ToListAsync();
         _db.SalaryStatementItems.RemoveRange(items);
@@ -1002,7 +1002,7 @@ public partial class SalaryService : ISalaryService
     {
         var period = (query.Period ?? "month").Trim().ToLowerInvariant();
         if (period is not ("day" or "week" or "month"))
-            throw ThrowHelper.Biz(nameof(MineAsync), "周期须为 day / week / month");
+            throw ThrowHelper.Biz(nameof(MineAsync), "个人工资查询的周期类型只支持日、周、月三种。请选择其中一种有效类型。");
         var (start, end) = ResolveMineRange(period, query.Date);
 
         var (colorFieldId, specFieldId, skuEnabled) = await ResolveSkuFieldIdsAsync(factoryId);
@@ -1429,7 +1429,7 @@ public partial class SalaryService : ISalaryService
         DateTime? from = query.From;
         DateTime? to = query.To;
         if (from.HasValue && to.HasValue && from.Value >= to.Value)
-            throw ThrowHelper.Biz(nameof(QueryItemsAsync), "时间范围起须早于止");
+            throw ThrowHelper.Biz(nameof(QueryItemsAsync), "查询的时间范围起始日期必须早于结束日期。请调整起止日期，使起始在前、结束在后。");
 
         var q =
             from i in _db.SalaryStatementItems.AsNoTracking()
@@ -1522,7 +1522,7 @@ public partial class SalaryService : ISalaryService
         {
             if (!DateTime.TryParseExact(periodValue, "yyyy-MM", CultureInfo.InvariantCulture,
                     DateTimeStyles.None, out var monthStart))
-                throw ThrowHelper.Biz(loc, "月周期格式须为 yyyy-MM");
+                throw ThrowHelper.Biz(loc, "月周期请按 yyyy-MM 格式填写，例如 2026-10。");
             return (monthStart, monthStart.AddMonths(1));
         }
 
@@ -1530,7 +1530,7 @@ public partial class SalaryService : ISalaryService
         if (periodValue.Length < 8 || periodValue[4] != '-' || periodValue[5] != 'W'
             || !int.TryParse(periodValue.AsSpan(0, 4), out var year)
             || !int.TryParse(periodValue.AsSpan(6), out var week))
-            throw ThrowHelper.Biz(loc, "周周期格式须为 yyyy-Www");
+            throw ThrowHelper.Biz(loc, "周周期请按 yyyy-Www 格式填写，例如 2026-W42。");
         var start = ISOWeek.ToDateTime(year, week, DayOfWeek.Monday);
         return (start, start.AddDays(7));
     }

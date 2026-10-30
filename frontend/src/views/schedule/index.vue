@@ -4,7 +4,7 @@
     <!-- 权重配置 -->
     <el-card shadow="never" class="mb">
       <div class="weights">
-        <span class="label">排产权重（合计自动显示）</span>
+        <span class="label">排产权重（各项之和自动计算）</span>
         <div class="weight-item"><span>交期紧迫度</span><el-input-number v-model="weights.due" :min="0" :max="1" :step="0.05" :precision="2" size="small" /></div>
         <div class="weight-item"><span>齐套性</span><el-input-number v-model="weights.kit" :min="0" :max="1" :step="0.05" :precision="2" size="small" /></div>
         <div class="weight-item"><span>客户等级</span><el-input-number v-model="weights.customer" :min="0" :max="1" :step="0.05" :precision="2" size="small" /></div>
@@ -15,7 +15,7 @@
         <el-button @click="resetWeights">恢复默认</el-button>
         <el-button type="success" @click="exportXlsx" :loading="exporting">导出 Excel</el-button>
       </div>
-      <div class="tip">交期紧迫度自动按完工日算；客户/金额/换型/齐套四维先在表格里手填（0-100，齐套填低分会提示顺延）。接金蝶后改自动取数。</div>
+      <div class="tip">交期紧迫度会根据完工日自动计算；客户等级、订单金额、换型相似度和齐套性这四项需手动在表格中填写 0 到 100 的分值，齐套性填低分时系统会提示可能需要顺延；对接金蝶后这些数据会自动获取</div>
     </el-card>
 
     <!-- 评分表 -->

@@ -12,6 +12,8 @@ public class ProdWorkOrder
     public long ProductId { get; set; }             // 产品
     public int Qty { get; set; }                    // 下单数量
     public byte Status { get; set; } = 0;           // 0待生产 1生产中 2完成
+    /// <summary>docs/422：已结束撤回后为 true，禁止报满自动结束；手动结束或进度回落清 false。</summary>
+    public bool Reopened { get; set; }
     public DateTime? DueDate { get; set; }          // 计划交期；空=未设交期
     public long? CreatedBy { get; set; }            // 创建人
     public DateTime CreatedAt { get; set; }

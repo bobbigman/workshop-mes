@@ -19,11 +19,11 @@
           <el-radio value="ReportUrlOp">报工页链接·按工序（工位码）</el-radio>
         </el-radio-group>
         <div v-if="form.qrMode === 'ReportUrlOp'" class="hint">
-          打印时按工单每道工序各出一张标签，扫码直达该工序报工；旧的工单号/报工链接模式不受影响。
+          勾选此项后，打印时每张工单的每道工序各出一张标签，工人扫码可直接进入对应工序的报工页；原来的工单号、报工链接方式仍可正常使用。
         </div>
       </el-form-item>
-      <el-form-item v-if="form.qrMode === 'ReportUrl' || form.qrMode === 'ReportUrlOp'" label="前端基址">
-        <el-input v-model="form.baseUrl" placeholder="如 http://192.168.1.100:5173，空则用当前站点" clearable />
+      <el-form-item v-if="form.qrMode === 'ReportUrl' || form.qrMode === 'ReportUrlOp'" label="手机端访问地址">
+        <el-input v-model="form.baseUrl" placeholder="例：http://192.168.1.100:5173，留空则自动使用当前访问地址" clearable />
       </el-form-item>
       <el-form-item label="显示字段">
         <el-checkbox v-model="form.showProductCode">产品编号</el-checkbox>
@@ -114,7 +114,7 @@ async function onSave() {
   saving.value = true
   try {
     await savePrintSetting({ ...form.value })
-    ElMessage.success('打印设置已保存，下次打印生效')
+    ElMessage.success('打印设置已保存，下次点「打印」时自动生效。')
     emit('saved')
     emit('update:modelValue', false)
   } finally {

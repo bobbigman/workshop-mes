@@ -118,19 +118,19 @@ public class AiToolDispatcher
         {
             if (!root.TryGetProperty(name, out var value) || value.ValueKind == JsonValueKind.Null) return null;
             if (value.ValueKind != JsonValueKind.Number || !value.TryGetInt32(out var number))
-                throw ThrowHelper.BizUser($"异常查询参数 {name} 必须是整数");
+                throw ThrowHelper.BizUser($"异常查询条件 {name} 必须是整数，请检查后重试。");
             return number;
         }
         var status = ReadInt("status");
         var type = ReadInt("abnormalType");
         var page = ReadInt("page") ?? 1;
         var pageSize = ReadInt("pageSize") ?? 10;
-        if (status is < 0 or > 1) throw ThrowHelper.BizUser("异常状态仅支持0未处理、1已处理");
-        if (type is < 1 or > 3) throw ThrowHelper.BizUser("异常类型仅支持1设备故障、2物料短缺、3质量异常");
-        if (page < 1 || pageSize < 1) throw ThrowHelper.BizUser("页码和每页条数必须大于0");
+        if (status is < 0 or > 1) throw ThrowHelper.BizUser("异常状态只能选未处理或已处理，请修正筛选条件。");
+        if (type is < 1 or > 3) throw ThrowHelper.BizUser("异常类型只能选设备故障、物料短缺或质量异常，请修正筛选条件。");
+        if (page < 1 || pageSize < 1) throw ThrowHelper.BizUser("页码和每页条数都必须大于0，请修正后重试。");
         pageSize = Math.Min(pageSize, 20);
         var skip = (long)(page - 1) * pageSize;
-        if (skip > int.MaxValue) throw ThrowHelper.BizUser("页码超出范围");
+        if (skip > int.MaxValue) throw ThrowHelper.BizUser("请求的页码超出了总页数范围，请减小页码或确认数据总量后重试。");
 
         var query = _db.Abnormals.AsNoTracking().Where(a => a.FactoryId == session.FactoryId);
         if (status != null) query = query.Where(a => a.Status == status.Value);
@@ -182,7 +182,7 @@ public class AiToolDispatcher
             {
                 keyword = new { type = "string", description = "工单号/产品名/产品编号关键词" },
                 productCode = new { type = "string", description = "产品编号精确" },
-                statuses = new { type = "array", items = new { type = "integer" }, description = "状态列表：0未开始1执行中2已结束3已取消；未完成用[0,1]" },
+                statuses = new { type = "array", items = new { type = "integer" }, description = "状态列表：0未开始1执行中2已结束3已作废；未完成用[0,1]" },
                 dueFrom = new { type = "string", description = "交期起 yyyy-MM-dd 或 今天/明天" },
                 dueToExclusive = new { type = "string", description = "交期止（不含）yyyy-MM-dd；与 dueFrom 组成半开区间" },
                 dueRelative = new { type = "string", description = "相对交期：今天/明天/逾期；优先于 dueFrom/dueToExclusive" },
@@ -303,7 +303,7 @@ public class AiToolDispatcher
     private static void EnsureToolAllowed(string mode, string toolName)
     {
         if (!ModeTools.TryGetValue(mode, out var allowed) || !allowed.Contains(toolName))
-            throw ThrowHelper.BizUser("该功能在当前模式下不可用");
+            throw ThrowHelper.BizUser("该功能在当前对话模式下不可用，请切换到对应的功能模式后再试。");
     }
 
     private static void RejectForbiddenArgs(string? json)
@@ -320,7 +320,7 @@ public class AiToolDispatcher
                 || n.Contains("path", StringComparison.OrdinalIgnoreCase)
                 || n.Contains("password", StringComparison.OrdinalIgnoreCase))
             {
-                throw ThrowHelper.BizUser("包含不支持的内容，请调整后重试");
+                throw ThrowHelper.BizUser("内容包含不支持的内容，请调整后重新提交。");
             }
         }
     }
@@ -434,7 +434,7 @@ public class AiToolDispatcher
                 ct.ThrowIfCancellationRequested();
                 var detail = await _workOrders.GetAsync(item.Id, factoryId);
                 if (detail.Code != 0 || detail.Data == null)
-                    throw ThrowHelper.BizUser($"读取工单 {item.OrderNo} 的进度失败：{detail.Msg}");
+                    throw ThrowHelper.BizUser($"读取工单 {item.OrderNo} 的进度失败：{detail.Msg}，请检查该工单数据是否完整及后端服务日志。");
                 var d = detail.Data;
                 item.DoneQty = d.Tasks.Count > 0 ? d.Tasks.Min(t => t.DoneQty) : 0;
                 item.RemainQty = Math.Max(0, item.Qty - item.DoneQty);
@@ -520,7 +520,7 @@ public class AiToolDispatcher
             totalRows = d.List.Count,
             truncated = d.List.Count > maxRows,
             queriedAt = d.QueriedAt,
-            hint = "已完工应付总合计=payableTotal；仅含 status=2；取消工单不在内",
+            hint = "已完工应付总合计=payableTotal；仅含 status=2；作废工单不在内",
             list = rows
         });
     }
@@ -537,7 +537,7 @@ public class AiToolDispatcher
         else if (!string.IsNullOrWhiteSpace(orderNo))
             res = await _workOrders.GetByOrderNoAsync(orderNo.Trim(), session.FactoryId);
         else
-            throw ThrowHelper.BizUser("请提供工单号");
+            throw ThrowHelper.BizUser("查询工单进度需要提供工单号，请在对话中补充工单号后再试。");
 
         if (res.Code != 0 || res.Data == null)
             return JsonSerializer.Serialize(new { found = false, msg = res.Msg });
@@ -572,13 +572,13 @@ public class AiToolDispatcher
     {
         var query = GetString(root, "query");
         if (string.IsNullOrWhiteSpace(query))
-            throw ThrowHelper.BizUser("请输入要搜索的内容");
+            throw ThrowHelper.BizUser("搜索操作说明需要提供关键词，请输入具体内容后再搜索。");
         if (query!.Trim().Length > 500)
-            throw ThrowHelper.BizUser("搜索内容最多 500 字");
+            throw ThrowHelper.BizUser("搜索内容太长了，请精简到500字以内再搜。");
 
         var result = session.Mode == "worker-help" ? _supportDocs.SearchWorkerHelp(query.Trim()) : _supportDocs.Search(query.Trim());
         if (session.Mode == WorkerHelpPolicy.Mode && result.State == "failed")
-            throw ThrowHelper.BizUser("操作说明加载失败，请稍后重试或查看手册");
+            throw ThrowHelper.BizUser("操作说明文档加载失败，请稍后重试；若持续异常请检查文档服务是否正常。");
         var sources = result.Sources.Select(s => new AiSourceDto
         {
             SourceId = s.SourceId,
@@ -635,7 +635,7 @@ public class AiToolDispatcher
         var t = s.Trim();
         if (DateTime.TryParse(t, out var dt))
             return dt;
-        throw ThrowHelper.BizUser("报工时间格式不正确，请重试");
+        throw ThrowHelper.BizUser("报工时间格式不对，系统识别不了。请按提示格式重新输入时间，或联系管理员协助。");
     }
 
     private async Task<string> ResolveProductAsync(JsonElement root, AiSessionState session, CancellationToken ct)
@@ -643,7 +643,7 @@ public class AiToolDispatcher
         var code = GetString(root, "productCode");
         var name = GetString(root, "productName");
         if (string.IsNullOrWhiteSpace(code) && string.IsNullOrWhiteSpace(name))
-            throw ThrowHelper.BizUser("请提供产品编号或产品名称");
+            throw ThrowHelper.BizUser("查询产品需要提供产品编号或名称，请在对话中补充后再试。");
 
         if (!string.IsNullOrWhiteSpace(code))
         {
@@ -691,7 +691,7 @@ public class AiToolDispatcher
     {
         var productCode = GetString(root, "productCode");
         if (string.IsNullOrWhiteSpace(productCode))
-            throw ThrowHelper.BizUser("请提供产品编号");
+            throw ThrowHelper.BizUser("获取产品操作指引需要提供产品编号，请在对话中补充后再试。");
 
         var product = await _db.Products.AsNoTracking()
             .FirstOrDefaultAsync(p => p.FactoryId == session.FactoryId && p.Code == productCode.Trim(), ct);
@@ -873,7 +873,7 @@ public class AiToolDispatcher
     private static void EnsureSafeRelativePath(string relativePath)
     {
         if (string.IsNullOrWhiteSpace(relativePath))
-            throw ThrowHelper.BizUser("资料路径无效");
+            throw ThrowHelper.BizUser("资料文件路径无效，请检查文件路径设置是否正确，确保路径在允许的范围内。");
         if (Path.IsPathRooted(relativePath))
             throw ThrowHelper.BizUser("资料路径无效");
         var norm = relativePath.Replace('\\', '/');
@@ -915,7 +915,7 @@ public class AiToolDispatcher
         }
         if (DateTime.TryParse(s, out var dt))
             return dt.Date.ToString("yyyy-MM-dd");
-        throw ThrowHelper.BizUser("日期格式不正确，请重试");
+        throw ThrowHelper.BizUser("日期格式不正确，请按系统要求的标准日期格式重新输入。");
     }
 
     private static DateTime? ParseDate(string? s)

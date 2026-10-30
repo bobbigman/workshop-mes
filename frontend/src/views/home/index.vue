@@ -15,7 +15,7 @@
       </button>
     </div>
     <p v-if="usingDefaults" class="hint">点左侧菜单旁的☆可加入常用</p>
-    <p v-else-if="loadError" class="hint">常用功能没加载出来，刷新页面再试</p>
+    <p v-else-if="loadError" class="hint">常用功能加载失败，请刷新页面重试；多次刷新仍不行请联系管理员</p>
   </section>
 </template>
 

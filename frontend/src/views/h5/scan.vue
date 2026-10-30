@@ -19,13 +19,13 @@
 
     <!-- 手动输入 -->
     <template v-if="manual">
-      <p class="hint">请输入工单号</p>
+      <p class="hint">例：GD2024001。，例如 GD2024001。</p>
       <div class="manual">
         <input
           ref="manualInput"
           v-model="manualText"
           class="manual-input"
-          placeholder="请输入工单号"
+          placeholder="例：GD2024001。，例如 GD2024001。"
           @keyup.enter="onManual"
         />
         <div class="manual-actions">
@@ -91,7 +91,7 @@
           <span class="corner bl" />
           <span class="corner br" />
         </div>
-        <p class="wait">等待扫描工单</p>
+        <p class="wait">请用扫码枪扫一下工单二维码。</p>
         <input
           ref="scanInput"
           v-model="scanText"
@@ -220,9 +220,9 @@ let handlingResult = false
 let alive = true
 
 const cameraStatusText = computed(() => {
-  if (cameraState.value === 'starting') return '正在打开摄像头，请允许使用摄像头…'
+  if (cameraState.value === 'starting') return '正在打开摄像头，手机弹出权限请求时请点允许。'
   if (cameraState.value === 'scanning') return '请对准工单二维码'
-  if (cameraState.value === 'error') return '摄像头未就绪'
+  if (cameraState.value === 'error') return '摄像头打不开，请检查手机权限设置，或改用手动输入工单号。'
   return '点击上方蓝色按钮打开摄像头'
 })
 
@@ -230,7 +230,7 @@ onMounted(() => {
   starting.value = false
   if (diagnosticPending) {
     cameraState.value = 'error'
-    cameraHint.value = '上次打开摄像头时页面重新加载，请用手机自带浏览器打开同一网址再试'
+    cameraHint.value = '上次用摄像头时页面自动刷新了，请用手机自带的浏览器重新打开这个网址试试。'
     recordCameraStep('上次摄像头请求未完成，扫码页面已重新加载', false)
   }
   recordCameraStep(`页面进入方式：${window.performance?.getEntriesByType('navigation')?.[0]?.type || '未知'}`)
@@ -278,7 +278,7 @@ function onPageHide(event) {
   destroyScanner()
   if (cameraState.value === 'starting' || cameraState.value === 'scanning') {
     cameraState.value = 'idle'
-    cameraHint.value = '页面已暂停，请重新打开摄像头'
+    cameraHint.value = '页面刚才被暂停了，摄像头已关闭。请点按钮重新打开摄像头。'
   }
 }
 
@@ -297,7 +297,7 @@ function onVisibility() {
     if (cameraState.value === 'idle' || cameraState.value === 'error') return
     stopCamera({ keepHint: true })
     if (mode.value === 'camera' && !manual.value) {
-      cameraHint.value = cameraHint.value || '已暂停摄像头，返回后请重新打开'
+      cameraHint.value = cameraHint.value || '摄像头已暂停，切回本页面后请点按钮重新打开。'
       cameraState.value = 'idle'
     }
   }
@@ -328,7 +328,7 @@ async function requestCameraStream() {
   } catch (err) {
     const name = err?.name || ''
     if (name === 'OverconstrainedError' || name === 'ConstraintNotSatisfiedError') {
-      recordCameraStep('后置摄像头不可用，改用默认摄像头')
+      recordCameraStep('后置摄像头不可用，已切到前置摄像头；如果拍不清楚，可以改用手动输入。')
       return await navigator.mediaDevices.getUserMedia({ audio: false, video: true })
     }
     throw err
@@ -343,7 +343,7 @@ async function startCamera() {
   if (typeof window !== 'undefined' && !window.isSecureContext) {
     recordCameraStep('无法请求：浏览器未将当前网址视为安全环境')
     cameraState.value = 'error'
-    cameraHint.value = '摄像头需要 HTTPS 访问，请改用手动输入或扫码枪'
+    cameraHint.value = '摄像头需要安全网址才能用。请先用手动输入工单号或扫码枪来报工。'
     return
   }
   if (!navigator.mediaDevices?.getUserMedia) {
@@ -363,7 +363,7 @@ async function startCamera() {
     recordCameraStep('等待 15 秒超时')
     stopCamera()
     cameraState.value = 'error'
-    cameraHint.value = '摄像头启动超时，请检查摄像头权限；若没有权限提示，请用手机系统浏览器打开本页重试'
+    cameraHint.value = '摄像头打开超时了。请检查手机是否允许了摄像头权限，或换手机自带浏览器打开本页重试。'
   }, 15000)
 
   try {
@@ -376,12 +376,12 @@ async function startCamera() {
     if (document.hidden) {
       recordCameraStep('授权返回时仍在后台，关闭视频流', false)
       cameraState.value = 'error'
-      cameraHint.value = '页面不在前台，已关闭摄像头。请返回本页后重新打开摄像头'
+      cameraHint.value = '你离开了本页面，摄像头已关闭。请回到这个页面后重新点按钮打开摄像头。'
       return
     }
     await nextTick()
     const video = videoEl.value
-    if (!video) throw new Error('[h5/scan] 视频节点未就绪')
+    if (!video) throw new Error('摄像头准备出错，请刷新页面重试，或改用手动输入。')
     video.srcObject = stream
     try {
       await video.play()
@@ -401,7 +401,7 @@ async function startCamera() {
     cameraState.value = 'error'
     const name = err?.name || ''
     if (name === 'NotAllowedError' || name === 'PermissionDeniedError' || name === 'SecurityError') {
-      cameraHint.value = '请在手机应用权限和浏览器网站设置中允许摄像头，然后重试；也可用手机系统浏览器打开本页'
+      cameraHint.value = '请在手机设置里允许浏览器使用摄像头，然后重新打开本页；也可以换手机自带浏览器试试。'
     } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
       cameraHint.value = '未检测到摄像头，请改用手动输入或扫码枪'
     } else if (name === 'NotReadableError' || name === 'TrackStartError') {

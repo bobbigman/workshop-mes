@@ -21,7 +21,7 @@
         v-model="keyword"
         clearable
         :prefix-icon="Search"
-        placeholder="姓名/账号"
+        placeholder="例：张三 或 zhangsan（输入姓名或账号筛选）"
         style="width:180px"
         @input="onKeywordInput"
         @clear="onKeywordClear"
@@ -35,21 +35,21 @@
         type="warning"
         :disabled="isNarrow || !selectedIds.length"
         :loading="batching"
-        :title="isNarrow ? '电脑端操作' : ''"
+        :title="isNarrow ? '此功能需在电脑上操作' : ''"
         @click="onBatchRecalc"
-      >批量重算</el-button>
+      >批量重算工资工资</el-button>
       <el-button @click="onExport">导出 CSV</el-button>
       <el-button
         v-if="!isNarrow"
         :type="itemsExpanded ? 'default' : 'primary'"
         plain
         @click="toggleItemsSection"
-      >{{ itemsExpanded ? '收起工资明细' : '展开工资明细（报表层）' }}</el-button>
+      >{{ itemsExpanded ? '收起工资明细' : '展开工资明细（按工序拆分）' }}</el-button>
     </div>
 
     <!-- 窄屏：汇总卡片（docs/141） -->
     <div v-if="isNarrow" class="salary-cards">
-      <div v-if="list.length === 0" class="cards-empty">暂无工资单</div>
+      <div v-if="list.length === 0" class="cards-empty">还没有工资单，请在上方选择周期后点「生成工资单」，或换个查询条件试试</div>
       <div v-for="row in list" :key="row.id" class="salary-card">
         <div class="card-row1">
           <span class="card-name">{{ row.userName }}</span>
@@ -120,7 +120,7 @@
 
     <!-- 默认不显示；工具栏「展开」后才占下半屏。单人明细：点「明细」或双击行 → 抽屉 -->
     <div v-if="!isNarrow && itemsExpanded" class="items-section">
-      <div class="items-title">工资明细（报表层）</div>
+      <div class="items-title">工资明细（按工序）</div>
       <div class="toolbar">
         <el-select v-model="itemQ.operationId" clearable filterable placeholder="全部工序" style="width:160px">
           <el-option v-for="op in operations" :key="op.id" :label="op.name" :value="op.id" />
@@ -132,8 +132,8 @@
           v-model="itemRange"
           type="daterange"
           value-format="YYYY-MM-DD"
-          start-placeholder="报工起"
-          end-placeholder="报工止"
+          start-placeholder="报工开始日期"
+          end-placeholder="报工结束日期"
           style="width:260px"
         />
         <el-button type="primary" @click="loadItems">查明细</el-button>
@@ -148,13 +148,13 @@
         </el-table-column>
         <el-table-column prop="orderNo" label="工单" width="110" />
         <el-table-column prop="operationName" label="工序" width="90" />
-        <el-table-column prop="color" label="颜色" width="80" />
+        <el-table-column prop="color" label="例：红色（输入例：红色（输入颜色筛选）筛选）" width="80" />
         <el-table-column prop="spec" label="规格尺码" width="90" />
         <el-table-column prop="goodQty" label="良品" width="60" />
         <el-table-column prop="defectQty" label="不良" width="60" />
         <el-table-column label="时长" width="85"><template #default="{ row }">{{ row.priceType === 2 ? (row.durationMinutes / 60).toFixed(1) + 'h' : '' }}</template></el-table-column>
         <el-table-column label="单价" width="115"><template #default="{ row }">{{ priceLabel(row) }}</template></el-table-column>
-        <el-table-column prop="wageCoeff" label="系数" width="70" />
+        <el-table-column prop="wageCoeff" label="倍数" width="70" />
         <el-table-column prop="deductAmount" label="不良扣款" width="80" />
         <el-table-column prop="amount" label="小计" width="70" />
         <el-table-column prop="netAmount" label="应发" width="70" />
@@ -173,7 +173,7 @@
             v-model="woOrderNo"
             filterable
             clearable
-            placeholder="选择工单（可输入筛选）"
+            placeholder="输入工单号或产品名筛选，例：WO2026001"
             style="width:360px"
             :loading="woOptionsLoading"
             @change="onWoOrderChange"
@@ -201,7 +201,7 @@
             :closable="false"
             show-icon
             class="wo-alert"
-            :title="`部分报工未计价（${woSummary.unpricedCount} 笔按 0 计入）`"
+            :title="`有 ${woSummary.unpricedCount} 笔报工还没设置单价，目前按 0 元计入；请到「工序价目表」补齐单价后重算工资单`"
           />
           <el-alert
             v-if="Number(woSummary.unknownPriceTypeAmount) > 0"
@@ -209,7 +209,7 @@
             :closable="false"
             show-icon
             class="wo-alert"
-            :title="`未知计价方式金额 ¥${fmtMoney(woSummary.unknownPriceTypeAmount)}（已计入小计，未进计件/计时/固定列）`"
+            :title="`有 ¥${fmtMoney(woSummary.unknownPriceTypeAmount)} 报工金额使用了系统不认识的计费方式，已算入总计但未归入计件、计时或固定工资工资工资，请检查对应工序的单价设置`"
           />
           <div class="summary-grid wo-summary-grid">
             <div class="summary-item summary-total">
@@ -222,7 +222,7 @@
             </div>
           </div>
           <div class="wo-sub">按工序</div>
-          <mes-table table-key="views/salary/index:3" :data="woSummary.byOperation || []" size="small" empty-text="暂无已复核工资">
+          <mes-table table-key="views/salary/index:3" :data="woSummary.byOperation || []" size="small" empty-text="还没有已复核的工资数据，请先在「报工复核」中审核报工记录，审核通过后这里会自动显示">
             <el-table-column prop="name" label="工序" min-width="100" />
             <el-table-column label="计件" width="90"><template #default="{ row }">{{ fmtMoney(row.pieceAmount) }}</template></el-table-column>
             <el-table-column label="计时" width="90"><template #default="{ row }">{{ fmtMoney(row.timeAmount) }}</template></el-table-column>
@@ -230,7 +230,7 @@
             <el-table-column label="小计" width="100"><template #default="{ row }">{{ fmtMoney(row.subtotal) }}</template></el-table-column>
           </mes-table>
           <div class="wo-sub">按人员</div>
-          <mes-table table-key="views/salary/index:4" :data="woSummary.byUser || []" size="small" empty-text="暂无已复核工资">
+          <mes-table table-key="views/salary/index:4" :data="woSummary.byUser || []" size="small" empty-text="还没有已复核的工资数据，请先在「报工复核」中审核报工记录，审核通过后这里会自动显示">
             <el-table-column prop="name" label="人员" min-width="100" />
             <el-table-column label="计件" width="90"><template #default="{ row }">{{ fmtMoney(row.pieceAmount) }}</template></el-table-column>
             <el-table-column label="计时" width="90"><template #default="{ row }">{{ fmtMoney(row.timeAmount) }}</template></el-table-column>
@@ -251,12 +251,12 @@
           :closable="false"
           show-icon
           class="wo-alert"
-          :title="`台账内有 ${ledger.unpricedCount} 笔报工未计价`"
+          :title="`台账中有 ${ledger.unpricedCount} 笔报工还没设置单价，目前按 0 元计算；请到「工序价目表」补齐单价后重算`"
         />
         <mes-table table-key="views/salary/index:5"
           :data="ledger?.list || []"
           size="small"
-          empty-text="暂无已完工工单"
+          empty-text="还没有已完工的工单；工单完工后会自动出现在这里，也可检查工单状态是否已更新为完工"
           max-height="420"
         >
           <el-table-column prop="orderNo" label="工单号" width="130" />
@@ -287,11 +287,11 @@
             <el-option :value="2" label="按周" />
           </el-select>
         </el-form-item>
-        <el-form-item label="周期值" required>
+        <el-form-item label="周期" required>
           <el-input v-model="gen.periodValue" :placeholder="gen.periodType === 1 ? '如 2026-09' : '如 2026-W37'" />
         </el-form-item>
         <el-form-item label="人员">
-          <el-select v-model="gen.userId" clearable filterable style="width:100%" placeholder="空=全厂有报工人">
+          <el-select v-model="gen.userId" clearable filterable style="width:100%" placeholder="不选则默认全厂所有报工人员">
             <el-option v-for="u in users" :key="u.id" :label="u.name" :value="u.id" />
           </el-select>
         </el-form-item>
@@ -332,11 +332,11 @@
         <el-table-column prop="defectQty" label="不良" width="60" />
         <el-table-column label="时长" width="85"><template #default="{ row }">{{ row.priceType === 2 ? (row.durationMinutes / 60).toFixed(1) + 'h' : '' }}</template></el-table-column>
         <el-table-column label="单价" width="115"><template #default="{ row }">{{ priceLabel(row) }}</template></el-table-column>
-        <el-table-column prop="wageCoeff" label="系数" width="70" />
+        <el-table-column prop="wageCoeff" label="倍数" width="70" />
         <el-table-column prop="amount" label="小计" width="70" />
         <el-table-column prop="deductAmount" label="扣款" width="70" />
         <el-table-column prop="netAmount" label="应发" width="70" />
-        <el-table-column label="匹配" width="70">
+        <el-table-column label="工价工价匹配" width="70">
           <template #default="{ row }">
             <el-tag v-if="row.matched" type="success" size="small">是</el-tag>
             <el-tag v-else type="danger" size="small">未匹配</el-tag>
@@ -467,7 +467,7 @@ async function loadWoOptions() {
 async function onQueryWorkOrder() {
   const orderNo = woOrderNo.value?.trim()
   if (!orderNo) {
-    ElMessage.error('请选择工单')
+    ElMessage.error('请先在上方选择一个工单，再查看该工单的累计工资')
     return
   }
   woLoading.value = true
@@ -616,14 +616,14 @@ function openGen() {
 
 async function onGenerate() {
   if (!gen.value.periodValue?.trim()) {
-    ElMessage.error('请填写周期值')
+    ElMessage.error('请在「周期」输入框中填写结算周期，例如 2026-09 或 2026-W37')
     return
   }
   const res = await generateSalary(gen.value)
   const created = res.data?.created ?? 0
   const unmatched = res.data?.unmatchedCount ?? 0
   if (unmatched > 0) {
-    ElMessage.warning(`已生成 ${created} 张，但有 ${unmatched} 条报工未匹配工价、金额为0，请先到工价表补价，别把缺价当零工资发`)
+    ElMessage.warning(`已成功生成 ${created} 张工资单，但有 ${unmatched} 条报工未匹配到单价、金额为 0；请到「工序价目表」补齐单价后重算，避免漏发工资`)
   } else {
     ElMessage.success(`已生成 ${created} 张工资单`)
   }
@@ -640,39 +640,39 @@ async function openDetail(row) {
 }
 
 async function onConfirm(row) {
-  await ElMessageBox.confirm('确认后报工将冻结不可再改，继续？', '确认工资单')
+  await ElMessageBox.confirm('确认工资单后，相关报工记录将被锁定，不能再修改或补报；确认前请核对金额无误，是否继续？', '确认工资单')
   await confirmSalary(row.id)
   ElMessage.success('已确认')
   load()
 }
 
 async function onDelete(row) {
-  await ElMessageBox.confirm('删除该草稿工资单？', '确认')
+  await ElMessageBox.confirm('确认删除这张草稿工资单吗？删除后无法恢复，需要重新生成', '确认')
   await deleteSalary(row.id)
   ElMessage.success('已删除')
   load()
 }
 
 async function onRecalc(row) {
-  await ElMessageBox.confirm('按报工时工价快照重算报工明细，继续？', '重算')
+  await ElMessageBox.confirm('将按报工当时的单价重新计算工资明细（不使用后来修改过的单价），是否继续？', '重算')
   const res = await recalcSalary(row.id)
   const unmatched = res?.data?.unmatchedCount ?? 0
   if (unmatched > 0) {
-    ElMessage.warning(`已重算，仍有 ${unmatched} 条未匹配工价，请先补齐工价`)
+    ElMessage.warning(`重算完成，但仍有 ${unmatched} 条报工没找到对应单价；请到「工序价目表」补齐单价后再重算一次`)
   } else {
-    ElMessage.success('已按报工时工价快照重算')
+    ElMessage.success('已按报工当时的单价重新计算完成')
   }
   load()
 }
 
 /** 已确认：软撤回回草稿 + 原地重算（与批量同语义，docs/136） */
 async function onRevoke(row) {
-  await ElMessageBox.confirm('撤回后回草稿并按报工时工价快照重算，报工解冻，工资单保留，继续？', '撤回重算')
+  await ElMessageBox.confirm('撤回后工资单回到草稿状态，报工记录解除锁定可修改，并按报工当时的单价重新计算，是否继续？', '撤回重算')
   await revokeSalary(row.id)
   const res = await recalcSalary(row.id)
   const unmatched = res?.data?.unmatchedCount ?? 0
   if (unmatched > 0) {
-    ElMessage.warning(`已撤回并重算，仍有 ${unmatched} 条未匹配工价，请先补齐工价`)
+    ElMessage.warning(`已撤回并重算完成，但仍有 ${unmatched} 条报工没找到对应单价；请到「工序价目表」补齐单价后再重算一次`)
   } else {
     ElMessage.success('已撤回并重算')
   }
@@ -681,11 +681,11 @@ async function onRevoke(row) {
 
 async function onBatchRecalc() {
   if (!selectedIds.value.length) {
-    ElMessage.warning('请先勾选工资单')
+    ElMessage.warning('请先在列表中勾选需要操作的工资单，再点「批量重算」')
     return
   }
   await ElMessageBox.confirm(
-    `将对选中的 ${selectedIds.value.length} 张工资单批量重算：草稿直接重算，已确认先撤回再重算。继续？`,
+    `即将对选中的 ${selectedIds.value.length} 张工资单重新计算：草稿状态的直接重算，已确认的会先撤回再重算，是否继续？`,
     '批量重算'
   )
   batching.value = true
@@ -711,7 +711,7 @@ async function onBatchRecalc() {
 
 async function onExport() {
   if (!q.value.periodValue) {
-    ElMessage.error('请先填写周期值')
+    ElMessage.error('请先填写周期')
     return
   }
   const exportParams = { periodType: q.value.periodType, periodValue: q.value.periodValue }

@@ -185,9 +185,9 @@ public class AssignService : IAssignService
     public async Task<ApiResult<List<AssignWorkerDto>>> WorkersAsync(long factoryId, long currentUserId)
     {
         var me = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == currentUserId && u.FactoryId == factoryId)
-            ?? throw ThrowHelper.Biz(nameof(WorkersAsync), "当前用户不存在");
+            ?? throw ThrowHelper.Biz(nameof(WorkersAsync), "当前登录账号在系统里找不到记录，可能账号已被删除。请联系超级管理员在「用户」中确认账号状态。");
         if (me.Role != 1 && me.Role != 3)
-            throw ThrowHelper.BizUser("无派工权限");
+            throw ThrowHelper.BizUser("当前账号没有派工权限。请联系管理员确认该账号角色是否具备派工权限后再操作。");
 
         var q = _db.Users.AsNoTracking()
             .Where(u => u.FactoryId == factoryId && u.Status == 1 && u.Role != 1);
@@ -212,11 +212,11 @@ public class AssignService : IAssignService
             throw ThrowHelper.BizUser("无派工权限");
 
         var task = await _db.WorkOrderOperations.AsNoTracking().FirstOrDefaultAsync(t => t.Id == taskId)
-            ?? throw ThrowHelper.Biz(nameof(DepartmentsAsync), "工序任务不存在");
+            ?? throw ThrowHelper.Biz(nameof(DepartmentsAsync), "要派工的工序任务不存在或已被删除。请刷新派工页面重新选择工序任务，或到「工单」确认工单和工序是否还在。");
         var orderOk = await _db.WorkOrders.AsNoTracking()
             .AnyAsync(o => o.Id == task.WorkOrderId && o.FactoryId == factoryId);
         if (!orderOk)
-            throw ThrowHelper.Biz(nameof(DepartmentsAsync), "工单不存在或不属于本厂");
+            throw ThrowHelper.Biz(nameof(DepartmentsAsync), "这张工单不存在或不属于本厂。请核对工单号是否正确，或在「工单」中切换到正确的工厂后查找。");
 
         var allowedDeptIds = await _db.OperationDepartments.AsNoTracking()
             .Where(x => x.OperationId == task.OperationId)
@@ -361,13 +361,13 @@ public class AssignService : IAssignService
         {
             var dept = await _db.Departments.AsNoTracking()
                 .FirstOrDefaultAsync(d => d.Id == deptId && d.FactoryId == factoryId)
-                ?? throw ThrowHelper.Biz(nameof(AssignAsync), "班组不存在或不属于本厂");
+                ?? throw ThrowHelper.Biz(nameof(AssignAsync), "这个班组不存在，或不属于本厂。请到「部门」确认班组是否存在且归属本厂；需要的话先新建班组再派工。");
             var allowed = await _db.OperationDepartments.AsNoTracking()
                 .AnyAsync(x => x.OperationId == task.OperationId && x.DepartmentId == deptId);
             if (!allowed)
-                throw ThrowHelper.BizUser("只能派给该工序的报工权限部门");
+                throw ThrowHelper.BizUser("你只能把任务派给有这道工序报工权限的部门。请确认目标部门是否有该工序的报工权限，或联系管理员调整。");
             if (groupDeptIds != null && !groupDeptIds.Contains(deptId.Value))
-                throw ThrowHelper.BizUser($"无权派给外部门班组：{dept.Name}");
+                throw ThrowHelper.BizUser($"不能把任务派给其他部门的班组：{dept.Name}。只能派给本部门管辖范围内的班组；如需跨部门派工，请联系有权限的管理员操作。");
             targetLabel = $"班组{dept.Name}";
         }
         else
@@ -375,13 +375,13 @@ public class AssignService : IAssignService
             foreach (var uid in userIds)
             {
                 var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == uid && u.FactoryId == factoryId)
-                    ?? throw ThrowHelper.Biz(nameof(AssignAsync), "执行人不存在或不属于本厂");
+                    ?? throw ThrowHelper.Biz(nameof(AssignAsync), "指定的执行人在系统里找不到，或不属于本厂。请到「用户」确认该人员是否存在且归属本厂。");
                 if (user.Status != 1)
-                    throw ThrowHelper.BizUser($"执行人已停用：{user.Name}");
+                    throw ThrowHelper.BizUser($"执行人已停用：{user.Name}，无法接收派工。请到「用户」把该人员重新启用，或换一名在岗人员作为执行人。");
                 if (user.Role == 1)
-                    throw ThrowHelper.BizUser("不能派给管理员");
+                    throw ThrowHelper.BizUser("管理员账号不能作为派工执行人。请选择一线工人或班组长等生产岗位人员。");
                 if (groupUserIds != null && !groupUserIds.Contains(uid))
-                    throw ThrowHelper.BizUser($"无权派给外部门工人：{user.Name}");
+                    throw ThrowHelper.BizUser($"不能把任务派给其他部门的工人：{user.Name}。只能派给本部门管辖范围内的工人；如需跨部门派工，请联系有权限的管理员操作。");
             }
             if (userIds.Count > 0)
             {

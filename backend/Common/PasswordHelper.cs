@@ -10,7 +10,7 @@ public static class PasswordHelper
     public static void EnsureComplexity(string password, string where)
     {
         if (string.IsNullOrEmpty(password) || password.Length < MinLength)
-            throw ThrowHelper.Biz(where, $"密码至少 {MinLength} 位");
+            throw ThrowHelper.Biz(where, $"密码至少 {MinLength} 位，请设置更长的密码。");
     }
 
     public static string Hash(string password) => BCrypt.Net.BCrypt.HashPassword(password);

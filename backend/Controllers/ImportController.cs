@@ -30,13 +30,13 @@ public class ImportController : ControllerBase
     public async Task<ApiResult<ImportResultDto>> Upload([FromQuery] string entityType, IFormFile file, [FromQuery] bool preview = false)
     {
         if (file == null || file.Length == 0)
-            throw ThrowHelper.Biz(nameof(Upload), "上传文件为空");
+            throw ThrowHelper.Biz(nameof(Upload), "上传的文件是空的。请确认选了正确的文件再上传，不要传空白文件。");
         using var ms = new MemoryStream();
         await file.CopyToAsync(ms);
         var fid = JwtHelper.GetFactoryId(User);
         if (entityType is "operationPriceList" or "priceRule") await _license.EnsureFeatureAsync(fid, LicenseFeature.PieceWage);
         if (entityType is "product" or "operationPriceList") return await new AttributeImportService(_db).ImportAsync(entityType, ms.ToArray(), fid, preview);
-        if (preview) throw ThrowHelper.BizUser("此导入类型暂不支持预检");
+        if (preview) throw ThrowHelper.BizUser("当前这种导入类型不支持先检查后导入。请直接执行导入，系统会在导入时自动核对数据。");
         return await _svc.ImportAsync(entityType, ms.ToArray(), fid);
     }
 }

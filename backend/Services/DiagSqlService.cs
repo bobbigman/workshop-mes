@@ -49,9 +49,9 @@ public class DiagSqlService : IDiagSqlService
     {
         var raw = sql ?? "";
         if (string.IsNullOrWhiteSpace(raw))
-            throw ThrowHelper.BizUser("请填写要查询的 SQL");
+            throw ThrowHelper.BizUser("诊断查询需要先填写要执行的查询语句。请在查询框中输入 SELECT 语句后再点击执行。");
         if (raw.Length > MaxSqlChars)
-            throw ThrowHelper.BizUser($"SQL 过长，最多 {MaxSqlChars} 字符");
+            throw ThrowHelper.BizUser($"查询语句太长，最多 {MaxSqlChars} 个字符。请精简查询条件或减少查询字段后重试。");
 
         var normalized = NormalizeForCheck(raw);
         EnsureSelectOnly(normalized);
@@ -138,18 +138,18 @@ public class DiagSqlService : IDiagSqlService
         var semi = withoutStrings.IndexOf(';');
         if (semi >= 0 && semi < withoutStrings.Length - 1
             && !string.IsNullOrWhiteSpace(withoutStrings[(semi + 1)..]))
-            throw ThrowHelper.BizUser("只允许单条 SELECT，不能一次执行多条语句");
+            throw ThrowHelper.BizUser("诊断查询每次只能执行一条 SELECT 语句，不能一次执行多条。请拆成多次查询分别执行。");
 
         var head = withoutStrings.TrimStart().TrimEnd(';', ' ', '\t');
         if (!(head.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase)
               || head.StartsWith("WITH", StringComparison.OrdinalIgnoreCase)))
-            throw ThrowHelper.BizUser("只允许 SELECT 查询（可用 WITH…SELECT）");
+            throw ThrowHelper.BizUser("诊断查询只允许 SELECT 查询（包括 WITH…SELECT 写法）。INSERT、UPDATE、DELETE 等写操作请使用维护 SQL 功能。");
 
         if (Forbidden.IsMatch(head))
-            throw ThrowHelper.BizUser("禁止写库或管理类语句，仅支持只读 SELECT");
+            throw ThrowHelper.BizUser("诊断查询不允许执行写入或管理类语句，只支持只读 SELECT 查询。如需修改数据，请使用维护 SQL 功能。");
 
         // SELECT INTO 会建表/写数据
         if (Regex.IsMatch(head, @"\bINTO\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
-            throw ThrowHelper.BizUser("禁止 SELECT INTO，请改用普通 SELECT");
+            throw ThrowHelper.BizUser("诊断查询不支持 SELECT INTO 写法，请改用普通 SELECT；如需建表请使用维护 SQL 功能。");
     }
 }

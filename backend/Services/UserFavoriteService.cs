@@ -129,11 +129,11 @@ public class UserFavoriteService : IUserFavoriteService
     {
         var key = (menuKey ?? "").Trim();
         if (key.Length == 0)
-            throw ThrowHelper.BizUser("请选择要收藏的菜单");
+            throw ThrowHelper.BizUser("请先点击左侧菜单项，再点收藏按钮。");
 
         var menu = UserFavoriteCatalog.Find(key);
         if (menu == null || !UserFavoriteCatalog.CanSee(menu, role))
-            throw ThrowHelper.BizUser("当前账号不能收藏这个菜单");
+            throw ThrowHelper.BizUser("你的角色没有该菜单的使用权限，无法收藏。如需使用请联系管理员分配权限。");
 
         var existing = await _db.UserFavorites
             .FirstOrDefaultAsync(x => x.UserId == userId && x.MenuKey == menu.Key);

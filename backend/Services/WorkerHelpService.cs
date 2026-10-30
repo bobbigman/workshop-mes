@@ -40,7 +40,7 @@ public class WorkerHelpService(AppDbContext db, IAiAssistantService assistant, A
         if (!await db.Users.AsNoTracking().AnyAsync(u => u.Id == userId && u.FactoryId == factoryId
             && u.Status == 1 && (u.Role == 1 || u.Role == 2 || u.Role == 3), ct)
             || !await db.Factories.AsNoTracking().AnyAsync(f => f.Id == factoryId && f.TrialCleanedAtUtc == null, ct))
-            throw ThrowHelper.BizUser("账号不可用或不属于当前工厂，请重新登录或联系管理员");
+            throw ThrowHelper.BizUser("该账号不可用或不属于当前工厂，请到人员管理中检查账号状态和工厂归属，或让用户重新登录。");
     }
 
     public async Task<ApiResult<object>> StatusAsync(long userId, long factoryId, CancellationToken ct)

@@ -30,11 +30,11 @@ public class KnowledgeFileParser
     {
         var root = (_config["KnowledgeBase:RootPath"] ?? "").Trim();
         if (string.IsNullOrEmpty(root))
-            throw ThrowHelper.Biz(nameof(Extract), "未配置 KnowledgeBase:RootPath");
+            throw ThrowHelper.Biz(nameof(Extract), "知识库存放目录还没设置。请在后端设置文件 appsettings.json 中添加 KnowledgeBase:RootPath 项，指向知识库文件所在的服务器目录。");
 
         var fullPath = Path.Combine(root, relativePath);
         if (!File.Exists(fullPath))
-            throw ThrowHelper.Biz(nameof(Extract), $"知识库文件不存在：{relativePath}");
+            throw ThrowHelper.Biz(nameof(Extract), $"知识库中指定的文件在服务器上不存在：{relativePath}。请检查知识库目录下是否有该文件，确认文件名和路径拼写正确。");
 
         var cacheKey = $"{relativePath}|{File.GetLastWriteTimeUtc(fullPath).Ticks}";
 
@@ -49,7 +49,7 @@ public class KnowledgeFileParser
             "docx" => ExtractDocx(fullPath),
             "pdf" => ExtractPdf(fullPath),
             "excel" or "xlsx" => ExtractExcel(fullPath),
-            _ => throw ThrowHelper.Biz(nameof(Extract), $"不支持的文件类型：{fileType}")
+            _ => throw ThrowHelper.Biz(nameof(Extract), $"知识库不支持当前文件格式：{fileType}。目前支持 pdf、docx、xlsx、jpg、png、webp，请把文件转成支持的格式后重新上传。")
         };
 
         lock (_lock)
@@ -73,7 +73,7 @@ public class KnowledgeFileParser
         }
         var result = sb.ToString().Trim();
         if (string.IsNullOrEmpty(result))
-            throw ThrowHelper.Biz(nameof(ExtractDocx), $"docx 未解析出文字，文件可能为空或损坏：{Path.GetFileName(path)}");
+            throw ThrowHelper.Biz(nameof(ExtractDocx), $"文件 {Path.GetFileName(path)} 读取不出文字内容，可能是空文件或已损坏。请确认文件能正常打开且有文字内容后重新上传。");
         return result;
     }
 
@@ -87,7 +87,7 @@ public class KnowledgeFileParser
         }
         var result = sb.ToString().Trim();
         if (string.IsNullOrEmpty(result))
-            throw ThrowHelper.Biz(nameof(ExtractPdf), $"pdf 未解析出文字（可能为扫描件），请提供电子版：{Path.GetFileName(path)}");
+            throw ThrowHelper.Biz(nameof(ExtractPdf), $"文件 {Path.GetFileName(path)} 读取不出文字（可能是扫描图片版 PDF）。请提供可编辑文字的电子版 PDF 后重新上传。");
         return result;
     }
 
@@ -108,7 +108,7 @@ public class KnowledgeFileParser
         }
         var result = sb.ToString().Trim();
         if (string.IsNullOrEmpty(result))
-            throw ThrowHelper.Biz(nameof(ExtractExcel), $"excel 未解析出内容，文件可能为空：{Path.GetFileName(path)}");
+            throw ThrowHelper.Biz(nameof(ExtractExcel), $"文件 {Path.GetFileName(path)} 读取不出内容，可能是空文件。请确认文件中有数据后重新上传。");
         return result;
     }
 }

@@ -124,12 +124,12 @@ public class WecomReportTaskService : IWecomReportTaskService
 
     public async Task<ReportTaskPage> QueryAsync(long factoryId, long userId, byte role, string? keyword, int page)
     {
-        if (page < 1 || page > 100) throw ThrowHelper.BizUser("页码须为1至100，请缩小产品或工单范围");
+        if (page < 1 || page > 100) throw ThrowHelper.BizUser("查询结果太多了，翻不了那么多页。请缩小搜索范围，比如限定产品或工单号再查。");
         var key = (keyword ?? "").Trim();
-        if (key.Length > 100) throw ThrowHelper.BizUser("查询关键词不能超过100字");
+        if (key.Length > 100) throw ThrowHelper.BizUser("搜索关键词太长了，最多100个字，请缩短后重新搜索。");
         var assigned = await _assign.MyTasksAsync(factoryId, userId);
         if (assigned.Code != 0 || assigned.Data == null)
-            throw ThrowHelper.BizUser($"查询本人派工失败：{assigned.Msg}，请稍后重试");
+            throw ThrowHelper.BizUser($"查询你的派工信息时出错了，请稍等一下再试；反复失败请联系管理员：{assigned.Msg}");
         var sources = assigned.Data.Where(t => t.OrderStatus is 0 or 1 && t.RemainQty > 0)
             .GroupBy(t => t.TaskId).ToDictionary(g => g.Key, g => g.First().AssignSource);
         if (sources.Count > 0)

@@ -34,9 +34,9 @@ public class FakeKingdeeAuthService : IKingdeeAuthService
     {
         account = (account ?? "").Trim();
         if (string.IsNullOrEmpty(account))
-            throw ThrowHelper.Biz(nameof(VerifyAsync), "金蝶账号不能为空");
+            throw ThrowHelper.Biz(nameof(VerifyAsync), "金蝶对接设置中账号为空。请到「系统设置·金蝶对接」填写金蝶账号后重新验证连接。");
         if (string.IsNullOrEmpty(password))
-            throw ThrowHelper.Biz(nameof(VerifyAsync), "金蝶密码不能为空");
+            throw ThrowHelper.Biz(nameof(VerifyAsync), "金蝶对接设置中密码为空。请到「系统设置·金蝶对接」填写金蝶密码后重新验证连接。");
 
         var financeAccounts = _config["Mcp:FinanceKingdeeAccounts"] ?? "";
         var isFinance = financeAccounts

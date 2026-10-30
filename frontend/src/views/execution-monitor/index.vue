@@ -2,7 +2,7 @@
   <div class="em-page" v-loading="loading && !hasData">
     <div class="em-heading">
       <div><span class="em-eyebrow">生产管理 / 执行监控</span><h1>生产执行总览</h1></div>
-      <div class="em-live" :class="{ err: errorTip }"><i /><span>{{ errorTip || (lastOkAt ? '更新于 ' + lastOkAt : '正在加载') }}</span><el-button :icon="Refresh" :loading="loading" @click="refresh(true)">刷新</el-button></div>
+      <div class="em-live" :class="{ err: errorTip }"><i /><span>{{ errorTip || (lastOkAt ? '更新于 ' + lastOkAt : '数据加载中，请稍候…') }}</span><el-button :icon="Refresh" :loading="loading" @click="refresh(true)">刷新</el-button></div>
     </div>
 
     <div class="em-summary">
@@ -17,10 +17,10 @@
 
     <section class="em-filter-panel">
       <div class="em-toolbar">
-        <el-input v-model="filters.keyword" class="em-kw" :prefix-icon="Search" clearable placeholder="工单号 / 产品编号 / 产品名称" @keyup.enter="onFilter" @clear="onFilter" />
+        <el-input v-model="filters.keyword" class="em-kw" :prefix-icon="Search" clearable placeholder="搜索工单号、产品编号或名称，例：WO20261001" @keyup.enter="onFilter" @clear="onFilter" />
         <el-select v-model="filters.status" class="em-status" clearable placeholder="全部状态" @change="onFilter"><el-option :value="0" label="未开始" /><el-option :value="1" label="执行中" /><el-option :value="2" label="已结束" /></el-select>
         <el-date-picker v-model="dueRange" class="em-date" type="daterange" value-format="YYYY-MM-DD" start-placeholder="交期开始" end-placeholder="交期结束" @change="onFilter" />
-        <el-button type="primary" @click="onFilter">查询</el-button><el-button @click="resetFilters">重置</el-button><el-tooltip content="工单统计随关键词、交期变化，不含已取消；异常与待办按当前权限统计。" placement="bottom"><button type="button" class="em-scope-help" aria-label="查看统计范围说明">ⓘ 统计范围</button></el-tooltip>
+        <el-button type="primary" @click="onFilter">查询</el-button><el-button @click="resetFilters">重置</el-button><el-tooltip content="工单统计随关键词和交期筛选变化，已作废的工单不计入；异常和待办数量按当前账号权限统计" placement="bottom"><button type="button" class="em-scope-help" aria-label="查看统计范围说明">ⓘ 统计范围</button></el-tooltip>
       </div>
 
     </section>
@@ -28,24 +28,24 @@
     <div class="em-mid">
       <section class="em-panel em-chains">
         <header class="em-panel-h"><h3>工序进度</h3><div class="em-legend"><span class="full">已报满</span><span class="partial">已报未满</span><span>未报工</span></div></header>
-        <div class="em-panel-caption">当前页前 4 张工单 · 查看更多请使用下方明细</div>
-        <div v-if="!focusOrders.length" class="em-empty">暂无符合条件的工单</div>
+        <div class="em-panel-caption">仅展示前 4 张工单，完整列表见下方明细表</div>
+        <div v-if="!focusOrders.length" class="em-empty">没有匹配的工单。试试放宽筛选条件，或到“工单管理”新建工单</div>
         <div v-for="o in focusOrders" :key="o.id" class="em-chain-row">
           <button class="em-chain-meta" @click="goOrderDetail(o)"><strong :title="o.orderNo">{{ o.orderNo }}</strong><span :title="o.productName">{{ o.productName }}</span><small>{{ statusLabel(o.status) }}<b v-if="o.dueState === 'overdue'" class="due-overdue"> · 已超期</b><b v-else-if="o.dueState === 'warning'" class="due-warning"> · 临期</b><b v-if="o.hasOpenAbnormal"> · 异常</b></small></button>
           <div class="em-ops">
             <template v-for="(op, idx) in (o.ops || [])" :key="op.operationId + '-' + idx">
-              <div class="em-op" :class="opClass(op)" :title="op.status + (op.defectQty ? ' · 不良 ' + op.defectQty : '')">
+              <div class="em-op" :class="opClass(op)" :title="op.status + (op.defectQty ? ' 不良品 ' + op.defectQty : '')">
                 <div class="op-top"><strong :title="op.operationName">{{ op.operationName }}</strong><i /></div>
-                <div class="op-bottom"><span :title="op.assigneeName || (op.isVirtual ? '按原工艺展示' : '未派工')">{{ op.assigneeName || (op.isVirtual ? '原工艺' : '未派工') }}</span><b>{{ op.planQty === 0 ? '无需报工' : op.doneQty + '/' + op.planQty }}</b></div>
+                <div class="op-bottom"><span :title="op.assigneeName || (op.isVirtual ? '该工序按工艺路线自动安排，尚未单独派工' : '未派工。。')">{{ op.assigneeName || (op.isVirtual ? '未派工（按工艺）' : '未派工') }}</span><b>{{ op.planQty === 0 ? '无需报工' : op.doneQty + '/' + op.planQty }}</b></div>
               </div><span v-if="idx < o.ops.length - 1" class="em-arrow" aria-hidden="true">→</span>
-            </template><span v-if="!o.ops?.length" class="muted">{{ o.progressHint || '无工序计划' }}</span>
+            </template><span v-if="!o.ops?.length" class="muted">{{ o.progressHint || '无工序计划，请到工单详情中添加工序，请到工单详情中添加工序' }}</span>
           </div>
         </div>
       </section>
 
       <section class="em-panel em-progress">
         <header class="em-panel-h"><h3>工单进度</h3><span class="sub">当前页前 5 单</span></header>
-        <div class="em-panel-caption">按各工序计划达成情况计算</div>
+        <div class="em-panel-caption">进度按每道工序的计划完成数计算</div>
         <div v-if="!visibleProgress.length" class="em-empty">暂无工单</div>
         <button v-for="(o, i) in visibleProgress" :key="o.id" class="em-progress-row" @click="goOrderDetail(o)">
           <span class="em-rank">{{ String(i + 1).padStart(2, '0') }}</span><div class="em-progress-info"><div class="em-progress-label"><span :title="o.orderNo + ' · ' + o.productName">{{ o.productName }}</span><b>{{ o.progressPercent == null ? '—' : formatPct(o) }}</b></div><div class="em-progress-order" :title="o.orderNo">{{ o.orderNo }}</div><div class="em-track"><i :style="{ width: progressValue(o) + '%' }" :class="{ full: progressValue(o) === 100 }" /></div></div>
@@ -54,7 +54,7 @@
 
       <section class="em-panel em-exceptions">
         <header class="em-panel-h"><h3>现场异常 <em>{{ data.abnormals?.total || 0 }}</em></h3><el-button v-if="canHandleAbnormal" link type="primary" @click="goAbnormal()">查看全部</el-button></header>
-        <div class="em-panel-caption">待处理 · 不随工单筛选</div>
+        <div class="em-panel-caption">以下为全部待处理异常，不受上方工单筛选条件影响</div>
         <div class="em-alert-list">
           <div v-if="!data.abnormals?.list?.length" class="em-empty"><el-icon class="em-ok"><CircleCheck /></el-icon><strong>当前无待处理异常</strong><span>现场上报后将在这里显示</span></div>
           <component :is="canHandleAbnormal ? 'button' : 'div'" v-for="a in (data.abnormals?.list || []).slice(0, 4)" :key="a.id" class="em-alert" @click="canHandleAbnormal && goAbnormal(a.id)"><div><span class="em-alert-type">{{ a.typeLabel }}</span><time>{{ formatTime(a.reportedAt) }}</time></div><p :title="a.description">{{ a.description }}</p><small>{{ a.orderNo || '未关联工单' }}</small></component>
@@ -64,8 +64,8 @@
 
     <div class="em-lower">
       <section class="em-panel em-details">
-        <header class="em-panel-h"><h3>生产工单明细 <span class="sub">共 {{ data.orders?.total || 0 }} 单</span></h3><span class="sub">现场进度含待复核报工</span></header>
-        <mes-table table-key="views/execution-monitor/index:1" :data="data.orders?.list || []" size="small" height="290" empty-text="暂无符合条件的工单">
+        <header class="em-panel-h"><h3>生产工单明细 <span class="sub">共 {{ data.orders?.total || 0 }} 单</span></h3><span class="sub">现场进度包含待复核的报工数据</span></header>
+        <mes-table table-key="views/execution-monitor/index:1" :data="data.orders?.list || []" size="small" height="290" empty-text="没有匹配的工单。试试放宽筛选条件，或到“工单管理”新建工单">
           <el-table-column prop="orderNo" label="工单号" min-width="175" show-overflow-tooltip /><el-table-column prop="productName" label="产品" min-width="110" show-overflow-tooltip />
           <el-table-column label="计划" width="70" prop="qty" align="right" /><el-table-column label="完成 / 剩余" width="100" align="right"><template #default="{ row }">{{ row.doneQty }} / {{ row.remainQty }}</template></el-table-column>
           <el-table-column label="工序达成" width="130"><template #default="{ row }"><div v-if="row.progressPercent != null" class="em-table-progress"><div class="em-track"><i :style="{ width: progressValue(row) + '%' }" /></div><span>{{ formatPct(row) }}</span></div><span v-else :title="row.progressHint">—</span></template></el-table-column>
@@ -77,7 +77,7 @@
       </section>
       <aside class="em-side">
         <section class="em-panel em-overdue"><header class="em-panel-h"><h3>交期预警 <em>{{ data.overdueOrders?.total || 0 }}</em></h3><span class="sub">超期工单</span></header><div class="em-panel-caption">随关键词、交期筛选 · 最多 10 单</div><div class="em-overdue-list"><div v-if="!data.overdueOrders?.list?.length" class="em-empty sm">暂无超期工单</div><button v-for="o in data.overdueOrders?.list || []" :key="o.id" class="em-due-item" @click="goOrderDetail(o)"><strong :title="o.orderNo">{{ o.orderNo }}</strong><span>{{ o.productName }}</span><small>交期 {{ formatDue(o.dueDate) }}</small></button></div></section>
-        <section v-if="showTodos" class="em-panel em-todo-panel"><header class="em-panel-h"><h3>待处理任务</h3><span class="sub">当前权限范围</span></header><button v-if="data.todos?.pendingReviewCount != null" class="em-todo" @click="goReview"><span><i class="amber" />报工待复核</span><b>{{ data.todos.pendingReviewCount }}<small> 条 →</small></b></button><button v-if="data.todos?.unassignedOpCount != null" class="em-todo" @click="goUnassignedHint"><span><i />工序待派工</span><b>{{ data.todos.unassignedOpCount }}<small> 道 →</small></b></button></section>
+        <section v-if="showTodos" class="em-panel em-todo-panel"><header class="em-panel-h"><h3>待处理任务</h3><span class="sub">仅显示您权限范围内的待办</span></header><button v-if="data.todos?.pendingReviewCount != null" class="em-todo" @click="goReview"><span><i class="amber" />报工待复核</span><b>{{ data.todos.pendingReviewCount }}<small> 条 →</small></b></button><button v-if="data.todos?.unassignedOpCount != null" class="em-todo" @click="goUnassignedHint"><span><i />工序待派工</span><b>{{ data.todos.unassignedOpCount }}<small> 道 →</small></b></button></section>
       </aside>
     </div>
   </div>
@@ -117,7 +117,7 @@ let seq = 0
 let inFlight = false
 let errToastAt = 0
 
-const STATUS = { 0: '未开始', 1: '执行中', 2: '已结束', 3: '已取消' }
+const STATUS = { 0: '未开始', 1: '执行中', 2: '已结束', 3: '已作废' }
 function statusLabel(s) { return STATUS[s] ?? s }
 function statusTag(s) { return s === 0 ? 'info' : s === 1 ? 'primary' : s === 2 ? 'success' : 'danger' }
 function formatDue(t) { return t ? String(t).replace('T', ' ').slice(0, 16) : '—' }
@@ -182,11 +182,11 @@ async function refresh(manual = false) {
     }
   } catch (e) {
     if (my !== seq) return
-    errorTip.value = '刷新失败，已保留上次数据'
+    errorTip.value = '数据刷新失败，当前显示的是上次加载的结果，请稍后点击刷新重试'
     const now = Date.now()
     if (now - errToastAt > 8000) {
       errToastAt = now
-      ElMessage.error(e?.message || '执行监控加载失败')
+      ElMessage.error(e?.message || '执行监控数据加载失败，请检查网络后刷新页面重试')
     }
   } finally {
     if (my === seq) {
@@ -225,7 +225,7 @@ function goReview() {
   router.push({ path: '/review', query: { reviewStatus: '0' } })
 }
 function goUnassignedHint() {
-  ElMessage.info('请打开工单详情，为未派工工序选择执行人；旧工单需要先完善工序任务')
+  ElMessage.info('请到工单详情页，给未派工的工序指定执行人；如果是旧工单，请先补全工序任务再派工')
 }
 
 function onVisibility() {

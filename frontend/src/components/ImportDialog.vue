@@ -2,9 +2,9 @@
   <span class="import-entry">
     <el-button @click="open">导入</el-button>
     <el-dialog v-model="dlg" :title="title" width="520px" @closed="onClosed">
-      <p class="hint">只支持 .xlsx。先下载母版，按列填写后上传。关联列（部门编码、不良品名称、单位、路线编号等）须与本厂已有数据一致；留空表示不挂关联。</p>
+      <p class="hint">只支持xlsx文件。请先下载模板，按列填好后上传。关联列要和系统里已有的数据一致，不确定的可以留空。</p>
       <div class="actions">
-        <el-button type="primary" plain :loading="downloading" @click="onDownload">下载母版</el-button>
+        <el-button type="primary" plain :loading="downloading" @click="onDownload">下载模板</el-button>
         <el-upload
           :auto-upload="false"
           :show-file-list="false"
@@ -15,10 +15,10 @@
           <el-button type="success" :loading="uploading">上传文件</el-button>
         </el-upload>
       </div>
-      <el-button v-if="pendingFile && result?.failCount===0" type="primary" :loading="uploading" @click="commitFile">预检通过，正式导入</el-button>
+      <el-button v-if="pendingFile && result?.failCount===0" type="primary" :loading="uploading" @click="commitFile">确认导入</el-button>
       <div v-if="result" class="result">
         <p>
-          {{ pendingFile ? '预检可导入' : '成功' }} <strong>{{ result.successCount }}</strong> 条 /
+          {{ pendingFile ? '检查通过，可导入' : '成功' }} <strong>{{ result.successCount }}</strong> 条 /
           失败 <strong>{{ result.failCount }}</strong> 条
         </p>
         <el-input
@@ -85,7 +85,7 @@ async function onFile(file) {
   const raw = file.raw
   if (!raw) return
   if (!/\.xlsx$/i.test(raw.name)) {
-    ElMessage.error('只支持 .xlsx 文件')
+    ElMessage.error('只能上传xlsx格式的Excel文件，请换一个文件再试。')
     return
   }
   uploading.value = true
@@ -102,7 +102,7 @@ async function onFile(file) {
       ElMessage.success(`成功导入 ${result.value.successCount} 条`)
       emit('done')
     } else if (result.value.failCount > 0) {
-      ElMessage.warning('导入未成功，请查看行级错误')
+      ElMessage.warning('部分数据导入失败，请查看下方每行的错误提示，修改后重新上传。')
     }
   } finally {
     uploading.value = false
@@ -112,7 +112,7 @@ async function onFile(file) {
 async function commitFile(){
   if(!pendingFile.value||uploading.value)return
   uploading.value=true
-  try{const fd=new FormData();fd.append('file',pendingFile.value);result.value=(await uploadImport(props.entityType,fd)).data;pendingFile.value=null;if(result.value.successCount){ElMessage.success('导入完成');emit('done')}}finally{uploading.value=false}
+  try{const fd=new FormData();fd.append('file',pendingFile.value);result.value=(await uploadImport(props.entityType,fd)).data;pendingFile.value=null;if(result.value.successCount){ElMessage.success('数据数据导入完成，请到对应列表页核对导入结果是否正确。，请到对应列表页核对导入结果是否正确。');emit('done')}}finally{uploading.value=false}
 }
 
 async function copyErrors() {
@@ -120,9 +120,9 @@ async function copyErrors() {
   if (!text) return
   try {
     await navigator.clipboard.writeText(text)
-    ElMessage.success('已复制')
+    ElMessage.success('内容内容已复制到剪贴板，可直接粘贴使用。到剪贴板，可直接粘贴使用。')
   } catch {
-    ElMessage.error('复制失败，请手动选中文本复制')
+    ElMessage.error('自动复制没成功，请手动选中需要的文字再复制；如果反复失败，换个浏览器试试。')
   }
 }
 </script>

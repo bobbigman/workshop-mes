@@ -29,7 +29,7 @@ async function onLogout() {
     // Vant：点取消会 reject('cancel')
     if (err === 'cancel' || err === 'close' || err?.message === 'cancel') return
     console.error('[手机退出登录] 确认或结束登录失败', err)
-    showToast(err?.message || '退出登录失败，请重试')
+    showToast(err?.message || '退出没成功，可能是网络不稳，请检查网络后再试一次；还是不行就找管理员帮忙。')
   }
 }
 </script>

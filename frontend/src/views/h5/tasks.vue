@@ -6,8 +6,8 @@
       <H5LogoutBtn />
     </div>
 
-    <p v-if="loadError" role="alert">任务加载失败，请刷新重试，或扫码报工。</p>
-    <div v-if="!loadError && list.length === 0" class="empty">暂无派给我的或本班组任务</div>
+    <p v-if="loadError" role="alert">任务列表加载失败了，请下拉刷新试试；还是不行可以直接扫码报工。</p>
+    <div v-if="!loadError && list.length === 0" class="empty">目前没有派给你或你们班组的任务。请联系班组长确认是否已派工，或直接扫码报工。</div>
     <div
       v-for="(row, index) in list"
       :key="row.taskId"

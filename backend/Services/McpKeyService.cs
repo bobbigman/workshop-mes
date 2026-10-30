@@ -82,7 +82,7 @@ public class McpKeyService : IMcpKeyService
     public async Task<ApiResult<List<McpKeyListItemDto>>> ListAsync(long factoryId)
     {
         if (factoryId <= 0)
-            throw ThrowHelper.BizUser("无法确定当前工厂");
+            throw ThrowHelper.BizUser("无法确定当前操作的工厂。请确认已登录并选择了正确的工厂后再管理 MCP 访问钥匙。");
 
         var list = await (
             from k in _db.McpKeys.AsNoTracking()
@@ -108,7 +108,7 @@ public class McpKeyService : IMcpKeyService
         if (factoryId <= 0)
             throw ThrowHelper.BizUser("无法确定当前工厂");
         if (string.IsNullOrWhiteSpace(mcpUrl))
-            throw ThrowHelper.Biz(nameof(CreateAsync), "MCP 地址为空：请配置 Mcp:Url，或从当前站点拼 /mcp");
+            throw ThrowHelper.Biz(nameof(CreateAsync), "MCP 服务地址还没设置。请在后端设置文件 appsettings.json 中填写 Mcp:Url，或确认当前站点可通过 /mcp 路径访问服务。");
 
         // 锁住已有工厂行，覆盖本厂尚无钥匙的情况；同厂跨进程请求也串行生成。
         // 吊销与新增共用事务，失败时旧钥匙不会被单独吊销。
@@ -198,7 +198,7 @@ public class McpKeyService : IMcpKeyService
 
         var row = await _db.McpKeys.FirstOrDefaultAsync(k => k.KeyId == keyId && k.FactoryId == factoryId);
         if (row == null)
-            throw ThrowHelper.BizUser("钥匙不存在");
+            throw ThrowHelper.BizUser("要撤销的访问钥匙不存在或已被撤销。请刷新钥匙列表确认目标钥匙是否还在。");
         if (row.Status == 0)
             return ApiResult<object?>.OkMsg();
 

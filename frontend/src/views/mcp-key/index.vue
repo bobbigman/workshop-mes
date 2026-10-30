@@ -2,7 +2,7 @@
   <div class="page">
     <el-alert type="info" :closable="false" show-icon style="margin-bottom:16px">
       <template #title>MCP 连接报文（每厂一把）</template>
-      点「生成报文」得到完整 JSON 连接配置。客户端支持导入此格式时可整段粘贴；也可按客户端要求填写地址和请求头。明文只显示一次，请立刻复制发给对接人。吊销后该钥匙立即失效。
+      点击“生成报文”获取完整连接信息，可整段粘贴到支持导入的客户端，也可按客户端要求填写地址和请求头；明文只显示一次，请立即复制发给对接人；吊销后该钥匙立即失效
     </el-alert>
 
     <el-card>
@@ -85,7 +85,7 @@ async function onCreate() {
   try {
     if (list.value.some(row => row.status === 1)) {
       const confirmed = await ElMessageBox.confirm(
-        '继续生成将使旧连接失效，客户需改用新报文，确认继续吗？',
+        '继续生成将使当前钥匙失效，对接方需要改用新报文才能重新连接。确认要继续生成吗？',
         '替换连接报文',
         { type: 'warning', confirmButtonText: '确认替换', cancelButtonText: '取消' }
       ).then(() => true, action => {
@@ -98,7 +98,7 @@ async function onCreate() {
     created.value = res.data
     plainDlg.value = true
     if (res.data?.revokedOld) {
-      ElMessage.warning('已吊销旧钥匙，客户需改用新报文')
+      ElMessage.warning('旧钥匙已吊销，请把新生成的报文发给对接方，对方更新后即可重新连接')
     }
     await load()
   } finally {
@@ -113,13 +113,13 @@ async function copyConnection() {
     await navigator.clipboard.writeText(text)
     ElMessage.success('已复制整段报文')
   } catch {
-    ElMessage.error('复制失败，请手动选中复制')
+    ElMessage.error('自动复制失败，请手动选中文本框中的全部内容后按 Ctrl+C 复制')
   }
 }
 
 async function onRevoke(row) {
   await ElMessageBox.confirm(
-    '吊销后客户立即连不上，确认吗？',
+    '吊销后对接方将立即断开连接，需要重新生成报文才能恢复。确认要吊销吗？',
     '吊销钥匙',
     { type: 'warning' }
   )

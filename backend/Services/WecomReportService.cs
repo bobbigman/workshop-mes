@@ -87,16 +87,16 @@ public class WecomReportService : IWecomReportService
     {
         var wecomUserId = (dto.UserId ?? "").Trim();
         if (string.IsNullOrEmpty(wecomUserId))
-            throw ThrowHelper.BizUser("缺少企微 userid，请重新对话");
+            throw ThrowHelper.BizUser("系统没有获取到你的企微用户信息，没法帮你报工。请退出对话重新进入，或联系管理员核对账号对应关系。");
 
         var orderNo = (dto.OrderNo ?? "").Trim();
         var opName = (dto.OperationName ?? "").Trim();
         if (string.IsNullOrEmpty(orderNo) || string.IsNullOrEmpty(opName))
-            throw ThrowHelper.BizUser("请说清工单号和工序，不要猜不补");
+            throw ThrowHelper.BizUser("请说清楚你要报工的工单号和工序名称，系统猜不出来；请重新完整地告诉机器人。");
         if (dto.GoodQty < 0 || dto.DefectQty < 0)
-            throw ThrowHelper.BizUser("良品/不良数必须是数字且不能为负");
+            throw ThrowHelper.BizUser("良品数和不良品数必须是数字，而且不能是负数，请检查后重新输入正确数量。");
         if (dto.GoodQty == 0 && dto.DefectQty == 0)
-            throw ThrowHelper.BizUser("请说明报工数量");
+            throw ThrowHelper.BizUser("请告诉机器人你要报多少件，不说数量没法报工。");
 
         // 复杂报工回退 149：有不良/原因不强行对话直录
         var defectReason = (dto.DefectReason ?? "").Trim();
@@ -108,17 +108,17 @@ public class WecomReportService : IWecomReportService
         var user = dto.VerifiedLoginUserId != null && dto.McpOwner != null
             ? await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == dto.VerifiedLoginUserId && u.FactoryId == factoryId && u.Status == 1 && u.UserType != UserTypeHelper.External)
             : await ResolveBoundUserAsync(factoryId, dto.ChanType, wecomUserId);
-        if (user == null) throw ThrowHelper.BizUser("请先验证报工身份或联系管理员核对有效绑定");
+        if (user == null) throw ThrowHelper.BizUser("你的报工身份还没验证过，或者账号对应关系有问题。请先完成身份验证，或联系管理员核对。");
 
         var order = await _db.WorkOrders.AsNoTracking()
             .FirstOrDefaultAsync(o => o.FactoryId == factoryId && o.OrderNo == orderNo);
         if (order == null)
-            throw ThrowHelper.BizUser($"工单号 {orderNo} 查不到，请重新说清");
+            throw ThrowHelper.BizUser($"你说的工单号 {orderNo} 查不到，可能输入有误或工单不存在，请重新确认工单号再说一遍。");
 
         var operationId = await ResolveOperationIdAsync(order, opName);
         if ((dto.ExpectedOrderId != null && dto.ExpectedOrderId != order.Id) ||
             (dto.ExpectedOperationId != null && dto.ExpectedOperationId != operationId))
-            throw ThrowHelper.BizUser("候选工单或工序已变化，请重新查询后选择");
+            throw ThrowHelper.BizUser("之前查到的工单或工序信息已经变了，请重新查询后再选择。");
         var resolvedOpName = await _db.Operations.AsNoTracking()
             .Where(o => o.Id == operationId)
             .Select(o => o.Name)
@@ -181,28 +181,28 @@ public class WecomReportService : IWecomReportService
     {
         var token = (dto.ConfirmToken ?? "").Trim();
         if (string.IsNullOrEmpty(token) || token.Length > 64)
-            throw ThrowHelper.BizUser("确认凭证无效，请重新预览");
+            throw ThrowHelper.BizUser("确认信息失效了，请重新预览报工信息后再确认提交。");
 
         var cacheKey = CacheKeyPrefix + token;
         if (!_cache.TryGetValue(cacheKey, out PendingConfirm? pending) || pending == null)
-            throw ThrowHelper.BizUser("确认已过期或无效，请重新报数预览");
+            throw ThrowHelper.BizUser("确认信息已经过期或失效了，请重新预览报工信息后再确认提交。");
         if (pending.FactoryId != factoryId)
-            throw ThrowHelper.BizUser("确认凭证与工厂不符，请重新预览");
+            throw ThrowHelper.BizUser("确认信息和你当前的工厂不一致，请重新预览报工信息后再确认提交。");
         if (pending.McpOwner != dto.McpOwner ||
             (pending.McpOwner != null && pending.UserId != dto.McpUserId))
-            throw ThrowHelper.BizUser("确认凭证与当前员工或会话不符");
+            throw ThrowHelper.BizUser("确认信息和你当前的账号或对话不匹配，请重新预览报工信息后再确认提交。");
 
         // 已确认过：幂等回放（同一 token 只落一次）
         if (pending.Used)
         {
             if (pending.CachedResult != null)
                 return ApiResult<object?>.Ok(pending.CachedResult);
-            throw ThrowHelper.BizUser("确认已使用，请重新报数预览");
+            throw ThrowHelper.BizUser("这条确认信息已经用过了，不能再用，请重新预览报工信息后再确认提交。");
         }
 
         if (!ConfirmLocks.TryAdd(token, 0))
         {
-            throw ThrowHelper.BizUser("报工正在提交，请稍后按原凭证重试");
+            throw ThrowHelper.BizUser("报工正在提交中，请不要重复操作，稍等一下再按原来的步骤重试。");
         }
 
         try
@@ -251,7 +251,7 @@ public class WecomReportService : IWecomReportService
         if (_cache.TryGetValue(CacheKeyPrefix + token, out PendingConfirm? pending) && pending != null)
         {
             if (pending.FactoryId != factoryId || pending.McpOwner != owner)
-                throw ThrowHelper.BizUser("不能取消其他员工或会话的预览");
+                throw ThrowHelper.BizUser("你不能取消别人的预览操作，只能取消自己的；如需处理他人的请联系管理员。");
             _cache.Remove(CacheKeyPrefix + token);
         }
     }
@@ -288,7 +288,7 @@ public class WecomReportService : IWecomReportService
         }
 
         if (opIds.Count == 0)
-            throw ThrowHelper.BizUser("该工单没有工序，请联系管理员");
+            throw ThrowHelper.BizUser("这张工单下面没有工序，没法报工，请联系管理员给这张工单添加工序。");
 
         var ops = await _db.Operations.AsNoTracking()
             .Where(o => o.FactoryId == order.FactoryId && opIds.Contains(o.Id))
@@ -298,14 +298,14 @@ public class WecomReportService : IWecomReportService
         var exact = ops.Where(o => string.Equals(o.Name, operationName, StringComparison.OrdinalIgnoreCase)).ToList();
         if (exact.Count == 1) return exact[0].Id;
         if (exact.Count > 1)
-            throw ThrowHelper.BizUser($"工序「{operationName}」有多条同名，请走报工表单");
+            throw ThrowHelper.BizUser($"工序「{operationName}」在这张工单里有好几道同名的，系统分不清是哪一道。请到报工表单页面手动选择具体工序。");
 
         var fuzzy = ops.Where(o => o.Name.Contains(operationName, StringComparison.OrdinalIgnoreCase)).ToList();
         if (fuzzy.Count == 1) return fuzzy[0].Id;
         if (fuzzy.Count > 1)
-            throw ThrowHelper.BizUser($"工序「{operationName}」匹配到多道，请说全称或走报工表单");
+            throw ThrowHelper.BizUser($"工序「{operationName}」匹配到了好几道工序，系统分不清。请说出完整的工序名称，或到报工表单页面手动选择。");
 
-        throw ThrowHelper.BizUser($"本工单没有工序「{operationName}」，请重新说清");
+        throw ThrowHelper.BizUser($"这张工单里没有你说的工序「{operationName}」，请重新确认工序名称，或到报工表单页面查看有哪些工序可选。");
     }
 
     private static string NormalizeChan(string? chanType)

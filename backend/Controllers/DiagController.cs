@@ -18,7 +18,7 @@ public class DiagController : ControllerBase
     private void EnsureAdmin()
     {
         if (JwtHelper.GetRole(User) != 1)
-            throw ThrowHelper.BizUser("仅管理员可使用诊断查询");
+            throw ThrowHelper.BizUser("诊断查询只有管理员能用。请用管理员账号登录后再操作。");
     }
 
     [HttpPost("sql")]

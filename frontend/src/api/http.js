@@ -11,7 +11,7 @@ const http = axios.create({
 
 const PROVIDER_KEY = 'supportProviderName'
 
-/** 登录/布局拉 instance-info 后写入；空则提示「您的软件提供商」 */
+/** 登录/布局拉 instance-info 后写入；空则提示「请在系统设置中填写软件提供商名称，以便报错时用户能联系到正确的技术支持。」 */
 export function setSupportProviderName(name) {
   const v = (name || '').trim()
   if (v) localStorage.setItem(PROVIDER_KEY, v)
@@ -19,7 +19,7 @@ export function setSupportProviderName(name) {
 }
 
 function providerLabel() {
-  return (localStorage.getItem(PROVIDER_KEY) || '').trim() || '您的软件提供商'
+  return (localStorage.getItem(PROVIDER_KEY) || '').trim() || '请在系统设置中填写软件提供商名称，以便报错时用户能联系到正确的技术支持。'
 }
 
 function traceIdOf(headers) {
@@ -33,7 +33,7 @@ function traceSuffix(headers) {
 
 /** msg 为空时的可排查提示（docs/111 拍板：仅空 msg 走此模板） */
 function fallbackFailTip(headers) {
-  return `请求失败，请洽${providerLabel()}，错误信息：服务端未返回详细原因${traceSuffix(headers)}`
+  return `请求失败，请联系${providerLabel()}；服务端未返回详细原因${traceSuffix(headers)}`
 }
 
 function withTraceIfLong(tip, headers) {
@@ -86,14 +86,14 @@ http.interceptors.response.use(
     if (typeof body === 'string') {
       const raw = body.trimStart()
       if (raw.startsWith('<')) {
-        const tip = `接口返回非 JSON（可能路由未注册或静态页兜底）${traceSuffix(res.headers)}`
+        const tip = `请求返回内容异常${traceSuffix(res.headers)}，请检查服务器路由设置和转发规则。`
         showApiError(tip)
         return Promise.reject(Object.assign(new Error(tip), { response: res }))
       }
       try {
         body = JSON.parse(body)
       } catch {
-        const tip = `接口返回无法解析的文本${traceSuffix(res.headers)}`
+        const tip = `返回内容无法识别${traceSuffix(res.headers)}，请检查后端服务是否正常。`
         showApiError(tip)
         return Promise.reject(Object.assign(new Error(tip), { response: res }))
       }
@@ -129,7 +129,7 @@ http.interceptors.response.use(
       localStorage.removeItem('licenseMessage')
       window.dispatchEvent(new Event('mes-auth-changed'))
       if (!window.location.hash.startsWith('#/login')) {
-        ElMessage.warning('登录已失效，请重新登录')
+        ElMessage.warning('登录凭证已失效，请重新登录。')
         const hashPath = window.location.hash.slice(1) || '/'
         const loginHash =
           hashPath.startsWith('/h5/') && !hashPath.startsWith('//')
@@ -146,9 +146,9 @@ http.interceptors.response.use(
     else if (typeof data === 'string' && data) {
       // HTML 兜底页太长且无信息量，改成短提示 + 追踪号
       tip = data.trimStart().startsWith('<')
-        ? `接口返回非 JSON（可能路由未注册或静态页兜底）${traceSuffix(headers)}`
+        ? `请求返回内容异常${traceSuffix(headers)}，请检查服务器路由设置和转发规则。`
         : withTraceIfLong(data, headers)
-    } else tip = err.message || `网络或服务器异常${traceSuffix(headers)}`
+    } else tip = err.message || `无法连接到服务器${traceSuffix(headers)}，请检查服务器是否在线、IP和端口是否正确、防火墙是否放行。`
     if (!tip) tip = fallbackFailTip(headers)
     showApiError(tip)
     return Promise.reject(Object.assign(new Error(tip), { response: err.response, code: err.code }))

@@ -37,7 +37,7 @@ public class UnitService : IUnitService
     public async Task<ApiResult<object?>> CreateAsync(UnitDto dto, long factoryId)
     {
         if (string.IsNullOrWhiteSpace(dto.Name))
-            throw ThrowHelper.Biz(nameof(CreateAsync), "单位名称不能为空");
+            throw ThrowHelper.Biz(nameof(CreateAsync), "请填写单位名称后再保存。");
         _db.Units.Add(new BaseUnit { FactoryId = factoryId, Name = dto.Name.Trim(), CreatedAt = DateTime.Now });
         await _db.SaveChangesAsync();
         return ApiResult<object?>.OkMsg();
@@ -48,7 +48,7 @@ public class UnitService : IUnitService
         if (string.IsNullOrWhiteSpace(dto.Name))
             throw ThrowHelper.Biz(nameof(UpdateAsync), "单位名称不能为空");
         var entity = await _db.Units.FirstOrDefaultAsync(u => u.Id == id && u.FactoryId == factoryId)
-            ?? throw ThrowHelper.Biz(nameof(UpdateAsync), "单位不存在");
+            ?? throw ThrowHelper.Biz(nameof(UpdateAsync), "要修改的单位不存在，可能已被删除。请回到「单位管理」刷新列表后重新选择。");
         entity.Name = dto.Name.Trim();
         await _db.SaveChangesAsync();
         return ApiResult<object?>.OkMsg();

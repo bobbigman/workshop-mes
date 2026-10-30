@@ -49,14 +49,14 @@ public class PrintSettingService : IPrintSettingService
     public async Task<ApiResult<object?>> SaveAsync(PrintSettingDto dto, long factoryId)
     {
         if (dto == null)
-            throw ThrowHelper.Biz(nameof(SaveAsync), "打印设置为空");
+            throw ThrowHelper.Biz(nameof(SaveAsync), "提交的打印设置为空。请至少设置一项打印内容后再保存。");
 
         var labelSize = (dto.LabelSize ?? "").Trim();
         var qrMode = (dto.QrMode ?? "").Trim();
         if (!LabelSizes.Contains(labelSize))
-            throw ThrowHelper.Biz(nameof(SaveAsync), "母版尺寸无效，仅支持 Label30x40 / Label80x60");
+            throw ThrowHelper.Biz(nameof(SaveAsync), "打印母版尺寸只支持 Label30x40 和 Label80x60 两种规格。请在打印设置中选择这两种尺寸之一。");
         if (!QrModes.Contains(qrMode))
-            throw ThrowHelper.Biz(nameof(SaveAsync), "二维码类型无效，仅支持 OrderNo / ReportUrl / ReportUrlOp");
+            throw ThrowHelper.Biz(nameof(SaveAsync), "二维码类型只支持 OrderNo（工单号）、ReportUrl（报工链接）和 ReportUrlOp（工序报工链接）三种。请选择其中一种有效类型。");
 
         string? baseUrl = string.IsNullOrWhiteSpace(dto.BaseUrl) ? null : dto.BaseUrl.Trim().TrimEnd('/');
         var needsBase = string.Equals(qrMode, "ReportUrl", StringComparison.OrdinalIgnoreCase)
@@ -65,7 +65,7 @@ public class PrintSettingService : IPrintSettingService
         {
             if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri) ||
                 (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
-                throw ThrowHelper.Biz(nameof(SaveAsync), "报工页基址须为 http/https 绝对地址");
+                throw ThrowHelper.Biz(nameof(SaveAsync), "报工页打印地址请填写以http或https开头的完整网址。");
         }
 
         var customIds = (dto.ShowCustomFieldIds ?? new List<long>())
@@ -79,7 +79,7 @@ public class PrintSettingService : IPrintSettingService
                                  && f.Target == "work_order"
                                  && customIds.Contains(f.Id));
             if (validCount != customIds.Count)
-                throw ThrowHelper.Biz(nameof(SaveAsync), "自定义字段无效或不属于本工厂工单字段");
+                throw ThrowHelper.Biz(nameof(SaveAsync), "自定义打印字段无效，或不属于本厂的工单字段。请到「工单字段」确认可用的自定义字段列表，选择合法字段。");
         }
 
         var row = await _db.PrintSettings.FirstOrDefaultAsync(x => x.FactoryId == factoryId);
@@ -128,7 +128,7 @@ public class PrintSettingService : IPrintSettingService
         catch (Exception ex)
         {
             throw ThrowHelper.Biz(nameof(ParseCustomFieldIds),
-                $"解析打印自定义字段配置失败，原文={raw}，原因={ex.Message}");
+                $"打印自定义字段的设置格式读取失败。请检查设置内容的格式是否正确，参照说明修正后重新保存。");
         }
     }
 }

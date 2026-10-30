@@ -73,7 +73,7 @@ public class ScheduleController : ControllerBase
         }
         catch (Exception)
         {
-            throw ThrowHelper.BizUser("排产权重配置格式不正确");
+            throw ThrowHelper.BizUser("排产权重填得不对。请到「排产评分」页面按提示重新填写权重，确保格式正确。");
         }
     }
 }

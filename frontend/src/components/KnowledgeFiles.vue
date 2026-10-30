@@ -1,12 +1,12 @@
 <template>
   <div class="kf">
     <div class="kf-head">
-      <el-input v-model="version" placeholder="版本（可选，如 V1.2）" size="small" style="width:150px" clearable />
+      <el-input v-model="version" placeholder="例：V1.2（不填也行）" size="small" style="width:150px" clearable />
       <el-upload :show-file-list="false" :http-request="doUpload" :disabled="!refId">
-        <el-button size="small" type="primary" :disabled="!refId">上传作业指导书 / 图纸</el-button>
+        <el-button size="small" type="primary" :disabled="!refId">上传指导书/图纸</el-button>
       </el-upload>
     </div>
-    <div v-if="!refId" class="kf-tip">先保存后，才能上传作业指导书 / 图纸</div>
+    <div v-if="!refId" class="kf-tip">请先点击保存，保存成功后即可上传附件。</div>
     <mes-table table-key="components/KnowledgeFiles:1" v-else :data="list" size="small">
       <el-table-column prop="fileName" label="文件名" min-width="160" show-overflow-tooltip />
       <el-table-column prop="fileType" label="类型" width="70" />
@@ -82,7 +82,7 @@ async function doUpload({ file }) {
   if (version.value) fd.append('version', version.value)
   fd.append('file', file)
   await uploadKnowledgeFile(fd)
-  ElMessage.success('上传成功')
+  ElMessage.success('文件已文件已上传成功，可在列表中查看。，可在列表中查看。')
   version.value = ''
   await load()
 }
@@ -111,7 +111,7 @@ async function openGuide(file) {
       URL.revokeObjectURL(url)
     }
   } catch {
-    ElMessage.error('预览失败，请稍后重试')
+    ElMessage.error('预览没打开成功，等一下再点试试。')
   }
 }
 
@@ -126,7 +126,7 @@ function closeImgPreview() {
 }
 
 async function onDelete(row) {
-  await ElMessageBox.confirm(`确认删除「${row.fileName}」？`, '提示', { type: 'warning' })
+  await ElMessageBox.confirm(`确认删除「${row.fileName}」？删除后无法恢复，确定要删吗？删除后无法恢复，确定要删吗？`, '提示', { type: 'warning' })
   await deleteKnowledgeFile(row.id)
   ElMessage.success('已删除')
   await load()

@@ -39,7 +39,7 @@ public class WorkOrderMcpTools
     public async Task<string> QueryWorkOrder(
         [Description("兼容旧调用保留的参数；车间查询不使用金蝶授权码")] string? authToken = null,
         [Description("关键词：工单号、产品名称或产品编号，可空")] string? keyword = null,
-        [Description("状态：0未开始 1执行中 2已完成 3已取消，可空查全部")] byte? status = null,
+        [Description("状态：0未开始 1执行中 2已完成 3已作废，可空查全部")] byte? status = null,
         [Description("渠道，可空")] string? chanType = null,
         [Description("会话身份，可空")] string? sessionId = null,
         [Description("本人网页登录验证的只读查询凭证，不是报工凭证")] string? queryAccessToken = null)

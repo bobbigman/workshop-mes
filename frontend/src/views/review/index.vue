@@ -19,7 +19,7 @@
           :value="o.value"
         />
       </el-select>
-      <el-input v-model="q.userName" placeholder="工人姓名" clearable style="width:140px" />
+      <el-input v-model="q.userName" placeholder="输入例：张三（输入姓名筛选）搜索姓名" clearable style="width:140px" />
       <el-select v-model="q.reviewStatus" style="width:120px">
         <el-option :value="0" label="待复核" />
         <el-option :value="1" label="已通过" />
@@ -33,10 +33,10 @@
       <el-table-column prop="orderNo" label="工单" width="140" />
       <el-table-column prop="productName" label="产品" />
       <el-table-column prop="operationName" label="工序" width="100" />
-      <el-table-column prop="userName" label="工人" width="90" />
+      <el-table-column prop="userName" label="输入例：张三（输入姓名筛选）搜索" width="90" />
       <el-table-column prop="goodQty" label="良品" width="70" />
       <el-table-column prop="defectQty" label="不良" width="70" />
-      <el-table-column label="上工序合格库存（可报上限）" width="160">
+      <el-table-column label="可报上限" width="160">
         <template #default="{ row }">
           {{ row.upstreamLimit == null ? '-' : row.upstreamLimit }}
         </template>
@@ -45,8 +45,8 @@
         <template #default="{ row }">
           <template v-if="row.unitPrice != null">¥{{ Number(row.unitPrice).toFixed(4) }}</template>
           <template v-else>
-            <span class="wage-miss">未配工价</span>
-            <el-button v-if="isAdmin" link type="primary" @click="$router.push('/operation-price-list')">去补价</el-button>
+            <span class="wage-miss">这道工序还没定单价，找管理员设一下。</span>
+            <el-button v-if="isAdmin" link type="primary" @click="$router.push('/operation-price-list')">去设置单价</el-button>
           </template>
         </template>
       </el-table-column>
@@ -60,7 +60,7 @@
           <el-tag v-else type="danger">已退回</el-tag>
           <el-tooltip
             v-if="row.qtyAbnormal"
-            content="本工序报工良品超过上工序已审核合格产出，正常生产逻辑不合理，若为返工、补料可手动特批通过"
+            content="这道工序报的合格品比上一道工序审过的还多，正常情况不该这样；如果是返工或补料，可以手动批准通过。"
             placement="top"
           >
             <el-tag type="warning" effect="dark" class="qty-abnormal-tag">数量异常</el-tag>
@@ -79,7 +79,7 @@
     <el-dialog v-model="rejectDlg" title="退回报工" width="420px">
       <el-form label-width="80px">
         <el-form-item label="原因" required>
-          <el-input v-model="rejectReason" type="textarea" :rows="3" maxlength="256" show-word-limit placeholder="请填写退回原因" />
+          <el-input v-model="rejectReason" type="textarea" :rows="3" maxlength="256" show-word-limit placeholder="退回去的时候要写一下原因，告诉对方哪里有问题。" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -88,9 +88,9 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="specialDlg" title="工序数量异常确认放行" width="480px">
+    <el-dialog v-model="specialDlg" title="确认特批通过这道工序" width="480px">
       <p class="dlg-body">
-        当前工序报工良品 {{ specialRow?.goodQty ?? 0 }} 件，上工序累计合格仅 {{ specialRow?.upstreamLimit ?? 0 }} 件，超出正常生产数量。请确认是否为返工、补料、特采等特殊场景，确认后才可完成复核通过。
+        这道工序报的良品 {{ specialRow?.goodQty ?? 0 }} 件，比上一道审过的 {{ specialRow?.upstreamLimit ?? 0 }} 件还多，正常不该这样；如果是返工、补料等特殊情况，确认后才能通过。
       </p>
       <el-form label-width="100px">
         <el-form-item label="特殊情况备注">
@@ -100,7 +100,7 @@
             :rows="2"
             maxlength="200"
             show-word-limit
-            placeholder="选填，备注不落库"
+            placeholder="选填，仅本次审核可见，不会保存"
           />
         </el-form-item>
       </el-form>
@@ -110,9 +110,9 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="batchDlg" title="存在工序数量异常单据" width="480px">
+    <el-dialog v-model="batchDlg" title="以下单据数量有异常" width="480px">
       <p class="dlg-body">
-        本次勾选共 {{ batchTotal }} 条单据，其中 {{ batchAbnormalCount }} 条报工数量超出上工序合格库存，系统将自动跳过异常单据，仅批量通过合规单据。
+        你选的里面有 {{ batchAbnormalCount }} 条数量不对（共 {{ batchTotal }} 条），系统会自动跳过这些，只通过没问题的。
       </p>
       <template #footer>
         <el-button @click="batchDlg = false">取消批量操作</el-button>
@@ -221,7 +221,7 @@ function openReject(row) {
 
 async function onReject() {
   if (!rejectReason.value.trim()) {
-    ElMessage.error('请填写退回原因')
+    ElMessage.error('退回去的时候要写一下原因，告诉对方哪里有问题。')
     return
   }
   await rejectReview(rejectId.value, { reason: rejectReason.value.trim() })
@@ -251,7 +251,7 @@ async function onBatch() {
 
 function showBatchAbnormalDetail() {
   const lines = batchAbnormalRows.value.map(r =>
-    `${r.orderNo} / ${r.operationName} / ${r.userName}：良品${r.goodQty}，上限${r.upstreamLimit ?? '-'}，同工序占用${r.sameOpOccupiedQty ?? '-'}`
+    `${r.orderNo} / ${r.operationName} / ${r.userName}：良品${r.goodQty}，可报上限${r.upstreamLimit ?? '-'}，同工序占用${r.sameOpOccupiedQty ?? '-'}`
   )
   ElMessageBox.alert(lines.join('<br/>') || '无', '异常明细', { dangerouslyUseHTMLString: true })
 }
@@ -259,7 +259,7 @@ function showBatchAbnormalDetail() {
 async function confirmBatchOkOnly() {
   const ids = batchOkIds.value.slice()
   if (!ids.length) {
-    ElMessage.warning('没有可批量通过的合规单据')
+    ElMessage.warning('你选的这些都有数量异常，没法直接批量通过，需要逐条处理。')
     batchDlg.value = false
     return
   }

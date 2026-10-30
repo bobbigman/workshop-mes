@@ -27,7 +27,7 @@ public sealed class MaintenanceSqlPlans(IMemoryCache cache)
             var key = "maintenance-sql:" + token;
             if (!cache.TryGetValue<MaintenanceSqlPlan>(key, out var plan) || plan == null
                 || plan.ExpiresAt <= DateTimeOffset.UtcNow || plan.Scope != scope)
-                throw ThrowHelper.BizUser("SQL确认凭据无效、过期或上下文已变化，请重新准备；执行失败时先查结果，不要直接重试");
+                throw ThrowHelper.BizUser("本次确认凭据已失效或环境发生了变化，请重新执行准备步骤获取新凭据；如之前执行失败，请先查看执行结果再决定是否重试，不要直接重跑。");
             cache.Remove(key);
             return plan;
         }
@@ -47,7 +47,7 @@ public sealed class MaintenanceSqlService(ConfiguredSqlConnection connection, Ma
     public async Task<object> PrepareAsync(string sql, string identity, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(sql) || sql.Length > 64000)
-            throw ThrowHelper.BizUser("维护SQL不能为空，最多64000字符；不支持GO等客户端指令");
+            throw ThrowHelper.BizUser("维护 SQL 内容不能为空，最多64000个字符，也不支持 GO 等客户端指令。请检查 SQL 内容后重新提交。");
         await using var conn = connection.Create();
         try
         {
@@ -71,7 +71,7 @@ public sealed class MaintenanceSqlService(ConfiguredSqlConnection connection, Ma
         timeout.CancelAfter(TimeSpan.FromSeconds(30));
         ct = timeout.Token;
         if (string.IsNullOrWhiteSpace(confirmationToken) || confirmationToken.Length != 64)
-            throw ThrowHelper.BizUser("请提供准备步骤返回的SQL确认凭据");
+            throw ThrowHelper.BizUser("执行维护 SQL 前需要先完成准备步骤拿到确认凭据。请先执行准备步骤，再凭凭据执行 SQL。");
         var plan = plans.Take(confirmationToken, Scope(identity));
         log.LogWarning("SQL维护开始 identity={Identity} server={Server} database={Database} sqlHash={SqlHash}", identity, plan.Server, plan.Database, plan.SqlHash);
         await using var conn = connection.Create();
@@ -80,7 +80,7 @@ public sealed class MaintenanceSqlService(ConfiguredSqlConnection connection, Ma
             await conn.OpenAsync(ct);
             var (server, database) = await TargetAsync(conn, ct);
             if (server != plan.Server || database != plan.Database)
-                throw ThrowHelper.BizUser("实际数据库目标已变化，请重新准备维护SQL");
+                throw ThrowHelper.BizUser("准备步骤和执行步骤之间目标库发生了变化（如切换了工厂或连接）。请重新执行准备步骤后再执行。");
             await using var command = conn.CreateCommand();
             command.CommandText = plan.Sql;
             command.CommandTimeout = 30;
@@ -156,7 +156,7 @@ public sealed class MaintenanceSqlService(ConfiguredSqlConnection connection, Ma
         command.CommandText = "SELECT CONVERT(nvarchar(128),SERVERPROPERTY('ServerName')),DB_NAME();";
         command.CommandTimeout = 10;
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleRow, ct);
-        if (!await reader.ReadAsync(ct)) throw ThrowHelper.BizUser("无法确认SQL维护目标");
+        if (!await reader.ReadAsync(ct)) throw ThrowHelper.BizUser("系统无法确定当前维护 SQL 操作的目标库。请确认已选择正确的工厂和数据连接后重试。");
         return (reader.GetString(0), reader.GetString(1));
     }
 }

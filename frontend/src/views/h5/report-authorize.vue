@@ -1,14 +1,14 @@
 <template>
   <main class="authorize-page">
-    <van-nav-bar title="验证本次对话报工身份" />
-    <van-loading v-if="loading" class="loading">正在核对登录身份</van-loading>
+    <van-nav-bar title="确认你的身份。" />
+    <van-loading v-if="loading" class="loading">正在确认你的账号信息，请稍等…</van-loading>
     <van-notice-bar v-if="error" :text="error" color="#b42318" background="#fff0ee" wrapable />
     <template v-if="identity">
       <van-cell-group inset>
         <van-cell title="员工" :value="identity.userName" />
         <van-cell title="工厂" :value="identity.factoryName" />
       </van-cell-group>
-      <p>{{ queryOnly ? '请确认这是你本人的账号。本次仅授予30分钟本人本厂查询权限，不允许报工或修改数据。' : '请确认这是您本人的账号。本次授权有效30分钟，机器人可查询待报工任务并在您确认后提交报工。' }}</p>
+      <p>请确认这是你本人的账号。{{ queryOnly ? '本次仅授予30分钟本人本厂查询权限，不允许报工或修改数据。' : '确认后30分钟内有效，机器人可以帮你查任务和报工，每次都会先问你确认。' }}</p>
       <van-field v-if="!code" v-model="password" type="password" label="登录密码" placeholder="仅在本页验证，不发给机器人" autocomplete="current-password" />
       <van-button v-if="!code" type="primary" block :loading="submitting" @click="approve">是我本人，确认本次授权</van-button>
       <section v-else class="code-card" aria-live="polite">
@@ -45,10 +45,10 @@ const ticket = typeof route.query.t === 'string' ? route.query.t : ''
 
 onMounted(async () => {
   try {
-    if (!/^[a-f0-9]{64}$/.test(ticket)) throw new Error('验证链接无效，请让机器人重新定位员工')
+    if (!/^[a-f0-9]{64}$/.test(ticket)) throw new Error('这个验证链接已经失效了，请在企业微信里让机器人重新发一次验证链接给你。')
     identity.value = (await (queryOnly ? inspectQueryIdentity(ticket) : inspectReportIdentity(ticket))).data
   } catch (e) {
-    error.value = e.message || '核对身份失败，请重新登录后再试'
+    error.value = e.message || '核对身份失败了，请退出后重新登录这个页面再试；反复失败找管理员帮忙。'
   } finally {
     loading.value = false
   }
@@ -56,7 +56,7 @@ onMounted(async () => {
 
 async function approve() {
   if (!password.value) {
-    error.value = '请输入本账号的登录密码，仅在此网页验证'
+    error.value = '请输入本账号的登录密码，仅在此网页核对'
     return
   }
   submitting.value = true
@@ -64,7 +64,7 @@ async function approve() {
   try {
     code.value = (await (queryOnly ? approveQueryIdentity(ticket, password.value) : approveReportIdentity(ticket, password.value))).data.verificationCode
   } catch (e) {
-    error.value = e.message || '授权失败，请重新核对身份'
+    error.value = e.message || '授权没成功，请重新输入密码核对身份；反复失败找管理员帮忙处理。'
   } finally {
     password.value = ''
     submitting.value = false

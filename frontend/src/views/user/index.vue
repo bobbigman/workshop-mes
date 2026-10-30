@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="toolbar">
-      <el-input v-model="keyword" placeholder="姓名/账号/微信号" clearable style="width:220px" @keyup.enter="load" />
+      <el-input v-model="keyword" placeholder="搜索姓名、登录账号或微信号，回车即可筛选" clearable style="width:220px" @keyup.enter="load" />
       <el-select v-model="userTypeFilter" clearable placeholder="人员类型" style="width:140px" @change="load">
         <el-option v-for="o in USER_TYPE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
       </el-select>
@@ -14,7 +14,7 @@
       <el-table-column prop="name" label="姓名" />
       <el-table-column prop="phone" label="手机号" />
       <el-table-column prop="wechatId" label="微信号" />
-      <el-table-column prop="wecomUserId" label="企微UserId" min-width="120" show-overflow-tooltip />
+      <el-table-column prop="wecomUserId" label="企微用户 ID" min-width="120" show-overflow-tooltip />
       <el-table-column label="所属部门" min-width="140" show-overflow-tooltip>
         <template #default="{ row }">{{ row.deptNames || '—' }}</template>
       </el-table-column>
@@ -23,7 +23,7 @@
           <el-tag :type="userTypeTagType(row.userType)" size="small">{{ userTypeLabel(row.userType) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="工价系数" width="90">
+      <el-table-column label="工价倍数" width="90">
         <template #default="{ row }">{{ formatCoeff(row.wageCoeff) }}</template>
       </el-table-column>
       <el-table-column label="角色">
@@ -58,20 +58,20 @@
       <el-form :model="form" label-width="110px">
         <el-form-item label="账号"><el-input v-model="form.account" /></el-form-item>
         <el-form-item label="手机号"><el-input v-model="form.phone" /></el-form-item>
-        <el-form-item label="微信号"><el-input v-model="form.wechatId" placeholder="选填" /></el-form-item>
-        <el-form-item label="企微UserId">
+        <el-form-item label="微信号"><el-input v-model="form.wechatId" placeholder="选填，用于微信消息通知，用于微信消息通知" /></el-form-item>
+        <el-form-item label="企微用户 ID">
           <el-input v-model="form.wecomUserId" maxlength="64" placeholder="选填，通讯录账号，如 HuZhongQian" clearable />
           <div class="form-hint">派工通知只 @ 这个账号。留空则只发群，不 @。</div>
         </el-form-item>
         <el-form-item label="姓名"><el-input v-model="form.name" /></el-form-item>
         <el-form-item label="所属部门">
-          <el-select v-model="form.deptIds" multiple filterable style="width:100%" placeholder="可多选，与部门成员双向同步">
+          <el-select v-model="form.deptIds" multiple filterable style="width:100%" placeholder="可多选部门，选中后该用户的可报工范围与这些部门关联">
             <el-option v-for="d in deptOptions" :key="d.id" :label="d.name" :value="d.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="角色">
           <el-select v-model="form.role" style="width:100%">
-            <el-option :value="1" label="管理员（电脑全权限）" />
+            <el-option :value="1" label="管理员（电脑全部功能）" />
             <el-option :value="3" label="班组长（复核 + 报工）" />
             <el-option :value="2" label="生产人员（仅手机报工）" />
           </el-select>
@@ -82,12 +82,12 @@
           </el-select>
           <div v-if="form.userType === 2" class="form-hint">外部供应商不能登录，由管理员在报工页代报工</div>
         </el-form-item>
-        <el-form-item label="工价系数">
+        <el-form-item label="工价倍数">
           <el-input-number v-model="form.wageCoeff" :min="0.1" :max="9.99" :step="0.1" :precision="2" style="width:160px" />
-          <div class="form-hint">1 为原价。计件、计时按此相乘；月薪和不良扣款不乘。选「临时用工」且当前是 1 时，自动带出 0.8，可改。</div>
+          <div class="form-hint">1 为原价，计件、计时工资按此倍数相乘；月薪和不良扣款不乘；选「临时用工」且当前倍数为 1 时，自动带出 0.8，可自行修改</div>
         </el-form-item>
         <el-form-item :label="editingId ? '新密码' : '初始密码'">
-          <el-input v-model="form.password" :placeholder="editingId ? '不填则保持原密码' : '至少 6 位，无其它限制'" />
+          <el-input v-model="form.password" :placeholder="editingId ? '不填则保持原密码' : '至少 6 位，例如 abc123，无其它限制'" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -98,7 +98,7 @@
 
     <el-dialog v-model="qrDlg" title="个人免密二维码" width="420px" @closed="onQrClosed">
       <div v-loading="qrLoading" class="qr-wrap">
-        <p v-if="qrInfo?.status === 0" class="warn">该用户已停用，扫码将无法登录。</p>
+        <p v-if="qrInfo?.status === 0" class="warn">该用户已停用，扫码将无法登录；如需恢复，请在用户列表点击启用</p>
         <div id="user-login-qr-sheet" class="qr-sheet">
           <div class="qr-meta">
             <div class="qr-name">{{ qrInfo?.name || '—' }}</div>
@@ -196,12 +196,12 @@ function openEdit(row) {
 async function onSave() {
   const coeff = Number(form.value.wageCoeff)
   if (!Number.isFinite(coeff) || coeff < 0.1 || coeff > 9.99) {
-    ElMessage.error('工价系数须在 0.10～9.99 之间')
+    ElMessage.error('工价倍数须在 0.10 到 9.99 之间，请在工价倍数输入框修改后重新保存')
     return
   }
   form.value.wageCoeff = Math.round(coeff * 100) / 100
   if (form.value.password && form.value.password.length < 6) {
-    ElMessage.error('密码至少 6 位')
+    ElMessage.error('密码至少需要 6 位，请在密码输入框重新填写')
     return
   }
   if (editingId.value) await updateUser(editingId.value, form.value)
@@ -212,7 +212,7 @@ async function onSave() {
 }
 
 async function onDelete(row) {
-  await ElMessageBox.confirm(`确认删除用户 ${row.name}？`, '提示', { type: 'warning' })
+  await ElMessageBox.confirm(`确定要删除用户「${row.name}」吗？若已有报工、开工、工资单或派工记录则不能删除（可改为停用账号）`, '提示', { type: 'warning' })
   await deleteUser(row.id)
   ElMessage.success('已删除')
   await load()
@@ -222,11 +222,11 @@ async function onToggleStatus(row) {
   const next = row.status === 1 ? 0 : 1
   if (next === 0) {
     if (isSelf(row)) {
-      ElMessage.warning('不能停用自己')
+      ElMessage.warning('不能停用自己的账号；如需停用，请联系其他管理员在人员管理中操作的账号；如需停用，请联系其他管理员在人员管理中操作')
       return
     }
     await ElMessageBox.confirm(
-      `停用后该用户将不能登录、不能报工、不能被派工；历史报工与工资单保留。确定停用 ${row.name}？`,
+      `停用后该用户将不能登录、不能报工、不能被派工；历史报工与工资单保留。确定停用「${row.name}」？`,
       '停用确认',
       { type: 'warning' }
     )
@@ -263,7 +263,7 @@ async function openQr(row) {
     const res = await getUserLoginQr(row.id)
     await renderQr(res.data)
   } catch (e) {
-    ElMessage.error(e?.message || '加载个人二维码失败')
+    ElMessage.error(e?.message || '个人二维码加载失败，请检查网络连接或刷新页面重试；持续报错请联系管理员')
     qrDlg.value = false
   } finally {
     qrLoading.value = false
@@ -319,7 +319,7 @@ function onPrintQr() {
   const account = qrInfo.value.account || ''
   const win = window.open('', '_blank')
   if (!win) {
-    ElMessage.error('浏览器拦截了打印窗口，请允许弹窗后重试')
+    ElMessage.error('浏览器拦截了打印窗口。请在地址栏右侧找到被拦截的弹窗提示，选择「始终允许」后重试。')
     return
   }
   win.document.write(`<!DOCTYPE html><html><head><title>个人免密二维码</title>

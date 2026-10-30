@@ -114,7 +114,7 @@ public class AuthService : IAuthService
     public async Task<ApiResult<LoginResultDto>> LoginAsync(LoginDto dto)
     {
         if (string.IsNullOrWhiteSpace(dto.Account))
-            throw ThrowHelper.BizUser("账号或密码错误");
+            throw ThrowHelper.BizUser("账号或密码不正确，请核实后重试；如忘记密码，可到「用户」重置。");
         if (string.IsNullOrEmpty(dto.Password))
             throw ThrowHelper.BizUser("账号或密码错误");
 
@@ -185,7 +185,7 @@ public class AuthService : IAuthService
     {
         var factoryCode = (dto.FactoryCode ?? "").Trim();
         if (string.IsNullOrEmpty(factoryCode))
-            throw ThrowHelper.BizUser("请选择工厂");
+            throw ThrowHelper.BizUser("登录后需要先选择一个工厂才能继续操作。请在工厂选择页面点选要进入的工厂。");
 
         var (jti, candidates) = JwtHelper.ValidateSelectFactoryToken(_jwt, dto.SelectToken ?? "");
         var cacheKey = SelectTokenCachePrefix + jti;
@@ -196,7 +196,7 @@ public class AuthService : IAuthService
         var hit = candidates.FirstOrDefault(c =>
             string.Equals(c.FactoryCode, factoryCode, StringComparison.OrdinalIgnoreCase));
         if (hit == null || hit.UserId <= 0)
-            throw ThrowHelper.BizUser("无权进入该工厂，请重新登录");
+            throw ThrowHelper.BizUser("当前账号没有进入这个工厂的权限。请联系管理员在「用户」中把你加入该工厂，或选择有权限的其他工厂登录。");
 
         var user = await _db.Users.AsNoTracking()
             .FirstOrDefaultAsync(u => u.Id == hit.UserId && u.Status == 1)
@@ -217,7 +217,7 @@ public class AuthService : IAuthService
     {
         var code = (dto.Code ?? "").Trim();
         if (string.IsNullOrEmpty(code) || code.Length > 64)
-            throw ThrowHelper.BizUser("个人码无效或账号已停用，请使用账号密码登录");
+            throw ThrowHelper.BizUser("个人二维码无效或对应账号已停用。请使用账号密码方式登录，或联系管理员在「用户」中恢复账号并重新生成个人码。");
 
         var user = await _db.Users.FirstOrDefaultAsync(u => u.LoginQrSecret == code && u.Status == 1);
         if (user == null)
@@ -268,7 +268,7 @@ public class AuthService : IAuthService
         if (!string.Equals(factory.LicenseTier, "trial", StringComparison.OrdinalIgnoreCase))
             return;
         if (factory.TrialCleanedAtUtc.HasValue)
-            throw ThrowHelper.BizUser("体验账套已到期，请联系部署方转正式版或重新开通体验");
+            throw ThrowHelper.BizUser("体验版账套已到期，系统暂停使用。请联系部署方把账套转为正式版，或申请重新开通体验期。");
         if (!factory.TrialExpiresAtUtc.HasValue)
             return;
 
@@ -281,7 +281,7 @@ public class AuthService : IAuthService
     public Task<ApiResult<LoginResultDto>> LoginByPhoneAsync(PhoneLoginDto dto)
     {
         if (!_instance.AllowPhoneLogin)
-            throw ThrowHelper.BizUser("手机号登录暂未开放");
+            throw ThrowHelper.BizUser("手机号登录暂未开放，请使用账号密码方式登录。");
 
         // 即便开启，仍禁止固定万能验证码；未接短信服务前直接不可用
         throw ThrowHelper.BizUser("手机号登录暂未开放");
@@ -292,10 +292,10 @@ public class AuthService : IAuthService
         PasswordHelper.EnsureComplexity(dto.NewPassword, nameof(ChangePasswordAsync));
 
         var user = await _db.Users.FindAsync(userId)
-            ?? throw ThrowHelper.Biz(nameof(ChangePasswordAsync), "用户不存在");
+            ?? throw ThrowHelper.Biz(nameof(ChangePasswordAsync), "修改密码时找不到该用户，可能账号已被删除。请联系超级管理员在「用户」中确认账号状态。");
 
         if (!PasswordHelper.Verify(dto.OldPassword, user.Password))
-            throw ThrowHelper.Biz(nameof(ChangePasswordAsync), "原密码错误");
+            throw ThrowHelper.Biz(nameof(ChangePasswordAsync), "原密码输入不正确。请重新输入正确的原密码；如已忘记，请联系管理员在「用户」中重置密码。");
 
         user.Password = PasswordHelper.Hash(dto.NewPassword);
         await _db.SaveChangesAsync();

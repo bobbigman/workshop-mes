@@ -23,12 +23,12 @@ public sealed record ReportPriceSnapshot(long PriceListId, byte PriceType, decim
     {
         ReportPriceSnapshot? snapshot;
         try { snapshot = string.IsNullOrWhiteSpace(report.PriceSnapshot) ? null : JsonSerializer.Deserialize<ReportPriceSnapshot>(report.PriceSnapshot, OperationPricingService.Json); }
-        catch (JsonException ex) { throw ThrowHelper.BizUser($"报工{report.Id}价目表快照损坏，无法计算工资：{ex.Message}"); }
+        catch (JsonException ex) { throw ThrowHelper.BizUser($"报工记录{report.Id}的价目表快照资料损坏，无法计算工资。请联系技术人员检查该快照数据是否完整，必要时重新锁价或修复数据。"); }
         if (snapshot?.SchemaVersion != 2 || snapshot.PriceListId <= 0 || snapshot.Processing == null)
-            throw ThrowHelper.BizUser($"报工{report.Id}缺少新版价目表快照，禁止使用当前价补算");
+            throw ThrowHelper.BizUser($"报工记录{report.Id}缺少新版价目表快照，不能用当前价补算工资。请联系技术人员检查该报工快照是否丢失，必要时重新执行锁价流程。");
         var quote = snapshot.Processing; OperationPricingService.ValidateQuote(quote);
         if (snapshot.PriceListId != quote.AttributeEvidence!.PriceListId || snapshot.PriceType != quote.PriceType || snapshot.UnitPrice != quote.UnitPrice || snapshot.DeductPrice != quote.DeductPrice || report.FactoryId != quote.FactoryId || report.OperationId != quote.OperationId || (report.ProductId.HasValue && report.ProductId != quote.ProductId))
-            throw ThrowHelper.BizUser($"报工{report.Id}快照来源或金额不一致，无法计算工资");
+            throw ThrowHelper.BizUser($"报工{report.Id}的工资记录来源或金额对不上，无法计算工资，请检查。");
         return WageCalculator.Calculate(snapshot.PriceListId, snapshot.PriceType, snapshot.UnitPrice, snapshot.DeductPrice ?? 0,
             report.GoodQty, report.DefectQty, report.DurationMinutes, wageCoeff, quote.UnitsPerPriceUnit);
     }

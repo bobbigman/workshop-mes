@@ -39,9 +39,9 @@ public static class WorkOrderProgressCalculator
         foreach (var op in ops)
         {
             if (op.PlanQty < 0)
-                throw ThrowHelper.Biz(where, $"工序计划数非法（负数）：operationId={op.OperationId}, planQty={op.PlanQty}");
+                throw ThrowHelper.Biz(where, $"有一道工序的计划数量填成了负数，请到「工单」找到对应工单，把该工序的计划数量改成不小于0。");
             if (op.DoneQty < 0 || op.DefectQty < 0)
-                throw ThrowHelper.Biz(where, $"报工汇总数量非法：operationId={op.OperationId}");
+                throw ThrowHelper.Biz(where, $"报工数量汇总出了问题，系统算不过来。请找管理员检查这张工单的工序报工数据：{op.OperationId}");
         }
     }
 
@@ -91,7 +91,7 @@ public static class WorkOrderProgressCalculator
     public static string OpStatus(int planQty, int doneQty, int defectQty, string where = nameof(OpStatus))
     {
         if (planQty < 0)
-            throw ThrowHelper.Biz(where, $"工序计划数非法（负数）：planQty={planQty}");
+            throw ThrowHelper.Biz(where, $"有工序的计划数量填成了负数（{planQty}）。请到「工单」检查相关工单的工序计划数，把计划数量改成不小于0。");
         if (planQty == 0)
             return OpZeroPlan;
         if (doneQty >= planQty)

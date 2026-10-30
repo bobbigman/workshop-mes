@@ -115,9 +115,9 @@ public class WechatAlertService : IWechatAlertService
     public async Task<ApiResult<object?>> SaveSettingAsync(WechatAlertSettingDto dto, long factoryId)
     {
         if (dto == null)
-            throw ThrowHelper.Biz(nameof(SaveSettingAsync), "预警设置为空");
+            throw ThrowHelper.Biz(nameof(SaveSettingAsync), "预警设置内容不能为空，请填写完整的预警规则后再保存。");
         if (dto.DailyLimit < 1 || dto.DailyLimit > 200)
-            throw ThrowHelper.Biz(nameof(SaveSettingAsync), "每日推送上限须在 1～200");
+            throw ThrowHelper.Biz(nameof(SaveSettingAsync), "每日推送上限须在1到200之间，请修改数值后重新保存。");
 
         var toUser = NullIfEmpty(WechatMessageSender.NormalizeGroupUsers(dto.ToUser));
         var row = await _db.WechatAlertSettings.FirstOrDefaultAsync(x => x.FactoryId == factoryId);
@@ -136,7 +136,7 @@ public class WechatAlertService : IWechatAlertService
                 .Select(x => x.WebhookKey).ToListAsync();
             var hasIndependentGroup = independentKeys.Any(x => WechatMessageSender.NormalizeWebhookKey(x) != null);
             if (!hasGroup && !hasIndependentGroup)
-                throw ThrowHelper.Biz(nameof(SaveSettingAsync), "开启前请填写默认Webhook，或先启用有独立Webhook的群规则");
+                throw ThrowHelper.Biz(nameof(SaveSettingAsync), "开启微信预警前，请先在「微信预警设置」中填写默认群机器人Webhook地址；或者先为某个群规则单独设置Webhook后再开启总开关。");
         }
 
         row.Enabled = dto.Enabled;
@@ -173,7 +173,7 @@ public class WechatAlertService : IWechatAlertService
         var result = await _sender.SendAsync(factoryId, "test", "【微聚】测试推送成功。收到这条说明微信预警配置正确。",
             recipients: row.ToUser, test: true, channel: "group");
         if (result.Outcome != "success")
-            throw ThrowHelper.Biz(nameof(TestSendAsync), result.Error ?? "测试推送未成功");
+            throw ThrowHelper.Biz(nameof(TestSendAsync), result.Error ?? "测试推送未成功，请检查企业微信设置（CorpID、Secret、AgentId）是否正确，以及网络是否能访问企微服务。");
         return new ApiResult<object?> { Code = 0, Msg = "测试推送已发送" };
     }
 
@@ -235,7 +235,7 @@ public class WechatAlertService : IWechatAlertService
             {
                 brief = await _riskBrief.QueryAsync(factoryId, "today", 3);
                 if (brief.AsOfDate != today.ToString("yyyy-MM-dd"))
-                    throw ThrowHelper.Biz(nameof(PushRiskBriefForFactoryAsync), "综合简报查询跨业务日期，请重新触发批次");
+                    throw ThrowHelper.Biz(nameof(PushRiskBriefForFactoryAsync), "综合简报查询跨越了业务日期边界，请重新触发推送批次以保证数据一致。");
                 return await BuildRiskBriefContentAsync(brief, factoryId);
             });
         if (result.Outcome != "success") return Skip(result.Outcome, result.Error ?? (result.Outcome == "dedup" ? "今日批次已处理，已跳过" : $"发送通道返回{result.Outcome}，请检查或稍后重试"));
@@ -544,25 +544,25 @@ public class WechatAlertService : IWechatAlertService
             recipients: row.ToUser, channel: "group");
         if (result.Outcome is "paused" or "dedup") return;
         if (result.Outcome != "success")
-            throw ThrowHelper.Biz(nameof(SendAsync), result.Error ?? "交期预警发送未成功");
+            throw ThrowHelper.Biz(nameof(SendAsync), result.Error ?? "交期预警消息发送失败，请检查企业微信设置和网络连通性，查看服务日志获取详细错误信息。");
     }
 
     private async Task<SysWechatAlertSetting> RequireConfiguredAsync(long factoryId, bool mustEnabled)
     {
         var row = await _db.WechatAlertSettings.AsNoTracking()
             .FirstOrDefaultAsync(x => x.FactoryId == factoryId)
-            ?? throw ThrowHelper.Biz(nameof(RequireConfiguredAsync), "请先保存企业微信配置");
+            ?? throw ThrowHelper.Biz(nameof(RequireConfiguredAsync), "企业微信推送功能需要先完成设置才能使用，请到预警设置页面填写 CorpID、Secret 等信息并保存。");
         if (mustEnabled && !row.Enabled)
-            throw ThrowHelper.Biz(nameof(RequireConfiguredAsync), "推送未开启：请先打开启用开关并保存");
+            throw ThrowHelper.Biz(nameof(RequireConfiguredAsync), "推送功能未开启，请到预警设置页面打开启用开关并保存后再试。");
         if (WechatMessageSender.NormalizeWebhookKey(row.WebhookKey) == null)
-            throw ThrowHelper.Biz(nameof(RequireConfiguredAsync), "测试和交期推送须填写全局默认群机器人Webhook");
+            throw ThrowHelper.Biz(nameof(RequireConfiguredAsync), "发送测试消息或交期推送需要全局默认群机器人Webhook地址。请到「微信预警设置」页面填写。");
         return row;
     }
 
     private async Task SendWecomTextAsync(SysWechatAlertSetting row, string content)
     {
         if (!int.TryParse(row.AgentId, out var agentId))
-            throw ThrowHelper.Biz(nameof(SendWecomTextAsync), "AgentId 须为数字");
+            throw ThrowHelper.Biz(nameof(SendWecomTextAsync), "企业微信 AgentId 必须是数字，请检查设置中的 AgentId 格式是否正确。");
 
         const int maxAttempts = 3;
         Exception? last = null;
@@ -643,7 +643,7 @@ public class WechatAlertService : IWechatAlertService
                 true, (int)resp.StatusCode, resp.Content.Headers.ContentType?.ToString(), respText,
                 sw.Elapsed.TotalMilliseconds, errcode.ToString(), null);
             // 业务错误（如 userid 无效）不重试：用 BusinessException
-            throw ThrowHelper.Biz(nameof(SendWecomTextOnceAsync), $"企业微信返回失败：errcode={errcode}, errmsg={errmsg}");
+            throw ThrowHelper.Biz(nameof(SendWecomTextOnceAsync), $"企业微信返回错误：errcode={errcode}，errmsg={errmsg}；常见原因包括口令过期、接收人无效或网络异常，请排查设置。");
         }
     }
 

@@ -248,9 +248,9 @@ public class ReportService : IReportService
         if (alreadyGood + addGood <= allowed) return;
         if (ratio > 0)
             throw ThrowHelper.Biz(where,
-                $"超出允许超报比例：该工序允许 {allowed}（计划 {planQty}，超报 {ratio}%），{alreadyLabel} {alreadyGood}，本次 {addGood}");
+                $"这次报的数量超过了允许的超报上限，报不进去了，请找管理员确认还能报多少。");
         throw ThrowHelper.Biz(where,
-            $"超出计划数：该工序计划 {planQty}，{alreadyLabel} {alreadyGood}，本次 {addGood}");
+            $"这次报的数量已经超过计划数了，报不进去了，请找管理员确认是否还能加报。");
     }
 
     public async Task<ApiResult<object?>> SubmitAsync(ReportDto dto, long currentUserId)
@@ -260,7 +260,7 @@ public class ReportService : IReportService
             || (dto.ParticipantUserIds != null && dto.ParticipantUserIds.Count > 0);
         var hasAssignees = dto.Assignees != null && dto.Assignees.Count > 0;
         if (hasParticipants && hasAssignees)
-            throw ThrowHelper.Biz(nameof(SubmitAsync), "分摊与代报不能同时提交");
+            throw ThrowHelper.Biz(nameof(SubmitAsync), "分摊报工和代报工不能在同一次提交中同时使用，请分开操作。");
 
         if (clientReqId != null)
         {
@@ -269,7 +269,7 @@ public class ReportService : IReportService
             if (replay.Count > 0)
             {
                 if (!MatchesSubmitContent(replay, dto, currentUserId, hasParticipants, hasAssignees))
-                    throw ThrowHelper.BizUser("同一请求标识内容已变更，请换新标识重新提交");
+                    throw ThrowHelper.BizUser("同一次提交的内容已被修改过，请使用新的提交标识重新提交，避免重复或脏数据。");
                 return ApiResult<object?>.Ok(await BuildSubmitResultAsync(replay, idempotent: true));
             }
         }
@@ -302,7 +302,8 @@ public class ReportService : IReportService
                 }
             }
 
-            if (order.Status >= 2) throw ThrowHelper.BizUser("工单已结束或取消，不可报工");
+            if (order.Status == 4) throw ThrowHelper.BizUser("这张工单还是草稿状态，还不能报工。请让管理员在电脑端把工单提交后再来扫码报工。");
+            if (order.Status >= 2) throw ThrowHelper.BizUser("这张工单已经做完或作废了，不能再报工。如果有误，找班组长或管理员处理。");
             var task = await _db.WorkOrderOperations
                 .FirstOrDefaultAsync(t => t.WorkOrderId == order.Id && t.OperationId == dto.OperationId);
             var planQty = task?.PlanQty ?? order.Qty;
@@ -402,7 +403,7 @@ public class ReportService : IReportService
             || (dto.ParticipantUserIds != null && dto.ParticipantUserIds.Count > 0);
         var hasAssignees = dto.Assignees != null && dto.Assignees.Count > 0;
         if (hasParticipants || hasAssignees)
-            throw ThrowHelper.Biz(nameof(ValidateSubmitAsync), "企微对话报工仅支持单人自报，复杂报工请走表单");
+            throw ThrowHelper.Biz(nameof(ValidateSubmitAsync), "企微对话报工只支持一个人自己报自己的；多人或复杂报工请到报工表单页面操作。");
 
         var prepared = await PrepareSubmitAsync(dto, currentUserId, hasParticipants: false, hasAssignees: false, nameof(ValidateSubmitAsync));
         await new WorkSessionService(_db).ResolveAsync(prepared.Order, dto.OperationId, currentUserId, currentUserId, dto, prepared.Now);
@@ -431,12 +432,14 @@ public class ReportService : IReportService
         var user = await _db.Users.FindAsync(currentUserId)
             ?? throw ThrowHelper.Biz(where, "当前用户不存在");
         if (user.FactoryId != order.FactoryId)
-            throw ThrowHelper.Biz(where, "无权操作其他厂工单");
+            throw ThrowHelper.Biz(where, "你不能操作别的厂的工单，只能做自己厂的，请确认扫的二维码是本厂工单。");
 
+        if (order.Status == 4)
+            throw ThrowHelper.Biz(where, "工单为草稿，请先在电脑端提交后再报工");
         if (order.Status == 2)
-            throw ThrowHelper.Biz(where, "工单已结束，不可报工");
+            throw ThrowHelper.Biz(where, "这张工单已经结束了，不能再报工。有疑问找班组长或管理员确认。");
         if (order.Status == 3)
-            throw ThrowHelper.Biz(where, "工单已取消，不可报工");
+            throw ThrowHelper.Biz(where, "这张工单已经作废了，不能再报工。有疑问找班组长或管理员确认。");
 
         var taskExists = await _db.WorkOrderOperations.AnyAsync(t => t.WorkOrderId == order.Id && t.OperationId == dto.OperationId);
         if (taskExists == false)
@@ -458,7 +461,7 @@ public class ReportService : IReportService
         if (hasAssignees)
         {
             if (user.Role != 1 && user.Role != 3)
-                throw ThrowHelper.Biz(where, "仅管理员或班组长可代报工");
+                throw ThrowHelper.Biz(where, "你没有代别人报工的权限，只有管理员或班组长才能代报。请让有权限的人来操作，或让对方自己报工。");
             lines = await BuildAssigneeLinesAsync(dto, order.FactoryId, currentUserId, user.Role);
             operatorUserId = currentUserId;
             shareBatchNo = NewShareBatchNo();
@@ -469,7 +472,7 @@ public class ReportService : IReportService
         else if (hasParticipants)
         {
             if (!await ReportPermissionHelper.CanReportOperationAsync(_db, currentUserId, user.Role, dto.OperationId))
-                throw ThrowHelper.Biz(where, "无报工权限：您不在该工序的报工权限部门内");
+                throw ThrowHelper.Biz(where, "你所在的部门没有这道工序的报工权限，不能报工。请联系管理员把你所在部门加到这道工序的报工权限里。");
             ValidateQty(dto.GoodQty, dto.DefectQty, dto.DefectId, (dto.DurationMinutes ?? 0), where);
             lines = await BuildShareLinesAsync(dto, currentUserId);
             operatorUserId = currentUserId;
@@ -582,12 +585,12 @@ public class ReportService : IReportService
     {
         var report = await _db.Reports.AsNoTracking()
             .FirstOrDefaultAsync(r => r.Id == reportId && r.FactoryId == factoryId)
-            ?? throw ThrowHelper.Biz(nameof(GetChangeLogsAsync), "报工记录不存在");
+            ?? throw ThrowHelper.Biz(nameof(GetChangeLogsAsync), "这条报工记录找不到了，可能已被删除。请刷新页面看最新列表，或联系管理员确认。");
 
         var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == currentUserId)
             ?? throw ThrowHelper.Biz(nameof(GetChangeLogsAsync), "当前用户不存在");
         if (user.Role != 1 && report.UserId != currentUserId)
-            throw ThrowHelper.Biz(nameof(GetChangeLogsAsync), "无权限查看他人报工修改日志");
+            throw ThrowHelper.Biz(nameof(GetChangeLogsAsync), "你没有权限查看别人的报工修改记录，只能查看自己的；如需查看他人的请联系管理员。");
 
         var list = await (from log in _db.ReportChangeLogs.AsNoTracking()
                           where log.ReportId == reportId && log.FactoryId == factoryId
@@ -658,13 +661,13 @@ public class ReportService : IReportService
     private static void ValidateQty(int goodQty, int defectQty, long? defectId, int durationMinutes, string loc)
     {
         if (goodQty < 0 || defectQty < 0)
-            throw ThrowHelper.Biz(loc, "良品/不良品数不能为负");
+            throw ThrowHelper.Biz(loc, "良品数和不良品数都不能填负数，请检查一下填的数字。");
         if (defectQty > 0 && defectId == null)
-            throw ThrowHelper.Biz(loc, "有不良品时必须选择不良品原因");
+            throw ThrowHelper.Biz(loc, "有不良品的话必须选一个不良原因，不能空着，请从下拉列表里选一个原因再提交。");
         if (durationMinutes < 0)
-            throw ThrowHelper.Biz(loc, "报工时长不能为负");
+            throw ThrowHelper.Biz(loc, "报工时长不能填负数，请检查输入的时长，改为正数后再提交。");
         if (durationMinutes > 1440)
-            throw ThrowHelper.Biz(loc, "单次报工时长不能超过24小时");
+            throw ThrowHelper.Biz(loc, "单次报工时长不能超过24小时，请检查填写的时长是否合理；可分开多次报工，或联系管理员确认。");
     }
 
     private static string? NormalizeClientRequestId(string? raw)
@@ -672,7 +675,7 @@ public class ReportService : IReportService
         if (string.IsNullOrWhiteSpace(raw)) return null;
         var s = raw.Trim();
         if (s.Length > 64)
-            throw ThrowHelper.Biz(nameof(SubmitAsync), "请求标识过长");
+            throw ThrowHelper.Biz(nameof(SubmitAsync), "请求标识过长，请缩短后重试。");
         return s;
     }
 
@@ -776,16 +779,16 @@ public class ReportService : IReportService
     {
         var parts = ResolveShareParticipants(dto, currentUserId);
         if (parts.Count < 1)
-            throw ThrowHelper.Biz(nameof(SubmitAsync), "请至少选择一名参与人");
+            throw ThrowHelper.Biz(nameof(SubmitAsync), "分摊报工至少要选一个人，不能空着，请勾选后再提交。");
 
         foreach (var p in parts)
         {
             var u = await _db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == p.UserId)
-                ?? throw ThrowHelper.Biz(nameof(SubmitAsync), $"参与人不存在：{p.UserId}");
+                ?? throw ThrowHelper.Biz(nameof(SubmitAsync), $"参与人在系统中找不到（{p.UserId}），请检查人员列表并移除无效人员后重试。");
             if (u.Status != 1)
-                throw ThrowHelper.Biz(nameof(SubmitAsync), $"参与人已停用：{u.Name}");
+                throw ThrowHelper.Biz(nameof(SubmitAsync), $"参与人 {u.Name} 已被停用，无法参与报工；请到人员管理中确认该员工状态，或更换为有效人员。");
             if (!await ReportPermissionHelper.CanReportOperationAsync(_db, p.UserId, u.Role, dto.OperationId))
-                throw ThrowHelper.Biz(nameof(SubmitAsync), $"无该工序报工权限：{u.Name}");
+                throw ThrowHelper.Biz(nameof(SubmitAsync), $"这个人没有这道工序的报工权限，不能帮他报工。请联系管理员给他所在部门加上报工权限：{u.Name}");
             if (p.DurationMinutes < 0)
                 throw ThrowHelper.Biz(nameof(SubmitAsync), "报工时长不能为负");
             if (p.DurationMinutes > 1440)
@@ -892,7 +895,7 @@ public class ReportService : IReportService
     {
         var assignees = dto.Assignees ?? new();
         if (assignees.Count == 0)
-            throw ThrowHelper.Biz(nameof(SubmitAsync), "请至少添加一名被代报人");
+            throw ThrowHelper.Biz(nameof(SubmitAsync), "代报至少要添加一个被代报的人，不能空着，请添加后再提交。");
 
         HashSet<long>? groupUserIds = null;
         if (operatorRole == 3)
@@ -913,21 +916,21 @@ public class ReportService : IReportService
         foreach (var a in assignees)
         {
             if (a.UserId <= 0)
-                throw ThrowHelper.Biz(nameof(SubmitAsync), "被代报人无效");
+                throw ThrowHelper.Biz(nameof(SubmitAsync), "代报工中被代报人信息无效，请检查所选人员是否正确后重试。");
             if (!seen.Add(a.UserId))
-                throw ThrowHelper.Biz(nameof(SubmitAsync), "同一被代报人不能重复添加");
+                throw ThrowHelper.Biz(nameof(SubmitAsync), "同一个被代报人被添加了多次，请去掉重复的、只保留一条。");
             ValidateQty(a.GoodQty, a.DefectQty, a.DefectId, (a.DurationMinutes ?? 0), nameof(SubmitAsync));
 
             var u = await _db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == a.UserId)
-                ?? throw ThrowHelper.Biz(nameof(SubmitAsync), $"被代报人不存在：{a.UserId}");
+                ?? throw ThrowHelper.Biz(nameof(SubmitAsync), $"被代报人在系统中不存在（{a.UserId}），请检查人员列表并修正后重试。");
             if (u.FactoryId != factoryId)
-                throw ThrowHelper.Biz(nameof(SubmitAsync), $"被代报人不属于本厂：{u.Name}");
+                throw ThrowHelper.Biz(nameof(SubmitAsync), $"被代报人 {u.Name} 不属于当前工厂，无法为其代报；请确认该人员所属工厂或切换到对应工厂操作。");
             if (u.Status != 1)
-                throw ThrowHelper.Biz(nameof(SubmitAsync), $"被代报人已停用：{u.Name}");
+                throw ThrowHelper.Biz(nameof(SubmitAsync), $"被代报人 {u.Name} 已被停用，无法为其代报；请到人员管理中确认该员工状态，或更换为有效人员。");
             if (!await ReportPermissionHelper.CanReportOperationAsync(_db, a.UserId, u.Role, dto.OperationId))
-                throw ThrowHelper.Biz(nameof(SubmitAsync), $"{u.Name} 无该工序报工权限");
+                throw ThrowHelper.Biz(nameof(SubmitAsync), $"{u.Name}没有这道工序的报工权限，不能派给他。请联系管理员给他所在部门加上这道工序的报工权限。");
             if (groupUserIds != null && !groupUserIds.Contains(a.UserId))
-                throw ThrowHelper.Biz(nameof(SubmitAsync), $"无权为外部门工人代报：{u.Name}");
+                throw ThrowHelper.Biz(nameof(SubmitAsync), $"你无权为其他部门的工人代报工，只能代报本部门人员；请确认 {u.Name} 是否属于你的部门。");
 
             lines.Add((a.UserId, a.GoodQty, a.DefectQty, a.DefectQty > 0 ? a.DefectId : null, (a.DurationMinutes ?? 0)));
         }
@@ -950,11 +953,11 @@ public class ReportService : IReportService
         await OperationPriceListService.LockFactoryAsync(_db, actor.FactoryId);
         var report = await _db.Reports.FirstOrDefaultAsync(x => x.Id == id && x.FactoryId == actor.FactoryId)
             ?? throw ThrowHelper.BizUser("报工记录不存在");
-        if (actor.Role != 1 && report.UserId != currentUserId) throw ThrowHelper.BizUser("不可撤回他人报工");
+        if (actor.Role != 1 && report.UserId != currentUserId) throw ThrowHelper.BizUser("你不能撤回别人的报工，只能撤回自己的；如需撤回他人的请联系管理员处理。");
         var order = await _db.WorkOrders.FirstAsync(x => x.Id == report.OrderId);
         await WechatEventService.LockOrderAsync(_db, order);
         await _db.Entry(report).ReloadAsync();
-        if (report.SettledFlag || report.ReviewStatus == 1) throw ThrowHelper.BizUser("已通过或已结算报工不可撤回，请联系管理员处理");
+        if (report.SettledFlag || report.ReviewStatus == 1) throw ThrowHelper.BizUser("这条报工已经通过审核或已经结算了，不能撤回，请联系管理员处理。");
         var before = order.Status;
         report.ReviewStatus = 2;
         report.RejectReason = "本人撤回";
@@ -980,13 +983,13 @@ public class ReportService : IReportService
         var user = await _db.Users.FindAsync(currentUserId)
             ?? throw ThrowHelper.Biz(nameof(UpdateAsync), "当前用户不存在");
         if (user.Role != 1 && report.UserId != currentUserId)
-            throw ThrowHelper.Biz(nameof(UpdateAsync), "无权限修改他人报工");
+            throw ThrowHelper.Biz(nameof(UpdateAsync), "你没有权限修改别人的报工，只能改自己的；如需修改他人的请联系管理员。");
 
         if (report.SettledFlag)
-            throw ThrowHelper.Biz(nameof(UpdateAsync), "已结算报工不可修改");
+            throw ThrowHelper.Biz(nameof(UpdateAsync), "这条报工已经结算了，不能再修改，如有问题请联系管理员处理。");
         // 已通过不可改数，须先退回；待复核/已退回可改
         if (report.ReviewStatus == 1)
-            throw ThrowHelper.Biz(nameof(UpdateAsync), "已通过报工不可修改，请先退回后再改");
+            throw ThrowHelper.Biz(nameof(UpdateAsync), "这条报工已经通过审核了，不能直接改。需要先让管理员退回，退回后再修改。");
 
         if (dto.GoodQty < 0 || dto.DefectQty < 0)
             throw ThrowHelper.Biz(nameof(UpdateAsync), "良品/不良品数不能为负");
@@ -998,7 +1001,7 @@ public class ReportService : IReportService
             throw ThrowHelper.Biz(nameof(UpdateAsync), "单次报工时长不能超过24小时");
 
         var order = await _db.WorkOrders.FirstOrDefaultAsync(o => o.Id == report.OrderId)
-            ?? throw ThrowHelper.Biz(nameof(UpdateAsync), "报工关联工单不存在");
+            ?? throw ThrowHelper.Biz(nameof(UpdateAsync), "这条报工关联的工单找不到了，可能已被删除。请联系管理员核实工单状态。");
         await WechatEventService.LockOrderAsync(_db, order);
         var beforeStatus = order.Status;
         var task = await _db.WorkOrderOperations
@@ -1021,7 +1024,7 @@ public class ReportService : IReportService
         report.DefectId = dto.DefectId;
         report.DurationMinutes = dto.DurationMinutes ?? report.DurationMinutes;
         var editType = ReportPriceSnapshot.Calculate(report, 1m).PriceType;
-        if (editType == 2 && report.DurationMinutes <= 0) throw ThrowHelper.BizUser("计时报工时长必须大于0分钟");
+        if (editType == 2 && report.DurationMinutes <= 0) throw ThrowHelper.BizUser("计时报工的时长必须大于0分钟，请把时长改成大于0的数再提交。");
         await _db.WorkSessions.Where(x => x.ReportId == report.Id)
             .ExecuteUpdateAsync(set => set.SetProperty(x => x.DurationMinutes, report.DurationMinutes));
         // 改数后回到待复核（含原已退回）
@@ -1134,10 +1137,10 @@ public class ReportService : IReportService
         var user = await _db.Users.FindAsync(currentUserId)
             ?? throw ThrowHelper.Biz(nameof(BatchReportAsync), "当前用户不存在");
         if (user.Role != 1)
-            throw ThrowHelper.Biz(nameof(BatchReportAsync), "无批量补报权限：仅管理员可操作");
+            throw ThrowHelper.Biz(nameof(BatchReportAsync), "批量补报只有管理员才能操作，你自己没法补，请联系管理员帮你处理。");
 
         if (dto.GoodQty < 0)
-            throw ThrowHelper.Biz(nameof(BatchReportAsync), "补报良品数不能为负");
+            throw ThrowHelper.Biz(nameof(BatchReportAsync), "补报的良品数不能填负数，请检查数值后重新提交。");
 
         var order = await _db.WorkOrders.FirstOrDefaultAsync(o => o.Id == dto.OrderId)
             ?? throw ThrowHelper.Biz(nameof(BatchReportAsync), "工单不存在");
@@ -1145,7 +1148,7 @@ public class ReportService : IReportService
         if (order.FactoryId != user.FactoryId) throw ThrowHelper.BizUser("无权操作其他厂工单");
         var batchNo = string.IsNullOrWhiteSpace(dto.BatchNo) ? null : dto.BatchNo.Trim();
         if (batchNo != null && batchNo.Length > 32)
-            throw ThrowHelper.Biz(nameof(BatchReportAsync), "batch_no 最长 32 字符");
+            throw ThrowHelper.Biz(nameof(BatchReportAsync), "批次号最长32个字符，请缩短后重试。");
 
         // 幂等：同工单同 batch_no 已存在则直接成功（docs/17 §2）
         if (batchNo != null)
@@ -1156,16 +1159,18 @@ public class ReportService : IReportService
                 return ApiResult<BatchReportResultDto>.Ok(new BatchReportResultDto { OperationCount = 0, ReportCount = 0 });
         }
 
+        if (order.Status == 4)
+            throw ThrowHelper.Biz(nameof(BatchReportAsync), "工单为草稿，请先在电脑端提交后再报工");
         if (order.Status == 2)
-            throw ThrowHelper.Biz(nameof(BatchReportAsync), "工单已结束，不可补报");
+            throw ThrowHelper.Biz(nameof(BatchReportAsync), "这张工单已经做完了，不能再补报了；如有特殊情况找管理员处理。");
         if (order.Status == 3)
-            throw ThrowHelper.Biz(nameof(BatchReportAsync), "工单已取消，不可补报");
+            throw ThrowHelper.Biz(nameof(BatchReportAsync), "这张工单已经作废了，不能再补报了；如有误找管理员确认。");
 
         // 事务外先算待报工序，给拆分校验用；锁内再重查防并发
         var ratio = (await QtyCfgAsync(order.FactoryId)).OverrunRatio;
         var pending = await CollectPendingOpsAsync(order, ratio);
         if (pending.Count == 0)
-            throw ThrowHelper.Biz(nameof(BatchReportAsync), "所有工序已报满");
+            throw ThrowHelper.Biz(nameof(BatchReportAsync), "这张工单所有工序都已经报满了，不需要再报了。");
 
         EnsureQtyWithinRemain(pending, dto.GoodQty, nameof(BatchReportAsync), ratio > 0);
         var perOpUsers = BuildPerOpUsers(pending, dto.Allocations, dto.GoodQty, currentUserId, nameof(BatchReportAsync));
@@ -1200,7 +1205,8 @@ public class ReportService : IReportService
                 throw ThrowHelper.Biz(nameof(BatchReportAsync), "所有工序已报满");
             EnsureQtyWithinRemain(pending, dto.GoodQty, nameof(BatchReportAsync), ratio > 0);
 
-            if (order.Status >= 2) throw ThrowHelper.BizUser("工单已结束或取消，不可补报");
+            if (order.Status == 4) throw ThrowHelper.BizUser("工单为草稿，请先在电脑端提交后再报工");
+            if (order.Status >= 2) throw ThrowHelper.BizUser("这张工单已经结束或作废了，不能再补报，找管理员确认一下情况。");
             var now = DateTime.Now;
             var reportCount = 0;
             var coeffUserIds = perOpUsers.Values.SelectMany(v => v.Select(x => x.UserId)).Distinct().ToList();
@@ -1222,23 +1228,23 @@ public class ReportService : IReportService
                 foreach (var (uid, qty) in users)
                 {
                     var deptId = await ResolveDeptSnapshotAsync(uid, op.OperationId);
-                    if (qty == 0 && priceType != 2) throw ThrowHelper.BizUser("非计时岗补报良品数必须大于0");
+                    if (qty == 0 && priceType != 2) throw ThrowHelper.BizUser("非计时岗位的补报良品数必须大于0，请检查填写的数量后重试。");
                     ResolvedWorkTime? time = null;
                     if (priceType == 2)
                     {
                         var input = dto.Allocations?.FirstOrDefault(x => x.OperationId == op.OperationId)?.Users.FirstOrDefault(x => x.UserId == uid);
                         var start = input?.StartTime ?? dto.StartTime;
                         var end = input?.EndTime ?? dto.EndTime;
-                        if (!start.HasValue || !end.HasValue) throw ThrowHelper.BizUser("计时补报必须填写开始和结束时间");
+                        if (!start.HasValue || !end.HasValue) throw ThrowHelper.BizUser("计时岗位的补报必须同时填写开始时间和结束时间，请补全后再提交。");
                         time = await clock.ResolveAsync(order, op.OperationId, uid, currentUserId,
                             new WorkTimeInput { StartTime = start, EndTime = end }, now);
                     }
                     else
                     {
                         var target = await _db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == uid && x.FactoryId == order.FactoryId && x.Status == 1)
-                            ?? throw ThrowHelper.BizUser("补报人员不存在、停用或不属于本厂");
+                            ?? throw ThrowHelper.BizUser("补报人员在系统中不存在、已停用或不属于当前工厂，请到人员管理中核实该员工状态和归属。");
                         if (!await ReportPermissionHelper.CanReportOperationAsync(_db, uid, target.Role, op.OperationId))
-                            throw ThrowHelper.BizUser($"无该工序报工权限：{target.Name}");
+                            throw ThrowHelper.BizUser($"这个人没有这道工序的报工权限，不能批量帮他报工。请联系管理员给他所在部门加上报工权限：{target.Name}");
                     }
                     var wageCoeff = coeffMap.GetValueOrDefault(uid, 1m);
                     var locked = (await new OperationPricingService(_db).LockedAsync(order.Id,op.OperationId,order.FactoryId,time?.ReportTime ?? now)) with { AppliedWageCoeff = budget.PriceType == 3 ? 1m : wageCoeff };
@@ -1345,9 +1351,9 @@ public class ReportService : IReportService
         if (goodQty <= bottleneck.Remain) return;
         if (overrunOn)
             throw ThrowHelper.Biz(loc,
-                $"超出允许超报比例：工序【{bottleneck.OperationName}】剩余可报 {bottleneck.Remain}");
+                $"工序【{bottleneck.OperationName}】能报的数量已经到上限（还能报 {bottleneck.Remain}），报不进去了，找管理员确认。");
         throw ThrowHelper.Biz(loc,
-            $"本次数量超过工序【{bottleneck.OperationName}】剩余可报 {bottleneck.Remain}");
+            $"本次数量超过工序【{bottleneck.OperationName}】还能报的上限（{bottleneck.Remain}），请减少数量或找管理员确认。");
     }
 
     /// <summary>每道待报工序 → 若干 (userId, qty)；未指定挂当前管理员；指定则合计必须 = N。</summary>
@@ -1366,22 +1372,22 @@ public class ReportService : IReportService
             foreach (var a in allocations)
             {
                 if (!pendingIds.Contains(a.OperationId))
-                    throw ThrowHelper.Biz(loc, $"工序 {a.OperationId} 不在待报列表中（可能已报满）");
+                    throw ThrowHelper.Biz(loc, $"工序 {a.OperationId} 不在待报列表中，可能已经报满或不在本次补报范围内，请刷新待报工序列表后重试。");
                 if (a.Users == null || a.Users.Count == 0)
-                    throw ThrowHelper.Biz(loc, $"工序 {a.OperationId} 拆分人员不能为空");
+                    throw ThrowHelper.Biz(loc, $"工序 {a.OperationId} 的拆分报工需要指定参与人员，请添加拆分人员后再提交。");
                 var sum = 0;
                 var list = new List<(long UserId, int GoodQty)>();
                 foreach (var u in a.Users)
                 {
                     if (u.UserId <= 0)
-                        throw ThrowHelper.Biz(loc, "拆分人员无效");
+                        throw ThrowHelper.Biz(loc, "拆分报工中指定的人员信息无效，请检查所选人员是否正确后重试。");
                     if (u.GoodQty < 0)
-                        throw ThrowHelper.Biz(loc, "拆分数量不能为负");
+                        throw ThrowHelper.Biz(loc, "拆分报工的数量不能填负数，请检查数值后重新提交。");
                     sum += u.GoodQty;
                     list.Add((u.UserId, u.GoodQty));
                 }
                 if (sum != goodQty)
-                    throw ThrowHelper.Biz(loc, $"工序 {a.OperationId} 拆分合计 {sum} 必须等于补报数 {goodQty}");
+                    throw ThrowHelper.Biz(loc, $"工序 {a.OperationId} 拆分各人员数量之和（{sum}）必须等于本次补报总数（{goodQty}），请核对拆分明细后重新提交。");
                 result[a.OperationId] = list;
             }
         }
@@ -1512,7 +1518,7 @@ public class ReportService : IReportService
         }
     }
 
-    /// <summary>按工序任务重算工单状态（进度轨：排除已退回，docs/22）。</summary>
+    /// <summary>按工序任务重算工单状态（进度轨：排除已退回，docs/22；重开 docs/422）。</summary>
     private async Task RecalcStatusAsync(ProdWorkOrder order)
     {
         if (order.Status == 3) return;
@@ -1521,6 +1527,7 @@ public class ReportService : IReportService
         if (!hasReport)
         {
             order.Status = 0;
+            order.Reopened = false;
             await _db.SaveChangesAsync();
             return;
         }
@@ -1528,12 +1535,13 @@ public class ReportService : IReportService
         order.Status = 1;
 
         var tasks = await _db.WorkOrderOperations.Where(t => t.WorkOrderId == order.Id).ToListAsync();
+        bool allDone;
         if (tasks.Count == 0)
         {
             var totalGood = await _db.Reports
                 .Where(r => r.OrderId == order.Id && r.ReviewStatus != 2)
                 .SumAsync(r => (int?)r.GoodQty) ?? 0;
-            if (totalGood >= order.Qty) order.Status = 2;
+            allDone = totalGood >= order.Qty;
         }
         else
         {
@@ -1542,8 +1550,16 @@ public class ReportService : IReportService
                                    group r by r.OperationId into g
                                    select new { OperationId = g.Key, Done = g.Sum(x => x.GoodQty) })
                                    .ToDictionaryAsync(x => x.OperationId, x => x.Done);
-            var allDone = tasks.All(t => reportSum.GetValueOrDefault(t.OperationId, 0) >= t.PlanQty);
-            if (allDone) order.Status = 2;
+            allDone = tasks.All(t => reportSum.GetValueOrDefault(t.OperationId, 0) >= t.PlanQty);
+        }
+
+        if (allDone)
+        {
+            if (!order.Reopened) order.Status = 2;
+        }
+        else
+        {
+            order.Reopened = false;
         }
 
         await _db.SaveChangesAsync();
@@ -1564,10 +1580,10 @@ public class ReportService : IReportService
         var cfg = await _upstreamSetting.GetOrDefaultAsync(order.FactoryId);
         var hard = ReportUpstreamSettingService.IsHardForOp(cfg, operationId);
         if (hard)
-            throw ThrowHelper.Biz(where, $"紧邻上一道【{hit.PrevOpName}】复核通过量不足，不可报工");
+            throw ThrowHelper.Biz(where, $"上一道【{hit.PrevOpName}】还没有复核通过足够的数量，你现在还不能报工。请等上一道工序复核完成后再来报工。");
         if (confirmUpstream) return;
         throw ThrowHelper.BizCode(
-            $"紧邻上一道【{hit.PrevOpName}】复核通过量不足，是否继续报工？",
+            $"上一道【{hit.PrevOpName}】复核通过的数量不太够，你确定要继续报工吗？不确定的话请先跟班组长确认。",
             UpstreamSoftConfirmCode);
     }
 
@@ -1599,13 +1615,13 @@ public class ReportService : IReportService
         if (hardNames.Count > 0)
         {
             var names = string.Join("、", hardNames.Distinct());
-            throw ThrowHelper.Biz(where, $"紧邻上一道【{names}】复核通过量不足，不可报工");
+            throw ThrowHelper.Biz(where, $"前面几道【{names}】还没有复核通过足够的数量，你现在还不能报工。请等前面的工序都复核完成后再来报工。");
         }
         if (softNames.Count == 0 || confirmUpstream) return;
         {
             var names = string.Join("、", softNames.Distinct());
             throw ThrowHelper.BizCode(
-                $"紧邻上一道【{names}】复核通过量不足，是否继续报工？",
+                $"前面几道【{names}】复核通过的数量不太够，你确定要继续报工吗？不确定的话请先跟班组长确认。",
                 UpstreamSoftConfirmCode);
         }
     }

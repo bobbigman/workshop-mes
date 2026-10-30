@@ -13,14 +13,14 @@
     </button>
 
     <section v-if="canWage" class="today-summary" aria-label="今日计件">
-      <div v-if="summaryLoading" class="summary-state" role="status">今日计件加载中…</div>
-      <div v-else-if="summaryError" class="summary-state" role="alert">今日计件加载失败 <button type="button" @click="loadTodaySummary">重试</button></div>
+      <div v-if="summaryLoading" class="summary-state" role="status">正在算今天的计件数据，请稍等…</div>
+      <div v-else-if="summaryError" class="summary-state" role="alert">今天的计件数据加载不出来，请检查网络后点重试；反复失败找管理员处理。 <button type="button" @click="loadTodaySummary">重试</button></div>
       <template v-else>
         <div class="today-cards">
           <div class="today-card good"><span>今日良品报工累计</span><strong>{{ todayGoodQty }}</strong></div>
           <div class="today-card wage"><span>预计计件收入</span><strong>¥{{ formatMoney(todayWage) }}</strong></div>
         </div>
-        <p class="today-tip">含已复核和待复核，以工资单为准</p>
+        <p class="today-tip">这个数字包含已复核和还没复核的记录，最终收入以工资单为准。</p>
       </template>
     </section>
 
@@ -29,18 +29,18 @@
         <span class="task-copy">
           <strong>我的任务</strong>
           <span v-if="tasksLoading" class="entry-note" role="status">任务加载中…</span>
-          <span v-else-if="loadError" class="entry-note">任务数量暂不可用</span>
-          <span v-else-if="!list.length" class="entry-note">暂无派给我或本班组的任务</span>
+          <span v-else-if="loadError" class="entry-note">任务数量暂时获取不到，请检查网络后刷新页面试试；一直不行找管理员看看。</span>
+          <span v-else-if="!list.length" class="entry-note">目前没有派给你或你们班组的新任务。有疑问找班组长确认是否已派工。</span>
           <span v-else class="entry-note"><b>已派任务 {{ list.length }} 项</b>（含本班组）</span>
         </span>
         <span class="entry-arrow">{{ loadError ? '查看任务' : '查看全部' }} ›</span>
       </router-link>
-      <p v-if="loadError" class="load-error" role="alert">任务加载失败 <button type="button" @click="load">重试</button></p>
+      <p v-if="loadError" class="load-error" role="alert">任务列表加载失败，请检查网络后点重试；反复失败找管理员处理。 <button type="button" @click="load">重试</button></p>
     </section>
 
     <section class="block" aria-label="常用功能">
       <h3 class="block-title">常用功能</h3>
-      <p v-if="viewError" class="load-error" role="alert">查询入口配置加载失败 <button type="button" @click="refreshViewMode">重试</button></p>
+      <p v-if="viewError" class="load-error" role="alert">页面内容加载失败，请点重试；反复失败找管理员检查后台设置。 <button type="button" @click="refreshViewMode">重试</button></p>
       <div class="shortcuts">
         <router-link v-for="item in shortcuts" :key="item.label" class="shortcut" :to="item.to">
           <span class="shortcut-icon" :class="item.tone"><van-icon :name="item.icon" aria-hidden="true" /></span>
@@ -82,7 +82,7 @@ const summaryLoading = ref(true)
 const summaryError = ref(false)
 const viewReady = ref(false)
 const viewError = ref(false)
-const userName = localStorage.getItem('userName') || '当前用户'
+const userName = localStorage.getItem('userName') || '师傅'
 const showPwaGuide = ref(false)
 const showOrdersEntry = ref(false)
 const canScan = canUse(currentTier(), FEATURE.ScanReport)

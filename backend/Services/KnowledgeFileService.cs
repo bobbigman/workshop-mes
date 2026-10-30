@@ -65,11 +65,11 @@ public class KnowledgeFileService : IKnowledgeFileService
     {
         var order = await _db.WorkOrders.AsNoTracking()
             .FirstOrDefaultAsync(o => o.Id == orderId && o.FactoryId == factoryId)
-            ?? throw ThrowHelper.Biz(nameof(ListByOrderAsync), "工单不存在");
+            ?? throw ThrowHelper.Biz(nameof(ListByOrderAsync), "查询知识库时找不到对应工单。请核对工单号是否正确，或到「工单」中核实该工单是否存在。");
 
         var product = await _db.Products.AsNoTracking()
             .FirstOrDefaultAsync(p => p.Id == order.ProductId && p.FactoryId == factoryId)
-            ?? throw ThrowHelper.Biz(nameof(ListByOrderAsync), "工单对应的产品不存在");
+            ?? throw ThrowHelper.Biz(nameof(ListByOrderAsync), "该工单关联的产品在系统中不存在，无法查找知识库资料。请到「产品定义」确认产品是否被误删，必要时重新关联产品。");
 
         var files = new List<BaseKnowledgeFile>();
         files.AddRange(await _db.KnowledgeFiles.AsNoTracking()
@@ -100,11 +100,11 @@ public class KnowledgeFileService : IKnowledgeFileService
     {
         var f = await _db.KnowledgeFiles.AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == fileId && x.FactoryId == factoryId)
-            ?? throw ThrowHelper.Biz(nameof(GetRawAsync), "文件不存在或无权访问");
+            ?? throw ThrowHelper.Biz(nameof(GetRawAsync), "文件不存在或当前账号无权访问。请确认文件路径正确且有访问权限；如文件被移动或删除，请重新上传。");
 
         var fullPath = ResolveFullPath(f.RelativePath);
         if (!File.Exists(fullPath))
-            throw ThrowHelper.Biz(nameof(GetRawAsync), "文件已丢失，请联系管理员重新上传");
+            throw ThrowHelper.Biz(nameof(GetRawAsync), "之前上传的文件已从服务器丢失。请联系管理员检查服务器存放目录，并重新上传该文件。");
 
         var bytes = await File.ReadAllBytesAsync(fullPath);
         return (bytes, MapContentType(f.FileType), f.FileName);
@@ -119,11 +119,11 @@ public class KnowledgeFileService : IKnowledgeFileService
 
         var fileType = NormalizeFileType(Path.GetExtension(originalFileName));
         if (fileType == null)
-            throw ThrowHelper.Biz(nameof(UploadAsync), "不支持的文件类型，请上传 pdf / docx / xlsx / jpg / png / webp");
+            throw ThrowHelper.Biz(nameof(UploadAsync), "上传的文件类型不支持。请上传 pdf、docx、xlsx、jpg、png 或 webp 格式的文件。");
         if (content.Length == 0)
             throw ThrowHelper.Biz(nameof(UploadAsync), "上传文件为空");
         if (content.Length > MaxFileBytes)
-            throw ThrowHelper.Biz(nameof(UploadAsync), "文件超过 20MB 上限");
+            throw ThrowHelper.Biz(nameof(UploadAsync), "文件大小超过了20MB上限。请压缩文件或拆分后重新上传。");
 
         var root = ResolveRoot();
         var relativePath = $"{factoryId}/{Guid.NewGuid():N}.{fileType}";
@@ -167,7 +167,7 @@ public class KnowledgeFileService : IKnowledgeFileService
             ? await _db.Products.AsNoTracking().AnyAsync(x => x.Id == refId && x.FactoryId == factoryId)
             : await _db.Operations.AsNoTracking().AnyAsync(x => x.Id == refId && x.FactoryId == factoryId);
         if (!exists)
-            throw ThrowHelper.Biz(nameof(EnsureRefExistsAsync), refType == "product" ? "产品不存在" : "工序不存在");
+            throw ThrowHelper.Biz(nameof(EnsureRefExistsAsync), refType == "product" ? "产品不存在" : "知识库关联的工序在系统中不存在。请核对工序编号，或到「工序」中核实该工序是否存在。");
     }
 
     private async Task<Dictionary<long, string>> LoadOpNamesAsync(List<BaseKnowledgeFile> files, long factoryId)
@@ -194,7 +194,7 @@ public class KnowledgeFileService : IKnowledgeFileService
     {
         var t = (refType ?? "").Trim().ToLowerInvariant();
         if (t != "product" && t != "operation")
-            throw ThrowHelper.Biz(nameof(NormalizeRefType), "refType 只能为 product 或 operation");
+            throw ThrowHelper.Biz(nameof(NormalizeRefType), "知识库文件的关联类型只能是产品（product）或工序（operation）。请修正关联类型后重试。");
         return t;
     }
 
@@ -241,7 +241,7 @@ public class KnowledgeFileService : IKnowledgeFileService
             ? root
             : root + Path.DirectorySeparatorChar;
         if (!full.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
-            throw ThrowHelper.Biz(nameof(ResolveFullPath), "非法文件路径");
+            throw ThrowHelper.Biz(nameof(ResolveFullPath), "文件路径包含非法字符或指向了受限目录。请检查文件路径是否规范，不要使用特殊字符或上级目录引用。");
         return full;
     }
 }

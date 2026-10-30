@@ -99,20 +99,20 @@ public class AbnormalService : IAbnormalService
     public async Task<ApiResult<object?>> CreateAsync(AbnormalCreateForm form, long userId, long factoryId)
     {
         if (form.Type is < 1 or > 3)
-            throw ThrowHelper.Biz(nameof(CreateAsync), "异常类型无效，仅支持设备故障/物料短缺/质量异常");
+            throw ThrowHelper.Biz(nameof(CreateAsync), "你选的异常类型不在可选范围内，请从设备故障、物料短缺、质量异常里选一个重新提交。");
 
         var desc = (form.Description ?? "").Trim();
         if (desc.Length == 0)
-            throw ThrowHelper.Biz(nameof(CreateAsync), "请填写问题描述");
+            throw ThrowHelper.Biz(nameof(CreateAsync), "问题描述不能空着，请简单写一下出了什么问题再提交。");
         if (desc.Length > 500)
-            throw ThrowHelper.Biz(nameof(CreateAsync), "描述不能超过 500 字");
+            throw ThrowHelper.Biz(nameof(CreateAsync), "问题描述写得太长了，最多500个字，请精简一下再提交。");
 
         if (form.WorkOrderId.HasValue)
         {
             var exists = await _db.WorkOrders.AsNoTracking()
                 .AnyAsync(o => o.Id == form.WorkOrderId.Value && o.FactoryId == factoryId);
             if (!exists)
-                throw ThrowHelper.Biz(nameof(CreateAsync), "关联工单不存在");
+                throw ThrowHelper.Biz(nameof(CreateAsync), "你关联的工单找不到了，可能已被删除或编号有误。请确认工单号是否正确，或联系管理员核实。");
         }
 
         long? assignHandlerId = null;
@@ -121,7 +121,7 @@ public class AbnormalService : IAbnormalService
             var handlerOk = await _db.Users.AsNoTracking()
                 .AnyAsync(u => u.Id == form.HandlerUserId.Value && u.FactoryId == factoryId && u.Status == 1);
             if (!handlerOk)
-                throw ThrowHelper.Biz(nameof(CreateAsync), "指定处理人不存在或已停用");
+                throw ThrowHelper.Biz(nameof(CreateAsync), "你指定的处理人找不到或已经被停用了。请换一个有效的处理人，或联系管理员确认人员状态。");
             assignHandlerId = form.HandlerUserId.Value;
         }
 
@@ -147,7 +147,7 @@ public class AbnormalService : IAbnormalService
         if (_events != null)
         {
             var reporter = await _db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == userId && x.FactoryId == factoryId)
-                ?? throw ThrowHelper.Biz(nameof(CreateAsync), "上报人不存在");
+                ?? throw ThrowHelper.Biz(nameof(CreateAsync), "系统识别不到上报人信息，可能是账号异常。请联系管理员检查你的员工账号是否正常。");
             await _events.EnqueueAbnormalAsync(row, reporter);
         }
         await tx.CommitAsync();
@@ -215,13 +215,13 @@ public class AbnormalService : IAbnormalService
     public async Task<ApiResult<object?>> ResolveAsync(long id, AbnormalResolveDto dto, long userId, long factoryId)
     {
         var row = await _db.Abnormals.FirstOrDefaultAsync(a => a.Id == id && a.FactoryId == factoryId)
-            ?? throw ThrowHelper.Biz(nameof(ResolveAsync), "异常记录不存在");
+            ?? throw ThrowHelper.Biz(nameof(ResolveAsync), "这条异常记录找不到了，可能已经被删除。请刷新页面看看最新列表，或联系管理员确认。");
         if (row.Status != 0)
-            throw ThrowHelper.Biz(nameof(ResolveAsync), "该异常已处理");
+            throw ThrowHelper.Biz(nameof(ResolveAsync), "这条异常已经处理过了，不需要再操作。如果还有问题，请重新上报一条新的异常。");
 
         var note = string.IsNullOrWhiteSpace(dto.HandleNote) ? null : dto.HandleNote.Trim();
         if (note != null && note.Length > 256)
-            throw ThrowHelper.Biz(nameof(ResolveAsync), "处理说明不能超过 256 字");
+            throw ThrowHelper.Biz(nameof(ResolveAsync), "处理说明写得太长了，最多256个字，请精简一下再提交。");
 
         row.Status = 1;
         row.HandledBy = userId;
@@ -238,7 +238,7 @@ public class AbnormalService : IAbnormalService
 
         var ext = Path.GetExtension(file.FileName);
         if (string.IsNullOrEmpty(ext) || !AllowedImageExt.Contains(ext))
-            throw ThrowHelper.Biz(nameof(SaveImageAsync), "仅支持 jpg/png/gif/webp 图片");
+            throw ThrowHelper.Biz(nameof(SaveImageAsync), "图片格式不支持，只能上传jpg、png、gif或webp格式的照片，请换一张重新上传。");
 
         var webRoot = _env.WebRootPath;
         if (string.IsNullOrWhiteSpace(webRoot))

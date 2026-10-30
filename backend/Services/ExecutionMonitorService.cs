@@ -340,9 +340,9 @@ public class ExecutionMonitorService : IExecutionMonitorService
         if (query.PageSize < 1) query.PageSize = 20;
         if (query.PageSize > MaxPageSize) query.PageSize = MaxPageSize;
         if (query.Status.HasValue && query.Status.Value > 2)
-            throw ThrowHelper.Biz(nameof(NormalizeQuery), "状态筛选仅支持未开始/执行中/已结束");
+            throw ThrowHelper.Biz(nameof(NormalizeQuery), "状态只能选未开始、执行中或已结束，请选择正确的筛选项。");
         if (query.DueFrom.HasValue && query.DueTo.HasValue && query.DueFrom.Value.Date > query.DueTo.Value.Date)
-            throw ThrowHelper.Biz(nameof(NormalizeQuery), "交期起止日期范围无效");
+            throw ThrowHelper.Biz(nameof(NormalizeQuery), "交期起止日期范围不合法，请检查开始日期是否早于结束日期后重试。");
         if (query.Keyword != null)
             query.Keyword = query.Keyword.Trim();
     }

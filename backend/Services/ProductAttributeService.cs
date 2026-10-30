@@ -21,19 +21,19 @@ public class ProductAttributeService(AppDbContext db)
         var old = await db.CustomFieldValues.Where(v => v.TargetId == productId && ids.Contains(v.FieldId)).ToListAsync();
         foreach (var (id, raw) in values)
         {
-            if (!fields.TryGetValue(id, out var field)) throw ThrowHelper.BizUser("产品属性字段不存在或非本厂产品字段");
+            if (!fields.TryGetValue(id, out var field)) throw ThrowHelper.BizUser("指定的产品属性字段不存在或不属于本厂产品。请到「产品属性」确认字段已创建且归属本厂后重新选择。");
             var value = string.IsNullOrWhiteSpace(raw) ? null : raw.Trim();
-            if (value?.Length > 256) throw ThrowHelper.BizUser($"属性{field.FieldName}超过256字");
+            if (value?.Length > 256) throw ThrowHelper.BizUser($"属性{field.FieldName}的值超过256字上限。请把该属性值精简到256字以内再保存。");
             if (value != null && field.FieldType == "number")
             {
                 if (!decimal.TryParse(value, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var number) || number < 0)
-                    throw ThrowHelper.BizUser($"属性{field.FieldName}须为非负数字");
+                    throw ThrowHelper.BizUser($"属性{field.FieldName}必须填非负数字（不小于0）。请检查输入值，确保是非负数。");
                 if (field.FieldKey is "print_panels" or "rib_count" && decimal.Truncate(number) != number)
-                    throw ThrowHelper.BizUser($"属性{field.FieldName}须为整数");
+                    throw ThrowHelper.BizUser($"属性{field.FieldName}必须填整数，不能带小数。请去掉小数部分后重新输入。");
                 value = number.ToString(CultureInfo.InvariantCulture);
             }
             if (value != null && field.FieldType == "single" && !await db.CustomFieldOptions.AnyAsync(o => o.FieldId == id && o.Label == value))
-                throw ThrowHelper.BizUser($"属性{field.FieldName}不在允许选项内");
+                throw ThrowHelper.BizUser($"属性{field.FieldName}填的值不在允许选项内。请查看该属性的下拉选项列表，选择合法值。");
             var entity = old.SingleOrDefault(v => v.FieldId == id);
             if (entity != null) { if (value == null) db.CustomFieldValues.Remove(entity); else entity.Value = value; }
             else if (value != null) db.CustomFieldValues.Add(new SysCustomFieldValue { FieldId = id, TargetId = productId, Value = value });

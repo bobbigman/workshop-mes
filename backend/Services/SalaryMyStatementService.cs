@@ -27,7 +27,7 @@ public partial class SalaryService
             && int.TryParse(value[..4], out var year) && year is >= 1 and < 9999
             && int.TryParse(value[6..], out var week) && week >= 1 && week <= ISOWeek.GetWeeksInYear(year))
             return ISOWeek.ToDateTime(year, week, DayOfWeek.Monday).AddDays(7);
-        throw ThrowHelper.BizCode("周期参数不合法", 400);
+        throw ThrowHelper.BizCode("工资结算的周期填得不合法。请检查起止日期或周期类型是否符合要求格式。", 400);
     }
 
     public async Task<ApiResult<List<MyStatementDto>>> MyStatementsAsync(
@@ -66,7 +66,7 @@ public partial class SalaryService
         // 状态条件也放在明细 SQL 中，撤回后不能通过旧 ID 继续读取。
         var visible = _db.SalaryStatements.AsNoTracking().Where(s => s.Id == id && s.FactoryId == factoryId
             && s.UserId == userId && (s.Status == 1 || s.Status == 2));
-        if (!await visible.AnyAsync()) throw ThrowHelper.BizCode("无权查看该工资单", 403);
+        if (!await visible.AnyAsync()) throw ThrowHelper.BizCode("你没有权限查看这张工资单，只能看自己的；如需查看他人的请联系管理员。", 403);
         var items = await (from i in _db.SalaryStatementItems.AsNoTracking()
             join s in visible on i.StatementId equals s.Id
             join r in _db.Reports.AsNoTracking() on i.ReportId equals r.Id

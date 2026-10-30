@@ -47,7 +47,7 @@ public class WecomReportController : ControllerBase
     {
         var expected = (_config["WecomReport:ApiToken"] ?? "").Trim();
         if (string.IsNullOrEmpty(expected))
-            throw ThrowHelper.Biz(nameof(EnsureWecomAuth), "未配置 WecomReport:ApiToken，拒绝企微报工调用");
+            throw ThrowHelper.Biz(nameof(EnsureWecomAuth), "企微报工还没设好，暂时用不了，请联系管理员处理。");
 
         var got = (Request.Headers["X-Wecom-Token"].FirstOrDefault() ?? "").Trim();
         if (string.IsNullOrEmpty(got))
@@ -58,11 +58,11 @@ public class WecomReportController : ControllerBase
         }
 
         if (!string.Equals(got, expected, StringComparison.Ordinal))
-            throw ThrowHelper.BizUser("未授权的企微报工调用");
+            throw ThrowHelper.BizUser("你的企微报工请求没有被开通，请联系管理员确认你的账号是否已开通企微报工权限。");
 
         var factoryId = _config.GetValue<long>("WecomReport:FactoryId", 0);
         if (factoryId <= 0)
-            throw ThrowHelper.Biz(nameof(EnsureWecomAuth), "未配置 WecomReport:FactoryId");
+            throw ThrowHelper.Biz(nameof(EnsureWecomAuth), "企微报工还缺少工厂编号，暂时用不了，请联系管理员补上后再试。");
 
         return factoryId;
     }

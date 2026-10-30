@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="toolbar">
-      <el-input v-model="keyword" placeholder="编号/名称" clearable style="width:200px" @keyup.enter="load" />
+      <el-input v-model="keyword" placeholder="例：GX001 / 车削（填编号或名称都能搜）" clearable style="width:200px" @keyup.enter="load" />
       <el-button type="primary" @click="load">查询</el-button>
       <el-button type="success" @click="openCreate">+ 创建工序</el-button>
       <ImportDialog entity-type="operation" title="导入工序" @done="load" />
@@ -21,17 +21,17 @@
     </mes-table>
 
     <el-dialog v-model="dlg" :title="editingId ? '编辑工序' : copyFromId ? '复制工序' : '创建工序'" :close-on-click-modal="!saving" :close-on-press-escape="!saving" :show-close="!saving" width="520px">
-      <el-alert v-if="copyFromId" title="请填写新编号；作业指导书、图纸及独立计价规则未复制。" type="info" :closable="false" show-icon style="margin-bottom:12px" />
+      <el-alert v-if="copyFromId" title="请填写新编号；作业指导书、图纸和独立计价规则不会被复制，需要在新工序中重新上传或设置" type="info" :closable="false" show-icon style="margin-bottom:12px" />
       <el-form :model="form" :disabled="saving" label-width="110px">
         <el-form-item label="工序编号" required><el-input v-model="form.code" /></el-form-item>
         <el-form-item label="工序名称" required><el-input v-model="form.name" /></el-form-item>
         <el-form-item label="报工权限">
-          <el-select v-model="form.deptIds" multiple filterable style="width:100%" placeholder="选择部门">
+          <el-select v-model="form.deptIds" multiple filterable style="width:100%" placeholder="选择有报工权限的部门（可多选）">
             <el-option v-for="d in deptOptions" :key="d.id" :label="d.name" :value="d.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="不良品项">
-          <el-select v-model="form.defectIds" multiple filterable style="width:100%" placeholder="选择不良品项">
+          <el-select v-model="form.defectIds" multiple filterable style="width:100%" placeholder="选择该工序可能出现的不良品项（可多选）">
             <el-option v-for="d in defectOptions" :key="d.id" :label="d.name" :value="d.id" />
           </el-select>
         </el-form-item>
@@ -99,7 +99,7 @@ async function openCopy(row) {
 async function onSave() {
   if (saving.value) return
   if (!form.value.code || !form.value.name) {
-    ElMessage.error('请填写工序编号和名称')
+    ElMessage.error('请填写工序编号和名称后再保存，两项都是必填项后再保存，两项都是必填项')
     return
   }
   saving.value = true
@@ -113,9 +113,9 @@ async function onSave() {
 }
 
 async function onDelete(row) {
-  await ElMessageBox.confirm(`确认删除工序 ${row.name}？`, '提示', { type: 'warning' })
+  await ElMessageBox.confirm(`确认删除工序“${row.name}”？若已被工艺路线、报工、价目表或开工记录引用则不能删除`, '提示', { type: 'warning' })
   await deleteOperation(row.id)
-  ElMessage.success('已删除')
+  ElMessage.success('已删除成功成功')
   await load()
 }
 </script>

@@ -11,7 +11,7 @@
       </el-table-column>
     </mes-table>
     <el-dialog v-model="dlg" :title="editingId ? '编辑不良品项' : '创建不良品项'" width="400px">
-      <el-input v-model="name" placeholder="如：粘锅" />
+      <el-input v-model="name" placeholder="例：粘锅、划伤、尺寸偏大（填常见不良现象名称）" />
       <template #footer>
         <el-button @click="dlg=false">取消</el-button>
         <el-button type="primary" @click="onSave">确定</el-button>
@@ -47,7 +47,7 @@ function openEdit(row) {
 
 async function onSave() {
   if (!name.value.trim()) {
-    ElMessage.error('请填写不良品项名称')
+    ElMessage.error('请填写不良品项名称，例如：粘锅、划伤，例例：粘锅、划伤、尺寸偏大（填常见不良现象名称）、划伤')
     return
   }
   if (editingId.value) await updateDefect(editingId.value, { name: name.value.trim() })
@@ -58,9 +58,9 @@ async function onSave() {
 }
 
 async function onDelete(row) {
-  await ElMessageBox.confirm(`确认删除「${row.name}」？`, '提示', { type: 'warning' })
+  await ElMessageBox.confirm(`确认删除不良品项“${row.name}”？若仍被工序引用则不能删除；删除后无法恢复`, '提示', { type: 'warning' })
   await deleteDefect(row.id)
-  ElMessage.success('已删除')
+  ElMessage.success('已删除成功成功')
   await load()
 }
 </script>

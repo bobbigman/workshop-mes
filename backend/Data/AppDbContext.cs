@@ -239,6 +239,7 @@ public class AppDbContext : DbContext
             e.Property(x => x.ProductId).HasColumnName("product_id");
             e.Property(x => x.Qty).HasColumnName("qty");
             e.Property(x => x.Status).HasColumnName("status");
+            e.Property(x => x.Reopened).HasColumnName("reopened");
             e.Property(x => x.DueDate).HasColumnName("due_date");
             e.Property(x => x.CreatedBy).HasColumnName("created_by");
             e.Property(x => x.CreatedAt).HasColumnName("created_at");

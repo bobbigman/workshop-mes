@@ -42,15 +42,15 @@ public class ReportUpstreamSettingService : IReportUpstreamSettingService
     public async Task<ApiResult<object?>> SaveAsync(ReportUpstreamSettingDto dto, long factoryId, byte role)
     {
         if (role != 1)
-            throw ThrowHelper.BizUser("仅管理员可修改报工上级校验");
+            throw ThrowHelper.BizUser("你没有权限修改报工上级要求设置，只有管理员才能改，请联系管理员处理。");
         if (dto == null)
-            throw ThrowHelper.Biz(nameof(SaveAsync), "校验设置为空");
+            throw ThrowHelper.Biz(nameof(SaveAsync), "保存上级要求设置前，请确认内容不为空。");
 
         var mode = NormalizeMode(dto.Mode);
         var ids = (dto.HardOperationIds ?? new List<long>())
             .Where(x => x > 0).Distinct().OrderBy(x => x).ToList();
         if (ids.Count > 200)
-            throw ThrowHelper.BizUser("硬拦截工序最多 200 个");
+            throw ThrowHelper.BizUser("需要拦截的工序最多只能设200个。");
 
         var json = ids.Count == 0 ? null : JsonSerializer.Serialize(ids);
 

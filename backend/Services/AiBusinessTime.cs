@@ -21,14 +21,14 @@ public static class AiBusinessTime
                 try { return TimeZoneInfo.FindSystemTimeZoneById("China Standard Time"); }
                 catch (TimeZoneNotFoundException)
                 {
-                    throw ThrowHelper.Biz(nameof(Resolve), $"无法解析业务时区：{id}");
+                    throw ThrowHelper.Biz(nameof(Resolve), $"系统无法识别指定的业务时区标识 {id}，请检查AI业务时区设置是否正确。");
                 }
             }
             throw ThrowHelper.Biz(nameof(Resolve), $"无法解析业务时区：{id}");
         }
         catch (InvalidTimeZoneException ex)
         {
-            throw ThrowHelper.Biz(nameof(Resolve), $"业务时区无效：{id}（{ex.Message}）");
+            throw ThrowHelper.Biz(nameof(Resolve), $"业务时区设置有误（{id}：{ex.Message}），请检查时区标识格式并修正设置。");
         }
     }
 

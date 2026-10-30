@@ -56,14 +56,14 @@ public class RiskBriefService(AppDbContext db, IConfiguration config, TimeProvid
     {
         "today" or "今日" or "今天" => "today",
         "week" or "本周" => "week",
-        _ => throw ThrowHelper.BizUser("风险简报仅支持今日或本周")
+        _ => throw ThrowHelper.BizUser("风险简报只能查今日或本周，且需要提供工厂上下文，请修正查询条件。")
     };
 
     public async Task<RiskBriefDto> QueryAsync(long factoryId, string? period = null, int topN = 3, CancellationToken ct = default)
     {
-        if (factoryId <= 0) throw ThrowHelper.BizUser("风险简报缺少工厂上下文");
+        if (factoryId <= 0) throw ThrowHelper.BizUser("风险简报查询缺少工厂信息，请确认登录工厂后再查。");
         var key = NormalizePeriod(period);
-        if (topN is < 1 or > 10) throw ThrowHelper.BizUser("风险简报条数须为1～10");
+        if (topN is < 1 or > 10) throw ThrowHelper.BizUser("风险简报返回条数须在1到10之间，请调整查询条件后重试。");
         var tz = AiBusinessTime.Resolve(config["Ai:BusinessTimeZone"]);
         var now = TimeZoneInfo.ConvertTime(clock.GetUtcNow(), tz).DateTime;
         var today = now.Date;

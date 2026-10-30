@@ -10,7 +10,7 @@
         <p>第一次用，按步骤来；遇到问题，搜关键词。</p>
         <label class="search-label" for="manual-search">搜索操作步骤和常见问题</label>
         <div class="search-row">
-          <el-input id="manual-search" v-model="query" clearable placeholder="例如：补报、改数、扫码、报工 复核" size="large" />
+          <el-input id="manual-search" v-model="query" clearable placeholder="例如：补报、改数、扫码、报工、复核" size="large" />
           <el-button v-if="query" size="large" @click="query = ''">清空搜索</el-button>
         </div>
         <p class="version">手册 {{ manualVersion }} · 更新 {{ manualUpdatedAt }} · 按同日系统界面编写</p>
@@ -34,7 +34,7 @@
             <strong>{{ group.title }}</strong><span>{{ group.description }}</span>
           </button>
         </nav>
-        <p v-if="invalidTopic" role="status">这个章节地址已失效，已为你打开入门指南，请从目录重新选择。</p>
+        <p v-if="invalidTopic" role="status">您访问的章节链接已失效，已为您打开入门指南，请从目录重新选择</p>
         <div class="reading-layout">
           <nav class="contents" :class="{ expanded: contentsOpen }" aria-label="章节目录">
             <div class="contents-heading">

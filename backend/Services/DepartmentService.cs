@@ -81,7 +81,7 @@ public class DepartmentService : IDepartmentService
     public async Task<ApiResult<DepartmentDetailDto>> GetAsync(long id, long factoryId)
     {
         var d = await _db.Departments.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id && x.FactoryId == factoryId)
-            ?? throw ThrowHelper.Biz(nameof(GetAsync), "部门不存在");
+            ?? throw ThrowHelper.Biz(nameof(GetAsync), "该部门在系统中不存在，可能已被删除，请刷新部门列表确认数据后重试。");
         var memberIds = await _db.DepartmentUsers.AsNoTracking()
             .Where(x => x.DepartmentId == id).Select(x => x.UserId).ToListAsync();
         return ApiResult<DepartmentDetailDto>.Ok(new DepartmentDetailDto
@@ -96,7 +96,7 @@ public class DepartmentService : IDepartmentService
     public async Task<ApiResult<object?>> CreateAsync(DepartmentCreateDto dto, long factoryId)
     {
         if (string.IsNullOrWhiteSpace(dto.Code) || string.IsNullOrWhiteSpace(dto.Name))
-            throw ThrowHelper.Biz(nameof(CreateAsync), "部门编码和名称不能为空");
+            throw ThrowHelper.Biz(nameof(CreateAsync), "新增部门时编码和名称都不能为空，请填写完整后再保存。");
 
         var dept = new SysDepartment
         {

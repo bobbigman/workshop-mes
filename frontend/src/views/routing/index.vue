@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="toolbar">
-      <el-input v-model="keyword" placeholder="编号/名称" clearable style="width:200px" @keyup.enter="load" />
+      <el-input v-model="keyword" placeholder="例：GX001 / 车削（填编号或名称都能搜）" clearable style="width:200px" @keyup.enter="load" />
       <el-button type="primary" @click="load">查询</el-button>
       <el-button type="success" @click="openCreate">+ 创建工艺路线</el-button>
     </div>
@@ -81,18 +81,18 @@ async function openCopy(row) {
 async function onSave() {
   if (saving.value) return
   if (!form.value.code || !form.value.name) {
-    ElMessage.error('请填写路线编号和名称')
+    ElMessage.error('请填写工艺路线的编号和名称，这两项都是必填项')
     return
   }
   const steps = form.value.steps
     .filter(s => s.operationId)
     .map((s, i) => ({ operationId: s.operationId, seq: i + 1 }))
   if (steps.length !== form.value.steps.length || new Set(steps.map(s => s.operationId)).size !== steps.length) {
-    ElMessage.error('请选择每一道工序，同一路线不能重复选择同一道工序')
+    ElMessage.error('每道工序都必须选择，且同一条路线里不能重复添加同一道工序；请检查工序明细中的空白行或重复项')
     return
   }
   if (steps.length === 0) {
-    ElMessage.error('请至少选择一道工序')
+    ElMessage.error('工艺路线至少要包含一道工序，请在工序明细中添加')
     return
   }
   const payload = { code: form.value.code, name: form.value.name, steps }
@@ -107,7 +107,7 @@ async function onSave() {
 }
 
 async function onDelete(row) {
-  await ElMessageBox.confirm(`确认删除工艺路线 ${row.name}？`, '提示', { type: 'warning' })
+  await ElMessageBox.confirm(`确认删除工艺路线「${row.name}」吗？若仍有产品引用该路线则不能删除；删除后无法恢复`, '提示', { type: 'warning' })
   await deleteRouting(row.id)
   ElMessage.success('已删除')
   await load()

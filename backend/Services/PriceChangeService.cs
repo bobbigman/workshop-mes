@@ -29,7 +29,7 @@ public sealed class PriceChangeDraftStore(IMemoryCache cache)
     }
     public PriceChangeDraft Get(string token) => token is { Length: 64 }
         && cache.TryGetValue<PriceChangeDraft>("price-change:" + token, out var draft) && draft != null && draft.ExpiresAt > DateTime.UtcNow
-        ? draft : throw ThrowHelper.BizUser("调价预览已失效，请重新预览");
+        ? draft : throw ThrowHelper.BizUser("调价预览结果已过期失效。请重新执行预览操作，获取最新调价方案。");
 }
 
 public class PriceChangeService(AppDbContext db, PriceChangeDraftStore drafts)
@@ -61,7 +61,7 @@ public class PriceChangeService(AppDbContext db, PriceChangeDraftStore drafts)
 
     private async Task AuthorizeAsync(long factoryId, long actor)
     {
-        Require(await db.Users.AsNoTracking().AnyAsync(u => u.Id == actor && u.FactoryId == factoryId && u.Role == 1 && u.Status == 1), "仅本厂有效管理员可调整工价");
+        Require(await db.Users.AsNoTracking().AnyAsync(u => u.Id == actor && u.FactoryId == factoryId && u.Role == 1 && u.Status == 1), "只有本厂的有效管理员账号才能调整工价。请确认当前登录账号具有管理员权限且归属本厂。");
     }
 
     public async Task<object> PreviewAsync(long id, PriceChangeInput input, long factoryId, long actor)
@@ -92,26 +92,26 @@ public class PriceChangeService(AppDbContext db, PriceChangeDraftStore drafts)
 
     private async Task<Plan> BuildAsync(long id, PriceChangeInput input, long factoryId)
     {
-        Require(input.RequestId != Guid.Empty && !string.IsNullOrWhiteSpace(input.ExpectedVersion), "调价请求标识或价表版本缺失");
-        Require(input.Rows is { Count: > 0 and <= 1000 } && input.Rows.All(x => x != null), "请选择需要调整的价格行");
-        Require(input.Rows.Select(x => x.RowId).Distinct().Count() == input.Rows.Count, "调价行标识重复");
-        Require((input.Reason?.Length ?? 0) <= 500, "原因最多500字");
+        Require(input.RequestId != Guid.Empty && !string.IsNullOrWhiteSpace(input.ExpectedVersion), "调价请求缺少必要的标识或价表版本信息。请刷新页面重新发起调价流程，确保信息完整。");
+        Require(input.Rows is { Count: > 0 and <= 1000 } && input.Rows.All(x => x != null), "还没有勾选要调整的价格行。请在调价列表中至少勾选一行后再提交。");
+        Require(input.Rows.Select(x => x.RowId).Distinct().Count() == input.Rows.Count, "调价请求中有重复的行标识。请刷新页面重新选择调价行，避免重复提交。");
+        Require((input.Reason?.Length ?? 0) <= 500, "调价原因说明不能超过500字。请把原因精简到500字以内再提交。");
         input.Reason = input.Reason?.Trim() ?? "";
         var from = input.EffectiveFrom.Date;
         var today = PriceTimelineService.Today;
-        Require(from >= new DateTime(2000,1,1), "请选择有效的生效日期");
-        Require(!input.RepriceCurrentMonth || (from.Year == today.Year && from.Month == today.Month && from <= today), "本月追溯生效日须在本月1日至今天之间");
-        Require(input.RepriceCurrentMonth || from >= today, "过去日期调价请选择本月追溯重算");
-        Require(!input.RepriceCurrentMonth || input.Reason.Length > 0, "追溯重算必须填写原因");
-        var old = await db.OperationPriceLists.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.FactoryId == factoryId) ?? throw ThrowHelper.BizUser("价目表不存在或非本厂");
-        Require(old.Version == input.ExpectedVersion && old.Status == 1, "价目表已变化或未启用，请刷新后预览");
-        Require(OperationPriceListService.Details(old).SchemaVersion == 2, "旧价目表需先转换");
-        Require(old.EffectiveTo == null || old.EffectiveTo >= from, "生效日超过失效日");
+        Require(from >= new DateTime(2000,1,1), "生效日期未选或格式不正确。请在调价表单中选择一个有效的生效日期。");
+        Require(!input.RepriceCurrentMonth || (from.Year == today.Year && from.Month == today.Month && from <= today), "本月追溯生效日必须在本月1日到今天之间。请把生效日期调整到该合法范围内。");
+        Require(input.RepriceCurrentMonth || from >= today, "选择了过去日期作为生效日，需要勾选「本月追溯重算」。请确认是否需要追溯重算，勾选后重新提交。");
+        Require(!input.RepriceCurrentMonth || input.Reason.Length > 0, "追溯重算会影响历史工资，必须填写调价原因。请在原因栏写明追溯调整的理由后再提交。");
+        var old = await db.OperationPriceLists.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.FactoryId == factoryId) ?? throw ThrowHelper.BizUser("指定的价目表不存在或不属于本厂。请到「工序价目表」列表确认该表是否存在及归属。");
+        Require(old.Version == input.ExpectedVersion && old.Status == 1, "价目表在你操作期间被修改过或已停用。请刷新页面重新加载最新状态后再预览调价。");
+        Require(OperationPriceListService.Details(old).SchemaVersion == 2, "这张旧版价目表需要先完成格式转换才能调价。请先执行旧表转换，完成后再发起调价。");
+        Require(old.EffectiveTo == null || old.EffectiveTo >= from, "生效日期晚于失效日期，前后矛盾。请把生效日期改成早于失效日期。");
         var revisions = await db.OperationPriceRevisions.AsNoTracking().Where(x => x.FactoryId == factoryId).OrderBy(x => x.Id).ToListAsync();
-        Require(!revisions.Any(x => x.PriceListId == id && !x.Superseded && x.EffectiveFrom > today), "已有未来调价安排，不可覆盖，请先核对");
+        Require(!revisions.Any(x => x.PriceListId == id && !x.Superseded && x.EffectiveFrom > today), "这张价目表已有一个未来的调价安排在排队，不能叠加新的。请先查看现有调价计划，确认后再决定取消或等待。");
         Require(!input.RepriceCurrentMonth || !revisions.Any(x => x.PriceListId == id && !x.Superseded
             && (x.EffectiveTo == null || x.EffectiveTo >= from) && Structure(OperationPricingService.Read<OperationPriceList>(x.SnapshotJson)) != Structure(old)),
-            "追溯区间包含条件、单位或产品范围变化，请选择结构调整之后的生效日");
+            "追溯区间内发生了条件、单位或产品范围的结构性变化，不能跨变化点追溯。请选择结构调整完成之后的日期作为生效日。");
         var snapshot = revisions.LastOrDefault(x => x.PriceListId == id && !x.Superseded);
         var fields = snapshot == null ? await new OperationAttributeService(db).FieldsAsync(factoryId, old.OperationId)
             : OperationPricingService.Read<Dictionary<long,SysCustomField>>(snapshot.FieldsJson);
@@ -119,19 +119,19 @@ public class PriceChangeService(AppDbContext db, PriceChangeDraftStore drafts)
         var details = OperationPriceListService.Details(next);
         foreach (var patch in input.Rows)
         {
-            var row = details.Rows.SingleOrDefault(x => x.RowId == patch.RowId) ?? throw ThrowHelper.BizUser("调价行不存在，请刷新");
+            var row = details.Rows.SingleOrDefault(x => x.RowId == patch.RowId) ?? throw ThrowHelper.BizUser("调价行在当前价目表中已不存在。请刷新页面重新加载最新价格行列表后再操作。");
             Require(patch.Amount is >= 0 and <= 1000000 && patch.DeductPrice is >= 0 and <= 1000000
-                && decimal.Round(patch.Amount,4) == patch.Amount && decimal.Round(patch.DeductPrice,4) == patch.DeductPrice, "金额须为0至1000000，最多4位小数");
+                && decimal.Round(patch.Amount,4) == patch.Amount && decimal.Round(patch.DeductPrice,4) == patch.DeductPrice, "调价金额必须在0到1000000之间，最多4位小数。请检查输入金额是否符合范围和小数位数要求。");
             row.Amount = patch.Amount; row.DeductPrice = patch.DeductPrice;
         }
-        Require(Json(details) != Json(OperationPriceListService.Details(old)), "价格没有变化，无需调整");
+        Require(Json(details) != Json(OperationPriceListService.Details(old)), "新旧价格完全相同，没有实际变化。请确认是否选错了调价行，或把目标金额改成与原值不同。");
         OperationPriceListService.Validate(details, fields, true, next.PricingType);
         next.Details = Json(details); next.EffectiveFrom = from;
         next.Version = MaintenanceSqlService.Hash(Json(input))[..32];
         var plan = new Plan { Before = old, After = next, Fields = fields, Revisions = revisions };
         var roots = await db.OperationPriceLists.AsNoTracking().Where(x => x.FactoryId == factoryId).OrderBy(x => x.Id).ToListAsync();
         Require(!roots.Any(x => x.Id != id && x.OperationId == old.OperationId && x.ProductId == old.ProductId && x.Status == 1
-            && (x.EffectiveTo == null || x.EffectiveTo >= from) && (next.EffectiveTo == null || x.EffectiveFrom <= next.EffectiveTo)), "同范围存在日期重叠的其他价表，不能安排调价");
+            && (x.EffectiveTo == null || x.EffectiveTo >= from) && (next.EffectiveTo == null || x.EffectiveFrom <= next.EffectiveTo)), "同一产品范围内已有另一张价目表有效期与本次调价重叠，无法安排。请先处理重叠价目表（停用或调整日期），再重新提交调价。");
         var reports = input.RepriceCurrentMonth ? await db.Reports.AsNoTracking().Where(x => x.FactoryId == factoryId && x.OperationId == old.OperationId
             && x.ReportTime >= from && x.ReportTime < new DateTime(today.Year,today.Month,1).AddMonths(1)).OrderBy(x => x.Id).ToListAsync() : new List<ProdReport>();
         var ids = reports.Select(x => x.Id).ToList();
@@ -145,35 +145,35 @@ public class PriceChangeService(AppDbContext db, PriceChangeDraftStore drafts)
             if (old.ProductId.HasValue && report.ProductId.HasValue && report.ProductId != old.ProductId) continue;
             try
             {
-                Require(report.PriceSnapshot != null, $"报工{report.Id}缺少原始计薪快照");
+                Require(report.PriceSnapshot != null, $"请检查这条报工的原始工资记录是否完整：报工{report.Id}");
                 var prior = OperationPricingService.Read<ReportPriceSnapshot>(report.PriceSnapshot!);
                 _ = ReportPriceSnapshot.Calculate(report, 1m);
                 var basis = prior.Processing!;
                 var selected = await new PriceTimelineService(db).SelectAsync(factoryId,basis.ProductId,basis.OperationId,report.ReportTime,next,fields);
                 if (selected.Table.Id != id)
                 {
-                    Require(prior.PriceListId != id, $"报工{report.Id}原价表与当前产品范围冲突，请核查");
+                    Require(prior.PriceListId != id, $"报工{report.Id}的原价表与当前产品范围对不上，请核查。");
                     continue;
                 }
                 var q = PriceTimelineService.Calculate(selected,basis.ProductId,basis.ReportUnitId,basis.AttributeEvidence!.Attributes,report.ReportTime);
                 Require(q.PriceType == prior.PriceType && q.ReportUnitId == basis.ReportUnitId && q.UnitsPerPriceUnit == basis.UnitsPerPriceUnit
-                    && q.PriceUnit == basis.PriceUnit, $"报工{report.Id}计价类型或单位换算已变化，不能仅调数值");
+                    && q.PriceUnit == basis.PriceUnit, $"报工{report.Id}的计价类型或单位折算已变化，不能只调数字。");
                 var linked = items.Where(x => x.ReportId == report.Id).ToList();
-                Require(linked.Count <= 1, $"报工{report.Id}被多张工资单引用");
+                Require(linked.Count <= 1, $"报工{report.Id}已被多张工资单引用，需先处理冲突。");
                 var item = linked.SingleOrDefault();
                 if (item != null)
                 {
                     var statement = statements.SingleOrDefault(x => x.Id == item.StatementId);
-                    Require(statement != null && statement.FactoryId == factoryId && statement.UserId == report.UserId, $"报工{report.Id}工资归属矛盾");
-                    Require(statement!.Status is 0 or 1, $"工资单{statement.Id}已发放或状态不支持");
-                    Require(report.ReviewStatus == 1 && item.PriceListId == prior.PriceListId && item.PriceType == prior.PriceType, $"报工{report.Id}复核或工资来源冲突");
-                    Require(item.WageCoeff > 0, $"报工{report.Id}工资明细人员系数无效");
+                    Require(statement != null && statement.FactoryId == factoryId && statement.UserId == report.UserId, $"报工{report.Id}的工资归属有矛盾，请检查。");
+                    Require(statement!.Status is 0 or 1, $"工资单{statement.Id}已发放或当前状态不能修改。");
+                    Require(report.ReviewStatus == 1 && item.PriceListId == prior.PriceListId && item.PriceType == prior.PriceType, $"报工{report.Id}的复核状态或工资来源有冲突，请检查。");
+                    Require(item.WageCoeff > 0, $"报工{report.Id}工资明细中的人员倍数无效，请检查。");
                     var expected = ReportPriceSnapshot.Calculate(report,item.WageCoeff);
                     Require(item.Amount == expected.Amount && (item.DeductAmount ?? 0) == expected.DeductAmount && item.UnitPrice == expected.UnitPrice
                         && item.CalcQty == expected.CalcQty && item.DurationMinutes == report.DurationMinutes && item.WageCoeff == expected.WageCoeff
-                        && report.SettledFlag == (statement.Status == 1), $"报工{report.Id}工资明细与原快照冲突");
+                        && report.SettledFlag == (statement.Status == 1), $"报工{report.Id}的工资明细与原始记录对不上，请检查。");
                 }
-                else Require(!report.SettledFlag, $"报工{report.Id}已结算但没有可靠工资明细");
+                else Require(!report.SettledFlag, $"报工{report.Id}已结算但缺少可靠的工资明细，需补全后再操作。");
                 var coeff = prior.AppliedWageCoeff;
                 if (coeff == null && item != null)
                 {
@@ -181,8 +181,8 @@ public class PriceChangeService(AppDbContext db, PriceChangeDraftStore drafts)
                     var recorded = ReportPriceSnapshot.Calculate(report,item.WageCoeff);
                     if (recorded.WageAmount == report.WageAmount) coeff = item.WageCoeff;
                 }
-                Require(coeff is > 0, $"报工{report.Id}缺少可靠历史人员系数，请核查，不能套用当前系数");
-                Require(ReportPriceSnapshot.Calculate(report,coeff!.Value).WageAmount == report.WageAmount, $"报工{report.Id}原金额与历史人员系数冲突");
+                Require(coeff is > 0, $"报工{report.Id}缺少可靠的历史人员倍数，请核查，不能直接套用当前倍数。");
+                Require(ReportPriceSnapshot.Calculate(report,coeff!.Value).WageAmount == report.WageAmount, $"报工{report.Id}原金额与历史人员倍数对不上，请检查。");
                 var updated = Copy(report);
                 updated.PriceSnapshot = Json(new ReportPriceSnapshot(q.AttributeEvidence!.PriceListId,q.PriceType,q.UnitPrice,q.DeductPrice)
                     { Processing = q, PriceRevisionId = q.PriceRevisionId, AppliedWageCoeff = coeff, CoefficientHistory = prior.CoefficientHistory });
@@ -235,15 +235,15 @@ public class PriceChangeService(AppDbContext db, PriceChangeDraftStore drafts)
         var existing = await db.OperationPriceChanges.AsNoTracking().SingleOrDefaultAsync(x => x.FactoryId == factoryId && x.RequestId == input.RequestId);
         if (existing != null)
         {
-            Require(existing.ChangedBy == actor && existing.PriceListId == id && existing.PlanHash == input.PlanHash, "同一请求内容或操作者已变化");
+            Require(existing.ChangedBy == actor && existing.PriceListId == id && existing.PlanHash == input.PlanHash, "提交调价时发现请求内容或操作者已发生变化。请刷新页面重新预览并提交。");
             await tx.CommitAsync();
             return new { batchId = existing.Id, idempotent = true, result = OperationPricingService.Read<object>(existing.AfterJson) };
         }
         var draft = drafts.Get(input.PreviewToken);
         Require(draft.FactoryId == factoryId && draft.ActorId == actor && draft.TableId == id && draft.Input.RequestId == input.RequestId
-            && draft.PlanHash == input.PlanHash, "预览凭据不属于本次操作");
+            && draft.PlanHash == input.PlanHash, "提交的预览凭据与本次调价操作不匹配。请重新预览后再提交确认，确保凭据一致。");
         var plan = await BuildAsync(id,draft.Input,factoryId);
-        Require(plan.Hash == draft.PlanHash && plan.Blockers.Count == 0, "价格或报工/工资范围已变化，请重新预览");
+        Require(plan.Hash == draft.PlanHash && plan.Blockers.Count == 0, "价格或报工范围在你预览之后发生了变化，请重新预览确认最新数据后再提交。");
         var table = await db.OperationPriceLists.SingleAsync(x => x.Id == id && x.FactoryId == factoryId);
         var timeline = new PriceTimelineService(db);
         await timeline.EnsureBaselineAsync(table);
@@ -297,6 +297,6 @@ public class PriceChangeService(AppDbContext db, PriceChangeDraftStore drafts)
     {
         await AuthorizeAsync(factoryId,actor);
         return await db.OperationPriceChanges.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.FactoryId == factoryId)
-            ?? throw ThrowHelper.BizUser("调价记录不存在或非本厂");
+            ?? throw ThrowHelper.BizUser("指定的调价记录不存在或不属于本厂。请到调价记录列表确认该记录是否存在及归属。");
     }
 }

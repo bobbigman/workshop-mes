@@ -2,8 +2,8 @@
   <div class="page">
     <ValueTip :text="VALUE_TIPS.workerView" />
     <el-alert type="info" :closable="false" show-icon style="margin-bottom:16px">
-      <template #title>默认保持「全车间可见可报」</template>
-      切成「只看我的任务」后：工人手机默认进【任务】、藏【工单】入口；扫码仍可扫全车间有权限的单，派工不拦报工。班组长/管理员不受影响。
+      <template #title>默认设置为全车间可见可报，所有工人都能看到并报自己可报工的工单</template>
+      切成「只看我的任务」后：工人手机默认进入任务页、隐藏工单入口；扫码仍可扫全车间能报工的单报工，派工不影响报工；班组长和管理员不受此设置影响
     </el-alert>
 
     <el-card>
@@ -48,7 +48,7 @@ async function onSave() {
   saving.value = true
   try {
     await saveWorkerView({ workerViewMode: form.value.workerViewMode })
-    ElMessage.success('已保存')
+    ElMessage.success('工单工单已保存，可在工单列表中查看和管理，可在工单列表中查看和管理')
     await load()
   } finally {
     saving.value = false

@@ -20,10 +20,10 @@
 
     <div v-if="loading" class="state">加载中…</div>
     <div v-else-if="loadError" class="state err">
-      加载失败，请重试
+      数据加载失败，请检查网络后刷新重试；反复失败找管理员处理。
       <button type="button" class="btn-sm" @click="reload">重试</button>
     </div>
-    <div v-else-if="list.length === 0" class="state">当天没有报工记录</div>
+    <div v-else-if="list.length === 0" class="state">当天没有报工记录。如果今天确实报过工但看不到，请换个日期看看，或找管理员核实。。如果今天确实报过工但看不到，请换个日期看看，或找管理员核实。</div>
 
     <div v-for="row in list" :key="row.id" class="card">
       <div class="row1">
@@ -40,7 +40,7 @@
           <span>单价 ¥{{ Number(row.unitPrice).toFixed(4) }}</span>
           <span v-if="row.wageAmount != null">金额 ¥{{ Number(row.wageAmount).toFixed(2) }}</span>
         </template>
-        <span v-else class="wage-miss">未配工价</span>
+        <span v-else class="wage-miss">这道工序还没定单价，找管理员设一下。</span>
       </div>
       <div class="time">{{ formatTime(row.reportTime) }}</div>
       <div v-if="row.reviewStatus === 2 && row.rejectReason" class="reject">退回原因：{{ row.rejectReason }}</div>
@@ -56,7 +56,7 @@
       </button>
     </div>
 
-    <p class="tip">待复核记录可自行修改数量；已通过需管理员退回后再改；已结算不可改。</p>
+    <p class="tip">待复核的记录你可以自己改数量；已经通过的要找管理员退回才能改；已结算的不能再改了。</p>
     <TabBar active="my-reports" />
 
     <div v-if="editVisible" class="mask" @click.self="closeEdit">
@@ -90,7 +90,7 @@ import { withdrawReport } from '@/api/prod'
 import { showConfirmDialog } from 'vant'
 async function withdraw(row) {
   try {
-    await showConfirmDialog({ title: '撤回本次报工', message: '撤回后本次不计入产量和工资，原开工记录保留，可重新开工。' })
+    await showConfirmDialog({ title: '撤回本次报工', message: '撤回后这次的产量和工资都不算了，但开工记录还在，你可以重新开工再报。' })
   } catch { return }
   await withdrawReport(row.id)
   showSuccessToast('已撤回')
@@ -196,7 +196,7 @@ async function openEdit(row) {
     defectOptions.value = defects.data || []
   } catch {
     defectOptions.value = []
-    showToast('不良原因加载失败，仍可改数量')
+    showToast('不良原因列表没加载出来，但不影响你改数量，可以先保存数量，不良原因稍后再补。')
   }
   editForm.value = {
     id: row.id,
@@ -219,15 +219,15 @@ function closeEdit() {
 async function saveEdit() {
   const f = editForm.value
   if (f.goodQty < 0 || f.defectQty < 0) {
-    showToast('良品/不良不能为负')
+    showToast('良品数和不良品数都不能填负数，请检查一下。')
     return
   }
   if (f.defectQty > 0 && !f.defectId) {
-    showToast('有不良品时必须选择不良原因')
+    showToast('有不良品的话，请选择一个不良原因再保存。')
     return
   }
   if (f.durationMinutes < 0 || f.durationMinutes > 1440) {
-    showToast('时长须在 0～1440 分钟')
+    showToast('时长不能超过24小时，请检查一下填写的数字。')
     return
   }
   saving.value = true
@@ -245,7 +245,7 @@ async function saveEdit() {
     editVisible.value = false
     await reload()
   } catch (e) {
-    showToast(e?.msg || e?.message || '保存失败')
+    showToast(e?.msg || e?.message || '保存失败了，请检查网络后重试；反复失败找管理员看看是不是数据有问题。了，请检查网络后重试；反复失败找管理员看看是不是数据有问题。')
   } finally {
     saving.value = false
   }

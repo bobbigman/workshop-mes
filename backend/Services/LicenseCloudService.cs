@@ -66,7 +66,7 @@ public class LicenseCloudService : ILicenseCloudService
             return;
 
         var factory = await _db.Factories.FirstOrDefaultAsync(f => f.Id == factoryId, ct)
-            ?? throw ThrowHelper.BizUser("工厂不存在");
+            ?? throw ThrowHelper.BizUser("刷新授权时找不到对应的工厂记录，请检查工厂数据是否完整，或联系技术支持排查。");
 
         var localUtc = DateTime.UtcNow;
         factory.LastLicenseSeenUtc = localUtc;

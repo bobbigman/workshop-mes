@@ -149,13 +149,13 @@ public class DeepSeekClient : IDeepSeekClient
         CancellationToken ct)
     {
         if (!_opt.IsConfigured)
-            throw ThrowHelper.Biz(nameof(ChatInternalAsync), "未配置 Ai:ApiKey，请联系部署人员配置环境变量 Ai__ApiKey");
+            throw ThrowHelper.Biz(nameof(ChatInternalAsync), "AI服务的访问Key还没设置，请在服务器环境变量中添加 Ai__ApiKey 并重启服务。");
         if (!_opt.HasModel)
-            throw ThrowHelper.Biz(nameof(ChatInternalAsync), "未配置 Ai:Model，请在服务器填写并做连接测试");
+            throw ThrowHelper.Biz(nameof(ChatInternalAsync), "AI模型名称还没设置，请在服务器设置文件中填写 Ai:Model 并完成连接测试。");
 
         var baseUrl = (_opt.BaseUrl ?? "").Trim().TrimEnd('/');
         if (string.IsNullOrWhiteSpace(baseUrl))
-            throw ThrowHelper.Biz(nameof(ChatInternalAsync), "Ai:BaseUrl 未配置");
+            throw ThrowHelper.Biz(nameof(ChatInternalAsync), "AI服务的访问地址还没设置，请在服务器设置文件中填写 Ai:BaseUrl。");
 
         var url = baseUrl + "/chat/completions";
         var bodyObj = new Dictionary<string, object?>

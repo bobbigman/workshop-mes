@@ -50,38 +50,38 @@ public class WechatEventService(AppDbContext db, ILicenseTierService license, We
     public static void ValidateRule(WechatRuleDto rule)
     {
         if (string.IsNullOrWhiteSpace(rule.Name) || rule.Name.Trim().Length > 64)
-            throw ThrowHelper.BizUser("规则名称须 1～64 字符");
+            throw ThrowHelper.BizUser("规则名称长度须在1到64个字符之间，请修改后重新保存。");
         if (rule.EventType is not ("report_created" or "order_started" or "order_completed" or "abnormal_reported" or "operation_assigned"))
-            throw ThrowHelper.BizUser("未知消息事件");
+            throw ThrowHelper.BizUser("选择了未知的消息事件类型，请从支持的事件列表中选择正确的事件。");
         if (rule.TargetChannel is not ("session" or "group"))
-            throw ThrowHelper.BizUser("目标通道须为会话到人或群消息");
+            throw ThrowHelper.BizUser("接收通道须选择会话到人或群消息其中一种，请修正后重新保存。");
         if (rule.ConditionType == "always")
         {
-            if (rule.Threshold != null) throw ThrowHelper.BizUser("全部提醒不允许填写阈值");
+            if (rule.Threshold != null) throw ThrowHelper.BizUser("全部提醒类型的规则不需要填写阈值，请清空阈值后重新保存。");
         }
         else if (rule.EventType == "abnormal_reported")
         {
             if (rule.ConditionType is not ("abnormal_device" or "abnormal_material" or "abnormal_quality") || rule.Threshold != null)
-                throw ThrowHelper.BizUser("异常上报请选择设备故障/物料短缺/质量异常，且不要填阈值");
+                throw ThrowHelper.BizUser("异常上报事件请选择设备故障、物料短缺或质量异常中的一种，且不要填写阈值，请修正后重新保存。");
         }
         else if (rule.EventType == "operation_assigned")
         {
             if (rule.ConditionType != "always" || rule.Threshold != null)
-                throw ThrowHelper.BizUser("派工事件仅支持全部提醒");
+                throw ThrowHelper.BizUser("派工事件只支持全部提醒模式，不支持设置阈值条件，请移除阈值后重新保存。");
         }
         else if (rule.ConditionType != "defect_rate" || rule.EventType != "report_created" ||
                  rule.Threshold == null || rule.Threshold < 0 || rule.Threshold > 100 || decimal.Round(rule.Threshold.Value, 2) != rule.Threshold)
-            throw ThrowHelper.BizUser("不良率阈值须 0～100，最多两位小数，且仅用于报工事件");
+            throw ThrowHelper.BizUser("不良率预警数值请填0到100之间、最多两位小数，且只用于报工事件。");
         if (string.IsNullOrWhiteSpace(rule.Template) || rule.Template.Length > 1000)
-            throw ThrowHelper.BizUser("消息模板须 1～1000 字符");
+            throw ThrowHelper.BizUser("消息模板内容长度须在1到1000个字符之间，请修改后重新保存。");
         var allowed = new HashSet<string> { "工单号", "产品编号", "产品名称", "事件时间" };
         if (rule.EventType == "report_created") allowed.UnionWith(["工序", "良品数", "不良数", "不良率"]);
         if (rule.EventType == "abnormal_reported") allowed.UnionWith(["异常类型", "问题描述", "上报人"]);
         if (rule.EventType == "operation_assigned") allowed.UnionWith(["工序", "派工对象"]);
         foreach (Match match in Regex.Matches(rule.Template, @"\{([^{}]+)\}"))
-            if (!allowed.Contains(match.Groups[1].Value)) throw ThrowHelper.BizUser($"该事件不支持占位符：{match.Value}");
+            if (!allowed.Contains(match.Groups[1].Value)) throw ThrowHelper.BizUser($"消息模板中使用了当前事件不支持的变量 {match.Value}，请参照可用变量列表修正模板内容。");
         var rest = Regex.Replace(rule.Template, @"\{([^{}]+)\}", "");
-        if (rest.Contains('{') || rest.Contains('}')) throw ThrowHelper.BizUser("模板占位符括号不完整");
+        if (rest.Contains('{') || rest.Contains('}')) throw ThrowHelper.BizUser("消息模板中的变量括号不成对，请检查模板内容，确保每个变量括号完整配对。");
         if (!string.IsNullOrWhiteSpace(rule.ToUser))
         {
             if (rule.TargetChannel == "group") WechatMessageSender.NormalizeGroupUsers(rule.ToUser);
@@ -105,26 +105,26 @@ public class WechatEventService(AppDbContext db, ILicenseTierService license, We
         if (string.IsNullOrWhiteSpace(dto.TargetChannel)) dto.TargetChannel = "group";
         var existing = id == null ? null : await db.WechatAlertRules.AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == id && x.FactoryId == factoryId)
-            ?? (id == null ? null : throw ThrowHelper.BizUser("规则不存在或无权限"));
+            ?? (id == null ? null : throw ThrowHelper.BizUser("该规则不存在或当前用户无权限修改，请刷新列表确认规则状态及自身权限。"));
         if (dto.TargetChannel != "group" || existing is { TargetChannel: "session" })
-            throw ThrowHelper.BizUser("旧会话规则已停用，请重新建立群机器人规则");
+            throw ThrowHelper.BizUser("旧的会话机器人规则已停用，请删除旧规则并重新创建新的群机器人规则。");
         ValidateRule(dto);
         if (dto.Enabled)
         {
             var setting = await db.WechatAlertSettings.AsNoTracking().FirstOrDefaultAsync(x => x.FactoryId == factoryId);
             if (setting == null)
-                throw ThrowHelper.BizUser("请先保存微信预警设置；可先启用独立Webhook规则，再开启总开关");
+                throw ThrowHelper.BizUser("请先在「微信预警设置」中保存基础设置，然后再添加群消息规则；如某条规则有独立Webhook，可先保存该规则再开启总开关。");
             if (dto.TargetChannel == "group")
             {
                 var key = WechatMessageSender.ResolveWebhookKey(dto.WebhookKey, existing?.WebhookKey)
                     ?? WechatMessageSender.NormalizeWebhookKey(setting.WebhookKey);
-                if (key == null) throw ThrowHelper.BizUser("群消息请填写本规则或全厂默认的群机器人 Webhook");
+                if (key == null) throw ThrowHelper.BizUser("这条群消息规则没有填Webhook，全厂也没设默认Webhook。请在本规则中填写Webhook，或到「微信预警设置」中设置全局默认Webhook。");
             }
             else
             {
                 if (string.IsNullOrWhiteSpace(setting.CorpId) || string.IsNullOrWhiteSpace(setting.Secret) ||
                     !int.TryParse(setting.AgentId, out var agent) || agent <= 0)
-                    throw ThrowHelper.BizUser("会话到人请先保存有效的 CorpID、Secret、AgentId");
+                    throw ThrowHelper.BizUser("选择会话到人模式前，需要先在企业微信设置中填写有效的 CorpID、Secret 和 AgentId 并保存。");
                 WechatMessageSender.NormalizeUsers(string.IsNullOrWhiteSpace(dto.ToUser) ? setting.ToUser : dto.ToUser);
             }
         }
@@ -151,7 +151,7 @@ public class WechatEventService(AppDbContext db, ILicenseTierService license, We
         if (context.Database.CurrentTransaction == null) throw ThrowHelper.General(nameof(LockOrderAsync), "工单锁须在业务事务内取得");
         await context.Database.ExecuteSqlInterpolatedAsync($"SELECT id FROM prod_work_order WITH (UPDLOCK, ROWLOCK) WHERE id={order.Id}");
         await context.Entry(order).ReloadAsync();
-        if (context.Entry(order).State == EntityState.Detached) throw ThrowHelper.BizUser("工单已删除");
+        if (context.Entry(order).State == EntityState.Detached) throw ThrowHelper.BizUser("关联的工单已被删除，无法锁定；请确认工单是否存在，或重新选择有效工单。");
     }
 
     public async Task EnqueueAsync(ProdWorkOrder order, byte before, IReadOnlyCollection<ProdReport>? reports = null)
@@ -373,24 +373,24 @@ public class WechatEventService(AppDbContext db, ILicenseTierService license, We
     public async Task HandleAsync(long factoryId, long id, long userId, WechatDeliveryActionDto dto, bool verify)
     {
         if (verify && (string.IsNullOrWhiteSpace(dto.Note) || dto.Note.Trim().Length > 256))
-            throw ThrowHelper.BizUser("核实说明须 1～256 字符");
+            throw ThrowHelper.BizUser("核实说明长度须在1到256个字符之间，请修改后重新提交。");
         await using var tx = await db.Database.BeginTransactionAsync();
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT id FROM sys_wechat_alert_delivery WITH (UPDLOCK, ROWLOCK) WHERE id={id} AND factory_id={factoryId}");
         var row = await db.WechatAlertDeliveries.FirstOrDefaultAsync(x => x.Id == id && x.FactoryId == factoryId)
-            ?? throw ThrowHelper.BizUser("发送记录不存在或无权限");
+            ?? throw ThrowHelper.BizUser("该发送记录不存在或当前用户无权限操作，请刷新列表确认记录状态及自身权限。");
         await db.Entry(row).ReloadAsync();
         if (verify ? row.Status != "unknown" : row.Status is not ("failed" or "partial"))
-            throw ThrowHelper.BizUser("记录状态已变化，请刷新；未知结果须先核实");
+            throw ThrowHelper.BizUser("该记录状态已被其他操作变更，请刷新页面获取最新状态；未知结果的记录须先完成核实再操作。");
         if (verify && dto.Sent) { row.Status = "confirmed"; row.CompletedAt = DateTime.Now; }
         else
         {
             if (!await license.CanUseAsync(factoryId, LicenseFeature.WechatDueAlert) ||
                 !await db.WechatAlertSettings.AnyAsync(x => x.FactoryId == factoryId && x.Enabled))
-                throw ThrowHelper.BizUser("请先开启微信预警并确认正式授权后再重试");
+                throw ThrowHelper.BizUser("微信预警功能尚未开启或未正式授权，请先在预警设置中开启并完成授权后再重试。");
             if (!await db.WechatAlertRules.AnyAsync(x => x.Id == row.RuleId && x.FactoryId == factoryId && x.TargetChannel == "group"))
-                throw ThrowHelper.BizUser("旧会话投递已停止，不可重试；请重新配置群规则");
+                throw ThrowHelper.BizUser("旧的会话推送方式已停止服务，无法重试，请重新设置群机器人规则以使用新的推送方式。");
             if (!await db.WechatAlertRules.AnyAsync(x => x.Id == row.RuleId && x.FactoryId == factoryId && x.Enabled))
-                throw ThrowHelper.BizUser("请先启用原规则再重试");
+                throw ThrowHelper.BizUser("该规则当前处于停用状态，请先启用该规则后再重试操作。");
             row.Status = "pending"; row.AutoAttempts = 0; row.NextAttemptAt = DateTime.Now; row.CompletedAt = null;
         }
         row.SendingStarted = false; row.LeaseId = null; row.LeaseUntil = null;

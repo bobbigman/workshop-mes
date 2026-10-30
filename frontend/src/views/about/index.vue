@@ -17,7 +17,7 @@
         <!-- 版本 / 版权 / 厂名元信息 -->
         <dl class="meta">
           <div class="row">
-            <dt>本机厂名</dt>
+            <dt>授权单位</dt>
             <dd>{{ factoryLabel || instanceLabel || '—' }}</dd>
           </div>
           <div class="row">
@@ -32,7 +32,7 @@
 
         <!-- 产品使用权（仿 WPS 输入框行） -->
         <div class="owner">
-          <span class="owner-label">本产品使用权属于</span>
+          <span class="owner-label">授权使用单位</span>
           <span class="owner-value">{{ ownerLabel }}</span>
         </div>
 
@@ -111,7 +111,7 @@ onMounted(async () => {
     if (res.data?.displayName) displayName.value = res.data.displayName
     if (res.data?.version) version.value = res.data.version
   } catch {
-    ElMessage.warning('实例信息加载失败，部分内容可能不是最新（版本仍显示构建号）')
+    ElMessage.warning('部分信息加载失败，当前显示的版本号可能不准确，请刷新页面重试')
   }
 })
 

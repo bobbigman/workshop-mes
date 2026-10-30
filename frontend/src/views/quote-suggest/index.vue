@@ -12,7 +12,7 @@
             remote
             clearable
             reserve-keyword
-            placeholder="搜索编号/名称"
+            placeholder="例：CP2024001 或 手机壳（编号、名称均可搜索）"
             :remote-method="onSearchProducts"
             :loading="productLoading"
             style="width: 100%; max-width: 640px"
@@ -29,10 +29,10 @@
           <el-input
             v-model="form.kingdeeMaterialCode"
             clearable
-            placeholder="金蝶物料编号，可空（空则只估人工）"
+            placeholder="选填，不填则只估算人工费用"
             style="width: 320px"
           />
-          <el-button style="margin-left: 8px" @click="onProbe" :loading="probeLoading">试查物料</el-button>
+          <el-button style="margin-left: 8px" @click="onProbe" :loading="probeLoading">查询物料信息</el-button>
           <span v-if="probeTip" class="probe-tip">{{ probeTip }}</span>
         </el-form-item>
         <el-form-item label="不良预留%">
@@ -62,7 +62,7 @@
           <el-card shadow="never">
             <div class="kpi-label">人工建议</div>
             <div class="kpi-value">{{ money(result.laborSuggest) }}</div>
-            <div class="kpi-sub">多相似件取平均</div>
+            <div class="kpi-sub">多个相似件时取平均值</div>
             <div v-if="result.laborWarning" class="warn-text">{{ result.laborWarning }}</div>
           </el-card>
         </el-col>
@@ -99,7 +99,7 @@
               · 物料单价 {{ money(result.materialUnitCost) }}
               · BOM合计 {{ money(result.bomTotalCost) }}
             </div>
-            <mes-table table-key="views/quote-suggest/index:2" :data="result.bomLines || []" size="small" empty-text="无 BOM 明细">
+            <mes-table table-key="views/quote-suggest/index:2" :data="result.bomLines || []" size="small" empty-text="未查到物料清单明细，请检查金蝶物料号是否正确，或到金蝶系统确认该物料是否已维护物料清单">
               <el-table-column prop="materialCode" label="子件编号" width="140" />
               <el-table-column prop="materialName" label="名称" min-width="120" />
               <el-table-column prop="qty" label="用量" width="80" />
@@ -111,7 +111,7 @@
         <el-col :span="10">
           <el-card shadow="never">
             <template #header>金蝶标准工艺</template>
-            <mes-table table-key="views/quote-suggest/index:3" :data="result.routingSteps || []" size="small" empty-text="无工艺">
+            <mes-table table-key="views/quote-suggest/index:3" :data="result.routingSteps || []" size="small" empty-text="未查到工艺路线，请检查金蝶物料号是否正确，或到金蝶系统确认该物料是否已维护工艺">
               <el-table-column prop="seq" label="序" width="70" />
               <el-table-column prop="operationName" label="工序" />
             </mes-table>
@@ -157,7 +157,7 @@ function money(v) {
 function materialSourceLabel(src) {
   if (src === 'bom') return '按金蝶 BOM 汇总'
   if (src === 'unit') return '按金蝶物料成本价'
-  return '未取到材料'
+  return '未获取到材料信息，请检查金蝶物料号是否正确'
 }
 
 async function onSearchProducts(kw) {
@@ -173,17 +173,17 @@ async function onSearchProducts(kw) {
 async function onProbe() {
   const code = (form.kingdeeMaterialCode || '').trim()
   if (!code) {
-    ElMessage.warning('请先填写物料号')
+    ElMessage.warning('请先在上方填写金蝶物料号，再点击查询')
     return
   }
   probeLoading.value = true
   probeTip.value = ''
   try {
     const { data } = await probeKingdeeMaterial(code)
-    if (!data) probeTip.value = '未找到该物料'
+    if (!data) probeTip.value = '未找到该物料，请核对金蝶物料号是否正确，请核对金蝶物料号是否正确'
     else probeTip.value = `${data.code} ${data.name} · 成本 ${money(data.costPrice)}`
   } catch {
-    probeTip.value = '查询失败'
+    probeTip.value = '查询物料失败，请检查网络连接或金蝶系统是否正常，稍后重试'
   } finally {
     probeLoading.value = false
   }
@@ -191,7 +191,7 @@ async function onProbe() {
 
 async function onCalc() {
   if (!form.similarProductIds.length) {
-    ElMessage.warning('请选择相似产品')
+    ElMessage.warning('请在上方搜索并选择一个相似产品，作为报价参考')
     return
   }
   calcLoading.value = true
@@ -203,7 +203,7 @@ async function onCalc() {
       defectReservePct: form.defectReservePct
     })
     result.value = data
-    ElMessage.success('已算出建议价')
+    ElMessage.success('建议价已算出，请查看下方结果；确认后可导出 Excel')
   } finally {
     calcLoading.value = false
   }

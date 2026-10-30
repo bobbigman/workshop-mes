@@ -68,7 +68,14 @@
         show-icon
         :closable="false"
       />
-      <el-main class="main"><router-view /></el-main>
+      <PcTabs v-if="!isMobile" />
+      <el-main class="main">
+        <router-view v-slot="{ Component, route: viewRoute }">
+          <keep-alive :max="16">
+            <component :is="Component" v-if="Component" :key="pcTabCacheKey(viewRoute.path)" />
+          </keep-alive>
+        </router-view>
+      </el-main>
     </el-container>
     <PageHelp ref="pageHelpRef" :enabled="!isMobile" />
   </el-container>
@@ -81,10 +88,12 @@ import { ElMessage } from 'element-plus'
 import { Iphone } from '@element-plus/icons-vue'
 import SideMenu from './SideMenu.vue'
 import PageHelp from '@/components/PageHelp.vue'
+import PcTabs from '@/components/PcTabs.vue'
 import { getInstanceInfo, getLicenseStatus } from '@/api/auth'
 import { resolveInstanceLabel, PRODUCT_TITLE } from '@/utils/instanceDisplay'
 import { LOGIN_FACTORY_KEY, rememberLoginFactory } from '@/utils/loginAppearance'
 import { resetFavorites } from '@/composables/useFavorites'
+import { addPcTab, clearPcTabs, pcTabCacheKey } from '@/composables/usePcTabs'
 
 const aiNewChat = ref(null)
 provide('aiNewChat', aiNewChat)
@@ -120,10 +129,10 @@ function applyLicenseStatus(data) {
     return
   }
   if (data.status === 'expired') {
-    licenseBanner.value = data.message || '授权已过期，高级功能暂不可用，请联系部署方续费'
+    licenseBanner.value = data.message || '授权已过期，高级功能暂不可用，请到「系统配置」联系部署方续费。'
     licenseBannerType.value = 'error'
   } else if (data.status === 'grace') {
-    licenseBanner.value = data.message || '授权校验已超过一段时间，请尽快联网'
+    licenseBanner.value = data.message || '授权检查超时，请检查网络连接后刷新页面。'
     licenseBannerType.value = 'warning'
   } else {
     licenseBanner.value = ''
@@ -159,6 +168,7 @@ function goHome() {
 function onLogout() {
   const appearanceCode = localStorage.getItem('factoryCode') || localStorage.getItem(LOGIN_FACTORY_KEY)
   resetFavorites()
+  clearPcTabs()
   localStorage.clear()
   window.dispatchEvent(new Event('mes-auth-changed'))
   rememberLoginFactory(appearanceCode)
@@ -172,6 +182,7 @@ function goH5() {
 watch(() => route.fullPath, () => {
   drawerOpen.value = false
   maybeRedirectWorkerToH5()
+  if (!standaloneGuide.value) addPcTab(route)
 })
 
 onMounted(() => {
@@ -180,7 +191,10 @@ onMounted(() => {
   window.addEventListener('resize', updateViewportHeight)
   mql = window.matchMedia('(max-width: 768px)')
   mql.addEventListener('change', checkMobile)
-  if (!standaloneGuide.value) loadShellInfo()
+  if (!standaloneGuide.value) {
+    loadShellInfo()
+    addPcTab(route)
+  }
 })
 
 watch(standaloneGuide, standalone => {
@@ -195,13 +209,13 @@ function loadShellInfo() {
       localStorage.setItem('instanceName', label)
     }
   }).catch(() => {
-    ElMessage.warning('实例信息加载失败，侧栏名称可能不是最新')
+    ElMessage.warning('实例信息加载失败，侧栏名称可能不是最新，请刷新页面重试；若仍失败检查后端服务是否正常。，请刷新页面重试；若仍失败检查后端服务是否正常。')
   })
   getLicenseStatus().then(res => {
     if (res.code === 0) applyLicenseStatus(res.data)
   }).catch(() => {
     // 保留本地 licenseTier 缓存，不因断网清空
-    ElMessage.warning('授权状态刷新失败，暂用本地缓存档位')
+    ElMessage.warning('授权状态刷新失败，当前用的是本地暂存档位，请检查网络后刷新页面。')
   })
 }
 
@@ -240,8 +254,9 @@ onUnmounted(() => {
   line-height: 1.55;
   overflow-wrap: anywhere;
 }
-.main-wrap { min-width: 0; flex: 1; }
-.license-banner { margin: 0; border-radius: 0; }
+.main-wrap { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+.main-wrap > .el-main.main { flex: 1; min-height: 0; overflow: auto; }
+.license-banner { margin: 0; border-radius: 0; flex-shrink: 0; }
 .header {
   display: flex;
   justify-content: space-between;

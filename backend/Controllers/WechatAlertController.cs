@@ -121,11 +121,11 @@ public class WechatAlertController : ControllerBase
     {
         var expected = (_config["WechatAlert:CronToken"] ?? "").Trim();
         if (string.IsNullOrEmpty(expected))
-            throw ThrowHelper.Biz(nameof(CronPush), "未配置 WechatAlert:CronToken，拒绝定时推送");
+            throw ThrowHelper.Biz(nameof(CronPush), "服务器还没设置定时推送的验证口令，微信预警的定时推送无法启动；请在服务器设置文件中添加 WechatAlert:CronToken。");
 
         var got = (Request.Headers["X-Cron-Token"].FirstOrDefault() ?? "").Trim();
         if (!string.Equals(got, expected, StringComparison.Ordinal))
-            throw ThrowHelper.Biz(nameof(CronPush), "定时推送 Token 无效");
+            throw ThrowHelper.Biz(nameof(CronPush), "定时推送的验证口令不正确，推送被拒绝；请检查服务器设置中的 CronToken 是否与调用方一致。");
 
     }
 }

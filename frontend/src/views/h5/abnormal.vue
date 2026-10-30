@@ -22,9 +22,9 @@
 
     <label class="field">
       <span>问题描述</span>
-      <textarea v-model="form.description" rows="4" maxlength="500" placeholder="简要说明现场情况；涉及交期或恢复时间，请写具体日期" aria-describedby="abnormal-date-hint" />
+      <textarea v-model="form.description" rows="4" maxlength="500" placeholder="简单说一下现场出了什么问题；如果影响交货或恢复时间，请写明具体日期（如2026-10-15）。" aria-describedby="abnormal-date-hint" />
     </label>
-    <p id="abnormal-date-hint" class="date-hint">日期请写年月日，例如 2026-10-13，避免用“今日／明日”，方便后续查看。</p>
+    <p id="abnormal-date-hint" class="date-hint">日期请写年月日，例如 2026-10-13，不要写“今日／明日”，方便以后查看。</p>
 
     <label class="field">
       <span>关联工单号（可选）</span>
@@ -94,7 +94,7 @@ function onFile(e) {
 
 async function onSubmit() {
   if (!form.description.trim()) {
-    showToast('请填写问题描述')
+    showToast('请先填写问题描述，写清楚现场发生了什么情况，再点提交。')
     return
   }
   submitting.value = true
@@ -104,7 +104,7 @@ async function onSubmit() {
     if (no) {
       const res = await getOrderByNo(no)
       workOrderId = res.data?.id
-      if (!workOrderId) throw new Error('工单不存在')
+      if (!workOrderId) throw new Error('找不到这张工单，可能已经被删掉或编号填错了。请返回重新扫码，或找管理员确认。')
     }
     const fd = new FormData()
     fd.append('type', String(form.type))

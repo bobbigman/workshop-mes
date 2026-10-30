@@ -10,7 +10,7 @@
       </el-select>
       <template v-if="c.operator==='eq'">
         <el-select :disabled="disabled" v-if="field(c)?.fieldType==='single'" v-model="c.value" style="width:140px"><el-option v-for="v in field(c).options" :key="v" :value="v" :label="v" /></el-select>
-        <el-input :disabled="disabled" v-else v-model="c.value" placeholder="条件值" style="width:120px" />
+        <el-input :disabled="disabled" v-else v-model="c.value" placeholder="例：合格 或 100" style="width:120px" />
       </template>
       <template v-else>
         <el-input-number :disabled="disabled" v-model="c.min" :controls="false" placeholder="下界不限" style="width:110px" />
@@ -20,7 +20,7 @@
       </template>
       <el-button :disabled="disabled" link type="danger" @click="remove(i)">移除</el-button>
     </div>
-    <el-button :disabled="disabled" link type="primary" @click="add">+ 条件（同时满足）</el-button>
+    <el-button :disabled="disabled" link type="primary" @click="add">+ 添加条件（需全部满足）</el-button>
   </div>
 </template>
 <script setup>

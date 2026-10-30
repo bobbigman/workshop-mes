@@ -168,9 +168,9 @@ public class SupportDocumentService
     public string ResolveRoot()
     {
         if (!_opt.Enabled)
-            throw ThrowHelper.Biz(nameof(ResolveRoot), "智能客服未启用（Ai:SupportDocs:Enabled=false）");
+            throw ThrowHelper.Biz(nameof(ResolveRoot), "智能客服未启用。请联系技术人员在服务器设置文件 appsettings.json 中将 Ai:SupportDocs:Enabled 设为 true 后启用。");
         if (!_opt.IsConfigured)
-            throw ThrowHelper.Biz(nameof(ResolveRoot), "未配置客服知识目录（Ai:SupportDocs:RootPath 为空）");
+            throw ThrowHelper.Biz(nameof(ResolveRoot), "客服知识目录还没设置。请在 appsettings.json 的 Ai:SupportDocs:RootPath 中填写操作手册文件夹的完整路径。");
 
         var root = _opt.RootPath.Trim();
         string full;
@@ -181,7 +181,7 @@ public class SupportDocumentService
 
         full = Path.GetFullPath(full);
         if (!Directory.Exists(full))
-            throw ThrowHelper.Biz(nameof(ResolveRoot), $"客服知识目录不存在：{full}");
+            throw ThrowHelper.Biz(nameof(ResolveRoot), $"设置的客服知识目录路径不存在：{full}。请检查 appsettings.json 中 Ai:SupportDocs:RootPath 指向的文件夹是否已创建且拼写正确。");
         return full;
     }
 
@@ -377,11 +377,11 @@ public class SupportDocumentService
         foreach (var kind in new[] { "mobile", "faq" })
         {
             using var stream = typeof(SupportDocumentService).Assembly.GetManifestResourceStream($"WorkerHelp.{kind}.md")
-                ?? throw ThrowHelper.BizUser("操作手册未正确发布，请联系管理员");
+                ?? throw ThrowHelper.BizUser("操作手册文件不完整或未放到指定目录。请把完整的操作手册文档放入知识库文件夹后重试。");
             using var reader = new StreamReader(stream, Encoding.UTF8);
             var content = reader.ReadToEnd();
             var firstChapter = System.Text.RegularExpressions.Regex.Match(content, @"(?m)^## ");
-            if (!firstChapter.Success) throw ThrowHelper.BizUser("发布的操作手册缺少章节，请联系管理员");
+            if (!firstChapter.Success) throw ThrowHelper.BizUser("已发布的操作手册缺少必要章节。请检查知识库文件夹中的文档是否包含全部章节，并按规范重新发布。");
             content = content[firstChapter.Index..];
             // 来源与前端手册的二级章节一致，三级小标题保留正文，不生成无法打开的独立来源。
             content = System.Text.RegularExpressions.Regex.Replace(content, @"(?m)^#{3,} +", "");
@@ -978,13 +978,13 @@ public class SupportDocumentService
     private static IEnumerable<string> SafeEnumerateDirectories(string root)
     {
         try { return Directory.EnumerateDirectories(root); }
-        catch (Exception ex) { throw ThrowHelper.Biz(nameof(SafeEnumerateDirectories), $"枚举子目录失败：{ex.Message}"); }
+        catch (Exception ex) { throw ThrowHelper.Biz(nameof(SafeEnumerateDirectories), $"读取知识目录下的子文件夹时出错，请检查该目录的访问权限是否正常、磁盘空间是否充足。"); }
     }
 
     private static IEnumerable<string> SafeEnumerateFiles(string root)
     {
         try { return Directory.EnumerateFiles(root); }
-        catch (Exception ex) { throw ThrowHelper.Biz(nameof(SafeEnumerateFiles), $"枚举文件失败：{ex.Message}"); }
+        catch (Exception ex) { throw ThrowHelper.Biz(nameof(SafeEnumerateFiles), $"读取知识目录下的文件列表时出错，请检查该目录的访问权限是否正常、是否存在损坏文件。"); }
     }
 
     private static string ReadUtf8(string fullPath)

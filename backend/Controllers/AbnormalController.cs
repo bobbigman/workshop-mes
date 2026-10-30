@@ -32,7 +32,7 @@ public class AbnormalController : ControllerBase
     {
         var role = JwtHelper.GetRole(User);
         if (role != 1 && role != 3)
-            throw ThrowHelper.BizUser("仅管理员或班组长可处理异常");
+            throw ThrowHelper.BizUser("你没有处理异常的权限，只有管理员或班组长才能处理。请把这个问题告诉他们来处理。");
         return _svc.ResolveAsync(id, dto ?? new AbnormalResolveDto(), JwtHelper.GetUserId(User), JwtHelper.GetFactoryId(User));
     }
 }

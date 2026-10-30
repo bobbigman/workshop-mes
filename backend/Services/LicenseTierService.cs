@@ -41,6 +41,6 @@ public class LicenseTierService : ILicenseTierService
             factoryId, LicenseTierPolicy.ToDb(tier), feature, LicenseTierPolicy.ToDb(need));
 
         throw ThrowHelper.BizUser(
-            $"当前为{LicenseTierPolicy.DisplayName(tier)}，{LicenseTierPolicy.FeatureDisplayName(feature)}需{LicenseTierPolicy.DisplayName(need)}及以上");
+            $"当前为{LicenseTierPolicy.DisplayName(tier)}，{LicenseTierPolicy.FeatureDisplayName(feature)}需{LicenseTierPolicy.DisplayName(need)}及以上版本才能使用，请联系供应商升级授权。");
     }
 }

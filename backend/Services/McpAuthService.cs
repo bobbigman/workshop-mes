@@ -79,7 +79,7 @@ public class McpAuthService : IMcpAuthService
             .Select(x => (long?)x.FactoryId)
             .FirstOrDefaultAsync();
         if (factoryId is null or <= 0)
-            throw ThrowHelper.Biz(nameof(ResolveFactoryIdByCodeAsync), "配对码无效。请回到豆包再说一次「查工单」，打开新链接（旧链接只有约半小时有效）。");
+            throw ThrowHelper.Biz(nameof(ResolveFactoryIdByCodeAsync), "配对码无效或已过期（链接有效期约半小时）。请回到豆包再说一次「查工单」，打开新生成的链接后重新填写账号密码。");
         return factoryId.Value;
     }
 
@@ -93,9 +93,9 @@ public class McpAuthService : IMcpAuthService
         if (row == null)
             throw ThrowHelper.Biz(nameof(PeekCodeAsync), "配对码无效。请回到豆包再说一次「查工单」，打开新链接（旧链接只有约半小时有效）。");
         if (row.CodeUsed)
-            throw ThrowHelper.Biz(nameof(PeekCodeAsync), "配对码已使用。请回到豆包重新发起授权，打开新链接。");
+            throw ThrowHelper.Biz(nameof(PeekCodeAsync), "该配对码已被使用过，不能重复使用。请回到豆包重新发起授权，获取新的配对链接。");
         if (row.CodeExpire < now)
-            throw ThrowHelper.Biz(nameof(PeekCodeAsync), "配对码已过期。请回到豆包再说一次「查工单」，打开新链接后再填账号密码。");
+            throw ThrowHelper.Biz(nameof(PeekCodeAsync), "配对码已过期。请回到豆包再说一次「查工单」，打开新生成的链接后再填写账号密码完成授权。");
     }
 
     public async Task<McpAuthInfo?> ExchangeAsync(string code, KingdeeUserInfo user, long factoryId)
@@ -109,9 +109,9 @@ public class McpAuthService : IMcpAuthService
         if (row == null)
             throw ThrowHelper.Biz(nameof(ExchangeAsync), "配对码无效。请回到豆包重新发起授权。");
         if (row.CodeUsed)
-            throw ThrowHelper.Biz(nameof(ExchangeAsync), "配对码已使用，请重新发起授权");
+            throw ThrowHelper.Biz(nameof(ExchangeAsync), "该配对码已被使用。请重新发起授权获取新的配对码。");
         if (row.CodeExpire < now)
-            throw ThrowHelper.Biz(nameof(ExchangeAsync), "配对码已过期，请重新发起授权");
+            throw ThrowHelper.Biz(nameof(ExchangeAsync), "该配对码已过期。请重新发起授权获取新的配对码。");
 
         // 换新 token（覆盖占位值），绑定金蝶用户，标记 code 已用
         row.AuthToken = GenerateShortCode();

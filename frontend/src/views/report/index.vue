@@ -2,7 +2,7 @@
   <div>
     <div v-if="managementEntry" class="management-entry">
       <router-link to="/h5/home">‹ 返回工作台</router-link>
-      <p v-if="!managementAllowed" role="alert">无权使用该操作或入口无效，请返回工作台。</p>
+      <p v-if="!managementAllowed" role="alert">您没有此功能的使用资格，如需使用请联系管理员开通，也可返回工作台首页</p>
     </div>
     <template v-else>
     <ValueTip :text="VALUE_TIPS.report" />
@@ -40,7 +40,7 @@
       <el-table-column prop="orderNo" label="工单编号" />
       <el-table-column prop="productName" label="产品" />
       <el-table-column prop="operationName" label="工序" />
-      <el-table-column prop="userName" label="报工人" width="90" />
+      <el-table-column prop="userName" label="报输入输入工人姓名搜索姓名搜索" width="90" />
       <el-table-column label="人员类型" width="110">
         <template #default="{ row }">
           <el-tag :type="userTypeTagType(row.userType)" size="small">{{ userTypeLabel(row.userType) }}</el-tag>
@@ -53,8 +53,8 @@
         <template #default="{ row }">
           <template v-if="row.unitPrice != null">¥{{ Number(row.unitPrice).toFixed(4) }}</template>
           <template v-else>
-            <span class="wage-miss">未配工价</span>
-            <el-button v-if="isAdmin" link type="primary" @click="$router.push('/operation-price-list')">去补价</el-button>
+            <span class="wage-miss">这道工序还没定单价，找管理员设一下。</span>
+            <el-button v-if="isAdmin" link type="primary" @click="$router.push('/operation-price-list')">去设置单价</el-button>
           </template>
         </template>
       </el-table-column>
@@ -94,7 +94,7 @@
             clearable
             allow-create
             default-first-option
-            placeholder="选择或输入工单号"
+            placeholder="输入工单号或从下拉列表选择"
             style="width:100%"
             @change="onCreateOrderChange"
           >
@@ -121,7 +121,7 @@
           <el-select
             v-model="createForm.operationId"
             style="width:100%"
-            placeholder="请先加载工单"
+            placeholder="请先在上方选择工单"
             :disabled="!orderDetail"
             @change="onOpChange"
           >
@@ -164,13 +164,13 @@
           </el-form-item>
           <el-form-item label="参与人">
             <div class="share-box">
-              <div class="hint">须含自己。按工时填的是分钟；选平均则按上面的良品数平分，每人旁边是分到的个数。分不尽的归当前报工人。</div>
+              <div class="hint">参与人须包含当前报工人自己。按工时：每人填写分钟数；按平均：良品数平分，余数归当前报工人</div>
               <div v-if="candidatesLoadError" class="hint">
-                参与人列表加载失败
+                参与人名单没加载出来，稍等刷新试试，还不行就找管理员。
                 <el-button link type="primary" @click="reloadCreateCandidates">重试</el-button>
               </div>
-              <div v-else-if="!createForm.operationId" class="hint">请先选择工序</div>
-              <div v-else-if="!createCandidates.length" class="hint">该工序暂无可选参与人</div>
+              <div v-else-if="!createForm.operationId" class="hint">请先在上方选择工序，再填写参与人和数量</div>
+              <div v-else-if="!createCandidates.length" class="hint">这道工序目前没有可以一起报工的人，只能你自己报。</div>
               <el-checkbox-group v-else v-model="participantIds">
                 <div v-for="c in createCandidates" :key="c.id" class="share-person">
                   <el-checkbox :value="c.id">{{ c.name }}</el-checkbox>
@@ -228,10 +228,10 @@
 
     <!-- 修改日志（docs/205） -->
     <el-dialog v-model="logDlg" title="修改记录" width="640px">
-      <mes-table table-key="views/report/index:2" :data="changeLogs" v-loading="logLoading" empty-text="暂无修改记录" max-height="420">
+      <mes-table table-key="views/report/index:2" :data="changeLogs" v-loading="logLoading" empty-text="该报工记录暂无修改历史" max-height="420">
         <el-table-column prop="changedAt" label="时间" width="170" />
         <el-table-column prop="changedByName" label="修改人" width="90" />
-        <el-table-column label="来源" width="60">
+        <el-table-column label="数据数据来源" width="60">
           <template #default="{ row }">{{ row.source === 2 ? 'H5' : 'PC' }}</template>
         </el-table-column>
         <el-table-column label="原值 → 新值" min-width="220">
@@ -248,7 +248,7 @@
     <el-dialog v-model="proxyDlg" title="代报工" width="720px" class="proxy-dialog"
       :fullscreen="proxyNarrow" :style="proxyNarrow ? { height: proxyViewportHeight + 'px' } : {}"
       :close-on-click-modal="false" :before-close="closeProxy" @closed="onProxyClosed">
-      <p v-if="orderOptionsError" role="alert">工单选项加载失败 <el-button link @click="loadOrderOptions">重试</el-button></p>
+      <p v-if="orderOptionsError" role="alert">工单列表加载失败，可能是网络波动，请点击重试；多次失败请联系管理员 <el-button link @click="loadOrderOptions">重试</el-button></p>
       <el-form label-width="90px" :label-position="proxyNarrow ? 'top' : 'right'" :disabled="proxySubmitting || proxyLoading">
         <el-form-item label="工单号" required>
           <el-select
@@ -257,7 +257,7 @@
             clearable
             allow-create
             default-first-option
-            placeholder="选择或输入工单号"
+            placeholder="输入工单号或从下拉列表选择"
             style="width:100%"
             @change="onProxyOrderChange"
           >
@@ -276,7 +276,7 @@
           <el-select
             v-model="proxyForm.operationId"
             style="width:100%"
-            placeholder="请先加载工单"
+            placeholder="请先在上方选择工单"
             :disabled="!proxyDetail"
             @change="onProxyOpChange"
           >
@@ -290,13 +290,13 @@
         </el-form-item>
         <p v-if="proxyLoadError" class="proxy-error" role="alert">{{ proxyLoadError }} <el-button link type="primary" :disabled="proxySubmitting || proxyLoading" @click="retryProxyLoad">重试</el-button></p>
         <p v-if="proxyLoading" role="status">正在加载工单及可代报人员…</p>
-        <p v-else-if="proxyDetail && !proxyDetail.tasks?.length" role="status">该工单暂无可选工序</p>
+        <p v-else-if="proxyDetail && !proxyDetail.tasks?.length" role="status">该工单暂无可选工序，请检查工单的工艺路线是否已设置，请检查工单的工艺路线是否已设置</p>
         <ProcessingRequirements :price="proxyDetail?.tasks?.find(t=>t.operationId===proxyForm.operationId)?.processingPrice" />
         <section class="proxy-details">
           <h3>代报明细</h3>
           <p class="proxy-hint">记到所选工人名下，各人分别填写数量。</p>
           <p class="proxy-hint">仅可选该工序报权部门人员{{ isLeader ? '，且限本组' : '' }}。</p>
-          <p v-if="proxyForm.operationId && !proxyLoading && !proxyLoadError && !proxyCandidates.length" role="status">当前工序暂无可代报人员</p>
+          <p v-if="proxyForm.operationId && !proxyLoading && !proxyLoadError && !proxyCandidates.length" role="status">当前工序暂无可代报人员，请检查该工序可报工的部门设置，或到人员管理中确认相关人员是否已分到对应部门，请检查该工序可报工的部门设置，或到人员管理中确认相关人员是否已分到对应部门</p>
           <article v-for="(row, idx) in proxyForm.rows" :key="row.localId" class="proxy-person">
             <header class="proxy-person-header">
               <b>工人{{ idx + 1 }}</b>
@@ -347,7 +347,7 @@
     <el-dialog v-model="batchDlg" title="一键补报未完工序" width="720px" class="report-management-dialog"
       :fullscreen="proxyNarrow" :style="proxyNarrow ? { height: proxyViewportHeight + 'px' } : {}"
       :close-on-click-modal="false" :before-close="closeBatch" @closed="onBatchClosed">
-      <p v-if="orderOptionsError" role="alert">工单选项加载失败 <el-button link @click="loadOrderOptions">重试</el-button></p>
+      <p v-if="orderOptionsError" role="alert">工单列表加载失败，可能是网络波动，请点击重试；多次失败请联系管理员 <el-button link @click="loadOrderOptions">重试</el-button></p>
       <p v-if="batchLoadError" role="alert">{{ batchLoadError }} <el-button link @click="loadBatchOrder">重试</el-button></p>
       <el-form label-width="100px" :label-position="proxyNarrow ? 'top' : 'right'" :disabled="batchSubmitting || batchLoading">
         <el-form-item label="工单号" required>
@@ -357,7 +357,7 @@
             clearable
             allow-create
             default-first-option
-            placeholder="选择或输入工单号"
+            placeholder="输入工单号或从下拉列表选择"
             style="width:100%"
             @change="onBatchOrderChange"
           >
@@ -379,9 +379,9 @@
               <div>计划 {{ row.planQty }} · 已报良品 {{ row.doneQty }}</div>
               <div>剩余可报 {{ row.remain }}</div>
             </article>
-            <p v-if="!pendingTasks.length">所有工序已报满</p>
+            <p v-if="!pendingTasks.length">所有工序已完成报工，无需补报</p>
           </div>
-          <mes-table table-key="views/report/index:3" v-else :data="pendingTasks" size="small" border empty-text="所有工序已报满">
+          <mes-table table-key="views/report/index:3" v-else :data="pendingTasks" size="small" border empty-text="所有工序已完成报工，无需补报">
             <el-table-column prop="seq" label="序号" width="60" />
             <el-table-column prop="operationName" label="工序" />
             <el-table-column prop="planQty" label="计划" width="80" />
@@ -401,7 +401,7 @@
         </el-form-item>
         <el-form-item v-if="pendingTasks.length" label="谁做的">
           <div class="alloc-wrap">
-            <div class="hint">默认挂当前管理员；需要计件到人时再按工序拆分，每道合计必须等于统一良品数。</div>
+            <div class="hint">默认记在当前管理员名下；需要计件到人时，勾选下方拆分选项按工序拆分到人，每道工序人数合计须等于统一良品数</div>
             <el-checkbox v-model="batchForm.split">按工序拆分到人</el-checkbox>
             <div v-if="batchForm.split" class="alloc-list">
               <div v-for="row in batchForm.allocRows" :key="row.operationId" class="alloc-op">
@@ -440,14 +440,14 @@
     <el-dialog v-model="pendingDlg" title="待补报开工记录" width="920px" class="report-management-dialog"
       :fullscreen="proxyNarrow" :style="proxyNarrow ? { height: proxyViewportHeight + 'px' } : {}"
       :close-on-click-modal="false" :before-close="closePending" @closed="returnFromManagement('pending')">
-      <p v-if="pendingError" role="alert">开工记录加载失败 <el-button link @click="openPending">重试</el-button></p>
+      <p v-if="pendingError" role="alert">开工记录加载失败，可能是网络波动，请点击重试；多次失败请联系管理员，可能是网络波动，请点击重试；多次失败请联系管理员 <el-button link @click="openPending">重试</el-button></p>
       <p v-if="pendingLoading" role="status">正在加载开工记录…</p>
       <div v-else-if="proxyNarrow && !pendingError" class="management-records">
-        <p v-if="!pendingRows.length">暂无待补报开工记录</p>
+        <p v-if="!pendingRows.length">暂无待补报的开工记录；所有开工记录均已补报完成，或当前筛选条件下没有匹配记录</p>
         <article v-for="row in pendingRows" :key="row.id" class="management-record">
           <b>{{ row.userName }} · {{ row.operationName }}</b>
           <div>工单 {{ row.orderNo }}</div><div>{{ row.productName }}</div>
-          <div>开始 {{ row.startTime?.replace('T', ' ') }}</div><div>收尾 {{ row.endTime?.replace('T', ' ') }}</div>
+          <div>开始 {{ row.startTime?.replace('T', ' ') }}</div><div>结束时间 {{ row.endTime?.replace('T', ' ') }}</div>
           <el-button type="primary" plain @click="selectPending(row)">补报</el-button>
         </article>
       </div>
@@ -457,7 +457,7 @@
         <el-table-column prop="productName" label="产品" />
         <el-table-column prop="operationName" label="工序" />
         <el-table-column prop="startTime" label="开始" width="175" />
-        <el-table-column prop="endTime" label="收尾" width="175" />
+        <el-table-column prop="endTime" label="结束时间" width="175" />
         <el-table-column label="时长"><template #default="{row}">{{ Math.ceil((new Date(row.endTime)-new Date(row.startTime))/60000) }}分</template></el-table-column>
         <el-table-column label="操作"><template #default="{row}"><el-button link @click="selectPending(row)">补报</el-button></template></el-table-column>
       </mes-table>
@@ -620,7 +620,7 @@ function selectPending(row) {
 }
 async function savePending() {
   if (!isAdmin || pendingSaving.value) return
-  if (!pendingTimes.value?.some(Boolean)) { ElMessage.error('请填写起止时间'); return }
+  if (!pendingTimes.value?.some(Boolean)) { ElMessage.error('计时岗补报需要填写开始和结束时间，请在下方起止时间栏中填写'); return }
   const timeError = managementTimeError(pendingTimes.value)
   if (timeError) { ElMessage.error(timeError); return }
   pendingSaving.value = true
@@ -858,13 +858,13 @@ function resetCreate() {
 async function loadOrder() {
   const no = (createForm.value.orderNo || '').trim()
   if (!no) {
-    ElMessage.error('请输入工单编号')
+    ElMessage.error('请输入工单编号，或从上方下拉列表中选择一个工单，或从上方下拉列表中选择一个工单')
     return
   }
   const res = await getOrderByNo(no)
   const data = res.data
   if (data.status === 2 || data.status === 3) {
-    ElMessage.error(data.status === 2 ? '工单已结束，不可报工' : '工单已取消，不可报工')
+    ElMessage.error(data.status === 2 ? '该工单已结束，不能再报工；如需调整，请到工单管理页面查看工单状态或联系主管处理' : '该工单已取消，不能再报工；如需恢复，请到工单管理页面检查工单状态或联系主管处理')
     orderDetail.value = null
     return
   }
@@ -894,7 +894,7 @@ async function reloadCreateCandidates() {
   } catch (error) {
     createCandidates.value = []
     candidatesLoadError.value = true
-    console.error('[新增报工] 参与人列表加载失败', error)
+    console.error('[新增报工] 参与人名单没加载出来，稍等刷新试试，还不行就找管理员。', error)
     ElMessage.error('参与人列表加载失败')
   }
 }
@@ -915,7 +915,7 @@ async function onOpChange() {
 
 async function onCreate(keepOpen) {
   if (!orderDetail.value) {
-    ElMessage.error('请先加载工单')
+    ElMessage.error('请先在上方选择工单')
     return
   }
   if (!createForm.value.operationId) {
@@ -923,30 +923,30 @@ async function onCreate(keepOpen) {
     return
   }
   if (locked.value) {
-    ElMessage.error('该工序已报满，不可继续报工')
+    ElMessage.error('这道工序的数量已经报够了，不能再报了；如果有问题，找班组长或管理员处理。')
     return
   }
   if (createForm.value.defectQty > 0 && !createForm.value.defectId) {
-    ElMessage.error('有不良品时必须选择不良品原因')
+    ElMessage.error('填了不良品数量就得选一个不良原因，不然没法提交。')
     return
   }
   const durationMinutes = (createForm.value.hours || 0) * 60 + (createForm.value.minutes || 0)
   if (durationMinutes > 1440) {
-    ElMessage.error('单次报工时长不能超过24小时')
+    ElMessage.error('一次报工的时长最多填24小时，超过了请拆成多次报。')
     return
   }
   const shareIds = [...new Set(participantIds.value.map(Number))]
   if (shareEnabled.value) {
     if (candidatesLoadError.value) {
-      ElMessage.error('参与人列表加载失败，请重试后再提交')
+      ElMessage.error('参与人列表加载失败，请刷新页面后重新操作；多次失败请检查网络连接或联系管理员')
       return
     }
     if (shareIds.length < 1) {
-      ElMessage.error('请勾选参与人')
+      ElMessage.error('多人报工时要先勾选一起干活的人。')
       return
     }
     if (myUserId && !shareIds.includes(myUserId)) {
-      ElMessage.error('参与人须包含自己')
+      ElMessage.error('多人报工时别忘了把自己也勾上。')
       return
     }
   }
@@ -978,7 +978,7 @@ async function onCreate(keepOpen) {
     let tip = reports.length > 1
       ? `已为 ${reports.length} 人分摊，合计良品 ${goodSum}`
       : (item ? `报工成功：良品${item.goodQty} 不良${item.defectQty}` : '报工成功')
-    if (unmatched) tip += '（未配工价）'
+    if (unmatched) tip += '（该工序尚未设置单价，请到工序价目表中设置）'
     if (unmatched) ElMessage.warning(tip)
     else ElMessage.success(tip)
     await load()
@@ -1008,7 +1008,7 @@ async function submitReportWithUpstreamConfirm(payload) {
     return await submitReport({ ...payload, confirmUpstream: false })
   } catch (e) {
     if (!isUpstreamSoftConfirm(e)) throw e
-    await ElMessageBox.confirm(e.message || '紧邻上一道复核通过量不足，是否继续报工？', '上级工序提示', {
+    await ElMessageBox.confirm(e.message || '上一道工序审核通过的数量不够你做这次的量，确定要继续报吗？', '上一道工序数量提醒', {
       type: 'warning',
       confirmButtonText: '继续报工',
       cancelButtonText: '取消'
@@ -1022,7 +1022,7 @@ async function batchReportWithUpstreamConfirm(payload) {
     return await batchReport({ ...payload, confirmUpstream: false })
   } catch (e) {
     if (!isUpstreamSoftConfirm(e)) throw e
-    await ElMessageBox.confirm(e.message || '紧邻上一道复核通过量不足，是否继续报工？', '上级工序提示', {
+    await ElMessageBox.confirm(e.message || '上一道工序审核通过的数量不够你做这次的量，确定要继续报吗？', '上一道工序数量提醒', {
       type: 'warning',
       confirmButtonText: '继续补报',
       cancelButtonText: '取消'
@@ -1047,7 +1047,7 @@ function addProxyRow() { proxyForm.value.rows.push(newProxyRow()) }
 function clearProxySelections() {
   const hadSelection = proxyForm.value.rows.some(row => row.userId || row.defectId)
   for (const row of proxyForm.value.rows) { row.userId = null; row.defectId = null }
-  if (hadSelection) ElMessage.warning('工单或工序已变化，请重新选择工人和不良原因；数量已保留，请核对')
+  if (hadSelection) ElMessage.warning('工单或工序已变化，已为您保留数量，请重新选择工人和不良原因后再提交')
 }
 
 function retryProxyLoad() {
@@ -1070,7 +1070,7 @@ async function loadProxyOrder() {
     const { data } = await getOrderByNo(no)
     if (version !== proxyOrderVersion || !proxyDlg.value) return
     if (data.status === 2 || data.status === 3) {
-      proxyLoadError.value = data.status === 2 ? '工单已结束，不可报工' : '工单已取消，不可报工'
+      proxyLoadError.value = data.status === 2 ? '该工单已结束，不能再报工；如需调整，请到工单管理页面查看工单状态或联系主管处理' : '该工单已取消，不能再报工；如需恢复，请到工单管理页面检查工单状态或联系主管处理'
       return
     }
     proxyDetail.value = data
@@ -1080,7 +1080,7 @@ async function loadProxyOrder() {
     }
   } catch (error) {
     if (version !== proxyOrderVersion || !proxyDlg.value) return
-    proxyLoadError.value = '加载代报工工单失败，请重试'
+    proxyLoadError.value = '加载代报工单失败，可能是网络波动，请稍后重试'
     console.error('[代报工] 加载工单失败', no, error)
   } finally {
     if (version === proxyOrderVersion) {
@@ -1111,10 +1111,10 @@ async function onProxyOpChange() {
       if (row.userId && !proxyCandidates.value.some(p => p.id === row.userId)) { row.userId = null; cleared = true }
       if (row.defectId && !proxyDefects.value.some(d => d.id === row.defectId)) { row.defectId = null; cleared = true }
     }
-    if (cleared) ElMessage.warning('已清除当前工序不适用的工人或不良原因；数量已保留，请核对')
+    if (cleared) ElMessage.warning('已自动清除不适用于当前工序的工人或不良原因，数量已保留，请重新选择后再提交')
   } catch (error) {
     if (version !== proxyOpVersion || orderVersion !== proxyOrderVersion || !proxyDlg.value) return
-    proxyLoadError.value = '加载代报工人员或不良原因失败，请重试'
+    proxyLoadError.value = '加载人员或不良原因失败，可能是网络波动，请稍后重试'
     console.error('[代报工] 加载工序人员和不良原因失败', operationId, error)
   } finally {
     if (version === proxyOpVersion && orderVersion === proxyOrderVersion) proxyLoading.value = false
@@ -1124,7 +1124,7 @@ async function onProxyOpChange() {
 async function onProxySubmit() {
   if (proxySubmitting.value || proxyLoading.value || proxyLoadError.value) return
   if (!proxyDetail.value) {
-    ElMessage.error('请先加载工单')
+    ElMessage.error('请先在上方选择工单')
     return
   }
   if (!proxyForm.value.operationId) {
@@ -1133,32 +1133,32 @@ async function onProxySubmit() {
   }
   const rows = proxyForm.value.rows || []
   if (!rows.length) {
-    ElMessage.error('请至少添加一名被代报人')
+    ElMessage.error('请至少添加一名被代报工人：点击下方「添加工人」，选择要代报的人员')
     return
   }
   for (const [index, r] of rows.entries()) {
-    const person = `工人${index + 1}`
+    const person = `第${index + 1}位工人`
     if (!r.userId) {
-      ElMessage.error(`${person}：请选择被代报人`)
+      ElMessage.error(`${person}：请选择被代报的工人`)
       return
     }
     if ((r.defectQty || 0) > 0 && !r.defectId) {
-      ElMessage.error(`${person}：有不良品时必须选择不良品原因`)
+      ElMessage.error(`${person}：填写了不良品数量，请选择不良原因`)
       return
     }
     if (!proxyCandidates.value.some(p => p.id === r.userId)
       || (r.defectQty > 0 && !proxyDefects.value.some(d => d.id === r.defectId))) {
-      ElMessage.error(`${person}：工人或不良原因不适用于当前工序，请重新选择`)
+      ElMessage.error(`${person}：所选工人或不良原因不适用于当前工序，请重新选择`)
       return
     }
     if (r.timeRange?.some(Boolean)) {
       const [start, end] = r.timeRange
       if (!start || !end || !Number.isFinite(Date.parse(start)) || !Number.isFinite(Date.parse(end)) || Date.parse(end) <= Date.parse(start)) {
-        ElMessage.error(`${person}：请补全开始和结束时间，结束须晚于开始`)
+        ElMessage.error(`${person}：请补全开始和结束时间，结束时间必须晚于开始时间；实际工时超过一天的，请拆成多条分别补报`)
         return
       }
       if (Date.parse(end) - Date.parse(start) > 24 * 60 * 60 * 1000) {
-        ElMessage.error(`${person}：单次计时补报不能超过24小时`)
+        ElMessage.error(`${person}：单次计时补报不能超过24小时；实际工时超过一天的，请拆成多条分别补报；实际工时超过一天的，请拆成多条分别补报`)
         return
       }
     }
@@ -1184,7 +1184,7 @@ async function onProxySubmit() {
     proxyClientRequestId.value = ''
     const n = res?.data?.reports?.length || rows.length
     const unmatched = (res?.data?.reports || []).some(r => r.unitPrice == null)
-    const tip = unmatched ? `已为 ${n} 人代报（含未配工价）` : `已为 ${n} 人代报`
+    const tip = unmatched ? `已为 ${n} 人代报（其中部分工序尚未设置单价，这些报工金额暂为 0；请到「工序价目表」补齐单价后再重算工资单）` : `已为 ${n} 人代报`
     if (unmatched) ElMessage.warning(tip)
     else ElMessage.success(tip)
     proxyDlg.value = false
@@ -1228,12 +1228,12 @@ async function openChangeLogs(row) {
 
 async function onSave() {
   if (form.value.defectQty > 0 && !form.value.defectId) {
-    ElMessage.error('有不良品时必须选择不良品原因')
+    ElMessage.error('填了不良品数量就得选一个不良原因，不然没法提交。')
     return
   }
   const durationMinutes = (form.value.hours || 0) * 60 + (form.value.minutes || 0)
   if (durationMinutes > 1440) {
-    ElMessage.error('单次报工时长不能超过24小时')
+    ElMessage.error('一次报工的时长最多填24小时，超过了请拆成多次报。')
     return
   }
   await updateReport(form.value.id, {
@@ -1245,7 +1245,7 @@ async function onSave() {
     durationMinutes,
     source: 1
   })
-  ElMessage.success('已保存')
+  ElMessage.success('工单工单已保存，可在工单列表中查看和管理，可在工单列表中查看和管理')
   dlg.value = false
   await load()
 }
@@ -1275,7 +1275,7 @@ async function loadBatchOrder() {
     const { data } = await getOrderByNo(no)
     if (version !== batchLoadVersion || !batchDlg.value) return
     if (data.status === 2 || data.status === 3) {
-      batchLoadError.value = data.status === 2 ? '工单已结束，不可补报' : '工单已取消，不可补报'
+      batchLoadError.value = data.status === 2 ? '该工单已经完工结束，不能再补报；如确需补报，请到「工单」将该工单重新打开后再操作' : '该工单已被取消，不能补报；如属误取消，请到「工单」恢复工单状态后再补报'
       return
     }
     batchDetail.value = data
@@ -1284,7 +1284,7 @@ async function loadBatchOrder() {
     rebuildAllocRows()
   } catch (error) {
     if (version !== batchLoadVersion) return
-    batchLoadError.value = '补报工单加载失败，请重试'
+    batchLoadError.value = '补报工单加载失败，请先检查网络连接，然后刷新页面重试；反复失败请联系管理员排查'
     console.error('[一键补报] 加载工单失败', no, error)
   } finally { if (version === batchLoadVersion) batchLoading.value = false }
 }
@@ -1336,11 +1336,11 @@ async function onBatchSubmit() {
   }
   const n = batchForm.value.goodQty || 0
   if (n < 0) {
-    ElMessage.error('补报良品数不能为负')
+    ElMessage.error('补报的良品数量必须是 0 或正数，不能填负数，请修改输入数量')
     return
   }
   if (n > minRemain.value) {
-    ElMessage.error(`本次数量超过剩余可报最小值 ${minRemain.value}`)
+    ElMessage.error(`本次补报数量超过该工序剩余可报上限（${minRemain.value}），请把数量调到不超过该上限`)
     return
   }
 
@@ -1348,12 +1348,12 @@ async function onBatchSubmit() {
   if (batchForm.value.split) {
     for (const row of batchForm.value.allocRows) {
       if (rowSum(row) !== n) {
-        ElMessage.error(`工序【${row.operationName}】拆分合计必须等于 ${n}`)
+        ElMessage.error(`工序【${row.operationName}】拆分到各人的数量合计必须等于 ${n}，请核对拆分明细`)
         return
       }
       for (const u of row.users) {
         if (!u.userId) {
-          ElMessage.error(`工序【${row.operationName}】请选择报工人`)
+          ElMessage.error(`工序【${row.operationName}】还需指定报工人，请在拆分明细中为每行选择报工人员`)
           return
         }
       }

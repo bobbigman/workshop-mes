@@ -34,7 +34,7 @@
       </section>
 
       <section class="block" aria-label="工人线">
-        <h2 class="block-title">工人：一学就会（3 步）</h2>
+        <h2 class="block-title">一学就会（3 步）</h2>
         <ol class="step-list">
           <li v-for="(step, i) in workerSteps" :key="'w' + i" class="step-card">
             <div class="step-num">{{ i + 1 }}</div>
@@ -56,7 +56,7 @@
         </ol>
       </section>
 
-      <p class="foot-tip">有问题？右上角「帮助」有完整操作手册；或找管理员。</p>
+      <p class="foot-tip">有问题？左侧菜单「帮助」→「操作手册」；或找管理员。</p>
     </main>
   </div>
 </template>
@@ -74,7 +74,7 @@ const returnPath = signedIn
 const adminSteps = [
   {
     title: '环境准备',
-    desc: '用电脑浏览器打开系统地址（就是内网 IP）。管理员管配置用电脑；工人报工用手机或 PDA。建议用 Chrome / Edge 浏览器。',
+    desc: '用电脑浏览器打开系统地址（就是内网 IP）。管理员在电脑上做基础设置；工人报工用手机或 PDA。建议用 Chrome / Edge 浏览器。',
     done: '浏览器能打开登录页。'
   },
   {

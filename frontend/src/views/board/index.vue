@@ -253,7 +253,7 @@ function renderDefectChart() {
 
 function themeColor(name) {
   const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
-  if (!value) throw new Error(`车间看板取色失败：documentElement 上没有 CSS 变量 ${name}`)
+  if (!value) throw new Error(`看板样式加载异常，请刷新重试`)
   return value
 }
 </script>

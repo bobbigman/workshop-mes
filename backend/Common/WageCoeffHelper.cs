@@ -11,9 +11,9 @@ public static class WageCoeffHelper
         if (raw == null) return Default;
         var v = raw.Value;
         if (v < 0.10m || v > 9.99m)
-            throw ThrowHelper.Biz(where, "工价系数须在 0.10～9.99 之间");
+            throw ThrowHelper.Biz(where, "工价倍数须在 0.10～9.99 之间。");
         if (v != decimal.Round(v, 2, MidpointRounding.AwayFromZero))
-            throw ThrowHelper.Biz(where, "工价系数最多两位小数");
+            throw ThrowHelper.Biz(where, "工价倍数最多两位小数。");
         return v;
     }
 

@@ -56,13 +56,13 @@ public class LoginSettingController : ControllerBase
         if (file == null || file.Length == 0)
             throw ThrowHelper.Biz(nameof(Upload), "上传文件为空");
         if (file.Length > MaxBytes)
-            throw ThrowHelper.Biz(nameof(Upload), "图片不能超过 5MB");
+            throw ThrowHelper.Biz(nameof(Upload), "上传的图片太大了，请压缩到5MB以内再上传。");
 
         var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
         if (!AllowedExt.Contains(ext))
-            throw ThrowHelper.Biz(nameof(Upload), "仅支持 png / jpg / jpeg / webp 图片");
+            throw ThrowHelper.Biz(nameof(Upload), "只支持png、jpg、jpeg、webp这几种图片格式，请换成支持的格式再上传。");
         if (!(file.ContentType ?? "").StartsWith("image/", StringComparison.OrdinalIgnoreCase))
-            throw ThrowHelper.Biz(nameof(Upload), "仅支持图片文件");
+            throw ThrowHelper.Biz(nameof(Upload), "只能上传图片文件，不支持其他文件类型；请确认选择的文件是图片格式。");
 
         var factoryId = JwtHelper.GetFactoryId(User);
 

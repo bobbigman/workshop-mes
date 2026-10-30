@@ -22,7 +22,7 @@
 
     <div v-if="loading && !hasData" class="load-mask">加载中…</div>
 
-    <div v-else-if="!hasData" class="load-mask">数据尚未加载成功，请查看上方错误信息，系统每10秒重试。</div>
+    <div v-else-if="!hasData" class="load-mask">数据加载中，每10秒自动重试</div>
 
     <template v-else>
       <div v-if="alertLines.length" class="alerts">
@@ -72,13 +72,13 @@
             <div class="gauge-wrap">
               <div ref="gaugeRef" class="gauge"></div>
               <div class="gauge-title">在制工单数量完成率</div>
-              <div class="gauge-note">未完工单完成数量合计 ÷ 计划数量合计</div>
+              <div class="gauge-note">已完成数量 ÷ 计划数量</div>
             </div>
             <div class="gauge-side">
               <div class="side-title">待推进工序 · 工单数</div>
               <div v-if="!stuckReady" class="side-empty">—</div>
               <div v-else-if="!stuckOps.length" class="side-empty">暂无未报满工序</div>
-              <p class="side-note">按第一道未报满工序归组</p>
+              <p class="side-note">按首道未完工序分组</p>
               <div v-for="s in stuckOps" :key="s.name" class="stuck-row">
                 <span>{{ s.name }}</span>
                 <strong>{{ s.count }}</strong>
@@ -88,7 +88,7 @@
 
           <div class="panel progress-list">
             <h3>未完工单 <em>{{ openOrders.length }} 张</em></h3>
-            <p class="caption">超期优先，同类按交期 · 红超期 / 黄临期</p>
+            <p class="caption">红超期 黄临期</p>
             <div ref="progressRowsRef" class="progress-rows">
             <div v-for="o in progressOrders" :key="o.orderNo" class="prog-item">
               <div class="row">
@@ -119,7 +119,7 @@
         <aside class="col-right">
           <div class="panel due-panel">
             <h3>交期预警 <em v-if="dueOrders.length">{{ dueOrderTotal }}</em></h3>
-            <p class="caption">优先处理 · 超期优先，同类按交期 · 前6张</p>
+            <p class="caption">优先处理前6张</p>
             <div v-if="!dueOrders.length" class="empty">暂无交期预警</div>
             <div v-for="o in dueOrders" :key="o.orderNo" class="due-item" :class="dueClass(o)">
               <strong>{{ o.productName }}</strong>
@@ -172,7 +172,7 @@ const pageIndex = ref(0)
 const lastUpdatedAt = ref(null)
 const refreshError = ref('')
 const refreshStatus = computed(() => refreshError.value
-  ? '刷新失败 · ' + refreshError.value + (lastUpdatedAt.value ? ' · 上次成功 ' + lastUpdatedAt.value.toLocaleTimeString('zh-CN', { hour12: false }) : '')
+  ? '刷新失败 ' + refreshError.value + (lastUpdatedAt.value ? ' · 上次成功 ' + lastUpdatedAt.value.toLocaleTimeString('zh-CN', { hour12: false }) : '')
   : lastUpdatedAt.value ? '数据更新 ' + lastUpdatedAt.value.toLocaleTimeString('zh-CN', { hour12: false }) + ' · 每10秒刷新' : '正在连接数据…')
 
 const notStarted = computed(() =>
@@ -387,7 +387,7 @@ async function load() {
     renderGauge()
     renderDefectChart()
   } catch (error) {
-    refreshError.value = error?.message || '数据请求失败'
+    refreshError.value = error?.message || '数据加载失败'
     console.error('车间大屏刷新失败', error)
   } finally {
     loadingRequest = false

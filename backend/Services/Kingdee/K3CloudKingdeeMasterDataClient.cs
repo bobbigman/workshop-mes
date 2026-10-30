@@ -115,7 +115,7 @@ public class K3CloudKingdeeMasterDataClient : IKingdeeMasterDataClient
         {
             if (_loggedIn) return;
             if (string.IsNullOrWhiteSpace(_opt.BaseUrl) || string.IsNullOrWhiteSpace(_opt.AcctId))
-                throw ThrowHelper.BizUser("金蝶未配置 BaseUrl/AcctId，请检查演示服 appsettings 的 Kingdee 节");
+                throw ThrowHelper.BizUser("金蝶对接的基础地址和账套号还没设置，请检查服务器设置文件 Kingdee 节中的 BaseUrl 和 AcctId 是否已正确填写。");
 
             var url = Combine(_opt.BaseUrl, "Kingdee.BOS.WebApi.ServicesStub.AuthService.ValidateUser.common.kdsvc");
             var bodyObj = new

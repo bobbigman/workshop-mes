@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="toolbar">
-      <el-input v-model="keyword" placeholder="编码/名称" clearable style="width:200px" @keyup.enter="load" />
+      <el-input v-model="keyword" placeholder="搜索部门编码或名称，例：SC01 或 生产部" clearable style="width:200px" @keyup.enter="load" />
       <el-button type="primary" @click="load">查询</el-button>
       <el-button type="success" @click="openCreate">+ 创建部门</el-button>
     </div>
@@ -22,7 +22,7 @@
         <el-form-item label="部门编码"><el-input v-model="form.code" /></el-form-item>
         <el-form-item label="部门名称"><el-input v-model="form.name" /></el-form-item>
         <el-form-item label="成员">
-          <el-select v-model="form.memberIds" multiple filterable style="width:100%" placeholder="选择人员">
+          <el-select v-model="form.memberIds" multiple filterable style="width:100%" placeholder="搜索并选择要加入此部门的人员姓名">
             <el-option v-for="u in userOptions" :key="u.id" :label="u.name" :value="u.id" />
           </el-select>
         </el-form-item>
@@ -71,7 +71,7 @@ async function openEdit(row) {
 
 async function onSave() {
   if (!form.value.code || !form.value.name) {
-    ElMessage.error('请填写部门编码和名称')
+    ElMessage.error('请同时填写部门编码和部门名称，两项都是必填项')
     return
   }
   if (editingId.value) await updateDept(editingId.value, form.value)
@@ -82,9 +82,9 @@ async function onSave() {
 }
 
 async function onDelete(row) {
-  await ElMessageBox.confirm(`确认删除部门 ${row.name}？`, '提示', { type: 'warning' })
+  await ElMessageBox.confirm(`确认删除部门“${row.name}”？若仍被工序设为报工权限、部门下还有人员、或已被派工为班组，则不能删除`, '提示', { type: 'warning' })
   await deleteDept(row.id)
-  ElMessage.success('已删除')
+  ElMessage.success('已删除成功成功')
   await load()
 }
 </script>

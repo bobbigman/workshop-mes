@@ -1,16 +1,16 @@
 <template>
   <main class="pricing-demo">
     <div class="demo-heading">
-      <div><h2>合片 · 加工选项演示</h2><p>先维护工序选项，再试选本单加工要求。</p></div>
+      <div><h2>合片 · 加工选项演示</h2><p>请先在“工序设置”页签维护好选项，再到“工单试选”页签模拟选择加工要求</p></div>
       <div><el-button @click="$router.push('/order')">返回工单</el-button><el-button @click="reset">重置演示</el-button></div>
     </div>
-    <el-alert title="交互小样：不保存工单，不参与报工和工资计算；刷新或离开页面后恢复初始数据。" type="warning" :closable="false" show-icon />
+    <el-alert title="本页面仅为交互演示：不保存工单，不参与报工和工资计算；刷新或离开页面后恢复初始数据" type="warning" :closable="false" show-icon />
 
     <el-tabs v-model="tab" class="demo-tabs">
       <el-tab-pane label="1. 工序设置" name="settings">
         <el-card shadow="never">
           <h3>合片 / 丝印 <el-tag>单选</el-tag></h3>
-          <p class="muted">下面维护各档附加工价。工单只能选择一档，“不丝印”明确按零加价。</p>
+          <p class="muted">下方设置各档附加工价；每张工单只能选一档，选“不丝印”则不加价</p>
           <mes-table table-key="views/order-pricing-demo/index:1" :data="silkOptions">
             <el-table-column prop="label" label="选项" min-width="250" />
             <el-table-column label="加价（元/打）" width="220">
@@ -61,13 +61,13 @@
               <div>{{ line.label }}<small v-if="line.note">{{ line.note }}</small></div>
               <strong>{{ line.cents === null ? '待选择' : `${line.key === 'base' ? '' : '+'}${money(line.cents)}` }}</strong>
             </div>
-            <div class="total-line"><span>合片单价</span><strong>{{ valid ? money(unitCents) : '待完善' }}<small v-if="valid"> 元/打</small></strong></div>
+            <div class="total-line"><span>合片单价</span><strong>{{ valid ? money(unitCents) : '待填写' }}<small v-if="valid"> 元/打</small></strong></div>
             <p class="muted">{{ quantity || '—' }}打 × {{ valid ? money(unitCents) : '—' }}元/打</p>
             <div class="estimate"><span>本工序估算加工费</span><strong>{{ valid ? `¥ ${money(unitCents * quantity)}` : '—' }}</strong></div>
-            <p class="muted">所有价格按“打”演示，不换算为把数，不代表已结算工资。</p>
+            <p class="muted">本页所有价格按“打”计算，不折算为把数，也不代表最终结算工资</p>
             <el-button type="primary" :disabled="!valid" @click="confirmed = true">确认演示选择</el-button>
-            <p v-if="!valid" class="pending">请选择丝印要求，并填写有效价格和数量。</p>
-            <el-alert v-if="confirmed" class="confirmation" title="已确认本页演示选择，未保存任何工单或工资数据。" type="success" :closable="false" show-icon />
+            <p v-if="!valid" class="pending">请先选择一项丝印要求，并确认价格和数量都已填写正确</p>
+            <el-alert v-if="confirmed" class="confirmation" title="已确认本页演示选择，未保存任何工单或工资数据；如需正式下单，请到“工单管理”页面操作" type="success" :closable="false" show-icon />
           </el-card>
         </div>
       </el-tab-pane>

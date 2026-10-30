@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="toolbar">
-      <el-input v-model="keyword" placeholder="编号/名称" clearable style="width:200px" @keyup.enter="load" />
+      <el-input v-model="keyword" placeholder="例：GX001 / 车削（填编号或名称都能搜）" clearable style="width:200px" @keyup.enter="load" />
       <el-button type="primary" @click="load">查询</el-button>
       <el-button type="success" @click="openCreate">+ 创建产品</el-button>
       <ImportDialog entity-type="product" title="导入产品" @done="load" />
@@ -26,15 +26,15 @@
     </mes-table>
 
     <el-dialog v-model="dlg" :title="editingId ? '编辑产品' : copyFromId ? '复制产品' : '创建产品'" :close-on-click-modal="!saving" :close-on-press-escape="!saving" :show-close="!saving" width="520px">
-      <el-alert v-if="copyFromId" title="请填写新编号；作业指导书、图纸及独立计价规则未复制。" type="info" :closable="false" show-icon style="margin-bottom:12px" />
+      <el-alert v-if="copyFromId" title="请填写新编号；作业指导书、图纸和独立计价规则不会被复制，需要在新工序中重新上传或设置" type="info" :closable="false" show-icon style="margin-bottom:12px" />
       <el-form :model="form" :disabled="saving" label-width="100px">
         <el-form-item label="产品编号" required><el-input v-model="form.code" /></el-form-item>
         <el-form-item label="产品名称" required><el-input v-model="form.name" /></el-form-item>
         <el-form-item v-if="isAdmin" label="重点产品">
-          <el-checkbox v-model="form.isRiskFocus">风险简报优先关注</el-checkbox>
+          <el-checkbox v-model="form.isRiskFocus">标记为重点产品（风险简报优先展示）</el-checkbox>
         </el-form-item>
         <el-form-item label="单位">
-          <el-select v-model="form.unitId" clearable placeholder="选择" style="width:100%">
+          <el-select v-model="form.unitId" clearable placeholder="选择计量单位（如：件、把、打）计量单位（如：件、把、打）" style="width:100%">
             <el-option v-for="u in unitOptions" :key="u.id" :label="u.name" :value="u.id" />
           </el-select>
         </el-form-item>
@@ -119,14 +119,14 @@ async function openCopy(row) {
 
 async function onSave() {
   if (saving.value) return
-  if (!form.value.code.trim() || !form.value.name.trim()) { ElMessage.error('请填写产品编号和名称'); return }
+  if (!form.value.code.trim() || !form.value.name.trim()) { ElMessage.error('产品编号和名称都是必填项，请填写后再保存；产品编号在系统中必须唯一'); return }
   if (form.value.newRouting) {
     const r = form.value.newRouting
     if (!r.code.trim() || !r.name.trim() || !r.steps.length || r.steps.some(s => !s.operationId)) {
-      ElMessage.error('请填写新路线编号、名称并选择每一道工序'); return
+      ElMessage.error('请填写新路线的编号和名称，并为每一道工序选择对应的加工步骤，不能留空'); return
     }
     if (new Set(r.steps.map(s => s.operationId)).size !== r.steps.length) {
-      ElMessage.error('同一路线不能重复选择同一道工序'); return
+      ElMessage.error('同一条工艺路线中不能重复添加同一道工序，请检查工序顺序列表并去掉重复项'); return
     }
   }
   saving.value = true
@@ -158,7 +158,7 @@ async function copyRouting() {
   } finally { loadingRouting.value = false }
 }
 async function onDelete(row) {
-  await ElMessageBox.confirm('确认删除？', '提示', { type: 'warning' })
+  await ElMessageBox.confirm('确认删除该产品吗？若已被工单或工序价目表引用则不能删除；删除后无法恢复', '提示', { type: 'warning' })
   await deleteProduct(row.id); ElMessage.success('已删除'); await load()
 }
 </script>

@@ -42,13 +42,13 @@ public class WorkerViewService : IWorkerViewService
     public async Task<ApiResult<object?>> SaveAsync(WorkerViewDto dto, long factoryId, byte role)
     {
         if (role != 1)
-            throw ThrowHelper.BizUser("仅管理员可修改工人手机视角");
+            throw ThrowHelper.BizUser("修改工人手机端视角需要管理员权限，当前账号权限不足，请切换到管理员账号操作。");
         if (dto == null)
-            throw ThrowHelper.Biz(nameof(SaveAsync), "视角设置为空");
+            throw ThrowHelper.Biz(nameof(SaveAsync), "当前用户的报工视角未设置，请到「用户」检查该用户的默认视角设置。");
 
         var mode = Normalize(dto.WorkerViewMode);
         if (mode != ModeAll && mode != ModeMyTasks)
-            throw ThrowHelper.BizUser("视角取值无效，仅支持 1=全车间可见 / 2=只看我的任务");
+            throw ThrowHelper.BizUser("视角只能选“全车间可见”或“只看我的任务”两种，请检查选择的选项是否正确。");
 
         var row = await _db.WorkerViewSettings.FirstOrDefaultAsync(x => x.FactoryId == factoryId);
         if (row == null)

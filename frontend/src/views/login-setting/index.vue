@@ -5,22 +5,22 @@
         <span class="card-title">登录页图片</span>
       </template>
 
-      <div class="tip">电脑登录背景，建议主体放在横图左侧，支持 PNG / JPG / WebP，≤5MB。上传时自动缩小并压缩；手机使用简洁渐变，不加载大图。</div>
+      <div class="tip">电脑端登录背景图：主体放在左侧，支持 PNG / JPG / WebP，不超过 5MB，上传后自动压缩；手机端使用简洁渐变，不加载大图</div>
 
       <div class="preview">
         <img v-if="bannerUrl" :src="bannerUrl" class="preview-img" alt="当前登录页图片" />
         <div v-else-if="loadError" class="preview-empty err">
-          当前图片加载失败
+          当前预览图加载失败，请检查图片文件，或重新上传
           <el-button link type="primary" @click="load">重试</el-button>
         </div>
-        <div v-else class="preview-empty">未配置，登录页将使用内置默认图</div>
+        <div v-else class="preview-empty">尚未上传自定义背景，登录页将使用内置默认图</div>
       </div>
 
       <div class="actions">
         <el-upload :show-file-list="false" :http-request="doUpload" accept=".png,.jpg,.jpeg,.webp">
           <el-button type="primary" :loading="uploading">{{ bannerUrl ? '替换图片' : '上传图片' }}</el-button>
         </el-upload>
-        <span v-if="bannerUrl" class="hint">本浏览器重新打开登录页即可看到本厂背景；新设备首次使用默认图，成功登录后记住本厂。</span>
+        <span v-if="bannerUrl" class="hint">上传成功后，在本浏览器重新打开登录页即可看到新背景；新设备首次访问先显示默认图，登录后自动记住本厂背景</span>
       </div>
     </el-card>
   </div>
@@ -46,7 +46,7 @@ async function load() {
   } catch {
     bannerUrl.value = ''
     loadError.value = true
-    ElMessage.warning('登录页图片信息加载失败，请重试')
+    ElMessage.warning('登录页背景图加载失败，请刷新页面重试')
   }
 }
 
@@ -62,7 +62,7 @@ async function doUpload({ file }) {
     ElMessage.success(`上传成功，图片大小 ${Math.ceil(compressed.size / 1024)} KB`)
   } catch (error) {
     console.error('[登录页图片] 压缩或上传失败', error)
-    ElMessage.error(error?.message || '登录页图片上传失败，请重试')
+    ElMessage.error(error?.message || '登录页背景图上传失败，请检查文件格式（支持 PNG/JPG/WebP）和大小（不超过 5MB）后重试')
   } finally {
     uploading.value = false
   }

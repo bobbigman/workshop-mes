@@ -10,7 +10,7 @@
       <el-input
         v-model="keyword"
         clearable
-        placeholder="工单号 / 产品编号 / 名称"
+        placeholder="工单号 / 产品编号 / 名称（例：WO20261001）（例：WO20261001）"
         style="width:220px"
         @keyup.enter="load"
       />
@@ -18,12 +18,12 @@
     </div>
 
     <el-tabs v-model="tab">
-      <el-tab-pane label="分布" name="distribution">
+      <el-tab-pane label="不良不良分布" name="distribution">
         <mes-table table-key="views/defect-stat/index:1" :data="distribution" row-key="defectKey">
           <el-table-column type="expand">
             <template #default="{ row }">
               <div class="expand-box">
-                <div class="expand-title">该原因集中在哪些工序</div>
+                <div class="expand-title">各工序不良数量分布</div>
                 <mes-table table-key="views/defect-stat/index:2" :data="row.byOperation || []" size="small" border>
                   <el-table-column prop="operationName" label="工序" />
                   <el-table-column prop="totalDefect" label="不良数" width="100" />

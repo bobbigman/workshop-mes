@@ -113,14 +113,14 @@ public class UserService : IUserService
     public async Task<ApiResult<object?>> CreateAsync(UserCreateDto dto, long factoryId)
     {
         if (string.IsNullOrWhiteSpace(dto.Account) || string.IsNullOrWhiteSpace(dto.Name))
-            throw ThrowHelper.Biz(nameof(CreateAsync), "账号和姓名不能为空");
+            throw ThrowHelper.Biz(nameof(CreateAsync), "请同时填写登录账号和用户姓名后再保存。");
         if (dto.Role is not (1 or 2 or 3))
-            throw ThrowHelper.Biz(nameof(CreateAsync), "角色无效：须为 1管理员 / 2生产人员 / 3班组长");
+            throw ThrowHelper.Biz(nameof(CreateAsync), "角色类型不正确，请选择管理员、生产人员或班组长之一。");
         UserTypeHelper.EnsureValid(dto.UserType, nameof(CreateAsync));
         PasswordHelper.EnsureComplexity(dto.Password, nameof(CreateAsync));
 
         if (await _db.Users.AnyAsync(u => u.FactoryId == factoryId && u.Account == dto.Account))
-            throw ThrowHelper.Biz(nameof(CreateAsync), "账号已存在");
+            throw ThrowHelper.Biz(nameof(CreateAsync), "该登录账号已被占用。请换一个账号名，或在「用户管理」中搜索确认是否重复。");
 
         var user = new SysUser
         {
@@ -189,7 +189,7 @@ public class UserService : IUserService
     public async Task<ApiResult<object?>> SetStatusAsync(long id, byte status, long factoryId, long operatorUserId)
     {
         if (status is not (0 or 1))
-            throw ThrowHelper.Biz(nameof(SetStatusAsync), "状态无效：须为 0停用 / 1启用");
+            throw ThrowHelper.Biz(nameof(SetStatusAsync), "账号状态设置不正确，只能设为启用或停用。");
 
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == id && u.FactoryId == factoryId)
             ?? throw ThrowHelper.Biz(nameof(SetStatusAsync), "用户不存在");
@@ -200,14 +200,14 @@ public class UserService : IUserService
         if (status == 0)
         {
             if (user.Id == operatorUserId)
-                throw ThrowHelper.Biz(nameof(SetStatusAsync), "不能停用自己");
+                throw ThrowHelper.Biz(nameof(SetStatusAsync), "不能停用自己的账号，以免系统无人可登录。如需交接，请先让其他管理员登录后再操作。");
 
             if (user.Role == 1)
             {
                 var enabledAdminCount = await _db.Users.CountAsync(u =>
                     u.FactoryId == factoryId && u.Role == 1 && u.Status == 1);
                 if (enabledAdminCount <= 1)
-                    throw ThrowHelper.Biz(nameof(SetStatusAsync), "最后一个管理员不可停用");
+                    throw ThrowHelper.Biz(nameof(SetStatusAsync), "系统至少要保留一个管理员账号。请先新建或启用另一个管理员账号，再停用当前账号。");
             }
         }
 
@@ -284,9 +284,9 @@ public class UserService : IUserService
         if (string.IsNullOrWhiteSpace(value)) return null;
         var v = value.Trim();
         if (v.Length > 64)
-            throw ThrowHelper.Biz(where, "企微UserId最长 64 字符");
+            throw ThrowHelper.Biz(where, "企业微信UserId不能超过64个字符，请检查是否粘贴了多余内容。");
         if (v.Contains('@') || v.Any(char.IsWhiteSpace) || v.IndexOfAny([',', '，', '|', ';', '；']) >= 0)
-            throw ThrowHelper.Biz(where, "企微UserId请填通讯录账号，不要带 @ 或分隔符");
+            throw ThrowHelper.Biz(where, "企业微信UserId请填写通讯录中的纯账号，不要包含@符号或其他分隔符，可在企业微信管理后台通讯录中复制。");
         return v;
     }
 
@@ -318,7 +318,7 @@ public class UserService : IUserService
             var validCount = await _db.Departments.AsNoTracking()
                 .CountAsync(d => d.FactoryId == factoryId && ids.Contains(d.Id));
             if (validCount != ids.Count)
-                throw ThrowHelper.Biz(where, "所属部门包含无效或不属于本厂的部门");
+                throw ThrowHelper.Biz(where, "所选部门中有不存在或不属于本厂的部门。请到「部门」确认可用部门后重新选择。");
         }
 
         var old = _db.DepartmentUsers.Where(x => x.UserId == userId);

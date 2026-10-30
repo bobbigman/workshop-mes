@@ -7,7 +7,7 @@
     @update:model-value="$emit('update:modelValue', $event)"
   >
     <div v-loading="loading" class="preview-wrap">
-      <p v-if="!loading && isOpMode && !sheets.length" class="empty-tip">该工单暂无工序，无法打印工序码</p>
+      <p v-if="!loading && isOpMode && !sheets.length" class="empty-tip">该工单还没有工序，无法打印工序码。请到「工单」编辑这张工单、添加工序后再打印。</p>
       <div id="print-sheets">
         <div
           v-for="(sheet, idx) in sheets"
@@ -144,7 +144,7 @@ async function load() {
         })
       }
       sheets.value = list
-      if (!list.length) ElMessage.warning('该工单暂无工序，无法打印工序码')
+      if (!list.length) ElMessage.warning('该工单还没有工序，无法打印工序码。请到「工单」编辑这张工单、添加工序后再打印。')
     } else {
       const content = buildQrContent(orderNo)
       sheets.value = [{
@@ -159,7 +159,7 @@ async function load() {
       }]
     }
   } catch (e) {
-    ElMessage.error('加载打印数据失败，请重试')
+    ElMessage.error('打印数据没加载出来。请检查网络是否正常，或回到工单列表重新打开这张工单再试。')
   } finally {
     loading.value = false
   }
@@ -181,7 +181,7 @@ function doPrint() {
   const html = root.innerHTML
   const win = window.open('', '_blank', 'width=800,height=600')
   if (!win) {
-    ElMessage.error('浏览器拦截了打印窗口，请允许弹窗后重试')
+    ElMessage.error('浏览器拦截了打印窗口。请在地址栏右侧找到被拦截的弹窗提示，选择「始终允许」后重试。')
     return
   }
   win.document.write(`<!DOCTYPE html><html><head><title>打印流转卡</title>

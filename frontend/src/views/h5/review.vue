@@ -18,7 +18,7 @@
         v-model="userName"
         class="search"
         type="search"
-        placeholder="工人"
+        placeholder="例：张三（输入姓名筛选）"
         @keyup.enter="reload"
       />
       <select v-model.number="reviewStatus" class="status" @change="reload">
@@ -46,10 +46,10 @@
 
     <div v-if="loading" class="state">加载中…</div>
     <div v-else-if="loadError" class="state err">
-      加载失败，请重试
+      数据加载失败，请检查网络后刷新重试；反复失败找管理员处理。
       <button type="button" class="btn-sm" @click="reload">重试</button>
     </div>
-    <div v-else-if="list.length === 0" class="state">暂无记录</div>
+    <div v-else-if="list.length === 0" class="state">暂时没有待复核的记录，可能报工都已复核完，或换个筛选条件看看。</div>
 
     <div
       v-for="row in list"
@@ -70,7 +70,7 @@
         <span
           v-if="row.qtyAbnormal"
           class="tag qty-abn"
-          title="本工序报工良品超过上工序已审核合格产出，正常生产逻辑不合理，若为返工、补料可手动特批通过"
+          title="这道工序报的良品数超过了上道工序审核通过的数量，正常情况不应该这样。如果是返工或补料，可以点特批通过。"
         >数量异常</span>
       </div>
       <div class="product">{{ row.productName }}</div>
@@ -120,7 +120,7 @@
           v-model="rejectReason"
           rows="4"
           maxlength="256"
-          placeholder="请填写退回原因（必填）"
+          placeholder="请填写为什么退回（必填）"
         />
         <div class="dlg-actions">
           <button type="button" class="btn-act" @click="rejectOpen = false">取消</button>
@@ -134,15 +134,15 @@
     <!-- 特批通过 -->
     <div v-if="specialOpen" class="mask" @click.self="specialOpen = false">
       <div class="dlg">
-        <h3>工序数量异常确认放行</h3>
+        <h3>确认特批通过这道工序</h3>
         <p class="dlg-body">
-          当前工序报工良品 {{ specialRow?.goodQty ?? 0 }} 件，上工序累计合格仅 {{ specialRow?.upstreamLimit ?? 0 }} 件，超出正常生产数量。请确认是否为返工、补料、特采等特殊场景，确认后才可完成复核通过。
+          这道工序报的良品 {{ specialRow?.goodQty ?? 0 }} 件，比上一道审过的 {{ specialRow?.upstreamLimit ?? 0 }} 件还多，正常不该这样；如果是返工、补料等特殊情况，确认后才能通过。
         </p>
         <textarea
           v-model="specialRemark"
           rows="3"
           maxlength="200"
-          placeholder="特殊情况备注（选填，不落库）"
+          placeholder="特殊情况备注（选填，仅当次参考不保存）"
         />
         <div class="dlg-actions">
           <button type="button" class="btn-act" @click="specialOpen = false">取消</button>
@@ -156,9 +156,9 @@
     <!-- 批量含异常 -->
     <div v-if="batchOpen" class="mask" @click.self="batchOpen = false">
       <div class="dlg">
-        <h3>存在工序数量异常单据</h3>
+        <h3>以下单据数量有异常</h3>
         <p class="dlg-body">
-          本次勾选共 {{ batchTotal }} 条单据，其中 {{ batchAbnormalCount }} 条报工数量超出上工序合格库存，系统将自动跳过异常单据，仅批量通过合规单据。
+          你选的里面有 {{ batchAbnormalCount }} 条数量不对（共 {{ batchTotal }} 条），系统会自动跳过这些，只通过没问题的。
         </p>
         <div v-if="batchDetailOpen" class="detail">
           <div v-for="r in batchAbnormalRows" :key="r.id" class="detail-row">
@@ -348,11 +348,11 @@ function openReject(row) {
 async function onReject() {
   const reason = rejectReason.value.trim()
   if (!reason) {
-    showToast('请填写退回原因')
+    showToast('退回去的时候要写一下原因，告诉对方哪里有问题。')
     return
   }
   if (reason.length > 256) {
-    showToast('退回原因不能超过256字')
+    showToast('退回原因写太多了，最多256个字，请精简一下。')
     return
   }
   rejecting.value = true
@@ -406,7 +406,7 @@ async function onBatch() {
 async function confirmBatchOkOnly() {
   const ids = batchOkIds.value.slice()
   if (!ids.length) {
-    showToast('没有可批量通过的合规单据')
+    showToast('你选的这些都有数量异常，没法直接批量通过，需要逐条处理。')
     batchOpen.value = false
     return
   }
@@ -426,7 +426,7 @@ async function confirmBatchOkOnly() {
 onMounted(() => {
   const role = Number(localStorage.getItem('role') || 0)
   if (role !== 1 && role !== 3) {
-    showToast('无权限')
+    showToast('你没有这道工序的复核权限。请联系班组长或管理员确认你所在部门是否有该工序的复核权限。')
     router.replace('/h5/tasks')
     return
   }

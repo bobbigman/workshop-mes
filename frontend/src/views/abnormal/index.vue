@@ -91,10 +91,10 @@ async function load() {
 async function onResolve(row) {
   let note = ''
   try {
-    const { value } = await ElMessageBox.prompt('可选填写处理说明', '标记恢复', {
+    const { value } = await ElMessageBox.prompt('请填写处理说明（选填）', '标记恢复', {
       confirmButtonText: '确认恢复',
       cancelButtonText: '取消',
-      inputPlaceholder: '处理说明（可空）',
+      inputPlaceholder: '请输入处理方式，如：已更换零件、已调整设备设置，不填也可提交',
       inputValue: ''
     })
     note = value || ''

@@ -37,7 +37,7 @@ public class ImportService : IImportService
     public Task<byte[]> DownloadTemplateAsync(string entityType)
     {
         if (!Templates.TryGetValue(entityType, out var headers))
-            throw ThrowHelper.Biz(nameof(DownloadTemplateAsync), $"未知导入类型: {entityType}");
+            throw ThrowHelper.Biz(nameof(DownloadTemplateAsync), $"当前选择的导入类型不在支持范围内：{entityType}。请核对导入类型是否正确，或联系技术人员确认。");
 
         using var wb = new XLWorkbook();
         var ws = wb.Worksheets.Add("母版");
@@ -122,7 +122,7 @@ public class ImportService : IImportService
         }
 
         if (rows.Count == 0)
-            throw ThrowHelper.Biz(nameof(ImportAsync), "没有可导入的数据行");
+            throw ThrowHelper.Biz(nameof(ImportAsync), "上传的文件里没有可识别的数据行。请确认文件内容不为空且格式符合模板要求后重新上传。");
 
         var result = new ImportResultDto();
         // 本文件内已出现过的账号：后续同行部门取并集；库中已有账号首次出现则覆盖部门
@@ -165,7 +165,7 @@ public class ImportService : IImportService
     private async Task ImportUserAsync(string[] r, long factoryId, HashSet<string> seenInFile)
     {
         var account = r[0];
-        if (string.IsNullOrWhiteSpace(account)) throw ThrowHelper.Biz(nameof(ImportUserAsync), "账号为空");
+        if (string.IsNullOrWhiteSpace(account)) throw ThrowHelper.Biz(nameof(ImportUserAsync), "导入的人员数据中账号列为空。请在导入文件中补全所有人员的账号后重新上传。");
 
         var deptCodes = Split(r.Length > 5 ? r[5] : null).ToList();
         var deptIds = new List<long>();
@@ -174,7 +174,7 @@ public class ImportService : IImportService
             var dept = await _db.Departments.AsNoTracking()
                 .FirstOrDefaultAsync(d => d.FactoryId == factoryId && d.Code == deptCode);
             if (dept == null)
-                throw ThrowHelper.Biz(nameof(ImportUserAsync), $"部门编码{deptCode}不存在");
+                throw ThrowHelper.Biz(nameof(ImportUserAsync), $"导入文件引用的部门代号在系统中不存在：{deptCode}。请到「部门」核对部门代号，或在导入文件中修正后重新上传。");
             deptIds.Add(dept.Id);
         }
 
@@ -244,9 +244,9 @@ public class ImportService : IImportService
     private async Task ImportDefectAsync(string[] r, long factoryId)
     {
         var name = r[0];
-        if (string.IsNullOrWhiteSpace(name)) throw ThrowHelper.Biz(nameof(ImportDefectAsync), "名称为空");
+        if (string.IsNullOrWhiteSpace(name)) throw ThrowHelper.Biz(nameof(ImportDefectAsync), "导入的不良品项名称为空。请在导入文件中补全不良品项名称后重新上传。");
         if (await _db.DefectItems.AnyAsync(d => d.FactoryId == factoryId && d.Name == name))
-            throw ThrowHelper.Biz(nameof(ImportDefectAsync), $"不良品项 {name} 已存在");
+            throw ThrowHelper.Biz(nameof(ImportDefectAsync), $"不良品项 {name} 已存在，不允许重复导入。如需更新，请到「不良品项」页面直接编辑已有记录。");
         _db.DefectItems.Add(new BaseDefectItem { FactoryId = factoryId, Name = name, CreatedAt = DateTime.Now });
         await _db.SaveChangesAsync();
     }
@@ -255,9 +255,9 @@ public class ImportService : IImportService
     {
         var code = r[0];
         if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(r[1]))
-            throw ThrowHelper.Biz(nameof(ImportOperationAsync), "编号或名称为空");
+            throw ThrowHelper.Biz(nameof(ImportOperationAsync), "导入的工序数据中编号或名称为空。请在导入文件中补全工序编号和名称后重新上传。");
         if (await _db.Operations.AnyAsync(o => o.FactoryId == factoryId && o.Code == code))
-            throw ThrowHelper.Biz(nameof(ImportOperationAsync), $"工序 {code} 已存在");
+            throw ThrowHelper.Biz(nameof(ImportOperationAsync), $"工序 {code} 已存在，不允许重复导入。如需更新，请到「工序」页面直接编辑已有工序。");
 
         // 先解析校验全部关联，通过后再写父表，避免失败行留下半截工序
         var depts = new List<SysDepartment>();
@@ -265,7 +265,7 @@ public class ImportService : IImportService
         {
             var dept = await _db.Departments.FirstOrDefaultAsync(d => d.FactoryId == factoryId && d.Code == deptCode);
             if (dept == null)
-                throw ThrowHelper.Biz(nameof(ImportOperationAsync), $"报工部门编码不存在：{deptCode}");
+                throw ThrowHelper.Biz(nameof(ImportOperationAsync), $"导入工序时请确认部门编号在系统中已存在：{deptCode}");
             depts.Add(dept);
         }
         var defects = new List<BaseDefectItem>();
@@ -273,7 +273,7 @@ public class ImportService : IImportService
         {
             var d = await _db.DefectItems.FirstOrDefaultAsync(x => x.FactoryId == factoryId && x.Name == defectName);
             if (d == null)
-                throw ThrowHelper.Biz(nameof(ImportOperationAsync), $"不良品项名称不存在：{defectName}");
+                throw ThrowHelper.Biz(nameof(ImportOperationAsync), $"导入文件引用的不良品项名称在系统中不存在：{defectName}。请先到「不良品项」页面核对名称，或先导入对应的不良品项再导入工序。");
             defects.Add(d);
         }
 
@@ -295,14 +295,14 @@ public class ImportService : IImportService
         if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(r[1]))
             throw ThrowHelper.Biz(nameof(ImportRoutingAsync), "编号或名称为空");
         if (await _db.Routings.AnyAsync(x => x.FactoryId == factoryId && x.Code == code))
-            throw ThrowHelper.Biz(nameof(ImportRoutingAsync), $"路线 {code} 已存在");
+            throw ThrowHelper.Biz(nameof(ImportRoutingAsync), $"工艺路线编号 {code} 已存在，不允许重复导入。如需更新，请到「工艺路线」页面直接编辑已有路线。");
 
         var ops = new List<BaseOperation>();
         foreach (var opCode in Split(r[2]))
         {
             var op = await _db.Operations.FirstOrDefaultAsync(o => o.FactoryId == factoryId && o.Code == opCode);
             if (op == null)
-                throw ThrowHelper.Biz(nameof(ImportRoutingAsync), $"工序编码不存在：{opCode}");
+                throw ThrowHelper.Biz(nameof(ImportRoutingAsync), $"导入的工艺路线引用的工序编号在系统中不存在：{opCode}。请先到「工序」核对工序编号，或先导入对应工序再导入路线。");
             ops.Add(op);
         }
 
@@ -323,14 +323,14 @@ public class ImportService : IImportService
         if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(r[1]))
             throw ThrowHelper.Biz(nameof(ImportProductAsync), "编号或名称为空");
         if (await _db.Products.AnyAsync(p => p.FactoryId == factoryId && p.Code == code))
-            throw ThrowHelper.Biz(nameof(ImportProductAsync), $"产品 {code} 已存在（编号唯一）");
+            throw ThrowHelper.Biz(nameof(ImportProductAsync), $"产品 {code} 已存在（产品编号全局唯一）。如需更新产品信息请到「产品定义」直接编辑；如需新增请换一个不重复的编号。");
 
         long? unitId = null;
         if (!string.IsNullOrWhiteSpace(r[2]))
         {
             var unit = await _db.Units.FirstOrDefaultAsync(u => u.FactoryId == factoryId && u.Name == r[2]);
             if (unit == null)
-                throw ThrowHelper.Biz(nameof(ImportProductAsync), $"单位名称不存在：{r[2]}");
+                throw ThrowHelper.Biz(nameof(ImportProductAsync), $"导入文件引用的单位名称在系统中不存在：{r[2]}。请先到「单位」核对单位名称是否正确，或先新建对应单位再导入产品。");
             unitId = unit.Id;
         }
         long? routingId = null;
@@ -338,7 +338,7 @@ public class ImportService : IImportService
         {
             var routing = await _db.Routings.FirstOrDefaultAsync(x => x.FactoryId == factoryId && x.Code == r[3]);
             if (routing == null)
-                throw ThrowHelper.Biz(nameof(ImportProductAsync), $"工艺路线编号不存在：{r[3]}");
+                throw ThrowHelper.Biz(nameof(ImportProductAsync), $"导入文件引用的工艺路线编号在系统中不存在：{r[3]}。请先到「工艺路线」页面核对路线编号，或先导入对应路线再导入产品。");
             routingId = routing.Id;
         }
 

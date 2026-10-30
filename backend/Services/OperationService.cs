@@ -103,10 +103,10 @@ public class OperationService : IOperationService
     {
         await using var tx = await _db.Database.BeginTransactionAsync();
         if (dto.CopyFromId.HasValue && !await _db.Operations.AnyAsync(o => o.Id == dto.CopyFromId && o.FactoryId == factoryId))
-            throw ThrowHelper.Biz(nameof(CreateAsync), "复制来源工序不存在或不属于本厂");
+            throw ThrowHelper.Biz(nameof(CreateAsync), "复制工序时指定的来源工序不存在或不属于本厂。请到「工序」确认来源工序编号正确且归属本厂。");
         await ValidateLinksAsync(dto, factoryId);
         if (string.IsNullOrWhiteSpace(dto.Code) || string.IsNullOrWhiteSpace(dto.Name))
-            throw ThrowHelper.Biz(nameof(CreateAsync), "工序编号和名称不能为空");
+            throw ThrowHelper.Biz(nameof(CreateAsync), "工序编号和名称都必须填写。请填写完整的工序编号和名称后再保存。");
 
         var op = new BaseOperation
         {
@@ -127,9 +127,9 @@ public class OperationService : IOperationService
         var depts = (dto.DeptIds ?? new()).Distinct().ToList();
         var defects = (dto.DefectIds ?? new()).Distinct().ToList();
         if (await _db.Departments.CountAsync(d => d.FactoryId == factoryId && depts.Contains(d.Id)) != depts.Count)
-            throw ThrowHelper.Biz(nameof(ValidateLinksAsync), "权限部门不存在或不属于本厂");
+            throw ThrowHelper.Biz(nameof(ValidateLinksAsync), "工序关联的报工权限部门不存在或不属于本厂。请到「部门」确认部门已创建且归属本厂，再回工序编辑页重新选择权限部门。注意：报工权限按部门控制，不是按人。");
         if (await _db.DefectItems.CountAsync(d => d.FactoryId == factoryId && defects.Contains(d.Id)) != defects.Count)
-            throw ThrowHelper.Biz(nameof(ValidateLinksAsync), "不良品项不存在或不属于本厂");
+            throw ThrowHelper.Biz(nameof(ValidateLinksAsync), "工序关联的不良品项不存在或不属于本厂。请到「不良品项管理」确认该项已创建且归属本厂，再回工序编辑页重新选择。");
         dto.DeptIds = depts;
         dto.DefectIds = defects;
     }

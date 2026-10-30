@@ -81,7 +81,7 @@ public class ReviewService : IReviewService
         var reviewer = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == currentUserId)
             ?? throw ThrowHelper.Biz(nameof(PendingAsync), "当前用户不存在");
         if (reviewer.Role != 1 && reviewer.Role != 3)
-            throw ThrowHelper.Biz(nameof(PendingAsync), "无复核权限");
+            throw ThrowHelper.Biz(nameof(PendingAsync), "当前账号没有复核权限。请到「用户管理」确认该账号是否已分配复核角色，或由有权限的管理员执行复核。");
 
         var q = from r in _db.Reports.AsNoTracking()
                 where r.FactoryId == factoryId
@@ -319,7 +319,7 @@ public class ReviewService : IReviewService
         await OperationPriceListService.LockFactoryAsync(_db,factoryId);
         var report = await LoadAndAuthorizeAsync(id, factoryId, currentUserId, nameof(ApproveAsync));
         if (report.ReviewStatus != 0)
-            throw ThrowHelper.Biz(nameof(ApproveAsync), "仅待复核记录可通过");
+            throw ThrowHelper.Biz(nameof(ApproveAsync), "只有状态为「待复核」的记录才能执行通过操作。请确认所选记录当前确实处于待复核状态。");
 
         report.ReviewStatus = 1;
         report.ReviewedBy = currentUserId;
@@ -334,16 +334,16 @@ public class ReviewService : IReviewService
     {
         var reason = (dto.Reason ?? "").Trim();
         if (reason.Length < 1 || reason.Length > 256)
-            throw ThrowHelper.Biz(nameof(RejectAsync), "退回原因须 1～256 字");
+            throw ThrowHelper.Biz(nameof(RejectAsync), "退回时必须填写退回原因，长度在1到256字之间。请在退回原因栏填写具体说明后再提交。");
 
         await using var tx = await _db.Database.BeginTransactionAsync();
         await OperationPriceListService.LockFactoryAsync(_db,factoryId);
         var report = await LoadAndAuthorizeAsync(id, factoryId, currentUserId, nameof(RejectAsync));
         // 允许从待复核或已通过退回（纠错）；已退回重复退回无意义
         if (report.ReviewStatus == 2)
-            throw ThrowHelper.Biz(nameof(RejectAsync), "该报工已是退回状态");
+            throw ThrowHelper.Biz(nameof(RejectAsync), "这条报工已经是退回状态了，不需要再退回。如需重新处理，请让报工人修改后重新提交。");
         if (report.SettledFlag)
-            throw ThrowHelper.Biz(nameof(RejectAsync), "已结算报工不可退回");
+            throw ThrowHelper.Biz(nameof(RejectAsync), "这条报工已经结算了，不能退回，如有问题请联系管理员处理。");
 
         var order = await _db.WorkOrders.FirstOrDefaultAsync(o => o.Id == report.OrderId);
         if (order != null) await WechatEventService.LockOrderAsync(_db, order);
@@ -368,7 +368,7 @@ public class ReviewService : IReviewService
         await using var tx = await _db.Database.BeginTransactionAsync();
         await OperationPriceListService.LockFactoryAsync(_db,factoryId);
         if (dto.Ids == null || dto.Ids.Count == 0)
-            throw ThrowHelper.Biz(nameof(BatchApproveAsync), "请选择待复核记录");
+            throw ThrowHelper.Biz(nameof(BatchApproveAsync), "批量通过前需要先勾选待复核记录。请在列表中选中至少一条待复核记录后再点批量通过。");
 
         var reviewer = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == currentUserId)
             ?? throw ThrowHelper.Biz(nameof(BatchApproveAsync), "当前用户不存在");
@@ -425,7 +425,7 @@ public class ReviewService : IReviewService
             var sameGroup = await _db.DepartmentUsers.AsNoTracking()
                 .AnyAsync(x => x.UserId == report.UserId && myDeptIds.Contains(x.DepartmentId));
             if (!sameGroup)
-                throw ThrowHelper.Biz(loc, "无权限复核外部门报工");
+                throw ThrowHelper.Biz(loc, "你没有权限复核其他部门的报工，只能复核本部门的；如需复核外部门的请联系管理员。");
         }
         return report;
     }

@@ -43,7 +43,7 @@ public class AiSessionStore
     public AiSessionStore(IOptions<AiOptions> opt) { _opt = opt.Value; }
 
     private static BusinessException ExpiredSession() =>
-        ThrowHelper.BizUser("对话上下文已过期或被自动回收，请点击“新对话”重新开始");
+        ThrowHelper.BizUser("对话上下文已过期或被回收，请点击新建对话重新发起。");
 
     public AiSessionState Create(long factoryId, long userId, string mode, bool beginGenerate = false)
     {
@@ -55,7 +55,7 @@ public class AiSessionStore
             {
                 var oldest = OldestIdle(userSessions);
                 if (oldest == null)
-                    throw ThrowHelper.BizUser("你的提问正在处理中，请稍后重试");
+                    throw ThrowHelper.BizUser("有提问正在处理中，请等待完成后再提交新问题。");
                 _sessions.Remove(oldest.Id);
                 userSessions.Remove(oldest);
             }
@@ -63,7 +63,7 @@ public class AiSessionStore
             {
                 var oldest = OldestIdle(_sessions.Values);
                 if (oldest == null)
-                    throw ThrowHelper.BizUser("AI 正在处理其他提问，请稍后重试");
+                    throw ThrowHelper.BizUser("AI正在处理其他用户的提问，请稍后重试。");
                 _sessions.Remove(oldest.Id);
             }
 
@@ -90,7 +90,7 @@ public class AiSessionStore
             if (!_sessions.TryGetValue(id, out var s))
                 throw ExpiredSession();
             if (s.FactoryId != factoryId || s.UserId != userId)
-                throw ThrowHelper.Biz(nameof(GetOwned), "无权访问该会话");
+                throw ThrowHelper.Biz(nameof(GetOwned), "你没有权限查看这个对话记录，只能查看自己发起的对话。");
             s.LastAccessAt = DateTime.UtcNow;
             return s;
         }
@@ -102,7 +102,7 @@ public class AiSessionStore
         {
             if (!_sessions.TryGetValue(id, out var s)) return;
             if (s.FactoryId != factoryId || s.UserId != userId || (mode != null && s.Mode != mode))
-                throw ThrowHelper.Biz(nameof(DeleteOwned), "无权清除该会话");
+                throw ThrowHelper.Biz(nameof(DeleteOwned), "你没有权限清除这个对话记录，只能清除自己发起的对话。");
             // 删除不能提前释放正在处理的名额，避免请求未结束就绕过并发保护。
             if (s.Busy) s.DeleteWhenIdle = true;
             else _sessions.Remove(id);

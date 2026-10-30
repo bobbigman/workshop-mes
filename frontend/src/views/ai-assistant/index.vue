@@ -12,7 +12,7 @@
       </div>
       <div class="ai-status">
         <el-tag v-if="!status.enabled" type="info">已关闭</el-tag>
-        <el-tag v-else-if="!status.configured" type="warning">未配置</el-tag>
+        <el-tag v-else-if="!status.configured" type="warning">未设置完成</el-tag>
         <el-tag v-else type="success">已就绪</el-tag>
         <el-button size="small" :disabled="busy" @click="onNewChat">新对话</el-button>
       </div>
@@ -31,7 +31,7 @@
       </div>
     </section>
 
-    <el-drawer v-if="isMobile" v-model="questionsOpen" title="有问题这儿一处查，新人少踩坑、不等老师傅" direction="btt" size="75%" append-to-body>
+    <el-drawer v-if="isMobile" v-model="questionsOpen" title="车间常见问题问题问题" direction="btt" size="75%" append-to-body>
       <div class="mobile-question-roles" aria-label="选择提问角色">
         <el-button v-for="r in ROLES" :key="r.value" :type="selectedRole === r.value ? 'primary' : 'default'"
           :disabled="busy" @click="selectMobileRole(r.value)">{{ r.label }}</el-button>
@@ -70,7 +70,7 @@
         </div>
 
         <details v-if="m.workOrders" class="block work-order-data" :open="!hasAnswerTable(m.text)">
-          <summary>工单原始数据 · 共 {{ m.workOrders.total }} 条<span class="muted"> · 查看详情与翻页</span></summary>
+          <summary>工单原始数据 · 共 {{ m.workOrders.total }} 条<span class="muted"> 展开查看明细</span></summary>
           <div class="block-title">
             共 {{ m.workOrders.total }} 条
             <span v-if="filterLabel(m.workOrders)" class="muted">（{{ filterLabel(m.workOrders) }}）</span>
@@ -128,16 +128,16 @@
           </el-card>
 
           <el-card shadow="never" class="src">
-            <div class="block-title">筛选内按工序汇总（良品：待复核 / 已通过 / 已退回）</div>
+            <div class="block-title">工序汇总</div>
             <mes-table table-key="views/ai-assistant/index:3" :data="m.reportEvidence.summary" size="small" border>
               <el-table-column prop="operationName" label="工序" min-width="110" />
-              <el-table-column label="待复核良" width="84">
+              <el-table-column label="待复核良品品" width="84">
                 <template #default="{ row }">{{ row.pendingGood }}</template>
               </el-table-column>
-              <el-table-column label="已通过良" width="84">
+              <el-table-column label="已通过良品品" width="84">
                 <template #default="{ row }">{{ row.approvedGood }}</template>
               </el-table-column>
-              <el-table-column label="已退回良" width="84">
+              <el-table-column label="已退回良品品" width="84">
                 <template #default="{ row }">{{ row.rejectedGood }}</template>
               </el-table-column>
               <el-table-column label="待复核不良" width="90">
@@ -149,10 +149,10 @@
               <el-table-column label="已退回不良" width="90">
                 <template #default="{ row }">{{ row.rejectedDefect }}</template>
               </el-table-column>
-              <el-table-column label="进度口径" width="84">
+              <el-table-column label="进度计算规则" width="84">
                 <template #default="{ row }">{{ row.progressGood }}</template>
               </el-table-column>
-              <el-table-column label="通过口径" width="84">
+              <el-table-column label="复核通过数算法" width="84">
                 <template #default="{ row }">{{ row.reportGood }}</template>
               </el-table-column>
             </mes-table>
@@ -197,12 +197,12 @@
         </div>
 
         <div v-if="visibleAiSources(m.sources).length" class="block">
-          <div class="block-title">来源</div>
+          <div class="block-title">数据数据来源</div>
           <el-card v-for="s in visibleAiSources(m.sources)" :key="s.sourceId" shadow="never" class="src">
             <div>
               <b>{{ s.title }}</b>
               <span v-if="s.chapter" class="muted"> · {{ s.chapter }}</span>
-              <span class="muted"> · {{ s.version || '未标注版本' }}</span>
+              <span class="muted"> · {{ s.version || '暂无版本信息' }}</span>
               <span v-if="s.updatedAt" class="muted"> · 更新 {{ s.updatedAt }}</span>
               <span class="muted"> · {{ s.sourceId }}</span>
             </div>
@@ -224,11 +224,11 @@
         :autosize="{ minRows: isMobile ? 1 : 3, maxRows: isMobile ? 4 : 6 }"
         maxlength="2000"
         :disabled="!canChat || busy"
-        :placeholder="isMobile ? '请输入问题' : '想了解什么？直接问，或点击上方角色选择问题'"
+        :placeholder="isMobile ? '例：这道工序怎么报工？输入问题或点击下方常见问题' : '想了解什么？直接问，或点击上方角色选择问题（例：这道工序怎么报工？）（例：这道工序怎么报工？）'"
         @keydown.ctrl.enter="onSend"
       />
       <div class="composer-footer">
-        <span class="composer-hint">{{ busy ? '正在回答，可随时停止' : 'Ctrl + Enter 发送' }}</span>
+        <span class="composer-hint">{{ busy ? '正在回答，可随时停止' : '按 Ctrl+Enter 快速发送，或点击发送按钮' }}</span>
         <el-button v-if="busy" class="stop-button" @click="onStop"><span class="stop-icon" aria-hidden="true"></span>停止生成</el-button>
         <el-button v-else type="primary" :disabled="!canChat || !input.trim()" @click="onSend">发送 <span v-if="!isMobile" aria-hidden="true">↑</span></el-button>
       </div>
@@ -286,7 +286,7 @@ function selectMobileRole(value) {
 const router = useRouter()
 const role = Number(localStorage.getItem('role') || 0)
 if (role !== 1) {
-  ElMessage.error('仅管理员可使用 AI 助手')
+  ElMessage.error('AI助手仅限管理员使用。如需开通，请联系系统管理员开通权限')
   router.replace('/order')
 }
 
@@ -414,17 +414,17 @@ async function refreshStatus() {
     if (!boundary.current(request)) return
     status.value = res.data || { enabled: false, configured: false }
     if (!status.value.enabled) {
-      banner.value = 'AI 助手已关闭。不影响下单与报工。需要时请联系部署人员开启。'
+      banner.value = 'AI助手已关闭，不影响下单与报工。需要使用时，请联系部署人员开启'
       bannerType.value = 'info'
     } else if (!status.value.configured) {
-      banner.value = 'AI 未配置完成（缺密钥或模型）。请联系部署人员在服务器配置后重启。'
+      banner.value = 'AI助手尚未设置完成，请联系部署人员填好连接信息和模型名称后重启服务'
       bannerType.value = 'warning'
     } else {
       banner.value = ''
     }
   } catch (e) {
     if (!boundary.current(request)) return
-    banner.value = e.message || '无法获取 AI 状态'
+    banner.value = e.message || '无法获取AI助手状态，请检查网络连接，或联系运维人员排查'
     bannerType.value = 'error'
   }
 }
@@ -451,7 +451,7 @@ async function onNewChat() {
       await deleteAiConversation(oldConversationId)
     } catch {
       if (!boundary.current(request)) return
-      ElMessage.warning('旧会话清理失败，已开始新对话')
+      ElMessage.warning('之前的对话记录清理未完成，已为您开启新对话；如需查看历史记录，请稍后刷新重试')
     }
   }
 }
@@ -504,7 +504,7 @@ async function onSend() {
     if (e.name === 'CanceledError' || e.code === 'ERR_CANCELED') {
       messages.value.push({ role: 'assistant', text: '已停止。' })
     } else {
-      messages.value.push({ role: 'assistant', text: e.message || '请求失败' })
+      messages.value.push({ role: 'assistant', text: e.message || 'AI回答AI回答请求失败，请检查网络后重试；多次失败请联系运维人员，请检查网络后重试；多次失败请联系运维人员' })
     }
   } finally {
     if (!boundary.current(request)) return

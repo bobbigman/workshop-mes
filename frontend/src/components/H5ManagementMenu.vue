@@ -8,7 +8,7 @@
     @update:show="emit('update:show', $event)"
     @select="selectAction"
   >
-    <div style="padding:10px 16px;font-size:12px;color:#86909c;text-align:center;">基础资料、人员配置请在电脑端操作</div>
+    <div style="padding:10px 16px;font-size:12px;color:#86909c;text-align:center;">基础资料和人员设置请到电脑上打开后台管理页面操作，手机上只能报工和查看。</div>
   </van-action-sheet>
 </template>
 

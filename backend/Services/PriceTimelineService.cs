@@ -32,7 +32,7 @@ public class PriceTimelineService(AppDbContext db)
         Dictionary<long, SysCustomField>? fields = null)
     {
         var old = await db.OperationPriceRevisions.Where(x => x.FactoryId == table.FactoryId && x.PriceListId == table.Id && !x.Superseded).ToListAsync();
-        OperationPriceListService.Require(!old.Any(x => x.EffectiveFrom > Today && x.EffectiveFrom >= from), "已有未来调价安排，请先核对，不可覆盖");
+        OperationPriceListService.Require(!old.Any(x => x.EffectiveFrom > Today && x.EffectiveFrom >= from), "该价格已有未来的调价安排在排队，不能直接覆盖；请先核对已有的调价计划，确认无冲突后再操作。");
         foreach (var item in old.Where(x => x.EffectiveTo == null || x.EffectiveTo >= from))
         {
             if (item.EffectiveFrom >= from) item.Superseded = true;

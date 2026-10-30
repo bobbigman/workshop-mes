@@ -104,7 +104,7 @@ public static class JwtHelper
         JwtOptions opt, string token)
     {
         if (string.IsNullOrWhiteSpace(token))
-            throw ThrowHelper.BizUser("选厂凭证无效或已过期，请重新登录");
+            throw ThrowHelper.BizUser("登录凭证已失效，请重新选择工厂并登录。");
         if (string.IsNullOrWhiteSpace(opt.Secret) || opt.Secret.Length < 32)
             throw ThrowHelper.General(nameof(ValidateSelectFactoryToken), "Jwt:Secret 未配置或长度不足32位");
 
@@ -154,7 +154,7 @@ public static class JwtHelper
     public static long GetUserId(ClaimsPrincipal user)
     {
         var v = user.FindFirst(ClaimUserId)?.Value
-            ?? throw ThrowHelper.BizUser("登录状态已失效，请重新登录");
+            ?? throw ThrowHelper.BizUser("登录状态已过期，请重新登录。");
         return long.Parse(v);
     }
 

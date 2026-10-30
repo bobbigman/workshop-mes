@@ -2,7 +2,7 @@
   <div>
     <ValueTip :text="VALUE_TIPS.order" />
     <div class="toolbar">
-      <el-input v-model="keyword" class="toolbar-search" placeholder="工单号/产品" clearable @keyup.enter="onSearch" />
+      <el-input v-model="keyword" class="toolbar-search" placeholder="输入工单号或产品名称搜索" clearable @keyup.enter="onSearch" />
       <template v-if="customFields.length">
         <el-select
           v-model="filterFieldId"
@@ -26,7 +26,7 @@
           v-model="filterValue"
           clearable
           filterable
-          placeholder="选项值"
+          placeholder="输入要匹配的输入要匹配的选项值"
           class="toolbar-value"
           @keyup.enter="onSearch"
         >
@@ -36,7 +36,7 @@
           v-else-if="filterField"
           v-model="filterValue"
           clearable
-          :placeholder="filterField.fieldType === 'number' ? '数字（按原文精确）' : '筛选值'"
+          :placeholder="filterField.fieldType === 'number' ? '输入精确数字进行筛选' : '输入关键词或数值进行筛选'"
           class="toolbar-value"
           @keyup.enter="onSearch"
         />
@@ -71,9 +71,10 @@
       <el-table-column column-key="remainQty" label="剩余" width="110">
         <template #default="{ row }">{{ row.remainQty ?? 0 }}</template>
       </el-table-column>
-      <el-table-column column-key="status" label="状态" width="100">
+      <el-table-column column-key="status" label="状态" width="140">
         <template #default="{ row }">
           <el-tag :type="statusTag(row.status)">{{ statusLabel(row.status) }}</el-tag>
+          <el-tag v-if="row.reopened && row.status === 1" size="small" type="info" style="margin-left:4px">已重新打开</el-tag>
         </template>
       </el-table-column>
       <el-table-column column-key="dueDate" label="交期" width="180">
@@ -116,6 +117,7 @@
       <div v-for="row in list" :key="row.id" class="m-card">
         <div class="m-top">
           <el-tag size="small" :type="statusTag(row.status)">{{ statusLabel(row.status) }}</el-tag>
+          <el-tag v-if="row.reopened && row.status === 1" size="small" type="info">已重新打开</el-tag>
           <span class="m-no">{{ row.orderNo }}</span>
         </div>
         <div class="m-product">{{ row.productName }}</div>
@@ -145,10 +147,10 @@
 
     <!-- 创建/编辑 -->
     <el-dialog v-model="dlg" :title="editingId ? '编辑工单' : copyFromId ? '复制工单' : '创建工单'" :close-on-click-modal="!saving" :close-on-press-escape="!saving" :show-close="!saving" width="620px">
-      <el-alert v-if="copyFromId" title="请核对数量并填写本次交期。工序计划按当前产品工艺重新生成，历史报工与派工不复制。" type="info" :closable="false" style="margin-bottom:12px" />
+      <el-alert v-if="copyFromId" title="请核对数量并填写本次交期。工序计划会按当前产品工艺重新生成，之前的报工记录和派工信息不会带过来。" type="info" :closable="false" style="margin-bottom:12px" />
       <el-form :disabled="saving" :model="form" label-width="90px">
         <el-form-item label="工单号">
-          <el-input v-model="form.orderNo" placeholder="留空自动生成" />
+          <el-input v-model="form.orderNo" placeholder="留空则系统自动生成工单号" />
         </el-form-item>
         <el-form-item label="产品" required>
           <el-select v-model="form.productId" filterable style="width:100%" @change="onProductChange">
@@ -159,14 +161,14 @@
           <el-input-number v-model="form.qty" :min="1" />
         </el-form-item>
         <el-form-item label="计划交期">
-          <el-date-picker v-model="form.dueDate" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="留空则未设交期" style="width:100%" />
+          <el-date-picker v-model="form.dueDate" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="选择交期日期和时间，留空表示不设交期" style="width:100%" />
         </el-form-item>
         <el-form-item v-if="form.tasks.length" label="工序计划">
           <div v-for="t in form.tasks" :key="t.operationId" class="plan-row">
             <span class="plan-name">{{ t.operationName }}</span>
             <el-input-number v-model="t.planQty" :min="t.doneQty" size="small" />
           </div>
-          <div class="plan-hint">计划数不可小于该工序已报良品数</div>
+          <div class="plan-hint">计划数量不能小于该工序已经报工的良品数；如需调低计划数，先到「报工」核实已报数量</div>
         </el-form-item>
         <el-form-item v-for="f in customFields" :key="f.id" :label="f.fieldName">
           <el-select v-if="f.fieldType === 'single'" v-model="form.ext[f.id]" clearable style="width:100%">
@@ -178,7 +180,11 @@
       </el-form>
       <template #footer>
         <el-button :disabled="saving" @click="dlg = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="onSave">保存</el-button>
+        <template v-if="!editingId || editingStatus === 4">
+          <el-button :loading="saving" @click="onSave(true)">暂存</el-button>
+          <el-button type="primary" :loading="saving" @click="onSave(false)">提交</el-button>
+        </template>
+        <el-button v-else type="primary" :loading="saving" @click="onSave(false)">保存</el-button>
       </template>
     </el-dialog>
 
@@ -188,7 +194,10 @@
         <el-descriptions-item label="工单号">{{ detail.orderNo }}</el-descriptions-item>
         <el-descriptions-item label="产品">{{ detail.productName }}</el-descriptions-item>
         <el-descriptions-item label="数量">{{ detail.qty }}</el-descriptions-item>
-        <el-descriptions-item label="状态">{{ statusLabel(detail.status) }}</el-descriptions-item>
+        <el-descriptions-item label="状态">
+          {{ statusLabel(detail.status) }}
+          <el-tag v-if="detail.reopened && detail.status === 1" size="small" type="info" style="margin-left:6px">已重新打开</el-tag>
+        </el-descriptions-item>
         <el-descriptions-item label="计划交期">
           <span :class="dueStateClass(detail)">{{ formatDue(detail.dueDate) }}</span>
         </el-descriptions-item>
@@ -227,7 +236,7 @@
                 :model-value="row.assigneeDepartmentId || null"
                 clearable
                 filterable
-                placeholder="班组（可选）"
+                placeholder="选择负责该工序的班组（可不填）"
                 size="small"
                 style="width:100%"
                 @visible-change="(open) => open && loadDeptOptions(row)"
@@ -248,7 +257,7 @@
                 collapse-tags
                 collapse-tags-tooltip
                 :disabled="!!row.assigneeDepartmentId"
-                placeholder="执行人（可多选）"
+                placeholder="选择执行人（可多选，不填则由部门内任何人报工）"
                 size="small"
                 style="width:100%;margin-top:4px"
                 @change="(v) => onAssignChange(row, v)"
@@ -273,7 +282,7 @@
           <el-table-column prop="version" label="版本" width="80">
             <template #default="{ row }">{{ row.version || '—' }}</template>
           </el-table-column>
-          <el-table-column label="来源" width="100">
+          <el-table-column label="数据数据来源" width="100">
             <template #default="{ row }">{{ row.refType === 'operation' ? (row.refName || '工序') : '产品' }}</template>
           </el-table-column>
           <el-table-column label="操作" width="80">
@@ -330,13 +339,16 @@ const isAdmin = role === 1
 const canAssign = role === 1 || role === 3
 const canPrint = canUse(currentTier(), FEATURE.PrintLabel)
 const list = ref([]), keyword = ref(''), statusTab = ref('1')
-const counts = ref({ all: 0, notStarted: 0, doing: 0, done: 0, cancelled: 0 })
+/** 编辑中工单状态；新建/复制为 null；4=草稿 → 显示暂存/提交 */
+const editingStatus = ref(null)
+const counts = ref({ all: 0, notStarted: 0, doing: 0, done: 0, cancelled: 0, draft: 0 })
 const statusTabs = computed(() => [
   { key: '', label: '全部', count: counts.value.all },
+  { key: '4', label: '草稿', count: counts.value.draft },
   { key: '0', label: '未开始', count: counts.value.notStarted },
   { key: '1', label: '执行中', count: counts.value.doing },
   { key: '2', label: '已结束', count: counts.value.done },
-  { key: '3', label: '已取消', count: counts.value.cancelled }
+  { key: '3', label: '已作废', count: counts.value.cancelled }
 ])
 const dlg = ref(false), editingId = ref(null), detailDlg = ref(false)
 const copyFromId = ref(null), saving = ref(false)
@@ -366,12 +378,12 @@ const filterField = computed(() =>
   (customFields.value || []).find(f => f.id === filterFieldId.value) || null
 )
 
-const STATUS = { 0: '未开始', 1: '执行中', 2: '已结束', 3: '已取消' }
+const STATUS = { 0: '未开始', 1: '执行中', 2: '已结束', 3: '已作废', 4: '草稿' }
 function statusLabel(s) { return STATUS[s] ?? s }
-function statusTag(s) { return s === 0 ? 'info' : s === 1 ? 'warning' : s === 2 ? 'success' : 'danger' }
+function statusTag(s) { return s === 4 ? '' : s === 0 ? 'info' : s === 1 ? 'warning' : s === 2 ? 'success' : 'danger' }
 function formatDue(t) { return t ? String(t).replace('T', ' ').slice(0, 16) : '—' }
 function dueStateClass(row) { return row.dueState === 'overdue' ? 'due-overdue' : row.dueState === 'warning' ? 'due-warning' : '' }
-function canEdit(row) { return row.status === 0 || row.status === 1 }
+function canEdit(row) { return row.status === 0 || row.status === 1 || row.status === 4 }
 function canReport(row) { return row.status === 0 || row.status === 1 }
 function goReport(row) { router.push({ path: '/report', query: { order: row.orderNo } }) }
 function extCell(row, fieldId) {
@@ -386,7 +398,7 @@ function actions(row) {
   if (row.status === 1) a.push({ key: 'finish', label: '结束', type: 'success' })
   if (row.status === 1) a.push({ key: 'withdraw', label: '撤回', type: 'warning' })
   if (row.status === 2) a.push({ key: 'withdraw', label: '撤回', type: 'warning' })
-  if (row.status === 0 || row.status === 1) a.push({ key: 'cancel', label: '取消', type: 'danger' })
+  if (row.status === 0 || row.status === 1 || row.status === 4) a.push({ key: 'cancel', label: '作废', type: 'danger' })
   if (row.status === 3) a.push({ key: 'restore', label: '恢复', type: 'primary' })
   return a
 }
@@ -400,7 +412,7 @@ onMounted(async () => {
     try {
       await openDetail({ id: Number(openId) })
     } catch (_) {
-      ElMessage.error('无法打开指定工单，请从列表重新进入')
+      ElMessage.error('无法打开该工单，可能是链接已过期或工单已被删除，请回到「工单」列表页重新查找并打开')
     }
   }
   if (!isAdmin) return
@@ -447,7 +459,8 @@ async function loadCounts() {
     notStarted: d.notStarted || 0,
     doing: d.doing || 0,
     done: d.done || 0,
-    cancelled: d.cancelled || 0
+    cancelled: d.cancelled || 0,
+    draft: d.draft || 0
   }
 }
 
@@ -460,7 +473,7 @@ async function load() {
     pageSize: 100
   }
   if (statusTab.value === '') {
-    // 「全部」与数量一致：不含已取消
+    // 「全部」与数量一致：不含已作废
     params.excludeCancelled = true
   } else {
     params.status = statusTab.value
@@ -501,6 +514,7 @@ function openCreate() {
   processingTasks.value = []
   copyFromId.value = null
   editingId.value = null
+  editingStatus.value = null
   form.value = { orderNo: '', productId: null, qty: 1, dueDate: null, ext: {}, tasks: [] }
   dlg.value = true
 }
@@ -511,6 +525,7 @@ async function openEdit(row) {
   const d = res.data
   processingTasks.value = d.tasks || []
   editingId.value = row.id
+  editingStatus.value = d.status
   form.value = {
     orderNo: d.orderNo,
     productId: d.productId,
@@ -528,18 +543,20 @@ function onProductChange() {
   if (editingId.value) form.value.tasks = []
 }
 
-async function onSave() {
+/** @param {boolean} asDraft true=暂存；false=提交或正式保存 */
+async function onSave(asDraft = false) {
   if (saving.value) return
   if (!form.value.productId || form.value.qty <= 0) {
-    ElMessage.error('请选择产品并填写数量')
+    ElMessage.error('请先选择一个产品，并在数量栏填写大于零的数字后再保存')
     return
   }
   let quoteTokens
-  try { quoteTokens = processingEditor.value?.getQuoteTokens() || {} } catch(e) { ElMessage.error(e.message); return }
+  try { quoteTokens = processingEditor.value?.getQuoteTokens(!asDraft) || {} } catch (e) { ElMessage.error(e.message); return }
   saving.value = true
   try {
     if (editingId.value) {
       const payload = {
+        asDraft,
         quoteTokens, operationAttributes: processingEditor.value?.getOperationAttributes(),
         orderNo: form.value.orderNo || undefined,
         productId: form.value.productId,
@@ -549,10 +566,15 @@ async function onSave() {
         planQty: form.value.tasks.length ? form.value.tasks.map(t => ({ operationId: t.operationId, planQty: t.planQty })) : undefined
       }
       await updateOrder(editingId.value, payload)
-      ElMessage.success('已保存')
+      ElMessage.success(asDraft ? '工单工单工单工单已暂存为草稿，可随时到工单列表中继续编辑，可在工单列表中继续编辑或提交为草稿，可随时到工单列表中继续编辑，可在工单列表中继续编辑或提交' : (editingStatus.value === 4 ? '工单工单已提交，工人可在报工页面看到并开始报工，工人可在报工页面看到并开始报工' : '工单工单已保存，可在工单列表中查看和管理，可在工单列表中查看和管理'))
     } else {
-      await createOrder({ quoteTokens, operationAttributes: processingEditor.value?.getOperationAttributes(), copyFromId: copyFromId.value, orderNo: form.value.orderNo || undefined, productId: form.value.productId, qty: form.value.qty, dueDate: form.value.dueDate || null, ext: form.value.ext })
-      ElMessage.success('创建成功')
+      await createOrder({
+        asDraft,
+        quoteTokens, operationAttributes: processingEditor.value?.getOperationAttributes(),
+        copyFromId: copyFromId.value, orderNo: form.value.orderNo || undefined,
+        productId: form.value.productId, qty: form.value.qty, dueDate: form.value.dueDate || null, ext: form.value.ext
+      })
+      ElMessage.success(asDraft ? '已暂存为草稿' : '已提交')
     }
     dlg.value = false
     await load()
@@ -560,12 +582,16 @@ async function onSave() {
 }
 
 async function onTransition(row, action) {
-  const labelMap = { start: '开始', finish: '结束', withdraw: '撤回', cancel: '取消', restore: '恢复' }
+  const labelMap = { start: '开始', finish: '结束', withdraw: '撤回', cancel: '作废', restore: '恢复' }
   let tip = `确认${labelMap[action]}工单 ${row.orderNo}？操作后立即生效`
   if (action === 'withdraw' && row.status === 2) {
     tip = `这张单之前已结束。撤回后重新回到执行中，可以继续报工；即使数量报满也不会自动结束，需要再点一次【结束】才关闭工单。历史报工记录保留不删。确认撤回工单 ${row.orderNo}？`
   } else if (action === 'withdraw' && row.status === 1) {
     tip = `撤回后工单退回未开始，工人报工时将选不到这张单；已报的良品、不良记录和工资数据都保留不删。确认撤回工单 ${row.orderNo}？`
+  } else if (action === 'cancel') {
+    tip = `作废后这张单不能再报工和补报；历史报工记录保留，可在【已作废】页签点【恢复】重新启用。确认作废工单 ${row.orderNo}？`
+  } else if (action === 'restore') {
+    tip = `作废后点【恢复】，工单回到未开始，可继续编辑和报工。确认恢复工单 ${row.orderNo}？`
   }
   await ElMessageBox.confirm(tip, '提示', { type: 'warning' })
   await transitionOrder(row.id, action)
@@ -581,6 +607,7 @@ async function onCopy(row) {
   const d = res.data
   processingTasks.value = d.tasks || []
   editingId.value = null
+  editingStatus.value = null
   copyFromId.value = row.id
   form.value = { orderNo: '', productId: d.productId, qty: d.qty, dueDate: null,
     ext: Object.fromEntries(customFields.value.filter(f => Object.hasOwn(d.ext || {}, f.id)).map(f => [f.id, d.ext[f.id]])), tasks: [] }
@@ -613,7 +640,7 @@ async function openDetail(row) {
     guides.value = g.data || []
   } catch {
     guides.value = []
-    ElMessage.error('加载图纸 / 作业指导书失败')
+    ElMessage.error('图纸或作业指导书加载失败，请检查文件是否已被删除或移动，也可到「产品定义」重新上传附件；若仍失败，联系管理员处理')
   }
   if (canAssign) await loadSuggests(detail.value.tasks)
 }
@@ -641,7 +668,7 @@ async function openGuide(file) {
       URL.revokeObjectURL(url)
     }
   } catch {
-    ElMessage.error('预览失败，请稍后重试')
+    ElMessage.error('预览没打开成功，等一下再点试试。')
   }
 }
 
@@ -684,7 +711,7 @@ function onPrint(row) {
 }
 
 async function onDelete(row) {
-  await ElMessageBox.confirm(`确认删除工单 ${row.orderNo}？将同时删除其报工记录`, '提示', { type: 'warning' })
+  await ElMessageBox.confirm(`确认删除工单「${row.orderNo}」吗？该工单的所有报工记录将一并删除且无法恢复，请谨慎操作`, '提示', { type: 'warning' })
   await deleteOrder(row.id)
   ElMessage.success('已删除')
   await load()

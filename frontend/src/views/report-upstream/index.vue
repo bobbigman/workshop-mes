@@ -3,28 +3,28 @@
     <ValueTip :text="VALUE_TIPS.reportUpstream" />
     <el-alert type="info" :closable="false" show-icon style="margin-bottom:16px">
       <template #title>默认「软提示」：允许串报，仅弹确认</template>
-      与复核页「上工序合格库存」同口径：首道不校验；非首道看紧邻上一道已复核通过良品。硬拦截时，清单空=全部工序硬拦；清单非空=仅勾选工序硬拦，其余仍软提示。
+      与复核页「上工序合格库存」口径一致：首道工序不检查；非首道看紧邻上一道已复核通过的良品。选严格拦截时，清单不勾=全部工序严格拦截；勾选后=仅勾选的工序严格拦截，其余仍只弹提示
     </el-alert>
 
     <el-card>
       <template #header>
-        <span>报工上级工序校验</span>
+        <span>上级工序报工检查</span>
       </template>
 
       <el-form :model="form" label-width="160px" style="max-width:720px">
-        <el-form-item label="校验模式">
+        <el-form-item label="检查方式">
           <el-radio-group v-model="form.mode">
             <el-radio value="soft">软提示（默认，可串报）</el-radio>
-            <el-radio value="hard">硬拦截</el-radio>
+            <el-radio value="hard">严格拦截（不允许串报）</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item v-if="form.mode === 'hard'" label="硬拦截工序">
+        <el-form-item v-if="form.mode === 'hard'" label="严格拦截工序">
           <el-select
             v-model="form.hardOperationIds"
             multiple
             filterable
             clearable
-            placeholder="空=全部工序硬拦；勾选后仅清单内硬拦"
+            placeholder="不勾选=全部工序严格拦截；勾选后仅所选工序拦截"
             style="width:100%"
           >
             <el-option

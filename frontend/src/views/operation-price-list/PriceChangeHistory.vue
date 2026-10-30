@@ -18,7 +18,7 @@
           <el-table-column prop="oldAmount" label="原报工金额" /><el-table-column prop="wageAmount" label="新报工金额" />
           <el-table-column prop="goodQty" label="良品数" /><el-table-column prop="durationMinutes" label="分钟" />
         </mes-table>
-        <el-collapse><el-collapse-item title="完整原始依据（价格、报工、工资与系数）"><pre class="audit-json">{{JSON.stringify(before,null,2)}}</pre></el-collapse-item><el-collapse-item title="完整调整结果"><pre class="audit-json">{{JSON.stringify(after,null,2)}}</pre></el-collapse-item></el-collapse>
+        <el-collapse><el-collapse-item title="调价前的完整数据（价格、报工、工资与倍数）"><pre class="audit-json">{{JSON.stringify(before,null,2)}}</pre></el-collapse-item><el-collapse-item title="调价后的完整结果"><pre class="audit-json">{{JSON.stringify(after,null,2)}}</pre></el-collapse-item></el-collapse>
       </template>
     </div>
   </el-dialog>

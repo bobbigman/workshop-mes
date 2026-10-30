@@ -20,8 +20,8 @@ public static class WageCalculator
         int goodQty, int defectQty, int durationMinutes, decimal wageCoeff, decimal unitsPerPriceUnit)
     {
         if (priceListId <= 0 || priceType is not (1 or 2 or 3) || unitPrice < 0 || deductPrice < 0 || unitsPerPriceUnit <= 0 || wageCoeff <= 0 || goodQty < 0 || defectQty < 0 || durationMinutes < 0)
-            throw ThrowHelper.BizUser("工资计算缺少有效价目表来源或金额/数量/时长/系数无效");
-        if (priceType != 1 && unitsPerPriceUnit != 1) throw ThrowHelper.BizUser("计时/固定工资换算必须为1");
+            throw ThrowHelper.BizUser("工资计算失败，请依次检查：该产品工序是否有生效价目表、报工数量和工时是否正常、计件倍数是否已设置。可到「工序价目表」和「报工」中核实。");
+        if (priceType != 1 && unitsPerPriceUnit != 1) throw ThrowHelper.BizUser("计时或固定工资的折算值必须为1。");
         var raw = priceType switch { 1 => goodQty * unitPrice / unitsPerPriceUnit * wageCoeff, 2 => durationMinutes / 60m * unitPrice * wageCoeff, _ => unitPrice };
         return new CalcResult { PriceListId = priceListId, PriceType = priceType, UnitPrice = priceType == 1 ? unitPrice / unitsPerPriceUnit : unitPrice,
             CalcQty = priceType == 1 ? goodQty : priceType == 3 ? 1 : 0, Amount = Math.Round(raw, 2, MidpointRounding.AwayFromZero),

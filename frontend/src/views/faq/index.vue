@@ -31,7 +31,7 @@ import { getFaq } from '@/api/supportDocs'
 
 const loading = ref(true)
 const groups = ref([])
-const emptyHint = '常见问题暂未收录'
+const emptyHint = '该问题暂未收录。换个关键词再搜，或联系管理员补充'
 
 onMounted(async () => {
   try {

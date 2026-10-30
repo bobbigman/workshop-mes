@@ -95,7 +95,7 @@ public class ProductService : IProductService
     public async Task<ApiResult<ProductDetailDto>> GetAsync(long id, long factoryId)
     {
         var p = await _db.Products.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id && x.FactoryId == factoryId)
-            ?? throw ThrowHelper.Biz(nameof(GetAsync), "产品不存在");
+            ?? throw ThrowHelper.Biz(nameof(GetAsync), "指定的产品在系统中不存在。请到「产品定义」核对产品编号是否正确，或新建该产品。");
         return ApiResult<ProductDetailDto>.Ok(new ProductDetailDto
         {
             CustomValues = await new ProductAttributeService(_db).GetAsync(p.Id, factoryId),
@@ -114,14 +114,14 @@ public class ProductService : IProductService
     {
         await using var tx = await _db.Database.BeginTransactionAsync();
         if (dto.CopyFromId.HasValue && !await _db.Products.AnyAsync(p => p.Id == dto.CopyFromId && p.FactoryId == factoryId))
-            throw ThrowHelper.Biz(nameof(CreateAsync), "复制来源产品不存在或不属于本厂");
+            throw ThrowHelper.Biz(nameof(CreateAsync), "复制产品时指定的来源产品不存在或不属于本厂。请到「产品定义」确认来源产品编号正确且归属本厂。");
         await ValidateReferencesAsync(dto, factoryId);
         if (string.IsNullOrWhiteSpace(dto.Code) || string.IsNullOrWhiteSpace(dto.Name))
-            throw ThrowHelper.Biz(nameof(CreateAsync), "产品编号和名称不能为空");
+            throw ThrowHelper.Biz(nameof(CreateAsync), "产品编号和名称都必须填写。请填写完整的产品编号和名称后再保存。");
 
         // 三条硬规则：产品编号唯一
         if (await _db.Products.AnyAsync(p => p.FactoryId == factoryId && p.Code == dto.Code.Trim()))
-            throw ThrowHelper.Biz(nameof(CreateAsync), "产品编号不可重复");
+            throw ThrowHelper.Biz(nameof(CreateAsync), "产品编号全局唯一，名称可以重复。请换一个未被占用的编号，可到「产品定义」搜索确认是否已存在。");
 
         var routingId = dto.RoutingId;
         if (dto.NewRouting != null)
@@ -153,9 +153,9 @@ public class ProductService : IProductService
     private async Task ValidateReferencesAsync(ProductCreateDto dto, long factoryId)
     {
         if (dto.UnitId.HasValue && !await _db.Units.AnyAsync(x => x.Id == dto.UnitId && x.FactoryId == factoryId))
-            throw ThrowHelper.Biz(nameof(ValidateReferencesAsync), "单位不存在或不属于本厂");
+            throw ThrowHelper.Biz(nameof(ValidateReferencesAsync), "产品关联的单位不存在或不属于本厂。请到「单位管理」确认单位已创建且归属本厂，再回产品编辑页重新选择。");
         if (dto.RoutingId.HasValue && !await _db.Routings.AnyAsync(x => x.Id == dto.RoutingId && x.FactoryId == factoryId))
-            throw ThrowHelper.Biz(nameof(ValidateReferencesAsync), "工艺路线不存在或不属于本厂");
+            throw ThrowHelper.Biz(nameof(ValidateReferencesAsync), "产品关联的工艺路线不存在或不属于本厂。请到「工艺路线」确认路线已创建且归属本厂，再回产品编辑页重新选择。");
     }
 
     public async Task<ApiResult<object?>> UpdateAsync(long id, ProductCreateDto dto, long factoryId)
@@ -163,7 +163,7 @@ public class ProductService : IProductService
         await using var tx = await _db.Database.BeginTransactionAsync();
         await ValidateReferencesAsync(dto, factoryId);
         if (dto.NewRouting != null)
-            throw ThrowHelper.Biz(nameof(UpdateAsync), "复制工艺并修改仅用于新建产品");
+            throw ThrowHelper.Biz(nameof(UpdateAsync), "「复制工艺并修改」只能在新建产品时使用，编辑已有产品不支持此操作。如需修改已有产品工艺，请直接编辑其工艺路线。");
         var product = await _db.Products.FirstOrDefaultAsync(p => p.Id == id && p.FactoryId == factoryId)
             ?? throw ThrowHelper.Biz(nameof(UpdateAsync), "产品不存在");
 

@@ -117,7 +117,7 @@ public class QuoteSuggestService : IQuoteSuggestService
     public async Task<ApiResult<KingdeeMaterialDto?>> ProbeMaterialAsync(string code)
     {
         if (string.IsNullOrWhiteSpace(code))
-            throw ThrowHelper.BizUser("请填写金蝶物料编号");
+            throw ThrowHelper.BizUser("查询金蝶物料报价前需要先填金蝶物料编号。请在产品信息中填入金蝶物料编号后再执行查询。");
         try
         {
             var m = await _kingdee.GetMaterialAsync(code.Trim());
@@ -137,19 +137,19 @@ public class QuoteSuggestService : IQuoteSuggestService
     public async Task<ApiResult<QuoteSuggestPreviewDto>> PreviewAsync(QuoteSuggestPreviewRequest req, long factoryId)
     {
         if (req.SimilarProductIds == null || req.SimilarProductIds.Count == 0)
-            throw ThrowHelper.BizUser("请至少选择一个相似产品");
+            throw ThrowHelper.BizUser("智能报价至少要选一个相似产品作为参考。请在相似产品列表中勾选至少一个产品后再预览报价。");
 
         var ids = req.SimilarProductIds.Distinct().ToList();
         var products = await _db.Products.AsNoTracking()
             .Where(p => p.FactoryId == factoryId && ids.Contains(p.Id))
             .ToListAsync();
         if (products.Count != ids.Count)
-            throw ThrowHelper.BizUser("相似产品不存在或不属于本厂");
+            throw ThrowHelper.BizUser("所选相似产品不存在或不属于本厂。请到「产品定义」确认所选产品编号正确且归属本厂。");
 
         var markup = req.MarkupPct ?? _opt.DefaultMarkupPct;
         var defectReserve = req.DefectReservePct ?? 0m;
-        if (markup < 0 || markup > 500) throw ThrowHelper.BizUser("毛利加点应在 0～500% 之间");
-        if (defectReserve < 0 || defectReserve > 100) throw ThrowHelper.BizUser("不良预留应在 0～100% 之间");
+        if (markup < 0 || markup > 500) throw ThrowHelper.BizUser("毛利加点比例必须在0%到500%之间。请把毛利加点值调到合法范围内。");
+        if (defectReserve < 0 || defectReserve > 100) throw ThrowHelper.BizUser("不良预留比例必须在0%到100%之间。请把不良预留值调到合法范围内。");
 
         var dto = new QuoteSuggestPreviewDto
         {
@@ -175,7 +175,7 @@ public class QuoteSuggestService : IQuoteSuggestService
     public async Task<(byte[] Content, string FileName)> ExportAsync(QuoteSuggestPreviewRequest req, long factoryId)
     {
         var preview = await PreviewAsync(req, factoryId);
-        var data = preview.Data ?? throw ThrowHelper.BizUser("导出失败：无计算结果");
+        var data = preview.Data ?? throw ThrowHelper.BizUser("导出报价时没有可导出的计算结果。请先完成报价预览生成结果后再导出。");
 
         using var wb = new XLWorkbook();
         var ws = wb.Worksheets.Add("建议报价");

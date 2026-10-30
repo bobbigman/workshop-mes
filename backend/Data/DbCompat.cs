@@ -115,6 +115,13 @@ BEGIN
     ALTER TABLE prod_work_order ADD due_date DATETIME2 NULL;
 END");
 
+        // docs/422：已结束撤回重开标记（报满不自动结束）
+        await db.Database.ExecuteSqlRawAsync(@"
+IF COL_LENGTH('prod_work_order', 'reopened') IS NULL
+BEGIN
+    ALTER TABLE prod_work_order ADD reopened BIT NOT NULL CONSTRAINT DF_prod_work_order_reopened DEFAULT 0;
+END");
+
         // 工单打印标签设置（工厂级）
         await db.Database.ExecuteSqlRawAsync(@"
 IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'sys_print_setting')

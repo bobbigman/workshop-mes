@@ -11,7 +11,7 @@ const routes = [
     children: [
       { path: 'home', name: 'Home', component: () => import('@/views/home/index.vue'), meta: { title: '首页' } },
       { path: 'order', name: 'Order', component: () => import('@/views/order/index.vue'), meta: { title: '工单' } },
-      { path: 'order-pricing-demo', name: 'OrderPricingDemo', component: () => import('@/views/order-pricing-demo/index.vue'), meta: { title: '加工选项演示', adminOnly: true } },
+      { path: 'order-pricing-demo', name: 'OrderPricingDemo', component: () => import('@/views/order-pricing-demo/index.vue'), meta: { title: '加工计价预览', adminOnly: true } },
       { path: 'execution-monitor', name: 'ExecutionMonitor', component: () => import('@/views/execution-monitor/index.vue'), meta: { title: '执行监控' } },
       { path: 'report', name: 'Report', component: () => import('@/views/report/index.vue'), meta: { title: '报工' } },
       { path: 'review', name: 'Review', component: () => import('@/views/review/index.vue'), meta: { title: '报工复核', feature: FEATURE.ReportReview } },
@@ -50,7 +50,7 @@ const routes = [
   { path: '/h5/help', component: () => import('@/views/h5/help.vue'), meta: { title: '帮助' } },
   { path: '/h5/ai-help', component: () => import('@/views/h5/ai-help.vue'), meta: { title: 'AI操作帮助' } },
   { path: '/h5/home', name: 'H5Home', component: () => import('@/views/h5/home.vue'), meta: { title: '工作台' } },
-  { path: '/h5/report-authorize', name: 'H5ReportAuthorize', component: () => import('@/views/h5/report-authorize.vue'), meta: { title: '对话报工身份验证' } },
+  { path: '/h5/report-authorize', name: 'H5ReportAuthorize', component: () => import('@/views/h5/report-authorize.vue'), meta: { title: '报工身份确认' } },
   { path: '/h5/orders', name: 'H5Orders', component: () => import('@/views/h5/orders.vue'), meta: { title: '工单' } },
   { path: '/h5/tasks', name: 'H5Tasks', component: () => import('@/views/h5/tasks.vue'), meta: { title: '我的任务' } },
   { path: '/h5/scan', name: 'H5Scan', component: () => import('@/views/h5/scan.vue'), meta: { title: '扫码报工', feature: FEATURE.ScanReport } },
@@ -110,7 +110,7 @@ router.beforeEach((to, from, next) => {
 router.onError((err) => {
   const msg = String(err?.message || err || '')
   if (/Failed to fetch dynamically imported module|Loading chunk|Loading CSS chunk/i.test(msg)) {
-    ElMessage.error('页面资源已更新，请按 Ctrl+F5 强制刷新')
+    ElMessage.error('系统已更新，请刷新页面使用最新版本；按 Ctrl+F5 可强制刷新。')
   }
 })
 

@@ -87,48 +87,48 @@ public class OperationPriceListService(AppDbContext db)
 
     public static void Validate(AttributePriceDetails details, IReadOnlyDictionary<long, SysCustomField> fields, bool enabling, byte pricingType = 1)
     {
-        Require(pricingType is 1 or 2 or 3, "计价方式无效");
-        Require(details != null && details.SchemaVersion == 2 && details.Rows != null && details.Groups != null && details.RequiredFieldIds != null, "价目表明细结构无效");
+        Require(pricingType is 1 or 2 or 3, "价目表的计价类型设置无效。请到「工序价目表」编辑该价目表，选择系统支持的计价类型（计件、计时、固定等）后重新保存。");
+        Require(details != null && details.SchemaVersion == 2 && details.Rows != null && details.Groups != null && details.RequiredFieldIds != null, "价目表的明细结构不符合要求。请到「工序价目表」编辑该价目表，检查收费组和价格行的层级关系是否正确。");
         if (pricingType != 1)
         {
-            Require(details.Groups.Count == 0, "计时/固定价目表不允许收费组");
-            Require(details.Rows.All(r => r.Kind != "extra"), "计时/固定价目表不允许附加行");
+            Require(details.Groups.Count == 0, "计时或固定类型的价目表不允许设置收费组。请到「工序价目表」编辑该价目表，移除收费组设置或改为计件类型。");
+            Require(details.Rows.All(r => r.Kind != "extra"), "计时或固定类型的价目表不允许添加附加行。请到「工序价目表」编辑该价目表，移除附加行或改为计件类型。");
         }
-        Require(details.Groups.All(g => g != null && g.Conditions != null) && details.Rows.All(r => r != null && r.Conditions != null && r.IncludedRowIds != null), "收费组或价格行结构为空");
-        Require(details!.Rows.Count <= 1000 && (!enabling || details.Rows.Count > 0), "价目表最多1000行，启用时不得为空");
-        Require(details.Groups.Select(g => g.Key).Distinct().Count() == details.Groups.Count && details.Groups.All(g => !string.IsNullOrWhiteSpace(g.Key) && !string.IsNullOrWhiteSpace(g.Name)), "收费组编码重复或为空");
-        Require(details.Rows.Select(r => r.RowId).Distinct().Count() == details.Rows.Count && details.Rows.All(r => !string.IsNullOrWhiteSpace(r.RowId)), "价格行编号重复或为空");
-        Require(details.RequiredFieldIds.All(fields.ContainsKey), "必需属性包含非本厂产品字段");
+        Require(details.Groups.All(g => g != null && g.Conditions != null) && details.Rows.All(r => r != null && r.Conditions != null && r.IncludedRowIds != null), "价目表的收费组或价格行为空。请到「工序价目表」编辑该价目表，至少添加一个收费组或价格行后再保存。");
+        Require(details!.Rows.Count <= 1000 && (!enabling || details.Rows.Count > 0), "价目表最多支持1000行，且启用时不能为空。请检查行数是否超限，并确保启用状态下至少有一行有效数据。");
+        Require(details.Groups.Select(g => g.Key).Distinct().Count() == details.Groups.Count && details.Groups.All(g => !string.IsNullOrWhiteSpace(g.Key) && !string.IsNullOrWhiteSpace(g.Name)), "价目表中有重复或为空的收费组代号。请到「工序价目表」编辑该价目表，确保每个收费组代号唯一且非空。");
+        Require(details.Rows.Select(r => r.RowId).Distinct().Count() == details.Rows.Count && details.Rows.All(r => !string.IsNullOrWhiteSpace(r.RowId)), "价目表中有重复或为空的价格行编号。请到「工序价目表」编辑该价目表，确保每个价格行编号唯一且非空。");
+        Require(details.RequiredFieldIds.All(fields.ContainsKey), "价目表的必需属性中引用了不属于当前工厂的产品字段。请到「工序价目表」编辑该价目表，移除或换成本厂产品的字段。");
         foreach (var c in details.Groups.SelectMany(g => g.Conditions).Concat(details.Rows.SelectMany(r => r.Conditions)))
         {
-            Require(c != null, "取价条件不能为空");
-            Require(fields.ContainsKey(c.FieldId), "条件引用的产品字段不存在或不属于本厂");
+            Require(c != null, "价目表的取价条件不能为空。请到「工序价目表」编辑该价目表，至少设置一个取价条件后再保存。");
+            Require(fields.ContainsKey(c.FieldId), "条件里引用的产品字段在本厂找不到。请到「产品定义」确认该字段是否已创建并归属本厂，再回到价目表编辑条件。");
             var field = fields[c.FieldId];
-            Require(field.FieldType is "number" or "single", "取价条件只支持数字或单选字段");
-            Require(c.Operator is "eq" or "range", "条件只支持等于或区间");
+            Require(field.FieldType is "number" or "single", "取价条件只支持数字类型或单选类型的字段。请到「产品属性」检查所选字段类型，换成数字或单选字段后重新设置条件。");
+            Require(c.Operator is "eq" or "range", "条件的匹配方式只支持「等于」和「区间」两种。请把当前条件的匹配方式改成等于或区间。");
             if (c.Operator == "eq")
             {
-                Require(!string.IsNullOrWhiteSpace(c.Value), "等于条件未填写值，不能当作不限");
-                if (field.FieldType == "number") { Require(Number(c.Value, out var n) && n >= 0, $"{field.FieldName}条件须为非负数字"); Require(field.FieldKey is not ("print_panels" or "rib_count") || decimal.Truncate(n) == n, $"{field.FieldName}条件须为整数"); }
+                Require(!string.IsNullOrWhiteSpace(c.Value), "选了「等于」条件但没有填具体值，系统不会当作不限处理。请在条件值栏填入明确的匹配值，或取消该条件。");
+                if (field.FieldType == "number") { Require(Number(c.Value, out var n) && n >= 0, $"{field.FieldName}的条件值必须是非负数字（不小于0）。请检查对应条件行，把负数改成合法的非负值。"); Require(field.FieldKey is not ("print_panels" or "rib_count") || decimal.Truncate(n) == n, $"{field.FieldName}的条件值必须是整数，不能带小数。请检查对应条件行，去掉小数部分后保存。"); }
             }
             else
                 Require(field.FieldType == "number" && (!c.Min.HasValue || c.Min >= 0) && (!c.Max.HasValue || c.Max >= 0) && (c.Min.HasValue || c.Max.HasValue) &&
-                    (!c.Min.HasValue || !c.Max.HasValue || c.Min < c.Max || (c.Min == c.Max && c.IncludeMin && c.IncludeMax)), "区间上下界或字段类型无效");
+                    (!c.Min.HasValue || !c.Max.HasValue || c.Min < c.Max || (c.Min == c.Max && c.IncludeMin && c.IncludeMax)), "区间条件的上下界设置不正确，或所选字段不支持区间匹配。请检查区间起止值是否合法、字段是否为数字类型。");
         }
         foreach (var row in details.Rows)
         {
-            Require(row.ProductId == null, "新版价目表行不接受产品绑定，请在表头选择产品");
-            Require(row.Label != null && row.Label.Length <= 256 && row.Note != null && row.Source != null, "行规格/备注/来源无效或规格超过256字");
-            Require(!enabling || !row.Note.Contains("待确认", StringComparison.Ordinal), $"行{row.RowId}备注仍待确认，不能启用");
-            Require(row.Kind == "extra" || row.GroupKey == null, "基础/最终行不能带收费组");
-            Require(row.Kind is "base" or "extra" or "final", "价格性质无效");
-            Require(row.Conditions != null && row.IncludedRowIds != null, "条件和包含项不能为空集合");
-            Require(!enabling || (row.Confirmed && row.Amount.HasValue && !string.IsNullOrWhiteSpace(row.Source)), $"行{row.RowId}待定、缺金额或来源，不能启用");
-            Require((!row.Amount.HasValue || Money(row.Amount.Value)) && Money(row.DeductPrice), "金额须为非负数且最多4位小数");
-            Require(row.Kind != "extra" || (details.Groups.Any(g => g.Key == row.GroupKey) && row.DeductPrice == 0 && row.IncludedRowIds.Count == 0), "附加行须属于收费组且不能定义扣价/包含项");
-            Require(row.IncludedRowIds.Distinct().Count() == row.IncludedRowIds.Count && row.IncludedRowIds.All(id => details.Rows.Any(r => r.RowId == id && r.Kind == "extra")), "包含项只能引用本表附加行，不能重复");
+            Require(row.ProductId == null, "新版价目表的产品只能在表头选择，不能在每一行单独指定产品。请到价目表表头选好产品，再把行上指定的产品删掉。");
+            Require(row.Label != null && row.Label.Length <= 256 && row.Note != null && row.Source != null, "某一行的规格、备注或来源填得无效，或规格文字超过256字上限。请逐行检查规格、备注、来源，缩短超长内容或修正无效值。");
+            Require(!enabling || !row.Note.Contains("待确认", StringComparison.Ordinal), $"行{row.RowId}的备注还是待确认状态，不能启用。请先编辑该行把备注确认完毕，再启用整张价目表。");
+            Require(row.Kind == "extra" || row.GroupKey == null, "基础价行和最终价行不允许挂收费组。请把这两类行上的收费组关联去掉，收费组只能用在附加行上。");
+            Require(row.Kind is "base" or "extra" or "final", "价格性质填的值不在系统允许范围内。请检查该行价格性质的下拉选项，选择一个有效值。");
+            Require(row.Conditions != null && row.IncludedRowIds != null, "取价条件列表和包含项列表不能同时为空。请至少填写一个匹配条件或一个包含项，否则无法确定这张表适用于哪些工序。");
+            Require(!enabling || (row.Confirmed && row.Amount.HasValue && !string.IsNullOrWhiteSpace(row.Source)), $"行{row.RowId}处于待定状态，或缺少金额、来源信息，无法启用。请补全该行的金额和来源，取消待定标记后再启用。");
+            Require((!row.Amount.HasValue || Money(row.Amount.Value)) && Money(row.DeductPrice), "金额必须不小于0，且最多保留4位小数。请检查所有价格行的金额，修正超出精度或负数的值。");
+            Require(row.Kind != "extra" || (details.Groups.Any(g => g.Key == row.GroupKey) && row.DeductPrice == 0 && row.IncludedRowIds.Count == 0), "附加行必须归属于某个收费组，且附加行本身不能设置扣价或包含项。请给附加行选一个收费组，并移除其上的扣价/包含项设置。");
+            Require(row.IncludedRowIds.Distinct().Count() == row.IncludedRowIds.Count && row.IncludedRowIds.All(id => details.Rows.Any(r => r.RowId == id && r.Kind == "extra")), "包含项只能引用同一张价目表内的附加行，且不能重复引用同一附加行。请检查包含项列表，确保引用的都是本表附加行且无重复。");
         }
-        Require(!enabling || details.Rows.Any(r => r.Kind != "extra"), "启用价目表须有基础或最终价");
+        Require(!enabling || details.Rows.Any(r => r.Kind != "extra"), "要启用的价目表必须至少有一条基础价或最终价行。请先添加一条基础价或最终价，再执行启用。");
         if (enabling)
         {
             for (var i = 0; i < details.Rows.Count; i++)
@@ -137,7 +137,7 @@ public class OperationPriceListService(AppDbContext db)
                 var a = details.Rows[i]; var b = details.Rows[j];
                 if ((a.Kind == "extra") != (b.Kind == "extra")) continue;
                 if (a.Kind == "extra" && a.GroupKey != b.GroupKey) continue;
-                Require(!MayOverlap(a.Conditions, b.Conditions, fields), $"价格行{a.RowId}与{b.RowId}条件重叠，不能启用");
+                Require(!MayOverlap(a.Conditions, b.Conditions, fields), $"价格行{a.RowId}与{b.RowId}的匹配条件重叠，系统无法判断用哪一行。请调整其中一行的条件范围使其不再重叠，然后再启用。");
             }
         }
     }
@@ -178,14 +178,14 @@ public class OperationPriceListService(AppDbContext db)
             if (!values.TryGetValue(c.FieldId, out var value) || string.IsNullOrWhiteSpace(value)) continue;
             if (fields[c.FieldId].FieldType == "number")
             {
-                Require(Number(value, out var n), $"产品属性{fields[c.FieldId].FieldName}不是有效数字");
+                Require(Number(value, out var n), $"产品属性{fields[c.FieldId].FieldName}不是有效数字，无法参与计算。请到「产品定义」检查该产品的属性值，确保数字类属性填了合法数值。");
                 if (c.Operator == "eq") { if (!Number(c.Value, out var expected) || n != expected) return false; }
                 else if ((c.Min.HasValue && (n < c.Min || (n == c.Min && !c.IncludeMin))) || (c.Max.HasValue && (n > c.Max || (n == c.Max && !c.IncludeMax)))) return false;
             }
             else if (!string.Equals(value, c.Value, StringComparison.Ordinal)) return false;
         }
         foreach (var c in list)
-            Require(values.TryGetValue(c.FieldId, out var value) && !string.IsNullOrWhiteSpace(value), $"缺少产品属性：{fields[c.FieldId].FieldName}，不能确定工价");
+            Require(values.TryGetValue(c.FieldId, out var value) && !string.IsNullOrWhiteSpace(value), $"计算工价需要用到产品属性{fields[c.FieldId].FieldName}，但该属性值为空，无法确定工价。请到「产品定义」补齐该产品缺失的属性值后重试。");
         return true;
     }
 
@@ -193,14 +193,14 @@ public class OperationPriceListService(AppDbContext db)
     {
         var details = Details(table);
         Validate(details, fields, true, table.PricingType);
-        Require(table.Status == 1 && date.Date >= table.EffectiveFrom.Date && (!table.EffectiveTo.HasValue || date.Date <= table.EffectiveTo.Value.Date), "价目表未启用或不在有效期");
-        Require(table.ReportUnitId == reportUnitId && table.UnitsPerPriceUnit > 0, "报工单位或换算不匹配");
-        Require(table.PricingType == 1 || (table.UnitsPerPriceUnit == 1 && table.PriceUnit == (table.PricingType == 2 ? "小时" : "笔")), "计时/固定价目表换算数须为1且计价单位须为小时/笔");
-        foreach (var id in details.RequiredFieldIds) Require(values.TryGetValue(id, out var value) && !string.IsNullOrWhiteSpace(value), $"缺少产品属性：{fields[id].FieldName}");
-        Require(table.ProductId == null || table.ProductId == productId, "价目表不属于当前产品");
+        Require(table.Status == 1 && date.Date >= table.EffectiveFrom.Date && (!table.EffectiveTo.HasValue || date.Date <= table.EffectiveTo.Value.Date), "这张价目表还没启用，或已经过了有效期。请到「工序价目表」页面检查该表的启用状态和有效期。");
+        Require(table.ReportUnitId == reportUnitId && table.UnitsPerPriceUnit > 0, "报工单位和折算方式对不上，系统没法算价。请联系管理员检查这道工序单价表里的单位和折算设置。");
+        Require(table.PricingType == 1 || (table.UnitsPerPriceUnit == 1 && table.PriceUnit == (table.PricingType == 2 ? "小时" : "笔")), "计时或固定类型的价目表，换算数必须为1，计价单位必须是小时或笔。请到价目表编辑页修正换算数和计价单位。");
+        foreach (var id in details.RequiredFieldIds) Require(values.TryGetValue(id, out var value) && !string.IsNullOrWhiteSpace(value), $"计算工价时缺少产品属性：{fields[id].FieldName}。请到「产品定义」找到该产品，补齐缺失属性后重新取价。");
+        Require(table.ProductId == null || table.ProductId == productId, "当前使用的价目表不属于这个产品。请确认价目表表头选的产品是否正确，或换一张属于该产品的价目表。");
         var applicable = details.Rows;
         var primary = applicable.Where(r => r.Kind != "extra" && Matches(r.Conditions, values, fields)).ToList();
-        Require(primary.Count == 1, primary.Count == 0 ? $"产品{productId}·工序{table.OperationId}·表{table.Code}缺规格的价：{string.Join("；", details.Rows.Where(r => r.Kind != "extra").SelectMany(r => r.Conditions).Select(c => $"{fields[c.FieldId].FieldName}实际={values.GetValueOrDefault(c.FieldId) ?? "未填"}，要求{c.Operator}:{c.Value ?? $"{c.Min}~{c.Max}"}"))}" : "重复命中基础/最终工价，请消除条件冲突");
+        Require(primary.Count == 1, primary.Count == 0 ? $"产品{productId}·工序{table.OperationId}·表{table.Code}缺规格的价：{string.Join("；", details.Rows.Where(r => r.Kind != "extra").SelectMany(r => r.Conditions).Select(c => $"{fields[c.FieldId].FieldName}实际={values.GetValueOrDefault(c.FieldId) ?? "未填"}，要求{c.Operator}:{c.Value ?? $"{c.Min}~{c.Max}"}"))}" : "有多张价目表同时命中了这道工序的基础/最终工价，系统无法判断用哪张。请到「工序价目表」消除重复或冲突的取价条件。");
         var price = primary[0];
         var evidence = new AttributeQuoteEvidence { PriceListId = table.Id, PriceListCode = table.Code, PricingDate = date.Date, Attributes = values.OrderBy(v => v.Key).ToDictionary(v => v.Key, v => v.Value) };
         var quote = new ProcessingQuote { SchemaVersion = 2, FactoryId = table.FactoryId, ProductId = productId, PriceType = table.PricingType, OperationId = table.OperationId, Version = table.Version, BaseName = $"{table.Code} / {price.RowId}", BasePrice = price.Amount!.Value,
@@ -212,8 +212,8 @@ public class OperationPriceListService(AppDbContext db)
         {
             if (!Matches(group.Conditions, values, fields)) continue;
             var extras = applicable.Where(r => r.Kind == "extra" && r.GroupKey == group.Key && Matches(r.Conditions, values, fields)).ToList();
-            Require(extras.Count <= 1, $"收费组“{group.Name}”重复命中，请核查区间或条件");
-            Require(!group.Required || extras.Count == 1, $"收费组“{group.Name}”缺价，不能当作免费");
+            Require(extras.Count <= 1, $"收费组“{group.Name}”命中了多行价格，无法确定用哪个。请到价目表检查该收费组的区间或条件设置，消除重复命中。");
+            Require(!group.Required || extras.Count == 1, $"收费组“{group.Name}”没有匹配到任何价格行，不能按免费处理。请到价目表中为该收费组补充对应价格行。");
             if (extras.Count == 0) continue;
             var extra = extras[0];
             var isIncluded = price.IncludedRowIds.Contains(extra.RowId);
@@ -226,7 +226,7 @@ public class OperationPriceListService(AppDbContext db)
         foreach (var row in details.Rows)
             evidence.Rows.Add(new(row.RowId, row.Kind, chosen.Contains(row.RowId), included.Contains(row.RowId), row.Amount!.Value,
                 included.Contains(row.RowId) ? "已包含，不另加价" : chosen.Contains(row.RowId) ? "条件命中" : "不在产品范围、条件不符或收费组不适用", row.Source));
-        Require(quote.UnitPrice / quote.UnitsPerPriceUnit <= 1000000 && quote.DeductPrice / quote.UnitsPerPriceUnit <= 1000000, "换算后的单价超过范围");
+        Require(quote.UnitPrice / quote.UnitsPerPriceUnit <= 1000000 && quote.DeductPrice / quote.UnitsPerPriceUnit <= 1000000, "换算后的单价超出了系统允许范围。请检查价目表的换算数和原始单价，确保换算结果在合理区间内。");
         quote.QuoteToken = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(OperationPricingService.Write(quote))));
         return quote;
     }
@@ -234,27 +234,27 @@ public class OperationPriceListService(AppDbContext db)
     public static OperationPriceList SelectTable(IEnumerable<OperationPriceList> candidates, long productId, long operationId)
     {
         var all = candidates.ToList();
-        Require(!all.Any(t => Details(t).SchemaVersion != 2), $"工序{operationId}存在旧行级配置待转换，禁止新单取价；请查看转换清单");
+        Require(!all.Any(t => Details(t).SchemaVersion != 2), $"工序{operationId}还有旧版行级价格设置没转换完，新单无法取价。请查看系统提示的转换清单，完成旧设置迁移后再建新单。");
         var specific = all.Where(t => t.ProductId == productId).ToList();
         var common = all.Where(t => t.ProductId == null).ToList();
-        Require(specific.Count <= 1 && common.Count <= 1, $"工序{operationId}同范围多张价目表生效，需消除冲突");
+        Require(specific.Count <= 1 && common.Count <= 1, $"工序{operationId}在同一范围内有多张价目表同时生效，产生冲突。请到「工序价目表」停用多余表或调整有效期，确保同一时段只有一张表生效。");
         var selected = specific.SingleOrDefault() ?? common.SingleOrDefault();
-        Require(selected != null, $"产品{productId}·工序{operationId}无生效专属或通用价目表，不能退回普通工价");
+        Require(selected != null, $"产品{productId}·工序{operationId}没有找到任何生效的专属或通用价目表，不能按普通工价代替。请到「工序价目表」新建一张并启用。");
         return selected!;
     }
 
     public async Task<ProcessingQuote> PreviewAsync(long productId, long operationId, long factoryId, DateTime? date = null,
         Dictionary<long, string?>? operationAttributes = null, long? workOrderId = null, string? expectedVersion = null)
     {
-        var p = await db.Products.AsNoTracking().SingleOrDefaultAsync(p => p.Id == productId && p.FactoryId == factoryId) ?? throw ThrowHelper.BizUser("产品不存在或非本厂");
-        Require(await db.Operations.AnyAsync(o => o.Id == operationId && o.FactoryId == factoryId) && await db.RoutingSteps.AnyAsync(s => s.RoutingId == p.RoutingId && s.OperationId == operationId), "工序不在本厂产品工艺内");
+        var p = await db.Products.AsNoTracking().SingleOrDefaultAsync(p => p.Id == productId && p.FactoryId == factoryId) ?? throw ThrowHelper.BizUser("预览取价时指定的产品不存在或不属于本厂。请检查输入的产品编号是否正确，或到「产品定义」确认该产品归属。");
+        Require(await db.Operations.AnyAsync(o => o.Id == operationId && o.FactoryId == factoryId) && await db.RoutingSteps.AnyAsync(s => s.RoutingId == p.RoutingId && s.OperationId == operationId), "指定的工序不在该产品的工艺路线中。请到「产品定义」查看该产品的工艺路线，确认工序是否已加入路线。");
         if (workOrderId.HasValue)
         {
-            Require(operationAttributes == null, "已有工单预览不接受工艺覆盖输入");
-            Require(await db.WorkOrders.AnyAsync(o => o.Id == workOrderId && o.FactoryId == factoryId && o.ProductId == productId), "工单不存在、产品不一致或非本厂");
-            var task = await db.WorkOrderOperations.AsNoTracking().SingleOrDefaultAsync(t => t.WorkOrderId == workOrderId && t.OperationId == operationId) ?? throw ThrowHelper.BizUser("工序不属于当前工单");
-            Require(task.ProcessingPrice != null, "该单没有可靠锁价，请使用新建/复制流程");
-            return await new OperationPricingService(db).BudgetAsync(workOrderId.Value,operationId,factoryId);
+            Require(operationAttributes == null, "已有工单的预览不接受手动覆盖工艺内容。请直接用工单自带的工艺信息预览，不要额外填写工艺覆盖值。");
+            Require(await db.WorkOrders.AnyAsync(o => o.Id == workOrderId && o.FactoryId == factoryId && o.ProductId == productId), "指定的工单不存在、所属产品与当前不一致或不属于本厂。请核实工单编号与产品的对应关系，确保工单归属正确。");
+            Require(await db.WorkOrderOperations.AnyAsync(t => t.WorkOrderId == workOrderId && t.OperationId == operationId), "指定的工序不属于当前工单。请检查工单包含的工序列表，确认所选工序确实在这张工单内。");
+            // docs/424：无锁价时由 BudgetAsync 懒绑定，不再要求先手工保存/复制
+            return await new OperationPricingService(db).BudgetAsync(workOrderId.Value, operationId, factoryId);
         }
         var day = (date ?? DateTime.Today).Date;
         var attrs = new OperationAttributeService(db);
@@ -264,14 +264,14 @@ public class OperationPriceListService(AppDbContext db)
         foreach (var (id, value) in values.Where(v => !string.IsNullOrWhiteSpace(v.Value)))
         {
             var f = fields[id];
-            if (f.FieldType == "single") Require(await db.CustomFieldOptions.AnyAsync(o => o.FieldId == id && o.Label == value), $"属性{f.FieldName}的选项无效");
+            if (f.FieldType == "single") Require(await db.CustomFieldOptions.AnyAsync(o => o.FieldId == id && o.Label == value), $"属性{f.FieldName}填的选项无效。请到「产品属性」查看该字段的可选值列表，选择合法选项。");
         }
         var quote = await new PriceTimelineService(db).QuoteAsync(factoryId,productId,operationId,p.UnitId ?? 0,values,day);
-        Require(expectedVersion == null || quote.Version == expectedVersion, "价目表已变化，请重新预览");
+        Require(expectedVersion == null || quote.Version == expectedVersion, "你上次预览之后价目表被人改过，之前的预览结果已失效。请点「重新预览」获取最新价格后再保存。");
         return quote;
     }
 
-    public async Task<OperationPriceList> GetAsync(long id, long factoryId) => await db.OperationPriceLists.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id && t.FactoryId == factoryId) ?? throw ThrowHelper.BizUser("价目表不存在或非本厂");
+    public async Task<OperationPriceList> GetAsync(long id, long factoryId) => await db.OperationPriceLists.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id && t.FactoryId == factoryId) ?? throw ThrowHelper.BizUser("指定的价目表不存在或不属于本厂。请到「工序价目表」列表确认该表是否存在及归属。");
     public static object View(OperationPriceList t) => new { t.Id, t.Code, t.Name, t.OperationId, t.ProductId, t.PricingType, t.Remark, t.ActivatedAt, t.Status, t.EffectiveFrom, t.EffectiveTo, t.PriceUnit, t.ReportUnitId, t.UnitsPerPriceUnit, t.Version, Details = Details(t), t.CreatedAt, t.UpdatedAt };
     public static bool Incomplete(AttributePriceDetails d) => d.Rows.Count == 0 || d.Rows.Any(r => !r.Confirmed || r.Amount == null || r.Note.Contains("待确认", StringComparison.Ordinal));
 
@@ -285,42 +285,42 @@ public class OperationPriceListService(AppDbContext db)
 
     public async Task<long> SaveAsync(long? id, PriceListInput input, long factoryId, byte? targetStatus = null)
     {
-        Require(!string.IsNullOrWhiteSpace(input.Code) && input.Code.Length <= 64 && !string.IsNullOrWhiteSpace(input.Name) && input.Name.Length <= 128, "编号/名称必填且不得超长");
+        Require(!string.IsNullOrWhiteSpace(input.Code) && input.Code.Length <= 64 && !string.IsNullOrWhiteSpace(input.Name) && input.Name.Length <= 128, "价目表的编号和名称都必须填写，且不能超长。请填写完整的编号和名称后再保存。");
         Require(input.PricingType is 1 or 2 or 3, "计价方式无效");
-        Require(input.Status <= 2 && (!input.EffectiveTo.HasValue || input.EffectiveTo.Value.Date >= input.EffectiveFrom.Date), "状态或有效日期无效");
-        Require(input.Remark != null && input.Remark.Length <= 1000, "表头备注超过1000字");
-        Require(!string.IsNullOrWhiteSpace(input.PriceUnit) && input.PriceUnit.Length <= 32 && input.UnitsPerPriceUnit is > 0 and <= 1000000 && decimal.Round(input.UnitsPerPriceUnit, 4) == input.UnitsPerPriceUnit, "计价单位/换算数无效");
-        Require(input.PricingType == 1 || (input.UnitsPerPriceUnit == 1 && input.PriceUnit == (input.PricingType == 2 ? "小时" : "笔")), "计时/固定价目表换算数须为1，计价单位须为小时/笔");
+        Require(input.Status <= 2 && (!input.EffectiveTo.HasValue || input.EffectiveTo.Value.Date >= input.EffectiveFrom.Date), "价目表的状态或有效期日期不合法。请检查启用/停用状态以及起止日期格式是否正确。");
+        Require(input.Remark != null && input.Remark.Length <= 1000, "价目表表头备注超过1000字上限。请把备注精简到1000字以内再保存。");
+        Require(!string.IsNullOrWhiteSpace(input.PriceUnit) && input.PriceUnit.Length <= 32 && input.UnitsPerPriceUnit is > 0 and <= 1000000 && decimal.Round(input.UnitsPerPriceUnit, 4) == input.UnitsPerPriceUnit, "计价单位或换算数填得不合法。请检查这两项，确认填了系统支持的单位和正数换算值。");
+        Require(input.PricingType == 1 || (input.UnitsPerPriceUnit == 1 && input.PriceUnit == (input.PricingType == 2 ? "小时" : "笔")), "计时或固定类型的价目表，换算数必须为1、计价单位必须为小时或笔。请修正这两项后保存。");
         await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
         await LockFactoryAsync(db, factoryId);
-        var table = id.HasValue ? await db.OperationPriceLists.SingleOrDefaultAsync(t => t.Id == id && t.FactoryId == factoryId) ?? throw ThrowHelper.BizUser("价目表不存在或非本厂") : new OperationPriceList { FactoryId = factoryId, CreatedAt = DateTime.Now };
-        Require(!id.HasValue || table.Version == input.ExpectedVersion, "价目表已被修改，请重新打开后编辑");
-        Require(!id.HasValue || Details(table).SchemaVersion == 2, "旧行级配置待转换，不可直接覆盖，请新建表级价目表");
-        Require(!id.HasValue || table.Code == input.Code.Trim(), "已保存价目表编号不能修改，请复制新建");
-        Require(table.ActivatedAt == null || table.OperationId == input.OperationId, "价目表首次启用后工序永久锁定，请复制新建");
-        Require(table.ActivatedAt == null || table.PricingType == input.PricingType, "价目表首次启用后计价方式永久锁定，请复制新建");
-        Require(await db.Operations.AnyAsync(o => o.Id == input.OperationId && o.FactoryId == factoryId) && await db.Units.AnyAsync(u => u.Id == input.ReportUnitId && u.FactoryId == factoryId), "工序/报工单位不存在或非本厂");
-        Require(input.ProductId == null || await db.Products.AnyAsync(p => p.Id == input.ProductId && p.FactoryId == factoryId), "表头产品不存在或非本厂");
-        Require(!await db.OperationPriceLists.AnyAsync(t => t.FactoryId == factoryId && t.Code == input.Code.Trim() && t.Id != id), "价目表编号已存在");
+        var table = id.HasValue ? await db.OperationPriceLists.SingleOrDefaultAsync(t => t.Id == id && t.FactoryId == factoryId) ?? throw ThrowHelper.BizUser("指定的价目表不存在或不属于本厂。请到「工序价目表」列表确认该表是否存在及归属。") : new OperationPriceList { FactoryId = factoryId, CreatedAt = DateTime.Now };
+        Require(!id.HasValue || table.Version == input.ExpectedVersion, "这张价目表在你编辑期间被别人改过。请刷新页面重新加载最新版本后再编辑保存。");
+        Require(!id.HasValue || Details(table).SchemaVersion == 2, "该工序还有旧版行级价格设置没转换完，不能直接覆盖保存。请先完成旧设置转换，或新建一张表级价目表替代。");
+        Require(!id.HasValue || table.Code == input.Code.Trim(), "已保存过的价目表编号不允许修改。如需更改编号，请用「复制新建」生成新表后再改编号。");
+        Require(table.ActivatedAt == null || table.OperationId == input.OperationId, "价目表首次启用后，关联的工序就不能再改了。如需更换工序，请用「复制新建」创建新表并选择正确工序。");
+        Require(table.ActivatedAt == null || table.PricingType == input.PricingType, "价目表首次启用后，计件/计时/固定的计价类型就锁定不能再改。如需更换，请用「复制新建」创建新表。");
+        Require(await db.Operations.AnyAsync(o => o.Id == input.OperationId && o.FactoryId == factoryId) && await db.Units.AnyAsync(u => u.Id == input.ReportUnitId && u.FactoryId == factoryId), "保存单价表前，请确认工序和报工单位都存在且属于本厂。");
+        Require(input.ProductId == null || await db.Products.AnyAsync(p => p.Id == input.ProductId && p.FactoryId == factoryId), "价目表表头选择的产品不存在或不属于本厂。请到「产品定义」确认产品编号正确且归属本厂后重新选择。");
+        Require(!await db.OperationPriceLists.AnyAsync(t => t.FactoryId == factoryId && t.Code == input.Code.Trim() && t.Id != id), "这个价目表编号已被占用。请换一个不重复的编号，或到「工序价目表」列表查看已有编号避免重复。");
         var fields = await new OperationAttributeService(db).FieldsAsync(factoryId, input.OperationId);
         Validate(input.Details, fields, false, input.PricingType);
         var status = targetStatus ?? (table.Status == 2 ? (byte)2 : table.Status == 1 ? (byte)1 : Incomplete(input.Details) ? (byte)0 : (byte)1);
-        Require(targetStatus == null || targetStatus is 1 or 2, "状态操作只接受启用或停用");
-        Require(targetStatus != 2 || table.Status == 1, "仅启用表可以停用");
-        Require(targetStatus != 1 || table.Status == 2, "仅停用表可以重新启用，草稿请保存");
+        Require(targetStatus == null || targetStatus is 1 or 2, "状态变更操作只接受「启用」或「停用」。请确认要执行的是启用还是停用，不要选其他状态。");
+        Require(targetStatus != 2 || table.Status == 1, "只有当前处于启用状态的价目表才能执行停用操作。请确认该表当前确实是启用状态。");
+        Require(targetStatus != 1 || table.Status == 2, "只有已停用的价目表才能重新启用；草稿状态的表请先保存再启用。请按当前状态选择正确操作。");
         Validate(input.Details, fields, status == 1, input.PricingType);
         var options = await db.CustomFieldOptions.AsNoTracking().Where(o => fields.Keys.Contains(o.FieldId)).ToListAsync();
         foreach (var c in input.Details.Rows.SelectMany(r => r.Conditions).Concat(input.Details.Groups.SelectMany(g => g.Conditions)))
-            if (fields[c.FieldId].FieldType == "single") Require(options.Any(o => o.FieldId == c.FieldId && o.Label == c.Value), "条件单选值不在字段选项内");
+            if (fields[c.FieldId].FieldType == "single") Require(options.Any(o => o.FieldId == c.FieldId && o.Label == c.Value), "条件中选择的单选值不在该字段预设选项内。请到「产品属性」查看该单选字段的可选值，选择合法选项。");
         if (status == 1)
-            Require(!await db.OperationPriceLists.AnyAsync(t => t.FactoryId == factoryId && t.Id != id && t.OperationId == input.OperationId && t.ProductId == input.ProductId && t.Status == 1 && (!input.EffectiveTo.HasValue || t.EffectiveFrom <= input.EffectiveTo.Value.Date) && (!t.EffectiveTo.HasValue || t.EffectiveTo >= input.EffectiveFrom.Date)), "同产品范围已有日期重叠的启用价目表，请先停用或调整日期");
+            Require(!await db.OperationPriceLists.AnyAsync(t => t.FactoryId == factoryId && t.Id != id && t.OperationId == input.OperationId && t.ProductId == input.ProductId && t.Status == 1 && (!input.EffectiveTo.HasValue || t.EffectiveFrom <= input.EffectiveTo.Value.Date) && (!t.EffectiveTo.HasValue || t.EffectiveTo >= input.EffectiveFrom.Date)), "同一产品范围内已有一张启用中的价目表与当前表有效期重叠。请先停用重叠的旧表，或调整当前表的起止日期避开重叠。");
         var timeline = new PriceTimelineService(db);
         if (id.HasValue)
         {
             if (table.ActivatedAt != null || table.Status == 1)
             {
                 var priorRows = Details(table).Rows.ToDictionary(x => x.RowId);
-                Require(input.Details.Rows.All(x => !priorRows.TryGetValue(x.RowId,out var prior) || (x.Amount == prior.Amount && x.DeductPrice == prior.DeductPrice)), "已启用价表的价格请通过调整工价修改");
+                Require(input.Details.Rows.All(x => !priorRows.TryGetValue(x.RowId,out var prior) || (x.Amount == prior.Amount && x.DeductPrice == prior.DeductPrice)), "已启用的价目表不能直接编辑价格行。请通过「调整工价」功能修改已启用表的价格。");
             }
             await timeline.EnsureBaselineAsync(table);
         }
@@ -343,8 +343,8 @@ public class OperationPriceListService(AppDbContext db)
             await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
         await LockFactoryAsync(db, factoryId);
             var legacy = await db.OperationPriceLists.SingleAsync(x => x.Id == id && x.FactoryId == factoryId);
-            Require(status == 2 && legacy.Status == 1, "旧行级配置只能停用，不能重新启用或修改");
-            Require(legacy.Version == expectedVersion, "价目表已被修改，请刷新");
+            Require(status == 2 && legacy.Status == 1, "旧版行级价格设置只允许停用，不能重新启用或修改内容。如需调整，请新建一张新版表级价目表替代。");
+            Require(legacy.Version == expectedVersion, "这张价目表在你操作期间被其他人修改了。请刷新页面获取最新版本后再执行状态变更。");
             legacy.Status = 2; legacy.Version = Guid.NewGuid().ToString("N"); legacy.UpdatedAt = DateTime.Now;
             await db.SaveChangesAsync(); await tx.CommitAsync(); return;
         }
@@ -355,12 +355,12 @@ public class OperationPriceListService(AppDbContext db)
     {
         await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
         await LockFactoryAsync(db, factoryId);
-        var t = await db.OperationPriceLists.SingleOrDefaultAsync(t => t.Id == id && t.FactoryId == factoryId) ?? throw ThrowHelper.BizUser("价目表不存在或非本厂");
-        Require(t.Version == expectedVersion, "价目表已被修改，请刷新");
-        Require(t.Status == 0 && t.ActivatedAt == null && Details(t).SchemaVersion == 2, "仅未启用过的新版草稿可以删除，其他表请停用");
+        var t = await db.OperationPriceLists.SingleOrDefaultAsync(t => t.Id == id && t.FactoryId == factoryId) ?? throw ThrowHelper.BizUser("指定的价目表不存在或不属于本厂。请到「工序价目表」列表确认该表是否存在及归属。");
+        Require(t.Version == expectedVersion, "你要编辑的价目表不存在，或已被他人修改、删除，当前内容已过时。请关闭后重新打开该价目表，按最新版本编辑。");
+        Require(t.Status == 0 && t.ActivatedAt == null && Details(t).SchemaVersion == 2, "只有从未启用过的新版草稿价目表才能删除；已启用过的表请用「停用」处理，不要删除。");
         // 快照JSON为自包含依据；保守检查全部当前任务引用，不能因草稿状态误删。
         var snapshots = await db.WorkOrderOperations.Where(x => x.ProcessingPrice != null && db.WorkOrders.Any(o => o.Id == x.WorkOrderId && o.FactoryId == factoryId)).Select(x => x.ProcessingPrice!).ToListAsync();
-        Require(!snapshots.Any(x => OperationPricingService.Read<ProcessingQuote>(x).AttributeEvidence?.PriceListId == id), "价目表已有工单引用，不能删除");
+        Require(!snapshots.Any(x => OperationPricingService.Read<ProcessingQuote>(x).AttributeEvidence?.PriceListId == id), "这张价目表已被工单引用，不能删除。如确实不需要，请先停用该表；若要彻底移除，须先解除所有关联工单的引用。");
         db.OperationPriceRevisions.RemoveRange(await db.OperationPriceRevisions.Where(x => x.FactoryId == factoryId && x.PriceListId == id).ToListAsync());
         db.OperationPriceLists.Remove(t); await db.SaveChangesAsync(); await tx.CommitAsync();
     }
