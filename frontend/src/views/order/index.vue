@@ -61,22 +61,22 @@
     </div>
 
     <!-- 桌面：表格；手机：卡片，避免窄屏挤成碎字 -->
-    <el-table class="pc-table" :data="list">
-      <el-table-column prop="orderNo" label="工单编号" min-width="168" class-name="col-order-no" />
-      <el-table-column prop="productName" label="产品" min-width="120" />
-      <el-table-column prop="qty" label="数量" width="88" />
-      <el-table-column label="进度" width="120">
+    <mes-table table-key="views/order/index:1" legacy-order-widths class="pc-table" :data="list" border show-overflow-tooltip>
+      <el-table-column prop="orderNo" column-key="orderNo" label="工单编号" min-width="260" class-name="col-order-no" />
+      <el-table-column prop="productName" column-key="productName" label="产品" min-width="120" />
+      <el-table-column prop="qty" column-key="qty" label="数量" width="110" />
+      <el-table-column column-key="progress" label="进度" width="160">
         <template #default="{ row }">{{ row.doneQty ?? 0 }}/{{ row.planQty ?? row.qty }}</template>
       </el-table-column>
-      <el-table-column label="剩余" width="80">
+      <el-table-column column-key="remainQty" label="剩余" width="110">
         <template #default="{ row }">{{ row.remainQty ?? 0 }}</template>
       </el-table-column>
-      <el-table-column label="状态" width="100">
+      <el-table-column column-key="status" label="状态" width="100">
         <template #default="{ row }">
           <el-tag :type="statusTag(row.status)">{{ statusLabel(row.status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="交期" width="180">
+      <el-table-column column-key="dueDate" label="交期" width="180">
         <template #default="{ row }">
           <span :class="dueStateClass(row)">{{ formatDue(row.dueDate) }}</span>
         </template>
@@ -84,14 +84,17 @@
       <el-table-column
         v-for="f in listColumns"
         :key="'cf-' + f.id"
+        :column-key="'cf-' + f.id"
         :label="f.fieldName"
         min-width="120"
         show-overflow-tooltip
       >
         <template #default="{ row }">{{ extCell(row, f.id) }}</template>
       </el-table-column>
-      <el-table-column prop="createdAt" label="创建时间" width="250" />
-      <el-table-column label="操作" min-width="460" fixed="right">
+      <el-table-column prop="createdAt" column-key="createdAt" label="创建时间" width="180">
+        <template #default="{ row }">{{ formatDue(row.createdAt) }}</template>
+      </el-table-column>
+      <el-table-column label="操作" min-width="460" fixed="right" :show-overflow-tooltip="false" :resizable="false">
         <template #default="{ row }">
           <div class="op-btns">
           <el-button link type="primary" @click="openDetail(row)">详情</el-button>
@@ -106,7 +109,7 @@
           </div>
         </template>
       </el-table-column>
-    </el-table>
+    </mes-table>
 
     <div class="m-list">
       <div v-if="list.length === 0" class="m-empty">暂无工单</div>
@@ -190,7 +193,7 @@
           <span :class="dueStateClass(detail)">{{ formatDue(detail.dueDate) }}</span>
         </el-descriptions-item>
       </el-descriptions>
-      <el-table :data="detail.tasks" class="detail-tasks">
+      <mes-table table-key="views/order/index:2" :data="detail.tasks" class="detail-tasks">
         <el-table-column prop="seq" label="序" width="50" />
         <el-table-column prop="operationName" label="工序" />
         <el-table-column v-if="isAdmin" label="加工要求 / 预算工价" min-width="240">
@@ -261,10 +264,10 @@
             <el-progress :percentage="row.planQty ? Math.min(100, Math.round(row.doneQty / row.planQty * 100)) : 0" />
           </template>
         </el-table-column>
-      </el-table>
+      </mes-table>
       <div class="kf-block">
         <div class="kf-title">图纸 / 作业指导书</div>
-        <el-table v-if="guides.length" :data="guides" size="small">
+        <mes-table table-key="views/order/index:3" v-if="guides.length" :data="guides" size="small">
           <el-table-column prop="fileName" label="文件名" min-width="160" show-overflow-tooltip />
           <el-table-column prop="fileType" label="类型" width="70" />
           <el-table-column prop="version" label="版本" width="80">
@@ -278,7 +281,7 @@
               <el-button link type="primary" @click="openGuide(row)">预览</el-button>
             </template>
           </el-table-column>
-        </el-table>
+        </mes-table>
         <div v-else class="kf-empty">暂无</div>
       </div>
       <el-image-viewer
