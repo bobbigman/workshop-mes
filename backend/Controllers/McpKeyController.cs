@@ -2,11 +2,13 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ahu.MicrosoftMes.Common;
 using ahu.MicrosoftMes.Mcp;
+using ahu.MicrosoftMes.Services;
 
 namespace ahu.MicrosoftMes.Controllers;
 
 /// <summary>MCP 钥匙管理（docs/96、docs/147）：一键生成完整连接报文 / 列表 / 吊销。仅管理员（RoleGuard）。</summary>
 [ApiController]
+[TypeFilter(typeof(CurrentAdminFilter))]
 [Route("api/McpKey")]
 [Authorize]
 public class McpKeyController : ControllerBase
@@ -21,7 +23,7 @@ public class McpKeyController : ControllerBase
     }
 
     [HttpGet("factories")]
-    public Task<ApiResult<List<McpKeyFactoryOptionDto>>> Factories() => _svc.ListFactoriesAsync();
+    public Task<ApiResult<List<McpKeyFactoryOptionDto>>> Factories() => _svc.ListFactoriesAsync(JwtHelper.GetFactoryId(User));
 
     [HttpGet]
     public Task<ApiResult<List<McpKeyListItemDto>>> List() =>

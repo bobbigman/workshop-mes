@@ -74,7 +74,8 @@ public class McpAuthService : IMcpAuthService
         if (string.IsNullOrEmpty(code))
             throw ThrowHelper.Biz(nameof(ResolveFactoryIdByCodeAsync), "配对码无效。请回到豆包重新发起授权。");
         var factoryId = await _db.McpAuths.AsNoTracking()
-            .Where(x => x.AuthCode == code)
+            .Where(x => x.AuthCode == code && !x.CodeUsed && x.CodeExpire >= DateTime.Now
+                && _db.Factories.Any(f => f.Id == x.FactoryId && f.TrialCleanedAtUtc == null))
             .Select(x => (long?)x.FactoryId)
             .FirstOrDefaultAsync();
         if (factoryId is null or <= 0)

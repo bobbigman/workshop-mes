@@ -1,5 +1,6 @@
 using ahu.MicrosoftMes.Common;
 using ahu.MicrosoftMes.Data;
+using ahu.MicrosoftMes.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace ahu.MicrosoftMes.Mcp;
@@ -85,27 +86,31 @@ public class McpTokenMiddleware
             return;
         }
 
-        // 标签对账：若请求带 factoryid / X-Factory-Id，必须与钥匙定的厂一致
-        var label = context.Request.Headers["factoryid"].FirstOrDefault()
-            ?? context.Request.Headers["X-Factory-Id"].FirstOrDefault()
-            ?? context.Request.Query["factoryid"].FirstOrDefault();
-        if (!string.IsNullOrWhiteSpace(label)
-            && long.TryParse(label.Trim(), out var labelFid)
-            && labelFid != factoryId.Value)
+        var labels = context.Request.Headers["factoryid"].Concat(context.Request.Headers["X-Factory-Id"])
+            .Concat(context.Request.Query["factoryid"]).ToArray();
+        if (labels.Any(label => !long.TryParse(label, System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out var id) || id <= 0))
         {
-            _logger.LogWarning(
-                "MCP 厂标签与钥匙不符: alias={Alias} keyFactory={KeyFactory} label={Label} path={Path}",
-                alias, factoryId, labelFid, context.Request.Path);
-            context.Response.StatusCode = StatusCodes.Status403Forbidden;
-            context.Response.ContentType = "application/json";
-            await context.Response.WriteAsync("{\"code\":403,\"msg\":\"factory label mismatch\"}");
+            context.Response.StatusCode = 400;
+            await context.Response.WriteAsJsonAsync(new { code = 400, msg = "工厂标签格式无效" });
             return;
         }
-
-        var factoryName = await db.Factories.AsNoTracking()
-            .Where(f => f.Id == factoryId.Value)
-            .Select(f => f.FactoryName)
-            .FirstOrDefaultAsync() ?? $"#{factoryId}";
+        if (labels.Any(label => long.Parse(label!, System.Globalization.CultureInfo.InvariantCulture) != factoryId.Value))
+        {
+            context.Response.StatusCode = 403;
+            await context.Response.WriteAsJsonAsync(new { code = 403, msg = "工厂标签与访问权限不符" });
+            return;
+        }
+        var factory = await db.Factories.AsNoTracking()
+            .FirstOrDefaultAsync(f => f.Id == factoryId.Value && f.TrialCleanedAtUtc == null);
+        if (factory == null)
+        {
+            await Write401(context);
+            return;
+        }
+        var factoryName = factory.FactoryName;
+        await context.RequestServices.GetRequiredService<ILicenseTierService>()
+            .EnsureFeatureAsync(factoryId.Value, LicenseFeature.KingdeeMcp);
 
         mcpCtx.CurrentFactoryId = factoryId;
         mcpCtx.KeyAlias = alias;

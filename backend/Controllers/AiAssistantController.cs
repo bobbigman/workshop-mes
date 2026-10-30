@@ -7,6 +7,7 @@ namespace ahu.MicrosoftMes.Controllers;
 
 /// <summary>PC 内置 AI 助手。全员登录用户可用（电脑端页面仍按角色在前端拦截）；工厂取自 JWT。</summary>
 [ApiController]
+[TypeFilter(typeof(CurrentAdminFilter))]
 [Authorize]
 [Route("api/ai-assistant")]
 public class AiAssistantController : ControllerBase

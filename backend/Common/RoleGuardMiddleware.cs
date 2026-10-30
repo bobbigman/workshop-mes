@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;
 using ahu.MicrosoftMes.Services;
 
 namespace ahu.MicrosoftMes.Common;
@@ -52,6 +52,8 @@ public class RoleGuardMiddleware
     private static bool IsAllowedForWorker(string path, string method)
     {
         if (WorkerHelpPolicy.IsAllowedEndpoint(path, method)) return true;
+        if (method == "POST" && (path.Equals("/api/QueryIdentity/inspect", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("/api/QueryIdentity/approve", StringComparison.OrdinalIgnoreCase))) return true;
         if ((method == "POST" && path.Equals("/api/work-session/start", StringComparison.OrdinalIgnoreCase))
             || (method == "GET" && path.Equals("/api/work-session/current", StringComparison.OrdinalIgnoreCase))) return true;
         if (method == "POST" && (path.Equals("/api/ReportIdentity/inspect", StringComparison.OrdinalIgnoreCase)

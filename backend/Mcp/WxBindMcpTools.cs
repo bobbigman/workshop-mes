@@ -12,16 +12,17 @@ public class WxBindMcpTools
 
     public WxBindMcpTools(IMcpWxBindService bind) => _bind = bind;
 
-    [McpServerTool, Description("用手机号绑定当前会话到本厂账号。报 11 位手机号即可；无需验证码。绑定成功后同会话查数据免再报手机号。")]
+    [McpServerTool, Description("旧绑定入口，仅返回本人网页验证指引；请改用start_query_auth，手机号不单独授权。")]
     public Task<string> BindWechat(
         [Description("本厂用户手机号，11 位")] string phone,
         [Description("渠道：coze/doubao/workbuddy/wx_gzh/wecom，可空默认 coze")] string? chanType = null,
         [Description("会话稳定身份 ID；可空则读请求头 X-Mcp-Session-Id")] string? sessionId = null)
         => _bind.BindAsync(phone, chanType, sessionId);
 
-    [McpServerTool, Description("解绑当前会话与本厂账号的绑定。解绑后需重新报手机号绑定。")]
+    [McpServerTool, Description("撤销本人的查询授权及绑定，必须提供本人queryAccessToken或可信平台身份。")]
     public Task<string> UnbindWechat(
+        [Description("本人只读查询授权凭证，可空时必须有可信平台身份")] string? queryAccessToken = null,
         [Description("渠道，可空默认 coze")] string? chanType = null,
         [Description("会话稳定身份 ID；可空则读请求头 X-Mcp-Session-Id")] string? sessionId = null)
-        => _bind.UnbindAsync(chanType, sessionId);
+        => _bind.UnbindQueryAsync(queryAccessToken);
 }

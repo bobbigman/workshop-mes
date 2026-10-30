@@ -41,6 +41,9 @@ public class AiToolDispatcher
         _logger = logger;
     }
 
+    public Task<Models.SysUser> EnsureAccessAsync(long userId, long factoryId, string mode, CancellationToken ct)
+        => CurrentAccountAccess.RequireAsync(_db, userId, factoryId, mode != WorkerHelpPolicy.Mode, ct);
+
     public IReadOnlyList<DeepSeekToolDef> ToolsForMode(string mode)
     {
         if (mode == "worker-help") return new[] { SearchSupportDocsTool() };
@@ -257,6 +260,7 @@ public class AiToolDispatcher
         AiSessionState session,
         CancellationToken ct)
     {
+        await EnsureAccessAsync(session.UserId, session.FactoryId, session.Mode, ct);
         RejectForbiddenArgs(argumentsJson);
         EnsureToolAllowed(session.Mode, toolName);
         _logger.LogInformation("AI工具 {Tool} factory={FactoryId} user={UserId} argsLen={Len}",
@@ -366,13 +370,14 @@ public class AiToolDispatcher
         long factoryId,
         CancellationToken ct)
     {
+        await TenantDataGuard.WorkOrdersAsync(_db, factoryId, ct: ct);
         if (page < 1) page = 1;
         if (pageSize < 1) pageSize = 20;
         if (pageSize > 50) pageSize = 50;
 
         var q = from o in _db.WorkOrders.AsNoTracking()
                 where o.FactoryId == factoryId
-                join p in _db.Products.AsNoTracking() on o.ProductId equals p.Id
+                join p in _db.Products.AsNoTracking().Where(p => p.FactoryId == factoryId) on o.ProductId equals p.Id
                 select new { o, p.Code, p.Name };
 
         if (!string.IsNullOrWhiteSpace(filters.Keyword))
@@ -448,12 +453,7 @@ public class AiToolDispatcher
 
     private async Task EnsureAdminPieceWageAsync(AiSessionState session, CancellationToken ct)
     {
-        var role = await _db.Users.AsNoTracking()
-            .Where(u => u.Id == session.UserId)
-            .Select(u => (byte?)u.Role)
-            .FirstOrDefaultAsync(ct);
-        if (role != 1)
-            throw ThrowHelper.BizUser("仅管理员可查询工单应付工资");
+        await EnsureAccessAsync(session.UserId, session.FactoryId, session.Mode, ct);
         await _license.EnsureFeatureAsync(session.FactoryId, LicenseFeature.PieceWage);
     }
 
@@ -707,12 +707,17 @@ public class AiToolDispatcher
         var opCodeById = new Dictionary<long, string>();
         if (product.RoutingId != null)
         {
+            if (!await _db.Routings.AsNoTracking().AnyAsync(r => r.Id == product.RoutingId && r.FactoryId == session.FactoryId))
+                throw ThrowHelper.BizUser("产品工艺路线关联异常，请联系管理员核对。");
             var steps = await _db.RoutingSteps.AsNoTracking()
                 .Where(s => s.RoutingId == product.RoutingId)
                 .OrderBy(s => s.Seq)
                 .ToListAsync(ct);
+            if (await _db.Operations.AsNoTracking().CountAsync(o => o.FactoryId == session.FactoryId && steps.Select(s => s.OperationId).Contains(o.Id))
+                != steps.Select(s => s.OperationId).Distinct().Count())
+                throw ThrowHelper.BizUser("工艺路线的工序关联异常，请联系管理员核对。");
             var ops = await _db.Operations.AsNoTracking()
-                .Where(o => steps.Select(s => s.OperationId).Contains(o.Id))
+                .Where(o => o.FactoryId == session.FactoryId && steps.Select(s => s.OperationId).Contains(o.Id))
                 .ToListAsync(ct);
             foreach (var s in steps)
             {

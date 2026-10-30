@@ -15,12 +15,14 @@ public class McpAuthController : ControllerBase
     private readonly IMcpAuthService _authService;
     private readonly IKingdeeAuthService _kingdeeService;
     private readonly IConfiguration _config;
+    private readonly ILicenseTierService _license;
 
-    public McpAuthController(IMcpAuthService authService, IKingdeeAuthService kingdeeService, IConfiguration config)
+    public McpAuthController(IMcpAuthService authService, IKingdeeAuthService kingdeeService, IConfiguration config, ILicenseTierService license)
     {
         _authService = authService;
         _kingdeeService = kingdeeService;
         _config = config;
+        _license = license;
     }
 
     [HttpGet]
@@ -30,10 +32,11 @@ public class McpAuthController : ControllerBase
         if (string.IsNullOrEmpty(code))
             return Content(ErrorPage("链接缺少配对码。请回到豆包对话，再说一次「查工单」，打开新链接。"), "text/html; charset=utf-8");
 
-        var factoryId = await _authService.ResolveFactoryIdByCodeAsync(code);
-        // 打开页时先验配对码，避免填完账号才发现已过期
+        // 打开页时先验配对码和真实厂授权，错误仍返回可读HTML。
         try
         {
+            var factoryId = await _authService.ResolveFactoryIdByCodeAsync(code);
+            await _license.EnsureFeatureAsync(factoryId, LicenseFeature.KingdeeMcp);
             await _authService.PeekCodeAsync(code, factoryId);
         }
         catch (BusinessException ex)
@@ -84,8 +87,10 @@ public class McpAuthController : ControllerBase
     {
         try
         {
-            var user = await _kingdeeService.VerifyAsync(account, password);
             var factoryId = await _authService.ResolveFactoryIdByCodeAsync(code);
+            await _license.EnsureFeatureAsync(factoryId, LicenseFeature.KingdeeMcp);
+            await _authService.PeekCodeAsync(code, factoryId);
+            var user = await _kingdeeService.VerifyAsync(account, password);
             var auth = await _authService.ExchangeAsync(code, user, factoryId);
 
             var html = $$"""
@@ -109,7 +114,7 @@ public class McpAuthController : ControllerBase
   <h2>授权成功</h2>
   <div class="sub">金蝶用户：{{auth?.KingdeeUserName}}</div>
   <div class="token">{{auth?.AuthToken}}</div>
-  <div class="hint">这是你的授权码。<br>复制后回到豆包对话，把授权码发给我，即可查询工单、报工、工资。</div>
+  <div class="hint">这是你的授权码。<br>复制后回到豆包对话，把授权码发给我，仅用于对应金蝶集成，不授予MES工单、报工或工资查询权限。</div>
 </div>
 </body>
 </html>

@@ -49,7 +49,7 @@ public class McpGateMiddleware
         _opt = opt.Value;
     }
 
-    public async Task InvokeAsync(HttpContext context, IConfiguration config, ILicenseTierService license)
+    public async Task InvokeAsync(HttpContext context)
     {
         var path = context.Request.Path.Value ?? "";
         var isMcp = path.StartsWith("/mcp", StringComparison.OrdinalIgnoreCase)
@@ -64,8 +64,7 @@ public class McpGateMiddleware
                 return;
             }
 
-            var factoryId = config.GetValue<long>("Mcp:FactoryId", 1);
-            await license.EnsureFeatureAsync(factoryId, LicenseFeature.KingdeeMcp);
+            // 这里只检查总开关；厂授权由钥匙/配对码定厂后检查。
         }
 
         await _next(context);

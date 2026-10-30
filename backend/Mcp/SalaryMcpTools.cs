@@ -42,9 +42,10 @@ public class SalaryMcpTools
         [Description("周期值：月为 yyyy-MM，周为 yyyy-Www，可空")] string? periodValue = null,
         [Description("状态：0草稿 1已确认，可空")] byte? status = null,
         [Description("渠道，可空")] string? chanType = null,
-        [Description("会话身份，可空")] string? sessionId = null)
+        [Description("会话身份，可空")] string? sessionId = null,
+        [Description("本人网页登录验证的只读查询凭证，不是报工凭证")] string? queryAccessToken = null)
     {
-        var access = await McpDataAccess.ResolveAsync(_wxBind, _config, chanType, sessionId);
+        var access = await McpDataAccess.ResolveAsync(_wxBind, _config, chanType, sessionId, queryAccessToken: queryAccessToken);
         if (access.Hint != null) return access.Hint;
 
         long factoryId = _mcpCtx.RequireFactoryId(nameof(QuerySalary));
@@ -82,9 +83,10 @@ public class SalaryMcpTools
     public async Task<string> QueryDailyPiecework(
         [Description("兼容旧调用保留的参数；车间查询不使用金蝶授权码")] string? authToken = null,
         [Description("渠道，可空")] string? chanType = null,
-        [Description("会话身份，可空")] string? sessionId = null)
+        [Description("会话身份，可空")] string? sessionId = null,
+        [Description("本人网页登录验证的只读查询凭证，不是报工凭证")] string? queryAccessToken = null)
     {
-        var access = await McpDataAccess.ResolveAsync(_wxBind, _config, chanType, sessionId);
+        var access = await McpDataAccess.ResolveAsync(_wxBind, _config, chanType, sessionId, queryAccessToken: queryAccessToken);
         if (access.Hint != null) return access.Hint;
 
         long factoryId = _mcpCtx.RequireFactoryId(nameof(QueryDailyPiecework));
@@ -139,9 +141,10 @@ public class SalaryMcpTools
         [Description("工单号，与 orderId 至少一个")] string? orderNo = null,
         [Description("工单ID，优先")] long? orderId = null,
         [Description("渠道，可空")] string? chanType = null,
-        [Description("会话身份，可空")] string? sessionId = null)
+        [Description("会话身份，可空")] string? sessionId = null,
+        [Description("本人网页登录验证的只读查询凭证，不是报工凭证")] string? queryAccessToken = null)
     {
-        var access = await McpDataAccess.ResolveAsync(_wxBind, _config, chanType, sessionId, adminOnly: true);
+        var access = await McpDataAccess.ResolveAsync(_wxBind, _config, chanType, sessionId, adminOnly: true, queryAccessToken: queryAccessToken);
         if (access.Hint != null) return access.Hint;
 
         long factoryId = _mcpCtx.RequireFactoryId(nameof(GetWorkOrderPayable));
@@ -161,9 +164,10 @@ public class SalaryMcpTools
      Description("已完工工单应付台账与总合计（docs/420/421，只读）。问「完成工单要付多少」用本工具。仅管理员；需计件工资许可。")]
     public async Task<string> GetCompletedWorkOrdersPayable(
         [Description("渠道，可空")] string? chanType = null,
-        [Description("会话身份，可空")] string? sessionId = null)
+        [Description("会话身份，可空")] string? sessionId = null,
+        [Description("本人网页登录验证的只读查询凭证，不是报工凭证")] string? queryAccessToken = null)
     {
-        var access = await McpDataAccess.ResolveAsync(_wxBind, _config, chanType, sessionId, adminOnly: true);
+        var access = await McpDataAccess.ResolveAsync(_wxBind, _config, chanType, sessionId, adminOnly: true, queryAccessToken: queryAccessToken);
         if (access.Hint != null) return access.Hint;
 
         long factoryId = _mcpCtx.RequireFactoryId(nameof(GetCompletedWorkOrdersPayable));

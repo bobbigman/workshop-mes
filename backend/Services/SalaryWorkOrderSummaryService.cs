@@ -64,6 +64,7 @@ public partial class SalaryService
     public async Task<ApiResult<SalaryWorkOrderSummaryDto>> WorkOrderSummaryAsync(
         long? orderId, string? orderNo, long factoryId)
     {
+        await TenantDataGuard.WorkOrdersAsync(_db, factoryId, orderId.HasValue ? new[] { orderId.Value } : null);
         var trimmedNo = orderNo?.Trim();
         if (!orderId.HasValue && string.IsNullOrEmpty(trimmedNo))
             throw ThrowHelper.BizUser("请输入工单号");
@@ -112,10 +113,11 @@ public partial class SalaryService
 
     public async Task<ApiResult<SalaryCompletedWorkOrdersDto>> CompletedWorkOrdersAsync(long factoryId)
     {
+        await TenantDataGuard.WorkOrdersAsync(_db, factoryId);
         var orders = await (
             from o in _db.WorkOrders.AsNoTracking()
             where o.FactoryId == factoryId && o.Status == 2
-            join p in _db.Products.AsNoTracking() on o.ProductId equals p.Id into pj
+            join p in _db.Products.AsNoTracking().Where(p => p.FactoryId == factoryId) on o.ProductId equals p.Id into pj
             from p in pj.DefaultIfEmpty()
             orderby o.OrderNo
             select new
@@ -189,9 +191,9 @@ public partial class SalaryService
         return await (
             from r in _db.Reports.AsNoTracking()
             where r.FactoryId == factoryId && orderIds.Contains(r.OrderId)
-            join op in _db.Operations.AsNoTracking() on r.OperationId equals op.Id into opj
+            join op in _db.Operations.AsNoTracking().Where(o => o.FactoryId == factoryId) on r.OperationId equals op.Id into opj
             from op in opj.DefaultIfEmpty()
-            join u in _db.Users.AsNoTracking() on r.UserId equals u.Id into uj
+            join u in _db.Users.AsNoTracking().Where(u => u.FactoryId == factoryId) on r.UserId equals u.Id into uj
             from u in uj.DefaultIfEmpty()
             select new ReportRow(
                 r.Id,

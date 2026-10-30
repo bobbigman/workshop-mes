@@ -160,6 +160,7 @@ function onLogout() {
   const appearanceCode = localStorage.getItem('factoryCode') || localStorage.getItem(LOGIN_FACTORY_KEY)
   resetFavorites()
   localStorage.clear()
+  window.dispatchEvent(new Event('mes-auth-changed'))
   rememberLoginFactory(appearanceCode)
   router.push('/login')
 }

@@ -35,15 +35,16 @@ public class WorkOrderMcpTools
         _config = config;
     }
 
-    [McpServerTool, Description("查询车间工单列表，可按关键词（工单号/产品名/产品编号）或状态筛选。演示模式下无需授权码；正式模式需钥匙定厂及手机号绑定，不需金蝶授权码。查「列表/今天有哪些单」用本工具；查「某单做到哪了/进度」请用 query_work_order_progress。")]
+    [McpServerTool, Description("查询车间工单列表，可按关键词（工单号/产品名/产品编号）或状态筛选。需钥匙定厂及可信平台身份或queryAccessToken，不需金蝶授权码。查「列表/今天有哪些单」用本工具；查「某单做到哪了/进度」请用 query_work_order_progress。")]
     public async Task<string> QueryWorkOrder(
         [Description("兼容旧调用保留的参数；车间查询不使用金蝶授权码")] string? authToken = null,
         [Description("关键词：工单号、产品名称或产品编号，可空")] string? keyword = null,
         [Description("状态：0未开始 1执行中 2已完成 3已取消，可空查全部")] byte? status = null,
         [Description("渠道，可空")] string? chanType = null,
-        [Description("会话身份，可空")] string? sessionId = null)
+        [Description("会话身份，可空")] string? sessionId = null,
+        [Description("本人网页登录验证的只读查询凭证，不是报工凭证")] string? queryAccessToken = null)
     {
-        var access = await McpDataAccess.ResolveAsync(_wxBind, _config, chanType, sessionId);
+        var access = await McpDataAccess.ResolveAsync(_wxBind, _config, chanType, sessionId, queryAccessToken: queryAccessToken);
         if (access.Hint != null) return access.Hint;
 
         long factoryId = _mcpCtx.RequireFactoryId(nameof(QueryWorkOrder));
@@ -78,7 +79,7 @@ public class WorkOrderMcpTools
         }, JsonOpts);
     }
 
-    [McpServerTool, Description("查询单张工单生产进度（做到哪了/第几道/完成百分比/距交期）。按工单号或产品编号/名称定位；演示模式可空授权码。查列表请用 query_work_order，不要用本工具顶替。")]
+    [McpServerTool, Description("查询单张工单生产进度（做到哪了/第几道/完成百分比/距交期）。按工单号或产品编号/名称定位；需可信平台身份或queryAccessToken。查列表请用 query_work_order，不要用本工具顶替。")]
     public async Task<string> QueryWorkOrderProgress(
         [Description("兼容旧调用保留的参数；车间查询不使用金蝶授权码")] string? authToken = null,
         [Description("工单号（精确，推荐）")] string? orderNo = null,
@@ -86,9 +87,10 @@ public class WorkOrderMcpTools
         [Description("产品名称（模糊）")] string? productName = null,
         [Description("工序名称（可选；只筛选展示的工序，整单完成数仍按全工序计算）")] string? operationName = null,
         [Description("渠道，可空")] string? chanType = null,
-        [Description("会话身份，可空")] string? sessionId = null)
+        [Description("会话身份，可空")] string? sessionId = null,
+        [Description("本人网页登录验证的只读查询凭证，不是报工凭证")] string? queryAccessToken = null)
     {
-        var access = await McpDataAccess.ResolveAsync(_wxBind, _config, chanType, sessionId);
+        var access = await McpDataAccess.ResolveAsync(_wxBind, _config, chanType, sessionId, queryAccessToken: queryAccessToken);
         if (access.Hint != null) return access.Hint;
 
         long factoryId = _mcpCtx.RequireFactoryId(nameof(QueryWorkOrderProgress));

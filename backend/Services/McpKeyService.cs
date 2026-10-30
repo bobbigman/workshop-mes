@@ -47,7 +47,7 @@ public class McpKeyFactoryOptionDto
 
 public interface IMcpKeyService
 {
-    Task<ApiResult<List<McpKeyFactoryOptionDto>>> ListFactoriesAsync();
+    Task<ApiResult<List<McpKeyFactoryOptionDto>>> ListFactoriesAsync(long factoryId);
     Task<ApiResult<List<McpKeyListItemDto>>> ListAsync(long factoryId);
     Task<ApiResult<McpKeyCreateResultDto>> CreateAsync(long factoryId, string mcpUrl);
     Task<ApiResult<object?>> RevokeAsync(long keyId, long factoryId);
@@ -65,9 +65,9 @@ public class McpKeyService : IMcpKeyService
         _logger = logger;
     }
 
-    public async Task<ApiResult<List<McpKeyFactoryOptionDto>>> ListFactoriesAsync()
+    public async Task<ApiResult<List<McpKeyFactoryOptionDto>>> ListFactoriesAsync(long factoryId)
     {
-        var list = await _db.Factories.AsNoTracking()
+        var list = await _db.Factories.AsNoTracking().Where(f => f.Id == factoryId && f.TrialCleanedAtUtc == null)
             .OrderBy(f => f.Id)
             .Select(f => new McpKeyFactoryOptionDto
             {

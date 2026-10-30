@@ -14,6 +14,7 @@ public class McpDataAccessTests
     public sealed class Bind : IMcpWxBindService
     {
         public SysUser? User = new() { Id = 17, FactoryId = 8, Role = 2, Status = 1, Name = "员工\"甲" };
+        public Task<SysUser?> ResolveQueryUserAsync(string? token, string? c, string? s, CancellationToken ct = default) => Task.FromResult(User);
         public Task<SysUser?> ResolveBoundUserAsync(string? c, string? s, CancellationToken ct = default) => Task.FromResult(User);
         public Task<string?> RequireBoundOrHintAsync(string? c, string? s, string t, CancellationToken ct = default) => throw new InvalidOperationException("旧权限路径");
         public Task<string> BindAsync(string p, string? c, string? s, CancellationToken ct = default) => throw new NotSupportedException();
@@ -36,7 +37,7 @@ public class McpDataAccessTests
     [InlineData(1, false, null)]
     [InlineData(2, false, 17L)]
     [InlineData(3, false, 17L)]
-    [InlineData(2, true, null)]
+    [InlineData(2, true, 17L)]
     public async Task Salary_UsesBoundScope_NotFinanceToken(byte role, bool demo, long? expected)
     {
         var bind = new Bind(); bind.User!.Role = role; bind.User.Account = "worker";
@@ -69,7 +70,7 @@ public class McpDataAccessTests
             }
             throw new InvalidOperationException($"unexpected {m.Name}");
         });
-        var tool = new SalaryMcpTools(svc, null!, Context(), bind, Config(demo));
+        var tool = new SalaryMcpTools(svc, null!, null!, Context(), bind, Config(demo));
         using var json = JsonDocument.Parse(await tool.QuerySalary(periodValue: "2026-10"));
         Assert.True(queryCalled);
         Assert.True(summaryCalled);
@@ -78,14 +79,14 @@ public class McpDataAccessTests
     }
 
     [Fact]
-    public async Task DailyPiecework_RequiresBoundUser_EvenInDemo()
+    public async Task DailyPiecework_StillRequiresIdentity_InDemo()
     {
         var tool = new SalaryMcpTools(
             Service<ISalaryService>((_, _) => throw new InvalidOperationException("不应调用")),
-            null!, Context(), new Bind(), Config(demo: true));
+            null!, null!, Context(), new Bind { User = null }, Config(demo: true));
         using var json = JsonDocument.Parse(await tool.QueryDailyPiecework());
         Assert.Equal(1, json.RootElement.GetProperty("code").GetInt32());
-        Assert.Contains("绑定", json.RootElement.GetProperty("msg").GetString());
+        Assert.Contains("验证", json.RootElement.GetProperty("msg").GetString());
     }
 
     [Theory]
@@ -114,7 +115,7 @@ public class McpDataAccessTests
                 Disclaimer = "按工价表试算、未复核未入账、复核后定；不生成工资单、不落库"
             }));
         });
-        var tool = new SalaryMcpTools(svc, null!, Context(), bind, Config());
+        var tool = new SalaryMcpTools(svc, null!, null!, Context(), bind, Config());
         using var json = JsonDocument.Parse(await tool.QueryDailyPiecework());
         Assert.Equal(17L, calledUser);
         Assert.Equal(0, json.RootElement.GetProperty("code").GetInt32());
@@ -135,7 +136,7 @@ public class McpDataAccessTests
     }
 
     [Fact]
-    public async Task WorkOrder_EmployeeHidesCustomFields_DemoPreservesThem()
+    public async Task WorkOrder_EmployeeHidesCustomFields_EvenInDemo()
     {
         var svc = Service<IWorkOrderService>((_,a) => {
             Assert.Equal(8L,a[1]);
@@ -147,7 +148,7 @@ public class McpDataAccessTests
         using var w = JsonDocument.Parse(await worker.QueryWorkOrder());
         using var d = JsonDocument.Parse(await demo.QueryWorkOrder());
         Assert.False(w.RootElement.GetProperty("list")[0].TryGetProperty("ext",out _));
-        Assert.Equal("客户秘密",d.RootElement.GetProperty("list")[0].GetProperty("ext").GetProperty("1").GetString());
+        Assert.False(d.RootElement.GetProperty("list")[0].TryGetProperty("ext",out _));
     }
 
     [Fact]
@@ -164,7 +165,7 @@ public class McpDataAccessTests
     {
         var svc = Service<ISalaryService>((_,_) => throw new InvalidOperationException("不应查询工资"));
         var bind = new Bind();
-        var tool = new SalaryMcpTools(svc,null!,Context(),bind,Config());
+        var tool = new SalaryMcpTools(svc,null!,null!,Context(),bind,Config());
         bind.User=null;
         using var unbound = JsonDocument.Parse(await tool.QuerySalary(authToken:"财务授权不能替代绑定"));
         Assert.Equal(1,unbound.RootElement.GetProperty("code").GetInt32());
@@ -182,6 +183,6 @@ public class McpDataAccessTests
         b.User.Role=1; Assert.Null((await McpDataAccess.ResolveAsync(b,Config(),null,null,true)).Hint);
         b.User.Status=0; Assert.NotNull((await McpDataAccess.ResolveAsync(b,Config(),null,null)).Hint);
         b.User=null; Assert.NotNull((await McpDataAccess.ResolveAsync(b,Config(),null,null)).Hint);
-        Assert.Null((await McpDataAccess.ResolveAsync(b,Config(true),null,null)).Hint);
+        Assert.NotNull((await McpDataAccess.ResolveAsync(b,Config(true),null,null)).Hint);
     }
 }

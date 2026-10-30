@@ -354,6 +354,7 @@ function applyLoginSession(data) {
   localStorage.setItem('instanceName', resolveInstanceLabel(displayName.value))
   if (data.factoryName) localStorage.setItem('factoryName', data.factoryName)
   if (data.factoryCode) localStorage.setItem('factoryCode', data.factoryCode)
+  window.dispatchEvent(new Event('mes-auth-changed'))
   localStorage.setItem('licenseTier', data.licenseTier || 'trial')
   if (data.licenseStatus) localStorage.setItem('licenseStatus', data.licenseStatus)
   if (data.licenseMessage) localStorage.setItem('licenseMessage', data.licenseMessage)

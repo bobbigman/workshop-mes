@@ -26,7 +26,7 @@ public class ReportMcpTools
         _config = config;
     }
 
-    [McpServerTool, Description("查询报工记录，管理员查本厂，生产人员/班组长仅查归属于本人的记录；可按工单号、产品编号、产品名称、复核状态筛选。演示模式下无需授权码；正式模式需钥匙定厂及手机号绑定，不需金蝶授权码。")]
+    [McpServerTool, Description("查询报工记录，管理员查本厂，生产人员/班组长仅查归属于本人的记录；可按工单号、产品编号、产品名称、复核状态筛选。需钥匙定厂及可信平台身份或queryAccessToken，不需金蝶授权码。")]
     public async Task<string> QueryReport(
         [Description("兼容旧调用保留的参数；车间查询不使用金蝶授权码")] string? authToken = null,
         [Description("工单号，可空")] string? orderNo = null,
@@ -34,9 +34,10 @@ public class ReportMcpTools
         [Description("产品名称，可空")] string? productName = null,
         [Description("复核状态：0待复核 1已通过 2已退回，可空查全部")] byte? reviewStatus = null,
         [Description("渠道，可空")] string? chanType = null,
-        [Description("会话身份，可空")] string? sessionId = null)
+        [Description("会话身份，可空")] string? sessionId = null,
+        [Description("本人网页登录验证的只读查询凭证，不是报工凭证")] string? queryAccessToken = null)
     {
-        var access = await McpDataAccess.ResolveAsync(_wxBind, _config, chanType, sessionId);
+        var access = await McpDataAccess.ResolveAsync(_wxBind, _config, chanType, sessionId, queryAccessToken: queryAccessToken);
         if (access.Hint != null) return access.Hint;
 
         long factoryId = _mcpCtx.RequireFactoryId(nameof(QueryReport));

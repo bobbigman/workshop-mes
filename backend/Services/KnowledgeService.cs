@@ -73,13 +73,19 @@ public class KnowledgeService : IKnowledgeService
         var opNameById = new Dictionary<long, string>();
         if (product.RoutingId != null)
         {
+            if (!await _db.Routings.AsNoTracking().AnyAsync(r => r.Id == product.RoutingId && r.FactoryId == factoryId))
+                throw ThrowHelper.BizUser("产品工艺路线关联异常，请联系管理员核对。");
             var steps = await _db.RoutingSteps.AsNoTracking()
                 .Where(s => s.RoutingId == product.RoutingId)
                 .OrderBy(s => s.Seq).ToListAsync();
+            if (await _db.Operations.AsNoTracking().CountAsync(o => o.FactoryId == factoryId && steps.Select(s => s.OperationId).Contains(o.Id))
+                != steps.Select(s => s.OperationId).Distinct().Count())
+                throw ThrowHelper.BizUser("工艺路线的工序关联异常，请联系管理员核对。");
+
             if (steps.Count > 0)
             {
                 var ops = await _db.Operations.AsNoTracking()
-                    .Where(o => steps.Select(s => s.OperationId).Contains(o.Id))
+                    .Where(o => o.FactoryId == factoryId && steps.Select(s => s.OperationId).Contains(o.Id))
                     .ToDictionaryAsync(o => o.Id, o => o.Name);
                 foreach (var s in steps)
                 {

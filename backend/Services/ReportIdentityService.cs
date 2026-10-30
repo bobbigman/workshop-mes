@@ -1,4 +1,4 @@
-﻿using System.Security.Cryptography;
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using ahu.MicrosoftMes.Common;
 using ahu.MicrosoftMes.Data;
@@ -47,18 +47,21 @@ public class ReportIdentityTickets
     private readonly IMemoryCache _cache;
     private readonly TimeProvider _clock;
     private readonly object _sync = new();
-    public ReportIdentityTickets(IMemoryCache cache, TimeProvider? clock = null) => (_cache, _clock) = (cache, clock ?? TimeProvider.System);
+    private static readonly object PasswordSync = new();
+    private readonly string _ticketNamespace;
+    public ReportIdentityTickets(IMemoryCache cache, TimeProvider? clock = null, string ticketNamespace = "report-identity")
+        => (_cache, _clock, _ticketNamespace) = (cache, clock ?? TimeProvider.System, ticketNamespace);
     private DateTimeOffset Now => _clock.GetUtcNow();
     private static string RandomToken() => Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
-    private static string Key(string prefix, string token)
+    private string Key(string prefix, string token)
     {
         if (string.IsNullOrEmpty(token) || token.Length != 64 || !token.All(Uri.IsHexDigit)) throw ThrowHelper.BizUser("授权凭证无效，请重新验证");
-        return "report-identity:" + prefix + ":" + token;
+        return _ticketNamespace + ":" + prefix + ":" + token;
     }
     public string Create(long factoryId, long userId, string name, string factoryName, long? originFactoryId = null)
     {
         var token = RandomToken();
-        _cache.Set(Key("lookup", token), new Pending(new ReportLookup(factoryId, userId, name, factoryName, Now.AddMinutes(10), originFactoryId ?? factoryId)), TimeSpan.FromMinutes(10));
+        _cache.Set(Key("lookup", token), new Pending(new ReportLookup(factoryId, userId, name, factoryName, Now.AddMinutes(10), originFactoryId ?? factoryId)) { Version = Version(factoryId, userId) }, TimeSpan.FromMinutes(10));
         return token;
     }
     public string CreateFactorySelection(long originFactoryId, ReportFactoryOption[] options)
@@ -84,7 +87,8 @@ public class ReportIdentityTickets
     private Pending PendingFor(string token)
     {
         if (!_cache.TryGetValue(Key("lookup", token), out Pending? pending) || pending == null ||
-            pending.Lookup.ExpiresAt <= Now || pending.Redeemed || pending.Attempts >= 5)
+            pending.Lookup.ExpiresAt <= Now || pending.Redeemed || pending.Attempts >= 5
+            || pending.Version != Version(pending.Lookup.FactoryId, pending.Lookup.UserId))
             throw ThrowHelper.BizUser("验证链接已过期、已使用或已作废，请让机器人重新定位员工");
         return pending;
     }
@@ -120,6 +124,7 @@ public class ReportIdentityTickets
             var access = RandomToken();
             var grant = new ReportLoginGrant(pending.Lookup.FactoryId, pending.Lookup.UserId, Guid.NewGuid().ToString("N"), Now.AddMinutes(30), pending.Lookup.OriginFactoryId);
             _cache.Set(Key("grant", access), grant, TimeSpan.FromMinutes(30));
+            _cache.Set(Key("grant-version", access), Version(grant.FactoryId, grant.UserId), TimeSpan.FromMinutes(30));
             pending.Redeemed = true;
             pending.Code = null;
             return (access, grant);
@@ -130,11 +135,18 @@ public class ReportIdentityTickets
         if (!_cache.TryGetValue(Key("grant", token), out ReportLoginGrant? grant) || grant == null || grant.ExpiresAt <= Now)
             throw ThrowHelper.BizUser("报工登录授权已失效，请重新验证身份");
         if (grant.OriginFactoryId != factoryId) throw ThrowHelper.BizUser("报工登录授权不属于当前MCP入口");
+        if (!_cache.TryGetValue(Key("grant-version", token), out string? version) || version != Version(grant.FactoryId, grant.UserId))
+            throw ThrowHelper.BizUser("授权已撤销，请重新验证身份。");
         return grant;
+    }
+    private string Version(long factoryId, long userId) => _cache.Get<string>($"{_ticketNamespace}:version:{factoryId}:{userId}") ?? "";
+    public void Revoke(long factoryId, long userId)
+    {
+        lock (_sync) _cache.Set($"{_ticketNamespace}:version:{factoryId}:{userId}", Guid.NewGuid().ToString("N"));
     }
     public void BeginPasswordAttempt(long factoryId, long userId)
     {
-        lock (_sync)
+        lock (PasswordSync)
         {
             var key = $"report-identity:password:{factoryId}:{userId}";
             if (_cache.TryGetValue($"report-identity:password:{factoryId}:{userId}", out int failures) && failures >= 5)
@@ -144,11 +156,12 @@ public class ReportIdentityTickets
     }
     public void ClearPasswordAttempts(long factoryId, long userId)
     {
-        lock (_sync) _cache.Remove($"report-identity:password:{factoryId}:{userId}");
+        lock (PasswordSync) _cache.Remove($"report-identity:password:{factoryId}:{userId}");
     }
     private sealed class Pending(ReportLookup lookup)
     {
         public ReportLookup Lookup { get; set; } = lookup;
+        public string Version { get; init; } = "";
         public string? Code { get; set; }
         public DateTimeOffset CodeExpires { get; set; }
         public bool Redeemed { get; set; }

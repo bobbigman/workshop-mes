@@ -8,7 +8,7 @@
         <van-cell title="员工" :value="identity.userName" />
         <van-cell title="工厂" :value="identity.factoryName" />
       </van-cell-group>
-      <p>请确认这是您本人的账号。本次授权有效30分钟，机器人可查询待报工任务并在您确认后提交报工。</p>
+      <p>{{ queryOnly ? '请确认这是你本人的账号。本次仅授予30分钟本人本厂查询权限，不允许报工或修改数据。' : '请确认这是您本人的账号。本次授权有效30分钟，机器人可查询待报工任务并在您确认后提交报工。' }}</p>
       <van-field v-if="!code" v-model="password" type="password" label="登录密码" placeholder="仅在本页验证，不发给机器人" autocomplete="current-password" />
       <van-button v-if="!code" type="primary" block :loading="submitting" @click="approve">是我本人，确认本次授权</van-button>
       <section v-else class="code-card" aria-live="polite">
@@ -30,6 +30,7 @@ import { NavBar as VanNavBar, Loading as VanLoading, NoticeBar as VanNoticeBar,
   CellGroup as VanCellGroup, Cell as VanCell, Button as VanButton, Field as VanField } from 'vant'
 import 'vant/lib/index.css'
 import { inspectReportIdentity, approveReportIdentity } from '@/api/reportIdentity'
+import { inspectQueryIdentity, approveQueryIdentity } from '@/api/queryIdentity'
 
 const route = useRoute()
 const router = useRouter()
@@ -39,12 +40,13 @@ const loading = ref(true)
 const submitting = ref(false)
 const code = ref('')
 const password = ref('')
+const queryOnly = route.query.purpose === 'query'
 const ticket = typeof route.query.t === 'string' ? route.query.t : ''
 
 onMounted(async () => {
   try {
     if (!/^[a-f0-9]{64}$/.test(ticket)) throw new Error('验证链接无效，请让机器人重新定位员工')
-    identity.value = (await inspectReportIdentity(ticket)).data
+    identity.value = (await (queryOnly ? inspectQueryIdentity(ticket) : inspectReportIdentity(ticket))).data
   } catch (e) {
     error.value = e.message || '核对身份失败，请重新登录后再试'
   } finally {
@@ -60,7 +62,7 @@ async function approve() {
   submitting.value = true
   error.value = ''
   try {
-    code.value = (await approveReportIdentity(ticket, password.value)).data.verificationCode
+    code.value = (await (queryOnly ? approveQueryIdentity(ticket, password.value) : approveReportIdentity(ticket, password.value))).data.verificationCode
   } catch (e) {
     error.value = e.message || '授权失败，请重新核对身份'
   } finally {

@@ -65,6 +65,7 @@ function showApiError(tip) {
 // 请求拦截：带 JWT
 http.interceptors.request.use(config => {
   const token = localStorage.getItem('token')
+  config.identityToken = token
   if (token) config.headers.Authorization = `Bearer ${token}`
   // API 必须实时取数：旧路由曾返回可缓存的首页 HTML，刷新页面也可能继续命中它。
   if (config.method?.toLowerCase() === 'get') {
@@ -76,6 +77,9 @@ http.interceptors.request.use(config => {
 
 http.interceptors.response.use(
   res => {
+    if (res.config.identityToken !== localStorage.getItem('token')) {
+      return Promise.reject(Object.assign(new Error('登录身份已变化，旧请求结果已丢弃。'), { code: 'ERR_IDENTITY_CHANGED' }))
+    }
     if (res.config.responseType === 'blob') return res
     let body = res.data
     // axios 偶发未解析 JSON（Content-Type 异常）时 body 是字符串；仅 HTML 才判「路由兜底」
@@ -111,6 +115,9 @@ http.interceptors.response.use(
     return body
   },
   err => {
+    if (err.config && err.config.identityToken !== localStorage.getItem('token')) {
+      return Promise.reject(Object.assign(new Error('登录身份已变化，旧请求结果已丢弃。'), { code: 'ERR_IDENTITY_CHANGED' }))
+    }
     // 工人帮助主动取消由页面显示中文反馈；仍将取消抛回调用方。
     if (err.code === 'ERR_CANCELED' && err.config?.silentCancel) return Promise.reject(err)
     if (err.response?.status === 401) {
@@ -120,6 +127,7 @@ http.interceptors.response.use(
       localStorage.removeItem('licenseTier')
       localStorage.removeItem('licenseStatus')
       localStorage.removeItem('licenseMessage')
+      window.dispatchEvent(new Event('mes-auth-changed'))
       if (!window.location.hash.startsWith('#/login')) {
         ElMessage.warning('登录已失效，请重新登录')
         const hashPath = window.location.hash.slice(1) || '/'

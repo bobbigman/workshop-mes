@@ -19,7 +19,7 @@ public class AuthMcpTools
         _config = config;
     }
 
-    [McpServerTool, Description("发起金蝶账号授权。返回一个 H5 授权链接，请用户打开链接登录金蝶，完成后页面会显示授权码，把授权码告诉用户后即可用于查询工单、报工、工资。")]
+    [McpServerTool, Description("发起金蝶账号授权。返回一个 H5 授权链接，请用户打开链接登录金蝶，完成后页面会显示授权码，仅用于对应金蝶集成；MES查询请用start_query_auth验证本人，本工具不授予MES数据权限。")]
     public async Task<string> StartAuth()
     {
         long factoryId = _mcpCtx.RequireFactoryId(nameof(StartAuth));

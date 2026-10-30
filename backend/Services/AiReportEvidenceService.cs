@@ -161,11 +161,17 @@ public class AiReportEvidenceService : IAiReportEvidenceService
         }
 
         // —— 明细 + 汇总 + 总数：单次读取全部匹配行（同一快照），避免并发报工下混用不同读点 ——
+        var invalidLinks = await _db.Reports.AsNoTracking().AnyAsync(r => r.FactoryId == factoryId && r.OrderId == order.Id
+            && (!_db.Operations.Any(o => o.Id == r.OperationId && o.FactoryId == factoryId)
+                || !_db.Users.Any(u => u.Id == r.UserId && u.FactoryId == factoryId)
+                || (r.DefectId != null && !_db.DefectItems.Any(d => d.Id == r.DefectId && d.FactoryId == factoryId))), ct);
+        if (invalidLinks) throw ThrowHelper.BizUser("报工记录的人员或工序等关联异常，请联系管理员核对。");
+
         var q = from r in _db.Reports.AsNoTracking()
                 where r.FactoryId == factoryId && r.OrderId == order.Id
-                join op in _db.Operations.AsNoTracking() on r.OperationId equals op.Id
-                join u in _db.Users.AsNoTracking() on r.UserId equals u.Id
-                join d in _db.DefectItems.AsNoTracking() on r.DefectId equals d.Id into dg
+                join op in _db.Operations.AsNoTracking().Where(o => o.FactoryId == factoryId) on r.OperationId equals op.Id
+                join u in _db.Users.AsNoTracking().Where(u => u.FactoryId == factoryId) on r.UserId equals u.Id
+                join d in _db.DefectItems.AsNoTracking().Where(d => d.FactoryId == factoryId) on r.DefectId equals d.Id into dg
                 from d in dg.DefaultIfEmpty()
                 select new
                 {

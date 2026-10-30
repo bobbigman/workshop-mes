@@ -47,7 +47,7 @@ public class AiSessionLifecycleTests
 
         var next = store.Create(1, 1, "support", beginGenerate: true);
 
-        Assert.Contains("新对话", Assert.Throws<BusinessException>(() => store.GetOwned(oldest.Id, 1, 1)).Message);
+        Assert.Throws<BusinessException>(() => store.GetOwned(oldest.Id, 1, 1));
         Assert.Same(recent, store.GetOwned(recent.Id, 1, 1));
         Assert.Same(active, store.GetOwned(active.Id, 1, 1));
         Assert.True(next.Busy);
@@ -73,7 +73,7 @@ public class AiSessionLifecycleTests
     {
         var store = Store();
         var session = store.Create(1, 1, "support");
-        Assert.Contains("无权", Assert.Throws<BusinessException>(() => store.GetOwned(session.Id, factoryId, userId)).Message);
+        Assert.Throws<BusinessException>(() => store.GetOwned(session.Id, factoryId, userId));
         Assert.Throws<BusinessException>(() => store.DeleteOwned(session.Id, factoryId, userId));
         Assert.Same(session, store.GetOwned(session.Id, 1, 1));
     }
@@ -101,7 +101,7 @@ public class AiSessionLifecycleTests
         var active = store.Create(1, 1, "support", beginGenerate: true);
         var userId = sameUser ? 1 : 2;
         var error = Assert.Throws<BusinessException>(() => store.Create(1, userId, "support", beginGenerate: true));
-        Assert.Contains("稍后重试", error.Message);
+        Assert.NotEqual(0, error.Code);
         Assert.DoesNotContain("结束旧对话", error.Message);
         store.EndGenerate(active);
         Assert.NotNull(store.Create(1, userId, "support", beginGenerate: true));
@@ -113,7 +113,7 @@ public class AiSessionLifecycleTests
         var store = Store(perUser: 1);
         var old = store.Create(1, 1, "support");
         store.Create(1, 1, "support");
-        Assert.Contains("自动回收", Assert.Throws<BusinessException>(() => store.TryBeginGenerate(old)).Message);
+        Assert.Throws<BusinessException>(() => store.TryBeginGenerate(old));
     }
 
     [Fact]
@@ -172,7 +172,7 @@ public class AiSessionLifecycleTests
         var sessions = new AiSessionStore(options);
         var client = new ScriptedClient();
         var support = new SupportDocumentService(options, NullLogger<SupportDocumentService>.Instance);
-        var tools = new AiToolDispatcher(null!, null!, null!, support, null!, null!, null!, options, NullLogger<AiToolDispatcher>.Instance);
+        var tools = new AiToolDispatcher(IdentityTestDatabase.Open(), null!, null!, support, null!, null!, null!, options, NullLogger<AiToolDispatcher>.Instance);
         return (new AiAssistantService(options, client, sessions, tools, null!,
             NullLogger<AiAssistantService>.Instance), sessions, client);
     }

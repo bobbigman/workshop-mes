@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Diagnostics;
 using System.Net;
 using System.Text;
@@ -19,7 +19,7 @@ public static class LogRedactor
         "password", "pwd", "secret", "client_secret", "corpsecret", "token",
         "access_token", "refresh_token", "authorization", "cookie", "set-cookie",
         "api_key", "apikey", "api-key", "x-api-key", "x-maintenance-key", "webhook_key", "webhookKey",
-        "factorySelectionToken", "lookupToken", "reportAccessToken", "verificationCode", "confirmToken", "candidateListToken"
+        "queryAccessToken", "X-Mcp-Identity-Key", "TrustedProxyKey", "factorySelectionToken", "lookupToken", "reportAccessToken", "verificationCode", "confirmToken", "candidateListToken"
     };
 
     private static readonly HashSet<string> SensitiveSqlHints = new(StringComparer.OrdinalIgnoreCase)
@@ -33,6 +33,10 @@ public static class LogRedactor
 
     private static readonly Regex BearerRegex = new(
         @"Bearer\s+[A-Za-z0-9\-._~+/]+=*",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private static readonly Regex QueryCredentialRegex = new(
+        "([\"']?(?:queryAccessToken|X-Mcp-Identity-Key|TrustedProxyKey)[\"']?\\s*[:=]\\s*)(?:\"[^\"]*\"|'[^']*'|[^\\s,;&}]+)",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     public static string CurrentTraceId()
@@ -66,6 +70,7 @@ public static class LogRedactor
         if (text == null) return "";
         var s = ConnPwdRegex.Replace(text, "$1=" + Redacted);
         s = BearerRegex.Replace(s, "Bearer " + Redacted);
+        s = QueryCredentialRegex.Replace(s, "$1" + Redacted);
         return TruncateUtf8(s, maxBytes).Text;
     }
 

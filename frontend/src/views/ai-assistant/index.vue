@@ -250,7 +250,8 @@
 </template>
 
 <script setup>
-import { computed, inject, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { computed, inject, nextTick, onMounted, onUnmounted, onActivated, ref } from 'vue'
+import { createAiIdentityBoundary } from '@/utils/aiIdentityBoundary'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import {
@@ -305,6 +306,34 @@ let abortCtrl = null
 
 const detailDlg = ref(false)
 const detail = ref(null)
+
+const boundary = createAiIdentityBoundary(
+  () => ['token', 'userId', 'factoryCode', 'role'].map(k => localStorage.getItem(k) || '').join('|'),
+  () => {
+    abortCtrl?.abort(); abortCtrl = null
+    conversationId.value = ''; messages.value = []; input.value = ''; busy.value = false
+    detail.value = null; detailDlg.value = false; banner.value = ''
+    status.value = { enabled: false, configured: false }
+    router.replace('/login')
+  }
+)
+function checkIdentity() { boundary.check() }
+let identityTimer
+onMounted(() => {
+  window.addEventListener('storage', checkIdentity)
+  window.addEventListener('focus', checkIdentity)
+  window.addEventListener('mes-auth-changed', checkIdentity)
+  identityTimer = window.setInterval(checkIdentity, 250)
+})
+onActivated(checkIdentity)
+onUnmounted(() => {
+  boundary.dispose(); abortCtrl?.abort()
+  window.clearInterval(identityTimer)
+  window.removeEventListener('storage', checkIdentity)
+  window.removeEventListener('focus', checkIdentity)
+  window.removeEventListener('mes-auth-changed', checkIdentity)
+})
+
 
 const QUESTIONS = {
   boss: [
@@ -378,8 +407,11 @@ onMounted(async () => {
 })
 
 async function refreshStatus() {
+  const request = boundary.begin('status')
+  if (!boundary.current(request)) return
   try {
     const res = await getAiStatus()
+    if (!boundary.current(request)) return
     status.value = res.data || { enabled: false, configured: false }
     if (!status.value.enabled) {
       banner.value = 'AI 助手已关闭。不影响下单与报工。需要时请联系部署人员开启。'
@@ -391,6 +423,7 @@ async function refreshStatus() {
       banner.value = ''
     }
   } catch (e) {
+    if (!boundary.current(request)) return
     banner.value = e.message || '无法获取 AI 状态'
     bannerType.value = 'error'
   }
@@ -404,6 +437,9 @@ function useExample(q) {
 }
 
 async function onNewChat() {
+  boundary.check(); boundary.invalidate()
+  const request = boundary.begin()
+  if (!boundary.current(request)) return
   const oldConversationId = conversationId.value
   conversationId.value = ''
   messages.value = []
@@ -414,6 +450,7 @@ async function onNewChat() {
     try {
       await deleteAiConversation(oldConversationId)
     } catch {
+      if (!boundary.current(request)) return
       ElMessage.warning('旧会话清理失败，已开始新对话')
     }
   }
@@ -437,6 +474,7 @@ function onRoleChange() {
 }
 
 async function onSend() {
+  if (!boundary.check()) return
   if (!canChat.value || busy.value) return
   const text = input.value.trim()
   if (!text) return
@@ -444,6 +482,8 @@ async function onSend() {
   questionsOpen.value = false
   messages.value.push({ role: 'user', text })
   input.value = ''
+  const request = boundary.begin()
+  if (!boundary.current(request)) return
   busy.value = true
   abortCtrl = new AbortController()
   await scrollBottom()
@@ -457,14 +497,17 @@ async function onSend() {
       },
       abortCtrl.signal
     )
+    if (!boundary.current(request)) return
     applyAssistant(res.data)
   } catch (e) {
+    if (!boundary.current(request)) return
     if (e.name === 'CanceledError' || e.code === 'ERR_CANCELED') {
       messages.value.push({ role: 'assistant', text: '已停止。' })
     } else {
       messages.value.push({ role: 'assistant', text: e.message || '请求失败' })
     }
   } finally {
+    if (!boundary.current(request)) return
     busy.value = false
     abortCtrl = null
     await scrollBottom()
@@ -482,6 +525,8 @@ async function onSelectCandidate(c) {
       ? `选择产品 ${c.productName || ('编号 ' + c.productCode)}`
       : `选择工序 ${c.operationName}`
   messages.value.push({ role: 'user', text: label })
+  const request = boundary.begin()
+  if (!boundary.current(request)) return
   busy.value = true
   abortCtrl = new AbortController()
   try {
@@ -493,10 +538,13 @@ async function onSelectCandidate(c) {
       selectedOperationId: c.type === 'operation' ? c.operationId : undefined
     }
     const res = await sendAiMessage(body, abortCtrl.signal)
+    if (!boundary.current(request)) return
     applyAssistant(res.data)
   } catch (e) {
+    if (!boundary.current(request)) return
     messages.value.push({ role: 'assistant', text: e.message || '请求失败' })
   } finally {
+    if (!boundary.current(request)) return
     busy.value = false
     abortCtrl = null
     await scrollBottom()
@@ -520,6 +568,8 @@ function applyAssistant(data) {
 
 async function onPage(msg, page) {
   if (!conversationId.value || busy.value) return
+  const request = boundary.begin()
+  if (!boundary.current(request)) return
   busy.value = true
   try {
     const res = await searchAiWorkOrders({
@@ -528,16 +578,19 @@ async function onPage(msg, page) {
       pageSize: msg.workOrders.pageSize,
       filters: msg.workOrders.filters
     })
+    if (!boundary.current(request)) return
     msg.workOrders = res.data
     msg.queriedAt = formatDateTime(new Date().toISOString())
   } catch { /* http 已提示 */ }
-  finally { busy.value = false }
+  finally { if (boundary.current(request)) busy.value = false }
 }
 
 async function onEvPage(msg, page) {
   if (!conversationId.value || busy.value) return
   const ev = msg.reportEvidence
   if (!ev) return
+  const request = boundary.begin()
+  if (!boundary.current(request)) return
   busy.value = true
   try {
     const res = await searchAiReportEvidence({
@@ -550,14 +603,18 @@ async function onEvPage(msg, page) {
       page,
       pageSize: ev.pageSize
     })
+    if (!boundary.current(request)) return
     msg.reportEvidence = res.data
   } catch { /* http 已提示 */ }
-  finally { busy.value = false }
+  finally { if (boundary.current(request)) busy.value = false }
 }
 
 async function openOrder(id) {
+  const request = boundary.begin('detail')
+  if (!boundary.current(request)) return
   try {
     const res = await getOrder(id)
+    if (!boundary.current(request)) return
     detail.value = res.data
     detailDlg.value = true
   } catch { /* http 已提示 */ }

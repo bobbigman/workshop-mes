@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using ahu.MicrosoftMes.Common;
 using ahu.MicrosoftMes.Data;
 using ahu.MicrosoftMes.Models;
@@ -158,9 +158,10 @@ public class WorkOrderService : IWorkOrderService
 
     public async Task<ApiResult<PageResult<WorkOrderListDto>>> QueryAsync(WorkOrderQueryDto query, long factoryId)
     {
+        await TenantDataGuard.WorkOrdersAsync(_db, factoryId);
         var q = from o in _db.WorkOrders.AsNoTracking()
                 where o.FactoryId == factoryId
-                join p in _db.Products.AsNoTracking() on o.ProductId equals p.Id
+                join p in _db.Products.AsNoTracking().Where(p => p.FactoryId == factoryId) on o.ProductId equals p.Id
                 select new { o, ProductName = p.Name, ProductCode = p.Code };
 
         if (!string.IsNullOrWhiteSpace(query.Keyword))
@@ -386,6 +387,7 @@ public class WorkOrderService : IWorkOrderService
 
     private async Task<WorkOrderDetailDto> BuildDetailAsync(ProdWorkOrder order, long? filterUserId = null, byte? filterRole = null)
     {
+        await TenantDataGuard.WorkOrdersAsync(_db, order.FactoryId, new[] { order.Id });
         var product = await _db.Products.AsNoTracking().FirstOrDefaultAsync(p => p.Id == order.ProductId && p.FactoryId == order.FactoryId)
             ?? throw ThrowHelper.Biz(nameof(BuildDetailAsync), "工单关联产品不存在");
 
@@ -447,7 +449,7 @@ public class WorkOrderService : IWorkOrderService
             {
                 ops = await (from s in _db.RoutingSteps.AsNoTracking()
                              where s.RoutingId == product.RoutingId
-                             join op in _db.Operations.AsNoTracking() on s.OperationId equals op.Id
+                             join op in _db.Operations.AsNoTracking().Where(op => op.FactoryId == order.FactoryId) on s.OperationId equals op.Id
                              orderby s.Seq
                              select new WorkOrderTaskDto
                              {

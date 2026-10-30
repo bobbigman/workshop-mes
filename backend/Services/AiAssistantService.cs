@@ -100,6 +100,8 @@ public class AiAssistantService : IAiAssistantService
         if (mode is not ("progress" or "guide" or "support" or "worker-help"))
             throw ThrowHelper.BizUser("不支持的操作类型，请换个问法");
 
+        await _tools.EnsureAccessAsync(userId, factoryId, mode, ct);
+
         var message = (req.Message ?? "").Trim();
         if (string.IsNullOrEmpty(message))
             throw ThrowHelper.BizUser("消息不能为空");
@@ -200,6 +202,7 @@ public class AiAssistantService : IAiAssistantService
                     : "未找到匹配的操作说明，请换个问法，或打开操作手册/常见问题。";
                 session.Messages.Add(new AiSessionMessage { Role = "assistant", Content = answer });
                 session.HasAnswered = true;
+                await _tools.EnsureAccessAsync(userId, factoryId, mode, ct);
                 return ApiResult<AiMessageResultDto>.Ok(new() { ConversationId = session.Id, Answer = answer });
             }
 
@@ -221,6 +224,7 @@ public class AiAssistantService : IAiAssistantService
                 DeepSeekChatResult modelResult;
                 try
                 {
+                    await _tools.EnsureAccessAsync(userId, factoryId, mode, ct);
                     modelResult = await _client.ChatAsync(
                         apiMessages,
                         forceAnswer ? null : tools,
@@ -328,6 +332,7 @@ public class AiAssistantService : IAiAssistantService
 
             ct.ThrowIfCancellationRequested();
             session.HasAnswered = true;
+            await _tools.EnsureAccessAsync(userId, factoryId, mode, ct);
             return ApiResult<AiMessageResultDto>.Ok(new AiMessageResultDto
             {
                 ConversationId = session.Id,
@@ -369,6 +374,7 @@ public class AiAssistantService : IAiAssistantService
         AiWorkOrderSearchRequest req, long userId, long factoryId, CancellationToken ct)
     {
         EnsureEnabled();
+        await _tools.EnsureAccessAsync(userId, factoryId, "progress", ct);
         AiWorkOrderFiltersDto filters;
         if (!string.IsNullOrWhiteSpace(req.ConversationId))
         {
@@ -391,6 +397,7 @@ public class AiAssistantService : IAiAssistantService
             session.LastWorkOrders = page;
             session.LastFilters = filters;
         }
+        await _tools.EnsureAccessAsync(userId, factoryId, "progress", ct);
         return ApiResult<AiWorkOrderPageDto>.Ok(page);
     }
 
@@ -398,6 +405,7 @@ public class AiAssistantService : IAiAssistantService
         AiReportEvidenceSearchRequest req, long userId, long factoryId, CancellationToken ct)
     {
         EnsureEnabled();
+        await _tools.EnsureAccessAsync(userId, factoryId, "support", ct);
         if (string.IsNullOrWhiteSpace(req.ConversationId))
             throw ThrowHelper.BizUser("会话信息缺失，请重新发起提问");
         var session = _sessions.GetOwned(req.ConversationId!, factoryId, userId); // 校验会话归属 + 工厂 + 用户
@@ -409,6 +417,7 @@ public class AiAssistantService : IAiAssistantService
             req.WorkOrderId, req.OrderNo, req.OperationId,
             req.ReportFrom, req.ReportToExclusive,
             req.Page, req.PageSize, factoryId, ct);
+        await _tools.EnsureAccessAsync(userId, factoryId, "support", ct);
         return ApiResult<AiReportEvidenceDto>.Ok(evidence);
     }
 

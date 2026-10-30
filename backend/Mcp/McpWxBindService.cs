@@ -5,23 +5,28 @@ using Microsoft.EntityFrameworkCore;
 using ahu.MicrosoftMes.Common;
 using ahu.MicrosoftMes.Data;
 using ahu.MicrosoftMes.Models;
+using ahu.MicrosoftMes.Services;
 
 namespace ahu.MicrosoftMes.Mcp;
 
-/// <summary>MCP 手机号直绑认人（docs/97）。</summary>
+/// <summary>MCP查询本人验证与旧绑定读取；手机号不单独授权。</summary>
 public interface IMcpWxBindService
 {
+    void LogQueryAccess(string tool, long? userId, bool allowed) { }
+    Task<SysUser?> ResolveQueryUserAsync(string? queryAccessToken, string? channel, string? session, CancellationToken ct = default)
+        => Task.FromResult<SysUser?>(null);
+    Task<string> UnbindQueryAsync(string? queryAccessToken, CancellationToken ct = default)
+        => Task.FromResult("""{"code":1,"msg":"请完成本人查询验证后解绑。"}""");
     Task<string> BindAsync(string phone, string? chanType, string? sessionId, CancellationToken ct = default);
     Task<string> UnbindAsync(string? chanType, string? sessionId, CancellationToken ct = default);
     /// <summary>未绑定返回 null；已绑定返回用户。缺会话身份抛错。</summary>
     Task<SysUser?> ResolveBoundUserAsync(string? chanType, string? sessionId, CancellationToken ct = default);
-    /// <summary>非演示模式：必须已绑定，否则返回提示 JSON；演示模式跳过。</summary>
+    /// <summary>查询必须通过可信平台身份，演示配置不跳过权限。</summary>
     Task<string?> RequireBoundOrHintAsync(string? chanType, string? sessionId, string toolName, CancellationToken ct = default);
 }
 
 public class McpWxBindService : IMcpWxBindService
 {
-    private static readonly Regex PhoneRe = new(@"^1\d{10}$", RegexOptions.Compiled);
     private readonly AppDbContext _db;
     private readonly IMcpRequestContext _ctx;
     private readonly IConfiguration _config;
@@ -42,80 +47,43 @@ public class McpWxBindService : IMcpWxBindService
         _logger = logger;
     }
 
-    public async Task<string> BindAsync(string phone, string? chanType, string? sessionId, CancellationToken ct = default)
+    public void LogQueryAccess(string tool, long? userId, bool allowed)
+        => _logger.LogInformation("MCP查询授权 tool={Tool} user={UserId} factory={FactoryId} allowed={Allowed}",
+            tool, userId, _ctx.CurrentFactoryId, allowed);
+
+    public Task<string> BindAsync(string phone, string? chanType, string? sessionId, CancellationToken ct = default)
+        => Task.FromResult("""{"code":1,"msg":"手机号仅用于定位，不再直接绑定授权。请调用start_query_auth并完成本人网页验证。"}""");
+
+    public Task<string> UnbindAsync(string? chanType, string? sessionId, CancellationToken ct = default)
+        => UnbindQueryAsync(null, ct);
+
+    public async Task<string> UnbindQueryAsync(string? queryAccessToken, CancellationToken ct = default)
     {
-        var factoryId = _ctx.RequireFactoryId(nameof(BindAsync));
-        var phoneTrim = (phone ?? "").Trim();
-        if (!PhoneRe.IsMatch(phoneTrim))
-            return """{"code":1,"msg":"手机号格式不对"}""";
-
-        var chan = NormalizeChan(chanType);
-        var rawSession = ResolveSessionId(sessionId);
-        if (string.IsNullOrEmpty(rawSession))
-            return """{"code":1,"msg":"缺少会话身份，无法绑定"}""";
-
-        var openHash = HashSession(rawSession);
-        var user = await _db.Users.AsNoTracking()
-            .FirstOrDefaultAsync(u => u.FactoryId == factoryId && u.Phone == phoneTrim, ct);
-        if (user == null)
-            return """{"code":1,"msg":"该手机号在本厂无账号"}""";
-        if (user.Status == 0)
-            return """{"code":1,"msg":"账号已停用"}""";
-
-        var existing = await _db.WxBinds
-            .FirstOrDefaultAsync(b =>
-                b.FactoryId == factoryId && b.ChanType == chan && b.WxOpenid == openHash && b.Status == 1, ct);
-        if (existing != null)
-        {
-            var boundName = await _db.Users.AsNoTracking()
-                .Where(u => u.Id == existing.UserId)
-                .Select(u => u.Name)
-                .FirstOrDefaultAsync(ct) ?? "?";
-            return $"{{\"code\":1,\"msg\":\"已绑定账号：{boundName}，如需换账号先解绑\"}}";
-        }
-
-        _db.WxBinds.Add(new SysWxBind
-        {
-            FactoryId = factoryId,
-            ChanType = chan,
-            WxOpenid = openHash,
-            UserId = user.Id,
-            Status = 1,
-            BoundAt = DateTime.Now
-        });
+        var user = await ResolveQueryUserAsync(queryAccessToken, null, null, ct);
+        if (user == null) return """{"code":1,"msg":"请先完成本人查询验证，不能按会话参数替他人解绑。"}""";
+        var identity = _http.HttpContext!.RequestServices.GetRequiredService<McpQueryIdentityService>();
+        var rows = await _db.WxBinds.Where(b => b.FactoryId == user.FactoryId && b.UserId == user.Id && b.Status == 1).ToListAsync(ct);
+        foreach (var row in rows) { row.Status = 0; row.UnboundAt = DateTime.Now; }
         await _db.SaveChangesAsync(ct);
-
-        _logger.LogInformation(
-            "MCP 绑定成功 factory={FactoryId} chan={Chan} openPrefix={Prefix} userId={UserId} name={Name}",
-            factoryId, chan, openHash[..Math.Min(8, openHash.Length)], user.Id, user.Name);
-
-        return $"{{\"code\":0,\"msg\":\"绑定成功：{user.Name}\"}}";
+        identity.Revoke(user.FactoryId, user.Id);
+        return """{"code":0,"msg":"已撤销本人查询授权及绑定，后续需重新验证。"}""";
     }
 
-    public async Task<string> UnbindAsync(string? chanType, string? sessionId, CancellationToken ct = default)
+    public async Task<SysUser?> ResolveQueryUserAsync(string? queryAccessToken, string? channel, string? sessionId, CancellationToken ct = default)
     {
-        var factoryId = _ctx.RequireFactoryId(nameof(UnbindAsync));
-        var chan = NormalizeChan(chanType);
-        var rawSession = ResolveSessionId(sessionId);
-        if (string.IsNullOrEmpty(rawSession))
-            return """{"code":1,"msg":"缺少会话身份"}""";
-
-        var openHash = HashSession(rawSession);
-        var row = await _db.WxBinds
-            .FirstOrDefaultAsync(b =>
-                b.FactoryId == factoryId && b.ChanType == chan && b.WxOpenid == openHash && b.Status == 1, ct);
-        if (row == null)
-            return """{"code":0,"msg":"当前未绑定"}""";
-
-        row.Status = 0;
-        row.UnboundAt = DateTime.Now;
-        await _db.SaveChangesAsync(ct);
-
-        _logger.LogInformation(
-            "MCP 解绑 factory={FactoryId} chan={Chan} openPrefix={Prefix} userId={UserId}",
-            factoryId, chan, openHash[..Math.Min(8, openHash.Length)], row.UserId);
-
-        return """{"code":0,"msg":"已解绑，下次需重新绑定"}""";
+        var factory = _ctx.RequireFactoryId(nameof(ResolveQueryUserAsync));
+        if (!string.IsNullOrWhiteSpace(queryAccessToken))
+            return await _http.HttpContext!.RequestServices.GetRequiredService<McpQueryIdentityService>()
+                .ResolveAsync(factory, queryAccessToken, ct);
+        var request = _http.HttpContext?.Request;
+        if (!McpQueryIdentityService.HasTrustedIdentity(request, _config)) return null;
+        var session = request!.Headers["X-Mcp-Session-Id"].ToString().Trim();
+        if (string.IsNullOrEmpty(session) || session.Length > 256) return null;
+        var verified = _config.GetValue<long>($"Mcp:WecomReport:VerifiedUsers:{factory}:{HashSession(session)}", 0);
+        if (verified <= 0) return null;
+        var user = await ResolveBoundUserAsync("wecom", session, ct);
+        if (user == null || user.Id != verified) return null;
+        return await CurrentAccountAccess.RequireAsync(_db, user.Id, factory, false, ct);
     }
 
     public async Task<SysUser?> ResolveBoundUserAsync(string? chanType, string? sessionId, CancellationToken ct = default)
@@ -123,7 +91,7 @@ public class McpWxBindService : IMcpWxBindService
         var factoryId = _ctx.RequireFactoryId(nameof(ResolveBoundUserAsync));
         var rawSession = ResolveSessionId(sessionId);
         if (string.IsNullOrEmpty(rawSession))
-            throw ThrowHelper.BizUser("缺少会话身份，请先绑定：报您的手机号");
+            throw ThrowHelper.BizUser("缺少会话身份，请调用start_query_auth完成本人网页验证");
 
         var chan = NormalizeChan(chanType);
         var openHash = HashSession(rawSession);
@@ -139,12 +107,9 @@ public class McpWxBindService : IMcpWxBindService
     public async Task<string?> RequireBoundOrHintAsync(
         string? chanType, string? sessionId, string toolName, CancellationToken ct = default)
     {
-        if (_config.GetValue("Mcp:DemoSkipAuth", false))
-            return null;
-
-        var user = await ResolveBoundUserAsync(chanType, sessionId, ct);
+        var user = await ResolveQueryUserAsync(null, chanType, sessionId, ct);
         if (user == null)
-            return """{"code":1,"msg":"请先绑定：报您的手机号"}""";
+            return """{"code":1,"msg":"请调用start_query_auth完成本人网页验证"}""";
 
         if (user.Role is not (1 or 2 or 3) || (toolName == "CalcSchedulePriority" && user.Role != 1))
             return System.Text.Json.JsonSerializer.Serialize(new { code = 1, msg = $"您（{user.Name}）无权查询此数据" });

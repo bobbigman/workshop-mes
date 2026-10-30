@@ -87,6 +87,8 @@ try
     builder.Services.AddHostedService<TrialAccountCleanupService>();
 
     builder.Services.AddMemoryCache();
+    builder.Services.AddSingleton<QueryIdentityTickets>();
+    builder.Services.AddScoped<McpQueryIdentityService>();
     builder.Services.AddSingleton<PriceChangeDraftStore>();
     builder.Services.AddControllers();
     builder.Services.AddEndpointsApiExplorer();
