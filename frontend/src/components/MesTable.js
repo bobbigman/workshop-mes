@@ -1,6 +1,7 @@
-import { cloneVNode, defineComponent, Fragment, h, onActivated, ref } from 'vue'
+import { cloneVNode, defineComponent, Fragment, h, onActivated, onBeforeUnmount, onDeactivated, ref } from 'vue'
 import { ElMessage, ElTable } from 'element-plus'
 import { readColumnWidths, tableColumnLayout, tableLayoutKey } from '../utils/tableLayout.js'
+import { cellCopyText, openCellCopyMenu } from '../utils/tableCellCopy.js'
 
 // 单根仍是原生 ElTable，保留 v-loading、页面样式、固定高度和所有业务事件。
 export default defineComponent({
@@ -14,6 +15,17 @@ export default defineComponent({
     const table = ref(null)
     const widths = ref({})
     let storageKey = '', legacyKey = ''
+    let closeCopyMenu = () => {}
+    onBeforeUnmount(() => closeCopyMenu())
+    onDeactivated(() => closeCopyMenu())
+
+    function copyMenu(row, column, cell, event) {
+      closeCopyMenu()
+      const text = cellCopyText(cell, column, event.target)
+      if (!text || event.defaultPrevented) return
+      event.preventDefault()
+      closeCopyMenu = openCellCopyMenu(event, text, ElMessage)
+    }
 
     function loadWidths() {
       try {
@@ -93,7 +105,8 @@ export default defineComponent({
       class: [attrs.class, 'mes-table'],
       border: true,
       showOverflowTooltip: attrs.showOverflowTooltip ?? attrs['show-overflow-tooltip'] ?? true,
-      onHeaderDragend: [saveWidth, attrs.onHeaderDragend].filter(Boolean)
+      onHeaderDragend: [saveWidth, attrs.onHeaderDragend].filter(Boolean),
+      onCellContextmenu: [attrs.onCellContextmenu, copyMenu].filter(Boolean)
     }, {
       ...slots,
       default: () => mapColumns(slots.default?.() || []),
