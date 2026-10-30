@@ -231,6 +231,30 @@ body {
   border-bottom: none;
 }
 
+/* 业务表格统一列宽交互；不影响宣传页、AI回答中的普通 HTML 表格。 */
+.mes-table .cell { user-select: text; }
+.mes-table th.el-table__cell { border-right: 2px solid #b8c5d6; }
+.mes-table th.el-table__cell:hover { border-right-color: var(--app-primary); }
+.mes-table td.el-table__cell { border-right: 1px solid #dce3ec; }
+.mes-table-layout-tools {
+  position: sticky;
+  left: 0;
+  width: max-content;
+  padding: 5px 12px;
+  background: var(--app-card);
+}
+.mes-table-reset {
+  padding: 3px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--app-text-2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.mes-table-reset:hover { color: var(--app-primary); }
+.mes-table-reset:focus-visible { outline: 2px solid var(--app-primary); outline-offset: 1px; }
+
 .el-table::before,
 .el-table::after {
   display: none;

@@ -17,7 +17,7 @@
           <el-button type="primary" @click="openRule()">新建规则</el-button>
           <el-button :loading="loading" @click="loadRules">刷新</el-button>
         </div>
-        <el-table :data="rules" v-loading="loading" empty-text="暂无规则，新建后只匹配后续业务事件">
+        <mes-table table-key="views/wechat-alert/MessageRules:1" :data="rules" v-loading="loading" empty-text="暂无规则，新建后只匹配后续业务事件">
           <el-table-column prop="name" label="规则名称" min-width="130" />
           <el-table-column label="事件" min-width="110"><template #default="{ row }">{{ events[row.eventType] }}</template></el-table-column>
           <el-table-column label="通道" width="100"><template #default="{ row }">{{ row.targetChannel === 'group' ? '群消息' : '旧规则（停用）' }}</template></el-table-column>
@@ -28,11 +28,11 @@
             <el-button link type="primary" @click="openRule(row)">{{ row.targetChannel === 'group' ? '编辑' : '查看' }}</el-button>
             <el-button link :disabled="saving || row.targetChannel !== 'group'" @click="toggleRule(row)">{{ row.enabled ? '停用' : '启用' }}</el-button>
           </template></el-table-column>
-        </el-table>
+        </mes-table>
       </el-tab-pane>
       <el-tab-pane label="发送记录" name="deliveries">
         <div class="toolbar"><el-button :loading="loadingDeliveries" @click="loadDeliveries">刷新记录</el-button></div>
-        <el-table :data="deliveries" v-loading="loadingDeliveries" empty-text="暂无事件发送记录">
+        <mes-table table-key="views/wechat-alert/MessageRules:2" :data="deliveries" v-loading="loadingDeliveries" empty-text="暂无事件发送记录">
           <el-table-column prop="ruleName" label="规则" min-width="110" />
           <el-table-column label="事件" min-width="110"><template #default="{ row }">{{ events[row.eventType] }}</template></el-table-column>
           <el-table-column label="发生时间" min-width="160"><template #default="{ row }">{{ formatTime(row.occurredAt) }}</template></el-table-column>
@@ -44,7 +44,7 @@
             <el-button v-if="['failed', 'partial'].includes(row.status) && rules.some(rule => rule.id === row.ruleId && rule.targetChannel === 'group')" link type="primary" :disabled="acting" @click="retry(row)">重试</el-button>
             <el-button v-if="row.status === 'unknown'" link type="warning" @click="openVerify(row)">核实</el-button>
           </template></el-table-column>
-        </el-table>
+        </mes-table>
         <el-pagination v-model:current-page="page" :page-size="20" :total="total" layout="prev, pager, next, total" @current-change="loadDeliveries" />
       </el-tab-pane>
     </el-tabs>
@@ -82,12 +82,12 @@
         <p>状态：{{ statuses[detail.status] }}；累计尝试：{{ detail.attempts }}；失败接收人：{{ detail.failedUsers || '无' }}</p>
         <p v-if="detail.handledAt">管理员 #{{ detail.handledBy }} 于 {{ formatTime(detail.handledAt) }}：{{ detail.handlingNote }}</p>
         <pre v-if="detail.error" class="preview">{{ detail.error }}</pre>
-        <el-table :data="attempts" empty-text="尚未尝试发送">
+        <mes-table table-key="views/wechat-alert/MessageRules:3" :data="attempts" empty-text="尚未尝试发送">
           <el-table-column label="时间" min-width="160"><template #default="{ row }">{{ formatTime(row.createdAt) }}</template></el-table-column>
           <el-table-column prop="toUser" label="本次接收人" min-width="140" show-overflow-tooltip />
           <el-table-column label="结果" width="110"><template #default="{ row }">{{ statuses[row.outcome] || row.outcome }}</template></el-table-column>
           <el-table-column label="说明" min-width="140" show-overflow-tooltip><template #default="{ row }">{{ row.handlingNote ? `管理员 #${row.handledBy}：${row.handlingNote}` : row.error }}</template></el-table-column>
-        </el-table>
+        </mes-table>
       </template>
     </el-dialog>
     <el-dialog v-model="verifyDialog" title="核实未知发送结果" width="540px" :close-on-click-modal="false">

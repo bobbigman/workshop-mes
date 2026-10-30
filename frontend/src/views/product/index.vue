@@ -6,7 +6,7 @@
       <el-button type="success" @click="openCreate">+ 创建产品</el-button>
       <ImportDialog entity-type="product" title="导入产品" @done="load" />
     </div>
-    <el-table :data="list">
+    <mes-table table-key="views/product/index:1" :data="list">
       <el-table-column prop="code" label="产品编号" />
       <el-table-column prop="name" label="产品名称" />
       <el-table-column label="重点产品" width="100">
@@ -23,7 +23,7 @@
           <el-button link type="danger" @click="onDelete(row)">删除</el-button>
         </template>
       </el-table-column>
-    </el-table>
+    </mes-table>
 
     <el-dialog v-model="dlg" :title="editingId ? '编辑产品' : copyFromId ? '复制产品' : '创建产品'" :close-on-click-modal="!saving" :close-on-press-escape="!saving" :show-close="!saving" width="520px">
       <el-alert v-if="copyFromId" title="请填写新编号；作业指导书、图纸及独立计价规则未复制。" type="info" :closable="false" show-icon style="margin-bottom:12px" />

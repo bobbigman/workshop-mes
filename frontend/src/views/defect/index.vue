@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="toolbar"><el-button type="success" @click="openCreate">+ 创建不良品项</el-button></div>
-    <el-table :data="list">
+    <mes-table table-key="views/defect/index:1" :data="list">
       <el-table-column prop="name" label="名称" />
       <el-table-column label="操作" width="160">
         <template #default="{ row }">
@@ -9,7 +9,7 @@
           <el-button link type="danger" @click="onDelete(row)">删除</el-button>
         </template>
       </el-table-column>
-    </el-table>
+    </mes-table>
     <el-dialog v-model="dlg" :title="editingId ? '编辑不良品项' : '创建不良品项'" width="400px">
       <el-input v-model="name" placeholder="如：粘锅" />
       <template #footer>

@@ -76,7 +76,7 @@
             <span v-if="filterLabel(m.workOrders)" class="muted">（{{ filterLabel(m.workOrders) }}）</span>
             <span class="muted"> · 查询时间 {{ m.queriedAt }}</span>
           </div>
-          <el-table :data="m.workOrders.list" size="small" border>
+          <mes-table table-key="views/ai-assistant/index:1" :data="m.workOrders.list" size="small" border>
             <el-table-column prop="orderNo" label="工单号" min-width="120" />
             <el-table-column prop="productCode" label="产品编号" width="110" />
             <el-table-column prop="productName" label="产品" min-width="120" />
@@ -93,7 +93,7 @@
                 <el-button link type="primary" @click="openOrder(row.id)">详情</el-button>
               </template>
             </el-table-column>
-          </el-table>
+          </mes-table>
           <div class="pager" v-if="m.workOrders.total > m.workOrders.pageSize">
             <el-pagination
               layout="prev, pager, next"
@@ -119,17 +119,17 @@
             <div class="block-title">
               整单累计：计划 {{ m.reportEvidence.totals.qty }} · 完成 {{ m.reportEvidence.totals.doneQty }}
             </div>
-            <el-table :data="m.reportEvidence.totals.tasks" size="small" border>
+            <mes-table table-key="views/ai-assistant/index:2" :data="m.reportEvidence.totals.tasks" size="small" border>
               <el-table-column prop="operationName" label="工序" min-width="120" />
               <el-table-column prop="planQty" label="计划" width="70" />
               <el-table-column prop="doneQty" label="有效良品" width="90" />
               <el-table-column prop="defectQty" label="有效不良" width="90" />
-            </el-table>
+            </mes-table>
           </el-card>
 
           <el-card shadow="never" class="src">
             <div class="block-title">筛选内按工序汇总（良品：待复核 / 已通过 / 已退回）</div>
-            <el-table :data="m.reportEvidence.summary" size="small" border>
+            <mes-table table-key="views/ai-assistant/index:3" :data="m.reportEvidence.summary" size="small" border>
               <el-table-column prop="operationName" label="工序" min-width="110" />
               <el-table-column label="待复核良" width="84">
                 <template #default="{ row }">{{ row.pendingGood }}</template>
@@ -155,7 +155,7 @@
               <el-table-column label="通过口径" width="84">
                 <template #default="{ row }">{{ row.reportGood }}</template>
               </el-table-column>
-            </el-table>
+            </mes-table>
           </el-card>
 
           <div class="block-title">
@@ -164,7 +164,7 @@
               （{{ m.reportEvidence.filter.operationName || '全部工序' }}）
             </span>
           </div>
-          <el-table :data="m.reportEvidence.list" size="small" border>
+          <mes-table table-key="views/ai-assistant/index:4" :data="m.reportEvidence.list" size="small" border>
             <el-table-column label="报工时间" width="150">
               <template #default="{ row }">{{ formatDateTime(row.reportTime) }}</template>
             </el-table-column>
@@ -184,7 +184,7 @@
             <el-table-column prop="batchNo" label="批次" width="100">
               <template #default="{ row }">{{ row.batchNo || '—' }}</template>
             </el-table-column>
-          </el-table>
+          </mes-table>
           <div class="pager" v-if="m.reportEvidence.total > m.reportEvidence.pageSize">
             <el-pagination
               layout="prev, pager, next"
@@ -238,12 +238,12 @@
       <template v-if="detail">
         <p>单号：{{ detail.orderNo }} · {{ detail.productCode }} {{ detail.productName }}</p>
         <p>数量：{{ detail.qty }} · 状态：{{ statusText(detail.status) }} · 交期：{{ formatDate(detail.dueDate) }}</p>
-        <el-table :data="detail.tasks || []" size="small" border>
+        <mes-table table-key="views/ai-assistant/index:5" :data="detail.tasks || []" size="small" border>
           <el-table-column prop="operationName" label="工序" />
           <el-table-column prop="planQty" label="计划" width="80" />
           <el-table-column prop="doneQty" label="良品" width="80" />
           <el-table-column prop="defectQty" label="不良" width="80" />
-        </el-table>
+        </mes-table>
       </template>
     </el-dialog>
   </div>

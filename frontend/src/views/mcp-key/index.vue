@@ -13,7 +13,7 @@
         </div>
       </template>
 
-      <el-table :data="list" v-loading="loading" stripe>
+      <mes-table table-key="views/mcp-key/index:1" :data="list" v-loading="loading" stripe>
         <el-table-column label="状态" width="90">
           <template #default="{ row }">
             <el-tag :type="row.status === 1 ? 'success' : 'info'">{{ row.status === 1 ? '有效' : '已吊销' }}</el-tag>
@@ -34,7 +34,7 @@
             <span v-else class="muted">—</span>
           </template>
         </el-table-column>
-      </el-table>
+      </mes-table>
     </el-card>
 
     <el-dialog v-model="plainDlg" title="请立即复制完整报文" width="560px" :close-on-click-modal="false" destroy-on-close @close="created = null">

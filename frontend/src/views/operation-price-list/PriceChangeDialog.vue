@@ -7,25 +7,25 @@
         <el-form-item label="生效日期" required><el-date-picker v-model="form.effectiveFrom" value-format="YYYY-MM-DD" /><el-button link @click="form.effectiveFrom=today">今天</el-button><el-button link @click="form.effectiveFrom=today.slice(0,8)+'01';form.repriceCurrentMonth=true">本月1日</el-button></el-form-item>
         <el-form-item label="追溯范围"><el-checkbox v-model="form.repriceCurrentMonth">重算生效日至本月底的已有报工与工资</el-checkbox></el-form-item>
         <el-form-item label="调整原因" :required="form.repriceCurrentMonth"><el-input v-model="form.reason" maxlength="500" show-word-limit /></el-form-item>
-        <el-table :data="form.rows" border max-height="260">
+        <mes-table table-key="views/operation-price-list/PriceChangeDialog:1" :data="form.rows" border max-height="260">
           <el-table-column prop="label" label="价格行" min-width="150" />
           <el-table-column prop="oldAmount" label="原金额" width="100" />
           <el-table-column label="新金额" width="195"><template #default="{row}"><el-input-number v-model="row.amount" :precision="4" :min="0" :max="1000000" /></template></el-table-column>
           <el-table-column prop="oldDeductPrice" label="原扣价" width="100" />
           <el-table-column label="新扣价" width="195"><template #default="{row}"><el-input-number v-model="row.deductPrice" :disabled="row.kind==='extra'" :precision="4" :min="0" :max="1000000" /></template></el-table-column>
-        </el-table>
+        </mes-table>
       </el-form>
       <template v-if="preview">
         <p>影响 {{ preview.reportCount }} 条报工、{{ preview.employeeCount }} 人、{{ preview.statementCount }} 张工资单。</p>
         <p>报工金额：{{ money(preview.reportOldAmount) }} → {{ money(preview.reportNewAmount) }}；工资明细净额：{{ money(preview.oldAmount) }} → {{ money(preview.newAmount) }}（差额 {{ money(preview.newAmount-preview.oldAmount) }}）</p>
         <el-alert v-if="preview.revokeStatementIds?.length" :title="`以下已确认工资单将退回草稿：${preview.revokeStatementIds.join('、')}`" type="warning" :closable="false" />
         <el-alert v-for="(message,i) in preview.blockers" :key="i" :title="message" type="error" :closable="false" />
-        <el-table :data="preview.rows" border max-height="220">
+        <mes-table table-key="views/operation-price-list/PriceChangeDialog:2" :data="preview.rows" border max-height="220">
           <el-table-column prop="reportId" label="报工编号" /><el-table-column prop="userId" label="员工编号" />
           <el-table-column label="业务日期"><template #default="{row}">{{ row.reportTime?.slice(0,10) }}</template></el-table-column>
           <el-table-column prop="oldReportAmount" label="原报工金额" /><el-table-column prop="newReportAmount" label="新报工金额" />
           <el-table-column prop="statementId" label="工资单编号" />
-        </el-table>
+        </mes-table>
         <p v-if="preview.previewToken">预览有效期5分钟；价格、报工或工资发生变化须重新预览。</p>
       </template>
       <el-alert v-if="retryPending" title="提交结果尚未确认。请点击“查询或重试本次提交”，沿用本次请求，避免重复调价。" type="warning" :closable="false" />

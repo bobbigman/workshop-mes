@@ -77,7 +77,7 @@
 
       <el-card shadow="never" style="margin-top: 16px">
         <template #header>相似件实绩</template>
-        <el-table :data="result.laborByProduct || []" size="small">
+        <mes-table table-key="views/quote-suggest/index:1" :data="result.laborByProduct || []" size="small">
           <el-table-column prop="productCode" label="编号" width="120" />
           <el-table-column prop="productName" label="名称" min-width="140" />
           <el-table-column prop="avgMinutesPerPiece" label="平均分钟/件" width="120" />
@@ -86,7 +86,7 @@
           <el-table-column prop="laborRateSource" label="费率来源" min-width="140" />
           <el-table-column prop="laborCost" label="人工" width="90" />
           <el-table-column prop="warning" label="提示" min-width="160" />
-        </el-table>
+        </mes-table>
         <p class="hint">{{ result.formulaNote }}</p>
       </el-card>
 
@@ -99,22 +99,22 @@
               · 物料单价 {{ money(result.materialUnitCost) }}
               · BOM合计 {{ money(result.bomTotalCost) }}
             </div>
-            <el-table :data="result.bomLines || []" size="small" empty-text="无 BOM 明细">
+            <mes-table table-key="views/quote-suggest/index:2" :data="result.bomLines || []" size="small" empty-text="无 BOM 明细">
               <el-table-column prop="materialCode" label="子件编号" width="140" />
               <el-table-column prop="materialName" label="名称" min-width="120" />
               <el-table-column prop="qty" label="用量" width="80" />
               <el-table-column prop="unitCost" label="单价" width="90" />
               <el-table-column prop="lineCost" label="金额" width="90" />
-            </el-table>
+            </mes-table>
           </el-card>
         </el-col>
         <el-col :span="10">
           <el-card shadow="never">
             <template #header>金蝶标准工艺</template>
-            <el-table :data="result.routingSteps || []" size="small" empty-text="无工艺">
+            <mes-table table-key="views/quote-suggest/index:3" :data="result.routingSteps || []" size="small" empty-text="无工艺">
               <el-table-column prop="seq" label="序" width="70" />
               <el-table-column prop="operationName" label="工序" />
-            </el-table>
+            </mes-table>
           </el-card>
         </el-col>
       </el-row>

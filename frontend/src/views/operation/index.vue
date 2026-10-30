@@ -6,7 +6,7 @@
       <el-button type="success" @click="openCreate">+ 创建工序</el-button>
       <ImportDialog entity-type="operation" title="导入工序" @done="load" />
     </div>
-    <el-table :data="list">
+    <mes-table table-key="views/operation/index:1" :data="list">
       <el-table-column prop="code" label="工序编号" />
       <el-table-column prop="name" label="工序名称" />
       <el-table-column prop="deptNames" label="报工权限(部门)" />
@@ -18,7 +18,7 @@
           <el-button link type="danger" @click="onDelete(row)">删除</el-button>
         </template>
       </el-table-column>
-    </el-table>
+    </mes-table>
 
     <el-dialog v-model="dlg" :title="editingId ? '编辑工序' : copyFromId ? '复制工序' : '创建工序'" :close-on-click-modal="!saving" :close-on-press-escape="!saving" :show-close="!saving" width="520px">
       <el-alert v-if="copyFromId" title="请填写新编号；作业指导书、图纸及独立计价规则未复制。" type="info" :closable="false" show-icon style="margin-bottom:12px" />

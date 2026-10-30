@@ -6,7 +6,7 @@
       <el-tab-pane label="全部" name="" />
     </el-tabs>
 
-    <el-table :data="list" v-loading="loading" :row-class-name="rowClass">
+    <mes-table table-key="views/abnormal/index:1" :data="list" v-loading="loading" :row-class-name="rowClass">
       <el-table-column label="类型" width="110">
         <template #default="{ row }">{{ row.typeLabel }}</template>
       </el-table-column>
@@ -37,7 +37,7 @@
           <span v-else class="muted">{{ row.handlerName || '—' }}</span>
         </template>
       </el-table-column>
-    </el-table>
+    </mes-table>
 
     <div class="pager">
       <el-pagination

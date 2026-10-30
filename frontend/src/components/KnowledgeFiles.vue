@@ -7,7 +7,7 @@
       </el-upload>
     </div>
     <div v-if="!refId" class="kf-tip">先保存后，才能上传作业指导书 / 图纸</div>
-    <el-table v-else :data="list" size="small">
+    <mes-table table-key="components/KnowledgeFiles:1" v-else :data="list" size="small">
       <el-table-column prop="fileName" label="文件名" min-width="160" show-overflow-tooltip />
       <el-table-column prop="fileType" label="类型" width="70" />
       <el-table-column prop="version" label="版本" width="80">
@@ -19,7 +19,7 @@
           <el-button link type="danger" @click="onDelete(row)">删除</el-button>
         </template>
       </el-table-column>
-    </el-table>
+    </mes-table>
     <el-image-viewer
       v-if="imgPreviewVisible"
       :url-list="imgPreviewUrls"

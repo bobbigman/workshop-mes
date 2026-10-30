@@ -5,7 +5,7 @@
       <el-button type="primary" @click="load">查询</el-button>
       <el-button type="success" @click="openCreate">+ 创建部门</el-button>
     </div>
-    <el-table :data="list">
+    <mes-table table-key="views/dept/index:1" :data="list">
       <el-table-column prop="code" label="部门编码" />
       <el-table-column prop="name" label="部门名称" />
       <el-table-column prop="members" label="成员" />
@@ -15,7 +15,7 @@
           <el-button link type="danger" @click="onDelete(row)">删除</el-button>
         </template>
       </el-table-column>
-    </el-table>
+    </mes-table>
 
     <el-dialog v-model="dlg" :title="editingId ? '编辑部门' : '创建部门'" width="480px">
       <el-form :model="form" label-width="90px">

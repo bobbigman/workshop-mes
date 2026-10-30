@@ -36,7 +36,7 @@
       <el-button v-if="isAdmin" type="warning" @click="openBatch()">一键补报未完工序</el-button>
       <el-button v-if="isAdmin" @click="openPending">待补报开工记录</el-button>
     </div>
-    <el-table :data="list">
+    <mes-table table-key="views/report/index:1" :data="list">
       <el-table-column prop="orderNo" label="工单编号" />
       <el-table-column prop="productName" label="产品" />
       <el-table-column prop="operationName" label="工序" />
@@ -81,7 +81,7 @@
           <el-button link type="info" @click="openChangeLogs(row)">修改记录</el-button>
         </template>
       </el-table-column>
-    </el-table>
+    </mes-table>
     </template>
 
     <!-- 新增报工（电脑端） -->
@@ -228,7 +228,7 @@
 
     <!-- 修改日志（docs/205） -->
     <el-dialog v-model="logDlg" title="修改记录" width="640px">
-      <el-table :data="changeLogs" v-loading="logLoading" empty-text="暂无修改记录" max-height="420">
+      <mes-table table-key="views/report/index:2" :data="changeLogs" v-loading="logLoading" empty-text="暂无修改记录" max-height="420">
         <el-table-column prop="changedAt" label="时间" width="170" />
         <el-table-column prop="changedByName" label="修改人" width="90" />
         <el-table-column label="来源" width="60">
@@ -241,7 +241,7 @@
             时长 {{ row.oldDurationMinutes }}→{{ row.newDurationMinutes }} 分
           </template>
         </el-table-column>
-      </el-table>
+      </mes-table>
     </el-dialog>
 
     <!-- 代报工（docs/94，管理员/班组长） -->
@@ -381,7 +381,7 @@
             </article>
             <p v-if="!pendingTasks.length">所有工序已报满</p>
           </div>
-          <el-table v-else :data="pendingTasks" size="small" border empty-text="所有工序已报满">
+          <mes-table table-key="views/report/index:3" v-else :data="pendingTasks" size="small" border empty-text="所有工序已报满">
             <el-table-column prop="seq" label="序号" width="60" />
             <el-table-column prop="operationName" label="工序" />
             <el-table-column prop="planQty" label="计划" width="80" />
@@ -389,7 +389,7 @@
             <el-table-column label="剩余可报" width="90">
               <template #default="{ row }">{{ row.remain }}</template>
             </el-table-column>
-          </el-table>
+          </mes-table>
         </el-form-item>
         <el-form-item v-if="pendingTasks.length" label="统一良品数" required>
           <el-input-number v-model="batchForm.goodQty" :min="0" :max="minRemain" />
@@ -451,7 +451,7 @@
           <el-button type="primary" plain @click="selectPending(row)">补报</el-button>
         </article>
       </div>
-      <el-table v-else-if="!pendingError && !pendingLoading" :data="pendingRows">
+      <mes-table table-key="views/report/index:4" v-else-if="!pendingError && !pendingLoading" :data="pendingRows">
         <el-table-column prop="userName" label="人员" />
         <el-table-column prop="orderNo" label="工单" />
         <el-table-column prop="productName" label="产品" />
@@ -460,7 +460,7 @@
         <el-table-column prop="endTime" label="收尾" width="175" />
         <el-table-column label="时长"><template #default="{row}">{{ Math.ceil((new Date(row.endTime)-new Date(row.startTime))/60000) }}分</template></el-table-column>
         <el-table-column label="操作"><template #default="{row}"><el-button link @click="selectPending(row)">补报</el-button></template></el-table-column>
-      </el-table>
+      </mes-table>
       <template #footer><el-button :disabled="pendingSaving" @click="pendingDlg=false">返回</el-button></template>
     </el-dialog>
     <el-dialog v-model="pendingEditDlg" title="补报开工记录" width="540px" class="report-management-dialog"

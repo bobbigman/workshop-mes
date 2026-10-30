@@ -1,23 +1,23 @@
 <template>
   <el-dialog :model-value="modelValue" title="调价记录" width="920px" @update:model-value="emit('update:modelValue',$event)">
     <div v-loading="busy">
-      <el-table :data="rows" border>
+      <mes-table table-key="views/operation-price-list/PriceChangeHistory:1" :data="rows" border>
         <el-table-column prop="id" label="批次" width="85" /><el-table-column prop="changedBy" label="操作者编号" width="110" />
         <el-table-column label="生效日" width="110"><template #default="{row}">{{row.effectiveFrom.slice(0,10)}}</template></el-table-column>
         <el-table-column prop="reason" label="原因" />
         <el-table-column label="本月追溯" width="90"><template #default="{row}">{{row.repriceCurrentMonth?'是':'否'}}</template></el-table-column>
         <el-table-column width="90"><template #default="{row}"><el-button link type="primary" @click="detail(row.id)">查看依据</el-button></template></el-table-column>
-      </el-table>
+      </mes-table>
       <el-pagination v-model:current-page="page" :total="total" :page-size="20" layout="prev,pager,next,total" @current-change="load" />
       <template v-if="selected">
         <p>批次 {{selected.id}} · {{selected.createdAt?.replace('T',' ')}} · {{selected.reason}}</p>
         <p>报工 {{after.reportCount}} 条，工资单 {{after.statementCount}} 张；工资明细净额 {{beforeAmount}} → {{afterAmount}}</p>
         <p v-if="after.revokeStatementIds?.length">撤回确认的工资单：{{after.revokeStatementIds.join('、')}}</p>
-        <el-table :data="reportRows" border max-height="260">
+        <mes-table table-key="views/operation-price-list/PriceChangeHistory:2" :data="reportRows" border max-height="260">
           <el-table-column prop="id" label="报工编号" /><el-table-column prop="userId" label="员工编号" />
           <el-table-column prop="oldAmount" label="原报工金额" /><el-table-column prop="wageAmount" label="新报工金额" />
           <el-table-column prop="goodQty" label="良品数" /><el-table-column prop="durationMinutes" label="分钟" />
-        </el-table>
+        </mes-table>
         <el-collapse><el-collapse-item title="完整原始依据（价格、报工、工资与系数）"><pre class="audit-json">{{JSON.stringify(before,null,2)}}</pre></el-collapse-item><el-collapse-item title="完整调整结果"><pre class="audit-json">{{JSON.stringify(after,null,2)}}</pre></el-collapse-item></el-collapse>
       </template>
     </div>

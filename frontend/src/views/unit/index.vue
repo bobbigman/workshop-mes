@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="toolbar"><el-button type="success" @click="openCreate">+ 创建单位</el-button></div>
-    <el-table :data="list">
+    <mes-table table-key="views/unit/index:1" :data="list">
       <el-table-column prop="name" label="单位名称" />
       <el-table-column label="操作" width="160">
         <template #default="{ row }">
@@ -9,7 +9,7 @@
           <el-button link type="danger" @click="onDelete(row)">删除</el-button>
         </template>
       </el-table-column>
-    </el-table>
+    </mes-table>
     <el-dialog v-model="dlg" :title="editingId ? '编辑单位' : '创建单位'" width="400px">
       <el-input v-model="name" placeholder="如：只" />
       <template #footer>

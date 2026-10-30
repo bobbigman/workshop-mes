@@ -28,7 +28,7 @@
       style="margin-bottom:12px"
     />
 
-    <el-table :data="items">
+    <mes-table table-key="views/salary-sku/index:1" :data="items">
       <el-table-column prop="productCode" label="产品编号" min-width="120" />
       <el-table-column prop="productName" label="产品名称" min-width="140" />
       <el-table-column prop="color" label="颜色" width="100" />
@@ -36,7 +36,7 @@
       <el-table-column prop="qty" label="数量" width="90" />
       <el-table-column prop="amount" label="金额" width="110" />
       <el-table-column prop="reportCount" label="报工次数" width="100" />
-    </el-table>
+    </mes-table>
   </div>
 </template>
 

@@ -9,7 +9,7 @@
       </el-select>
       <el-button type="success" @click="openCreate">+ 添加字段</el-button>
     </div>
-    <el-table :data="list">
+    <mes-table table-key="views/custom-field/index:1" :data="list">
       <el-table-column prop="fieldName" label="字段名称" /><el-table-column v-if="target==='work_order_task'" label="所属工序"><template #default="{row}">{{operations.find(o=>o.id===row.operationId)?.name}}</template></el-table-column>
       <el-table-column prop="fieldKey" label="编码" width="120">
         <template #default="{ row }">{{ row.fieldKey || '—' }}</template>
@@ -29,7 +29,7 @@
           <el-button link type="danger" :disabled="deletingId !== null" :loading="deletingId === row.id" @click="onDelete(row)">删除</el-button>
         </template>
       </el-table-column>
-    </el-table>
+    </mes-table>
 
     <el-dialog v-model="dlg" :title="editingId ? '编辑自定义字段' : '创建自定义字段'" width="480px">
       <el-form :model="form" label-width="120px"><el-form-item v-if="target==='work_order_task'" label="所属工序" required><el-select v-model="form.operationId" :disabled="!!editingId" filterable><el-option v-for="o in operations" :key="o.id" :value="o.id" :label="o.name" /></el-select></el-form-item>

@@ -28,7 +28,7 @@
       <el-button type="primary" @click="load">查询</el-button>
       <el-button type="success" :disabled="!selected.length" @click="onBatch">批量通过</el-button>
     </div>
-    <el-table :data="list" :row-class-name="rowClassName" @selection-change="onSel">
+    <mes-table table-key="views/review/index:1" :data="list" :row-class-name="rowClassName" @selection-change="onSel">
       <el-table-column type="selection" width="48" :selectable="row => row.reviewStatus === 0" />
       <el-table-column prop="orderNo" label="工单" width="140" />
       <el-table-column prop="productName" label="产品" />
@@ -74,7 +74,7 @@
           <el-button v-if="row.reviewStatus !== 2" link type="danger" @click="openReject(row)">退回</el-button>
         </template>
       </el-table-column>
-    </el-table>
+    </mes-table>
 
     <el-dialog v-model="rejectDlg" title="退回报工" width="420px">
       <el-form label-width="80px">

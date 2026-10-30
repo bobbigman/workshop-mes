@@ -11,7 +11,7 @@
         <el-card shadow="never">
           <h3>合片 / 丝印 <el-tag>单选</el-tag></h3>
           <p class="muted">下面维护各档附加工价。工单只能选择一档，“不丝印”明确按零加价。</p>
-          <el-table :data="silkOptions">
+          <mes-table table-key="views/order-pricing-demo/index:1" :data="silkOptions">
             <el-table-column prop="label" label="选项" min-width="250" />
             <el-table-column label="加价（元/打）" width="220">
               <template #default="{ row }">
@@ -19,7 +19,7 @@
                 <el-input-number v-else v-model="row.price" :min="0" :max="9999" :precision="2" :step="0.05" :aria-label="row.label + '加价'" />
               </template>
             </el-table-column>
-          </el-table>
+          </mes-table>
           <div class="extra-setting"><span>双层伞面叠片（另组选项）</span><el-input-number v-model="stackPrice" :min="0" :max="9999" :precision="2" :step="0.1" aria-label="叠片加价" /><span>元/打</span></div>
           <el-alert title="演示假设：叠片可另行选择；其适用规格与叠加条件待客户确认。2—4片丝印的打包范围也待确认。" type="info" :closable="false" />
           <el-button type="primary" class="next-button" @click="tab = 'order'">去工单试选</el-button>

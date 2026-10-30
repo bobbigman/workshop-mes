@@ -73,7 +73,7 @@
     </div>
 
     <template v-else>
-      <el-table
+      <mes-table table-key="views/salary/index:1"
         :data="list"
         :height="tableHeight"
         @selection-change="onSelectionChange"
@@ -104,7 +104,7 @@
             <el-button v-if="row.status === 1" link type="danger" @click="onRevoke(row)">撤回重算</el-button>
           </template>
         </el-table-column>
-      </el-table>
+      </mes-table>
       <div class="pager">
         <el-pagination
           v-model:current-page="q.page"
@@ -139,7 +139,7 @@
         <el-button type="primary" @click="loadItems">查明细</el-button>
         <el-button @click="onExportItems">导出明细 CSV</el-button>
       </div>
-      <el-table :data="itemRows" size="small" height="calc(50vh - 120px)">
+      <mes-table table-key="views/salary/index:2" :data="itemRows" size="small" height="calc(50vh - 120px)">
         <el-table-column prop="userName" label="人员" width="90" fixed />
         <el-table-column label="人员类型" width="110">
           <template #default="{ row }">
@@ -159,7 +159,7 @@
         <el-table-column prop="amount" label="小计" width="70" />
         <el-table-column prop="netAmount" label="应发" width="70" />
         <el-table-column prop="reportTime" label="报工时间" width="160" />
-      </el-table>
+      </mes-table>
       <div v-if="itemTotal > itemRows.length" class="items-foot">共 {{ itemTotal }} 条，当前显示 {{ itemRows.length }} 条</div>
     </div>
     </template>
@@ -222,21 +222,21 @@
             </div>
           </div>
           <div class="wo-sub">按工序</div>
-          <el-table :data="woSummary.byOperation || []" size="small" empty-text="暂无已复核工资">
+          <mes-table table-key="views/salary/index:3" :data="woSummary.byOperation || []" size="small" empty-text="暂无已复核工资">
             <el-table-column prop="name" label="工序" min-width="100" />
             <el-table-column label="计件" width="90"><template #default="{ row }">{{ fmtMoney(row.pieceAmount) }}</template></el-table-column>
             <el-table-column label="计时" width="90"><template #default="{ row }">{{ fmtMoney(row.timeAmount) }}</template></el-table-column>
             <el-table-column label="固定" width="90"><template #default="{ row }">{{ fmtMoney(row.fixedAmount) }}</template></el-table-column>
             <el-table-column label="小计" width="100"><template #default="{ row }">{{ fmtMoney(row.subtotal) }}</template></el-table-column>
-          </el-table>
+          </mes-table>
           <div class="wo-sub">按人员</div>
-          <el-table :data="woSummary.byUser || []" size="small" empty-text="暂无已复核工资">
+          <mes-table table-key="views/salary/index:4" :data="woSummary.byUser || []" size="small" empty-text="暂无已复核工资">
             <el-table-column prop="name" label="人员" min-width="100" />
             <el-table-column label="计件" width="90"><template #default="{ row }">{{ fmtMoney(row.pieceAmount) }}</template></el-table-column>
             <el-table-column label="计时" width="90"><template #default="{ row }">{{ fmtMoney(row.timeAmount) }}</template></el-table-column>
             <el-table-column label="固定" width="90"><template #default="{ row }">{{ fmtMoney(row.fixedAmount) }}</template></el-table-column>
             <el-table-column label="小计" width="100"><template #default="{ row }">{{ fmtMoney(row.subtotal) }}</template></el-table-column>
-          </el-table>
+          </mes-table>
         </template>
       </div>
 
@@ -253,7 +253,7 @@
           class="wo-alert"
           :title="`台账内有 ${ledger.unpricedCount} 笔报工未计价`"
         />
-        <el-table
+        <mes-table table-key="views/salary/index:5"
           :data="ledger?.list || []"
           size="small"
           empty-text="暂无已完工工单"
@@ -270,7 +270,7 @@
           <el-table-column label="未复核金额" width="110">
             <template #default="{ row }">{{ fmtMoney(row.unreviewedAmount) }}</template>
           </el-table-column>
-        </el-table>
+        </mes-table>
         <div v-if="ledger" class="wo-ledger-foot">
           <span>应付总合计 <b>¥{{ fmtMoney(ledger.payableTotal) }}</b></span>
           <span>未复核合计 ¥{{ fmtMoney(ledger.unreviewedAmount) }}</span>
@@ -323,7 +323,7 @@
         </div>
       </div>
 
-      <el-table :data="detail?.items || []" size="small">
+      <mes-table table-key="views/salary/index:6" :data="detail?.items || []" size="small">
         <el-table-column prop="orderNo" label="工单" width="110" />
         <el-table-column prop="operationName" label="工序" width="90" />
         <el-table-column prop="color" label="颜色" width="80" />
@@ -342,7 +342,7 @@
             <el-tag v-else type="danger" size="small">未匹配</el-tag>
           </template>
         </el-table-column>
-      </el-table>
+      </mes-table>
     </el-drawer>
   </div>
 </template>

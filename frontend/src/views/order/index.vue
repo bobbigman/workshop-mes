@@ -558,9 +558,18 @@ async function onSave() {
 
 async function onTransition(row, action) {
   const labelMap = { start: '开始', finish: '结束', withdraw: '撤回', cancel: '取消', restore: '恢复' }
-  await ElMessageBox.confirm(`确认${labelMap[action]}工单 ${row.orderNo}？`, '提示', { type: 'warning' })
+  let tip = `确认${labelMap[action]}工单 ${row.orderNo}？操作后立即生效`
+  if (action === 'withdraw' && row.status === 2) {
+    tip = `这张单之前已结束。撤回后重新回到执行中，可以继续报工；即使数量报满也不会自动结束，需要再点一次【结束】才关闭工单。历史报工记录保留不删。确认撤回工单 ${row.orderNo}？`
+  } else if (action === 'withdraw' && row.status === 1) {
+    tip = `撤回后工单退回未开始，工人报工时将选不到这张单；已报的良品、不良记录和工资数据都保留不删。确认撤回工单 ${row.orderNo}？`
+  }
+  await ElMessageBox.confirm(tip, '提示', { type: 'warning' })
   await transitionOrder(row.id, action)
-  ElMessage.success('操作成功')
+  let okMsg = '操作已完成'
+  if (action === 'withdraw' && row.status === 2) okMsg = '已重新打开'
+  else if (action === 'withdraw' && row.status === 1) okMsg = '已退回未开始'
+  ElMessage.success(okMsg)
   await load()
 }
 

@@ -20,7 +20,7 @@
 
     <!-- 评分表 -->
     <el-card shadow="never">
-      <el-table :data="rows" border stripe size="small" v-loading="loading">
+      <mes-table table-key="views/schedule/index:1" :data="rows" border stripe size="small" v-loading="loading">
         <el-table-column prop="suggestSeq" label="序号" width="56" align="center" />
         <el-table-column prop="moNo" label="任务单号" width="130" />
         <el-table-column label="产品" width="140">
@@ -59,7 +59,7 @@
         <el-table-column prop="rank" label="优先级排名" width="90" align="center" />
         <el-table-column prop="suggestSeq" label="建议开工顺序" width="105" align="center" />
         <el-table-column prop="remark" label="备注" min-width="180" />
-      </el-table>
+      </mes-table>
     </el-card>
   </div>
 </template>

@@ -12,7 +12,7 @@
         <el-button @click="search">查询</el-button><el-button @click="reset">重置</el-button><el-button @click="load">刷新</el-button>
         <el-button type="primary" @click="create">＋ 新增价目表</el-button>
       </div>
-      <el-table :data="list" border stripe>
+      <mes-table table-key="views/operation-price-list/index:1" :data="list" border stripe>
         <el-table-column label="单据编号" min-width="150"><template #default="{row}"><el-button link type="primary" @click="open(row.id,true)">{{row.code}}</el-button></template></el-table-column>
         <el-table-column prop="name" label="名称" min-width="150" />
         <el-table-column label="价目表类型 / 工序" min-width="150"><template #default="{row}">{{opName(row.operationId)}}</template></el-table-column>
@@ -23,7 +23,7 @@
         <el-table-column label="生效 ~ 失效" min-width="205"><template #default="{row}">{{day(row.effectiveFrom)}} ~ {{row.effectiveTo?day(row.effectiveTo):'长期'}}</template></el-table-column>
         <el-table-column label="更新时间" min-width="160"><template #default="{row}">{{row.updatedAt?.replace('T',' ').slice(0,19)}}</template></el-table-column>
         <el-table-column label="操作" width="330" fixed="right"><template #default="{row}"><el-button link type="primary" @click="open(row.id,false)">编辑</el-button><el-button v-if="row.status===1" link type="primary" @click="adjustId=row.id;adjustVisible=true">调整工价</el-button><el-button link @click="historyId=row.id;historyVisible=true">调价记录</el-button><el-button link @click="copy(row)">复制</el-button><el-button link type="danger" :disabled="row.status!==0||!!row.activatedAt" @click="removeTable(row)">删除</el-button></template></el-table-column>
-      </el-table>
+      </mes-table>
       <el-pagination v-model:current-page="filters.page" :page-size="20" :total="total" layout="prev,pager,next,total" @current-change="load" />
     </template>
     <template v-else>
@@ -58,13 +58,13 @@
       <el-form :disabled="readonly||saving">
         <el-collapse v-model="expanded"><el-collapse-item title="收费组（组内唯一，不同适用组按已确认规则累计）" name="groups">
           <el-button v-if="!readonly" @click="addGroup">新增收费组</el-button>
-          <el-table :data="form.details.groups" border>
+          <mes-table table-key="views/operation-price-list/index:2" :data="form.details.groups" border>
             <el-table-column label="编码" width="150"><template #default="{row}"><span v-if="readonly" class="copyable">{{row.key}}</span><el-input v-else v-model="row.key" :disabled="form.details.rows.some(r=>r.groupKey===row.key)" /></template></el-table-column>
             <el-table-column label="名称" width="150"><template #default="{row}"><span v-if="readonly" class="copyable">{{row.name}}</span><el-input v-else v-model="row.name" /></template></el-table-column>
             <el-table-column label="适用条件"><template #default="{row}"><span v-if="readonly" class="copyable">{{summary(row.conditions)}}</span><AttributeConditions v-else v-model="row.conditions" :fields="fields" /></template></el-table-column>
             <el-table-column label="必须命中" width="100"><template #default="{row}"><span v-if="readonly" class="copyable">{{row.required?'是':'否'}}</span><el-checkbox v-else v-model="row.required" /></template></el-table-column>
             <el-table-column v-if="!readonly" width="75"><template #default="{row}"><el-button link type="danger" @click="removeGroup(row)">删除</el-button></template></el-table-column>
-          </el-table>
+          </mes-table>
         </el-collapse-item></el-collapse>
         <div v-if="!readonly" class="toolbar body-tools">
           <el-button @click="addMenu=!addMenu">新增行 ▾</el-button>
@@ -72,7 +72,7 @@
           <el-button :disabled="!selected" @click="duplicate">复制选中行</el-button><el-button type="danger" plain :disabled="!selected" @click="removeRow">删除行</el-button>
           <span class="hint">点击行号或规格维护价格性质、包含项和确认信息；已启用价表的金额与不良扣价请点“调整工价”。</span>
         </div>
-        <el-table :data="form.details.rows" border stripe row-key="rowId" highlight-current-row @current-change="r=>selected=r" class="price-table">
+        <mes-table table-key="views/operation-price-list/index:3" :data="form.details.rows" border stripe row-key="rowId" highlight-current-row @current-change="r=>selected=r" class="price-table">
           <el-table-column label="行号" width="65"><template #default="{row,$index}"><span v-if="readonly" class="copyable">{{$index+1}}</span><el-button v-else link type="primary" @click="editRow(row)">{{$index+1}}</el-button></template></el-table-column>
           <el-table-column label="品名规格" min-width="175"><template #default="{row}"><span v-if="readonly" class="copyable">{{row.label||'未填写规格'}}</span><el-button v-else link type="primary" @click="editRow(row)">{{row.label||'未填写规格（点击编辑）'}}</el-button><div class="hint">{{kinds[row.kind]}} · {{row.confirmed&&row.amount!=null?'已确认':'待确认 / 未定价'}}</div></template></el-table-column>
           <el-table-column label="取价条件" min-width="230"><template #default="{row}"><span v-if="readonly" class="copyable">{{summary(row.conditions)}}</span><el-button v-else link type="primary" @click="editConditions(row)">{{summary(row.conditions)}}</el-button></template></el-table-column>
@@ -80,7 +80,7 @@
           <el-table-column label="单价" width="145"><template #default="{row}"><span v-if="readonly" class="copyable">{{row.amount??'未定价'}}</span><el-input-number v-else v-model="row.amount" :disabled="priceFrozen(row.rowId)" :controls="false" :precision="4" :min="0" :max="1000000" style="width:125px" /></template></el-table-column>
           <el-table-column label="单位" width="80"><template #default>{{form.priceUnit||'未设'}}</template></el-table-column>
           <el-table-column label="收费组" min-width="150"><template #default="{row}"><span v-if="readonly&&row.kind==='extra'" class="copyable">{{form.details.groups.find(g=>g.key===row.groupKey)?.name||row.groupKey||'未选择'}}</span><el-select v-else-if="row.kind==='extra'" v-model="row.groupKey" placeholder="请选择"><el-option v-for="g in form.details.groups" :key="g.key" :value="g.key" :label="g.name" /></el-select><span v-else>—</span></template></el-table-column>
-        </el-table>
+        </mes-table>
       </el-form>
       <p class="hint">不完整草稿可保存；完整草稿保存即启用，启用失败保留原状态。停用表保存仍停用。未确认行请打开行详情补齐；原始分档价仅作备注，不自动参与匹配。</p>
       <h3>取价试算</h3>
@@ -88,7 +88,7 @@
       <div class="toolbar"><el-select v-model="previewProduct" filterable placeholder="试算产品" style="width:300px"><el-option v-for="p in products" :key="p.id" :value="p.id" :label="`${p.code} ${p.name}`" /></el-select><el-button :disabled="!id||dirty()" :loading="previewing" @click="preview">试算</el-button></div>
       <el-form label-width="130px"><el-form-item v-for="f in craftFields" :key="f.id" :label="f.fieldName"><el-select v-if="f.fieldType==='single'" v-model="previewAttributes[f.id]" clearable><el-option v-for="v in f.options" :key="v" :value="v" :label="v" /></el-select><el-input v-else v-model="previewAttributes[f.id]" placeholder="实际值，未知留空" /></el-form-item></el-form>
       <el-alert v-if="previewError" :title="previewError" type="error" :closable="false" />
-      <template v-if="quote"><p><strong>{{quote.baseName}}：{{quote.unitPrice}}元/{{quote.priceUnit}}</strong>；每{{quote.priceUnit}}对应{{quote.unitsPerPriceUnit}}个报工单位</p><el-table :data="quote.attributeEvidence?.rows" border><el-table-column prop="rowId" label="价格行" /><el-table-column prop="reason" label="结果及原因" /><el-table-column prop="amount" label="原价" /><el-table-column prop="source" label="来源" /></el-table></template>
+      <template v-if="quote"><p><strong>{{quote.baseName}}：{{quote.unitPrice}}元/{{quote.priceUnit}}</strong>；每{{quote.priceUnit}}对应{{quote.unitsPerPriceUnit}}个报工单位</p><mes-table table-key="views/operation-price-list/index:4" :data="quote.attributeEvidence?.rows" border><el-table-column prop="rowId" label="价格行" /><el-table-column prop="reason" label="结果及原因" /><el-table-column prop="amount" label="原价" /><el-table-column prop="source" label="来源" /></mes-table></template>
     </template>
     <el-dialog v-model="conditionDialog" title="取价条件（全部同时满足）" width="850px" :close-on-click-modal="false">
       <el-checkbox v-model="unlimited" :disabled="readonly">不限属性条件</el-checkbox>

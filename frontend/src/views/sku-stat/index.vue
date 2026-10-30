@@ -22,7 +22,7 @@
       style="margin-bottom:12px"
     />
 
-    <el-table :data="items">
+    <mes-table table-key="views/sku-stat/index:1" :data="items">
       <el-table-column prop="productCode" label="产品编号" min-width="120" />
       <el-table-column prop="productName" label="产品名称" min-width="140" />
       <el-table-column prop="color" label="颜色" width="100" />
@@ -30,7 +30,7 @@
       <el-table-column prop="totalGood" label="良品合计" width="100" />
       <el-table-column prop="totalDefect" label="不良合计" width="100" />
       <el-table-column prop="reportCount" label="报工次数" width="100" />
-    </el-table>
+    </mes-table>
   </div>
 </template>
 

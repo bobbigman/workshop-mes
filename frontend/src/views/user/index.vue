@@ -9,7 +9,7 @@
       <el-button type="success" @click="openCreate">+ 创建用户</el-button>
       <ImportDialog entity-type="user" title="导入用户" @done="load" />
     </div>
-    <el-table :data="list">
+    <mes-table table-key="views/user/index:1" :data="list">
       <el-table-column prop="account" label="账号" />
       <el-table-column prop="name" label="姓名" />
       <el-table-column prop="phone" label="手机号" />
@@ -52,7 +52,7 @@
           <el-button link type="danger" @click="onDelete(row)">删除</el-button>
         </template>
       </el-table-column>
-    </el-table>
+    </mes-table>
 
     <el-dialog v-model="dlg" :title="editingId ? '编辑用户' : '创建用户'" width="480px">
       <el-form :model="form" label-width="110px">

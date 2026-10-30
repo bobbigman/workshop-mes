@@ -65,14 +65,14 @@
     <div class="em-lower">
       <section class="em-panel em-details">
         <header class="em-panel-h"><h3>生产工单明细 <span class="sub">共 {{ data.orders?.total || 0 }} 单</span></h3><span class="sub">现场进度含待复核报工</span></header>
-        <el-table :data="data.orders?.list || []" size="small" height="290" empty-text="暂无符合条件的工单">
+        <mes-table table-key="views/execution-monitor/index:1" :data="data.orders?.list || []" size="small" height="290" empty-text="暂无符合条件的工单">
           <el-table-column prop="orderNo" label="工单号" min-width="175" show-overflow-tooltip /><el-table-column prop="productName" label="产品" min-width="110" show-overflow-tooltip />
           <el-table-column label="计划" width="70" prop="qty" align="right" /><el-table-column label="完成 / 剩余" width="100" align="right"><template #default="{ row }">{{ row.doneQty }} / {{ row.remainQty }}</template></el-table-column>
           <el-table-column label="工序达成" width="130"><template #default="{ row }"><div v-if="row.progressPercent != null" class="em-table-progress"><div class="em-track"><i :style="{ width: progressValue(row) + '%' }" /></div><span>{{ formatPct(row) }}</span></div><span v-else :title="row.progressHint">—</span></template></el-table-column>
           <el-table-column label="状态" width="90"><template #default="{ row }"><el-tag size="small" :type="statusTag(row.status)">{{ statusLabel(row.status) }}</el-tag></template></el-table-column>
           <el-table-column label="计划交期" width="145"><template #default="{ row }"><span :class="dueClass(row)">{{ formatDue(row.dueDate) }}</span></template></el-table-column>
           <el-table-column label="操作" width="175" fixed="right"><template #default="{ row }"><el-button link type="primary" @click="goOrderDetail(row)">{{ canHandleAbnormal ? '详情 / 派工' : '详情' }}</el-button><el-button v-if="row.status === 0 || row.status === 1" link type="primary" @click="goReport(row)">报工</el-button><el-button v-if="row.hasOpenAbnormal && canHandleAbnormal" link type="danger" @click="goAbnormal()">异常</el-button></template></el-table-column>
-        </el-table>
+        </mes-table>
         <div class="em-pager"><el-pagination v-model:current-page="page" v-model:page-size="pageSize" :total="data.orders?.total || 0" :page-sizes="[10,20,50]" layout="total, sizes, prev, pager, next" @current-change="() => refresh(true)" @size-change="onPageSize" /></div>
       </section>
       <aside class="em-side">

@@ -19,16 +19,16 @@
 
     <el-tabs v-model="tab">
       <el-tab-pane label="分布" name="distribution">
-        <el-table :data="distribution" row-key="defectKey">
+        <mes-table table-key="views/defect-stat/index:1" :data="distribution" row-key="defectKey">
           <el-table-column type="expand">
             <template #default="{ row }">
               <div class="expand-box">
                 <div class="expand-title">该原因集中在哪些工序</div>
-                <el-table :data="row.byOperation || []" size="small" border>
+                <mes-table table-key="views/defect-stat/index:2" :data="row.byOperation || []" size="small" border>
                   <el-table-column prop="operationName" label="工序" />
                   <el-table-column prop="totalDefect" label="不良数" width="100" />
                   <el-table-column prop="reportCount" label="报工次数" width="100" />
-                </el-table>
+                </mes-table>
               </div>
             </template>
           </el-table-column>
@@ -38,11 +38,11 @@
           <el-table-column label="占比" width="100">
             <template #default="{ row }">{{ formatPct(row.sharePercent) }}</template>
           </el-table-column>
-        </el-table>
+        </mes-table>
       </el-tab-pane>
 
       <el-tab-pane label="汇总" name="summary">
-        <el-table :data="summary">
+        <mes-table table-key="views/defect-stat/index:3" :data="summary">
           <el-table-column prop="operationName" label="工序" min-width="120" />
           <el-table-column prop="defectName" label="不良原因" min-width="120" />
           <el-table-column prop="userName" label="报工人" width="120" />
@@ -51,11 +51,11 @@
           <el-table-column label="不良率" width="100">
             <template #default="{ row }">{{ formatPct(row.defectRate) }}</template>
           </el-table-column>
-        </el-table>
+        </mes-table>
       </el-tab-pane>
 
       <el-tab-pane label="明细" name="details">
-        <el-table :data="details">
+        <mes-table table-key="views/defect-stat/index:4" :data="details">
           <el-table-column prop="orderNo" label="工单号" min-width="130" />
           <el-table-column prop="productCode" label="产品编号" min-width="110" />
           <el-table-column prop="productName" label="产品名称" min-width="120" />
@@ -70,7 +70,7 @@
           <el-table-column label="复核" width="90">
             <template #default="{ row }">{{ reviewLabel(row.reviewStatus) }}</template>
           </el-table-column>
-        </el-table>
+        </mes-table>
       </el-tab-pane>
     </el-tabs>
   </div>
