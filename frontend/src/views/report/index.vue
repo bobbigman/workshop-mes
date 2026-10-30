@@ -475,7 +475,7 @@
 </template>
 <script setup>
 import ProcessingRequirements from '@/components/ProcessingRequirements.vue'
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onActivated, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getReportList, updateReport, submitReport, batchReport, getDefectsByOp, getOrderByNo, getOrderList, getReportCandidates, getReportChangeLogs } from '@/api/prod'
 import { getUserList } from '@/api/sys'
@@ -759,12 +759,18 @@ onMounted(async () => {
     else if (route.query.action === 'pending') openPending()
     return
   }
-  await Promise.all([load(), loadOrderOptions()])
+  if (!route.query.order) await Promise.all([load(), loadOrderOptions()])
+})
+
+// PC 标签页按路径缓存；从工单再次进入时不会重新 mounted。
+onActivated(async () => {
+  if (managementEntry.value) return
   const order = route.query.order
-  if (order) {
-    openCreate(String(order))
-    router.replace({ path: '/report', query: {} })
-  }
+  if (!order) return
+  openCreate(String(order))
+  // 消费本次入口参数，返回菜单时不重复弹出，之后仍可再次报同一工单。
+  await router.replace({ path: '/report', query: {} })
+  await load()
 })
 
 async function loadOrderOptions() {
