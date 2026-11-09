@@ -48,7 +48,7 @@ public class ExceptionMiddleware
                     traceId, ReadClaim(context, JwtHelper.ClaimUserId), ReadClaim(context, JwtHelper.ClaimFactoryId),
                     context.Request.Path.Value, ex.Message);
                 await WriteSafeAsync(context, HttpStatusCode.OK,
-                    ApiResult<object?>.FailMsg(ex.Message, ex.Code));
+                    new ApiResult<object?> { Code = ex.Code, Msg = ex.Message, Data = ex.Payload });
             }
         }
         catch (Exception ex)

@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>创建工单弹窗 · 轻量美化预览</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='4' y='3' width='16' height='18' rx='2' fill='%23409eff'/%3E%3Cpath d='M8 8h8M8 12h8M8 16h5' stroke='white' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+/* ============ 基础与设计 token（对齐 Element Plus 视觉语言） ============ */
+:root{
+  --bg:#f5f7fa; --card:#ffffff;
+  --primary:#409eff; --primary-light:#ecf5ff; --primary-border:#b3d8ff;
+  --success:#67c23a; --success-text:#3f8f1c; --success-bg:#f0f9eb;
+  --warning:#e6a23c; --warning-text:#b8761a; --warning-bg:#fdf6ec;
+  --danger:#f56c6c; --danger-text:#c45656; --danger-bg:#fef0f0;
+  --text-1:#303133; --text-2:#606266; --text-3:#909399;
+  --border:#e4e7ed; --border-light:#ebeef5; --line:#f2f4f7; --head-bg:#fafafa;
+  --radius:8px; --radius-sm:4px;
+  --font:"PingFang SC","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:var(--font);background:var(--bg);color:var(--text-1);font-size:14px;line-height:1.5}
+
+/* ============ 模拟后台外壳 ============ */
+.topbar{height:44px;background:#fff;border-bottom:1px solid var(--border-light);display:flex;align-items:center;justify-content:space-between;padding:0 24px}
+.topbar .brand{font-weight:600;font-size:14px}
+.topbar .brand span{color:var(--text-3);font-weight:400;margin-left:10px;font-size:12px}
+.topbar .note{font-size:12px;color:var(--text-3)}
+.stage{padding:20px 16px 40px;width:min(96vw,1100px);max-width:none;margin:0 auto}
+.stage-title{font-size:15px;font-weight:600;margin:0 0 4px}
+.stage-sub{font-size:12px;color:var(--text-3);margin:0 0 18px}
+
+/* ============ 弹窗：加宽 + 头/底固定、中间滚 ============ */
+.dialog{background:var(--card);border-radius:var(--radius);box-shadow:0 8px 30px rgba(31,45,61,.12);overflow:hidden;max-height:min(92vh,860px);display:flex;flex-direction:column}
+.dialog-header{display:flex;align-items:center;justify-content:space-between;padding:14px 20px 10px;flex:none}
+.dialog-title{font-size:16px;font-weight:600}
+.dialog-close{width:28px;height:28px;border:0;background:transparent;border-radius:var(--radius-sm);cursor:pointer;color:var(--text-3);display:flex;align-items:center;justify-content:center}
+.dialog-close:hover{background:var(--line);color:var(--text-1)}
+.dialog-body{padding:4px 20px 8px;flex:1 1 auto;overflow-y:auto;min-height:0}
+
+/* ============ 基础信息：宽屏三列，用宽换高 ============ */
+.form-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));column-gap:16px;row-gap:12px}
+.field{display:grid;grid-template-columns:88px minmax(0,1fr);align-items:center;gap:10px}
+.field label{font-size:13px;color:var(--text-2);text-align:right}
+.field label .req{color:var(--danger);margin-right:2px;font-weight:700}
+.ctl{height:30px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;padding:0 10px;font-size:13px;color:var(--text-1);display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
+.ctl .ph{color:#c0c4cc}
+.ctl .val{color:var(--text-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ctl.sel{cursor:default}
+.ctl .arrow{color:#c0c4cc;font-size:11px;flex:none}
+.ctl.focused{border-color:var(--primary)}
+.num-ctl{display:flex;align-items:center;border:1px solid var(--border);border-radius:var(--radius-sm);height:30px;background:#fff}
+.num-ctl button{width:30px;height:28px;border:0;background:transparent;color:var(--text-3);font-size:15px;cursor:default}
+.num-ctl .n{flex:1;text-align:center;font-size:13px;border-left:1px solid var(--border-light);border-right:1px solid var(--border-light);line-height:28px}
+
+/* ============ 工价小节 ============ */
+.section-gap{height:18px}
+.section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;padding-top:4px;border-top:1px solid var(--line);padding-top:14px}
+.section-title{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}
+.section-title .count{font-size:12px;font-weight:400;color:var(--text-3)}
+.rule-line{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-3);position:relative}
+.rule-line .q{width:16px;height:16px;border-radius:50%;border:1px solid #c0c4cc;color:var(--text-3);font-size:11px;display:inline-flex;align-items:center;justify-content:center;cursor:default}
+.rule-tip{position:absolute;right:0;top:22px;width:330px;background:#fff;border:1px solid var(--border-light);box-shadow:0 4px 16px rgba(31,45,61,.14);border-radius:var(--radius-sm);padding:10px 12px;font-size:12px;color:var(--text-2);line-height:1.6;opacity:0;pointer-events:none;transition:opacity .15s;z-index:20;text-align:left}
+.rule-line:hover .rule-tip{opacity:1}
+
+/* ============ 工序工价表：去竖线、浅横线 ============ */
+.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius-sm)}
+table.quote{width:100%;min-width:640px;border-collapse:collapse;table-layout:fixed;font-size:13px}
+table.quote th,table.quote td{border:0;border-bottom:1px solid var(--line);padding:10px 12px;vertical-align:top;text-align:left}
+table.quote thead th{background:var(--head-bg);color:var(--text-2);font-weight:600;font-size:13px}
+table.quote tbody tr:last-child td{border-bottom:0}
+td.op-name{font-weight:500;white-space:nowrap}
+.weak{color:var(--text-3)}
+
+/* 属性单元格：名左值右；宽屏三列压行高 */
+.attr-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 12px}
+.attr{display:grid;grid-template-columns:minmax(72px,40%) minmax(0,1fr);gap:6px;align-items:center}
+.attr.full{grid-column:1 / -1}
+.attr .a-label{font-size:12px;color:var(--text-2);text-align:right;line-height:1.3}
+.attr .a-label .req{color:var(--danger);font-weight:700;margin-right:2px}
+.attr .a-ctl{height:28px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;font-size:12px;display:flex;align-items:center;padding:0 8px;justify-content:space-between;gap:6px;color:var(--text-1);white-space:nowrap;overflow:hidden}
+.attr .a-ctl .ph{color:#c0c4cc;overflow:hidden;text-overflow:ellipsis}
+.attr .a-ctl .arrow{flex:none}
+.attr .a-ctl.err{border-color:var(--danger)}
+
+/* 单价列状态 */
+.tag{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:var(--radius-sm);font-size:12px;white-space:nowrap}
+.tag.muted{background:var(--head-bg);color:var(--text-3);border:1px solid var(--line)}
+.tag.warn{background:var(--warning-bg);color:var(--warning-text)}
+.price-ok{color:var(--success-text)}
+.price-ok .amt{font-size:15px;font-weight:700}
+.price-ok .sub{font-size:12px;color:var(--text-3);margin-top:2px;line-height:1.45}
+.err-text{color:var(--danger-text);font-size:12px;line-height:1.45}
+
+/* 操作列按钮：按状态降噪 */
+.act-btn{height:26px;padding:0 12px;border-radius:var(--radius-sm);font-size:12px;cursor:pointer;border:1px solid transparent;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.act-btn.primary{background:var(--primary-light);color:var(--primary);border-color:var(--primary-border)}
+.act-btn.primary:hover{background:var(--primary);color:#fff}
+.act-btn.disabled{background:#f4f4f5;color:#c0c4cc;cursor:not-allowed;border-color:var(--line)}
+.act-cell{text-align:center;white-space:nowrap}
+
+/* ============ 底部按钮（固定在弹窗底） ============ */
+.dialog-footer{display:flex;justify-content:flex-end;gap:10px;padding:12px 20px 16px;flex:none;border-top:1px solid var(--border-light);background:#fff}
+.btn{height:32px;padding:0 16px;border-radius:var(--radius-sm);font-size:13px;cursor:pointer;border:1px solid var(--border);background:#fff;color:var(--text-2)}
+.btn:hover{border-color:var(--primary-border);color:var(--primary)}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+.btn.primary:hover{background:#66b1ff}
+
+/* ============ 图例 + 美化要点 ============ */
+.legend{display:flex;flex-wrap:wrap;gap:14px 22px;margin-top:16px;font-size:12px;color:var(--text-2)}
+.legend .li{display:flex;align-items:center;gap:6px}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.changes{margin-top:22px;background:#fff;border:1px solid var(--border-light);border-radius:var(--radius);padding:14px 18px}
+.changes h4{margin:0 0 10px;font-size:13px;color:var(--text-2);font-weight:600}
+.changes ul{margin:0;padding-left:18px;color:var(--text-2);font-size:13px;line-height:1.9}
+
+/* toast */
+.toast{position:fixed;left:50%;bottom:34px;transform:translateX(-50%);background:rgba(48,49,51,.92);color:#fff;font-size:13px;padding:9px 18px;border-radius:var(--radius-sm);opacity:0;transition:opacity .2s;pointer-events:none;z-index:99}
+.toast.show{opacity:1}
+
+/* ============ 响应式 ============ */
+@media (max-width:1000px){
+  .form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .attr-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:720px){
+  .form-grid{grid-template-columns:1fr}
+  .attr-grid{grid-template-columns:1fr}
+  .stage{padding:16px 10px 40px;width:auto}
+  .dialog{max-height:none}
+  .rule-tip{width:240px;right:auto;left:-120px}
+}
+</style>
+</head>
+<body>
+
+<!-- 模拟后台顶栏 -->
+<div class="topbar">
+  <div class="brand">微聚轻MES · 生产工单<span>创建工单</span></div>
+  <div class="note">静态样式预览 · 不连后端 · 示例单价仅演示视觉效果</div>
+</div>
+
+<div class="stage">
+  <p class="stage-title">创建工单弹窗 · 轻量美化后效果</p>
+  <p class="stage-sub">流程与取价逻辑不变；弹窗加宽到约 1100px，属性三列、头底固定中间可滚，用宽度换高度。</p>
+
+  <!-- ================= 美化后弹窗 ================= -->
+  <div class="dialog" role="dialog" aria-label="创建工单">
+    <div class="dialog-header">
+      <div class="dialog-title">创建工单</div>
+      <button class="dialog-close" data-toast="关闭为静态演示，不执行操作" aria-label="关闭">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+
+    <div class="dialog-body">
+      <!-- 基础信息 -->
+      <div class="form-grid">
+        <div class="field">
+          <label>工单号</label>
+          <div class="ctl"><span class="ph">留空则系统自动生成工单号</span></div>
+        </div>
+        <div class="field">
+          <label><span class="req">*</span>产品</label>
+          <div class="ctl focused sel"><span class="val">P-101 头盔伞32寸</span><span class="arrow">▾</span></div>
+        </div>
+        <div class="field">
+          <label><span class="req">*</span>数量</label>
+          <div class="num-ctl"><button type="button" data-toast="静态演示">−</button><span class="n">1</span><button type="button" data-toast="静态演示">＋</button></div>
+        </div>
+        <div class="field">
+          <label>计划交期</label>
+          <div class="ctl sel"><span class="ph">选择交期，可留空</span><span class="arrow">▾</span></div>
+        </div>
+        <div class="field">
+          <label>批次</label>
+          <div class="ctl sel"><span class="ph">选择</span><span class="arrow">▾</span></div>
+        </div>
+        <div class="field">
+          <label>材质</label>
+          <div class="ctl sel"><span class="ph">选择</span><span class="arrow">▾</span></div>
+        </div>
+      </div>
+
+      <div class="section-gap"></div>
+
+      <!-- 工序工价小节：短提示 + 问号完整规则 -->
+      <div class="section-head">
+        <div class="section-title">工序工价 <span class="count">已取价 4 / 8</span></div>
+        <div class="rule-line">
+          带 ★ 为取价必填，提交前需取价成功
+          <span class="q">?</span>
+          <span class="rule-tip">
+            选产品后请按需补全带 ★ 的工艺属性，并点「重新取价」；<br>
+            提交或正式保存前须全部取价成功（暂存可不齐全）；<br>
+            已有报工后该工序单价锁定、不可更改。
+          </span>
+        </div>
+      </div>
+
+      <!-- 工价表 -->
+      <div class="table-wrap">
+        <table class="quote">
+          <colgroup>
+            <col style="width:92px">
+            <col style="width:44%">
+            <col style="width:28%">
+            <col style="width:104px">
+          </colgroup>
+          <thead>
+            <tr><th>工序</th><th>工艺属性</th><th>本单单价</th><th style="text-align:center">操作</th></tr>
+          </thead>
+          <tbody>
+            <!-- 1 合片：待重新取价（浅橙），按钮可点蓝 -->
+            <tr>
+              <td class="op-name">合片</td>
+              <td>
+                <div class="attr-grid">
+                  <div class="attr"><span class="a-label"><span class="req">★</span>丝印片数</span><span class="a-ctl"><span class="val">1片</span></span></div>
+                  <div class="attr"><span class="a-label">内标/拷壳边组</span><span class="a-ctl"><span class="ph">选择</span><span class="arrow">▾</span></span></div>
+                  <div class="attr"><span class="a-label">带/狗牙边/顶标组</span><span class="a-ctl"><span class="ph">选择</span><span class="arrow">▾</span></span></div>
+                  <div class="attr"><span class="a-label">特殊伞面规格</span><span class="a-ctl"><span class="ph">选择</span><span class="arrow">▾</span></span></div>
+                  <div class="attr"><span class="a-label">针数规格</span><span class="a-ctl"><span class="ph">可留空</span></span></div>
+                  <div class="attr"><span class="a-label">叠片</span><span class="a-ctl"><span class="ph">选择</span><span class="arrow">▾</span></span></div>
+                </div>
+              </td>
+              <td><span class="tag warn">待重新取价</span></td>
+              <td class="act-cell"><button class="act-btn primary" data-toast="静态演示：真实环境将按当前属性重新取价">重新取价</button></td>
+            </tr>
+            <!-- 2 缝伞：已定绿 -->
+            <tr>
+              <td class="op-name">缝伞</td>
+              <td class="weak">—</td>
+              <td>
+                <div class="price-ok"><span class="amt">0.12</span> 元/件
+                  <div class="sub">基础：标准件</div>
+                </div>
+              </td>
+              <td class="act-cell"><span class="act-btn disabled" aria-disabled="true">重新取价</span></td>
+            </tr>
+            <!-- 3 拉边：已定绿 -->
+            <tr>
+              <td class="op-name">拉边</td>
+              <td class="weak">—</td>
+              <td>
+                <div class="price-ok"><span class="amt">0.08</span> 元/件
+                  <div class="sub">基础：标准件</div>
+                </div>
+              </td>
+              <td class="act-cell"><span class="act-btn disabled" aria-disabled="true">重新取价</span></td>
+            </tr>
+            <!-- 4 小裁：待取价灰 -->
+            <tr>
+              <td class="op-name">小裁</td>
+              <td class="weak">—</td>
+              <td><span class="tag muted">待取价</span></td>
+              <td class="act-cell"><span class="act-btn disabled" aria-disabled="true">重新取价</span></td>
+            </tr>
+            <!-- 5 顶带：已定绿 -->
+            <tr>
+              <td class="op-name">顶带</td>
+              <td class="weak">—</td>
+              <td>
+                <div class="price-ok"><span class="amt">0.15</span> 元/件
+                  <div class="sub">基础：标准件</div>
+                </div>
+              </td>
+              <td class="act-cell"><span class="act-btn disabled" aria-disabled="true">重新取价</span></td>
+            </tr>
+            <!-- 6 打珠尾：待取价灰 -->
+            <tr>
+              <td class="op-name">打珠尾</td>
+              <td class="weak">—</td>
+              <td><span class="tag muted">待取价</span></td>
+              <td class="act-cell"><span class="act-btn disabled" aria-disabled="true">重新取价</span></td>
+            </tr>
+            <!-- 7 品检：已定绿 -->
+            <tr>
+              <td class="op-name">品检</td>
+              <td class="weak">—</td>
+              <td>
+                <div class="price-ok"><span class="amt">0.05</span> 元/件
+                  <div class="sub">基础：标准件</div>
+                </div>
+              </td>
+              <td class="act-cell"><span class="act-btn disabled" aria-disabled="true">重新取价</span></td>
+            </tr>
+            <!-- 8 包装：报错红，按钮可点蓝 -->
+            <tr>
+              <td class="op-name">包装</td>
+              <td>
+                <div class="attr-grid">
+                <div class="attr full">
+                    <span class="a-label"><span class="req">★</span>工艺动作</span>
+                    <span class="a-ctl err"><span class="ph">请先选择</span><span class="arrow">▾</span></span>
+                  </div>
+                </div>
+              </td>
+              <td><div class="err-text">「包装」缺少必填属性「工艺动作」，请选择后重新取价。</div></td>
+              <td class="act-cell"><button class="act-btn primary" data-toast="静态演示：补齐必填属性后再取价">重新取价</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 图例：按钮/状态含义 -->
+      <div class="legend">
+        <span class="li"><span class="dot" style="background:var(--success)"></span>已定价：绿色金额，按钮灰置</span>
+        <span class="li"><span class="dot" style="background:var(--warning)"></span>改动待重取：浅橙标签，按钮可点</span>
+        <span class="li"><span class="dot" style="background:#c0c4cc"></span>待取价：灰标签，按钮灰置</span>
+        <span class="li"><span class="dot" style="background:var(--danger)"></span>必填缺失：红色完整提示，按钮可点</span>
+      </div>
+    </div>
+
+    <div class="dialog-footer">
+      <button class="btn" data-toast="静态演示：取消不保存">取消</button>
+      <button class="btn" data-toast="静态演示：暂存允许工序未取价齐全">暂存</button>
+      <button class="btn primary" data-toast="静态演示：提交前须全部工序取价成功">提交</button>
+    </div>
+  </div>
+
+  <!-- 美化要点 -->
+  <div class="changes">
+    <h4>本次轻量美化要点（不改逻辑、不改接口）</h4>
+    <ul>
+      <li>弹窗宽度改为 <code>min(96vw, 1100px)</code>，吃掉大屏两侧空白。</li>
+      <li>基本信息宽屏三列；合片工艺属性宽屏三列（窄屏回两列/一列），用宽度压行高。</li>
+      <li>弹窗头/底固定，中间 body 单独滚动，少拖整页。</li>
+      <li>表格浅横线、短状态标签、金额加重、按钮按状态降噪等轻量美化保留。</li>
+      <li>不改取价/暂存/提交业务规则；正式实现仍走 Vue3 + Element Plus。</li>
+    </ul>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  var toast=document.getElementById('toast'),timer=null;
+  function show(msg){
+    toast.textContent=msg;toast.classList.add('show');
+    if(timer)clearTimeout(timer);
+    timer=setTimeout(function(){toast.classList.remove('show');},1600);
+  }
+  document.querySelectorAll('[data-toast]').forEach(function(el){
+    el.addEventListener('click',function(){show(el.getAttribute('data-toast'));});
+  });
+})();
+</script>
+</body>
+</html>

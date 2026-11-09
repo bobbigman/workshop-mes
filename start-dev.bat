@@ -54,17 +54,28 @@ start "MES-后端" cmd /k "cd /d "%~dp0backend" && title MES-后端 && dotnet ru
 echo [3/3] 启动前端 https://localhost:5173 ...
 start "MES-前端" cmd /k "cd /d "%~dp0frontend" && title MES-前端 && npm run dev"
 
+:: 取当前可给手机扫码用的局域网 IP（脚本：有默认网关的网卡；跳过本机/虚拟网卡）
+set "LAN_IP="
+for /f "usebackq delims=" %%i in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\get-lan-ip.ps1"`) do set "LAN_IP=%%i"
+if "%LAN_IP%"=="" set "LAN_IP=127.0.0.1"
+set "FRONT_URL=https://%LAN_IP%:5173"
+
 echo.
 echo 等待服务起来后自动打开浏览器...
+echo   当前局域网地址：%FRONT_URL%
 timeout /t 8 /nobreak >nul
-start "" "https://localhost:5173"
+start "" "%FRONT_URL%"
 
 echo.
 echo 已启动：
 echo   后端  https://localhost:8080
-echo   前端  https://localhost:5173
+echo   前端  %FRONT_URL%
+echo   （本机也可 https://localhost:5173 ；出个人码请用上面局域网地址）
 echo   演示  工厂 F001 / admin 或 zhangchu / Admin123
 echo.
-echo 提示：要用 Visual Studio 生成时，先双击 stop-dev.bat 停掉后端。
+echo 提示：
+echo   - 只要重启后端（代码改完要生效）：双击 restart-backend.bat
+echo   - 要用 Visual Studio 生成时：先双击 stop-dev.bat 停掉后端
 echo.
 pause
+

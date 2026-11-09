@@ -89,12 +89,12 @@ let searchTimer = null
 
 const tabs = ref([
   { key: 'all', label: '全部', count: 0 },
-  { key: '0', label: '未开始', count: 0 },
-  { key: '1', label: '执行中', count: 0 },
+  { key: '0', label: '已审核', count: 0 },
+  { key: '1', label: '报工中', count: 0 },
   { key: '2', label: '已结束', count: 0 }
 ])
 
-const STATUS = { 0: '未开始', 1: '执行中', 2: '已结束', 3: '已作废' }
+const STATUS = { 0: '已审核', 1: '报工中', 2: '已结束', 3: '已作废', 6: '已挂起' }
 function statusLabel(s) { return STATUS[s] ?? s }
 function formatDue(t) { return t ? String(t).replace('T', ' ').slice(0, 16) : '—' }
 function dueClass(row) { return row.dueState === 'overdue' ? 'due-overdue' : row.dueState === 'warning' ? 'due-warning' : '' }
@@ -135,8 +135,8 @@ onMounted(async () => {
 function syncTabCounts() {
   tabs.value = [
     { key: 'all', label: '全部', count: counts.value.all },
-    { key: '0', label: '未开始', count: counts.value.notStarted },
-    { key: '1', label: '执行中', count: counts.value.doing },
+    { key: '0', label: '已审核', count: counts.value.notStarted },
+    { key: '1', label: '报工中', count: counts.value.doing },
     { key: '2', label: '已结束', count: counts.value.done }
   ]
 }

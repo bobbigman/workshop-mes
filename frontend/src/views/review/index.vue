@@ -2,15 +2,78 @@
   <div>
     <div class="toolbar">
       <el-select
-        v-model="q.orderNo"
+        v-model="filterFieldKey"
+        placeholder="筛选字段"
+        class="toolbar-field"
+        @change="onFilterFieldChange"
+      >
+        <el-option
+          v-for="f in FILTER_FIELDS"
+          :key="f.key"
+          :label="f.label"
+          :value="f.key"
+        />
+      </el-select>
+      <el-select v-model="filterOp" class="toolbar-match">
+        <el-option
+          v-for="o in quickFilterOps"
+          :key="o.value"
+          :label="o.label"
+          :value="o.value"
+        />
+      </el-select>
+      <el-select
+        v-if="currentFilterMeta?.valueType === 'reviewStatus'"
+        v-model="filterValue"
+        clearable
+        placeholder="选择复核状态"
+        class="toolbar-value"
+        @keyup.enter="onSearch"
+      >
+        <el-option
+          v-for="o in REVIEW_STATUS_OPTIONS"
+          :key="o.value"
+          :label="o.label"
+          :value="String(o.value)"
+        />
+      </el-select>
+      <el-date-picker
+        v-else-if="currentFilterMeta?.valueType === 'date'"
+        v-model="filterValue"
+        type="date"
+        value-format="YYYY-MM-DD"
+        placeholder="选择日期"
+        class="toolbar-value"
+        clearable
+      />
+      <el-select
+        v-else-if="isProductFilterField"
+        v-model="filterValue"
+        clearable
+        filterable
+        allow-create
+        default-first-option
+        :placeholder="productFilterPlaceholder"
+        class="toolbar-value"
+        @keyup.enter="onSearch"
+      >
+        <el-option
+          v-for="p in productOptions"
+          :key="p.id"
+          :label="productFilterOptionLabel(p)"
+          :value="productFilterOptionValue(p)"
+        />
+      </el-select>
+      <el-select
+        v-else-if="filterFieldKey === 'orderNo'"
+        v-model="filterValue"
         filterable
         clearable
         allow-create
         default-first-option
-        placeholder="工单编号"
-        style="width:220px"
-        @change="load"
-        @clear="load"
+        placeholder="选择或输入工单号"
+        class="toolbar-value"
+        @keyup.enter="onSearch"
       >
         <el-option
           v-for="o in orderOptions"
@@ -19,21 +82,33 @@
           :value="o.value"
         />
       </el-select>
-      <el-input v-model="q.userName" placeholder="输入例：张三（输入姓名筛选）搜索姓名" clearable style="width:140px" />
-      <el-select v-model="q.reviewStatus" style="width:120px">
-        <el-option :value="0" label="待复核" />
-        <el-option :value="1" label="已通过" />
-        <el-option :value="2" label="已退回" />
-      </el-select>
-      <el-button type="primary" @click="load">查询</el-button>
-      <el-button type="success" :disabled="!selected.length" @click="onBatch">批量通过</el-button>
+      <el-input
+        v-else
+        v-model="filterValue"
+        clearable
+        :placeholder="filterValuePlaceholder"
+        class="toolbar-value"
+        @keyup.enter="onSearch"
+      />
+      <el-button type="primary" @click="onSearch">查询</el-button>
+      <el-button @click="onReset">重置</el-button>
+      <el-button type="success" @click="onToolbarApprove">通过</el-button>
+      <el-button type="danger" @click="onToolbarReject">退回</el-button>
+      <el-button type="success" plain @click="onBatch">批量通过</el-button>
     </div>
-    <mes-table table-key="views/review/index:1" :data="list" :row-class-name="rowClassName" @selection-change="onSel">
-      <el-table-column type="selection" width="48" :selectable="row => row.reviewStatus === 0" />
+    <mes-table
+      ref="tableRef"
+      table-key="views/review/index:1"
+      :data="list"
+      :row-class-name="rowClassName"
+      @selection-change="onSel"
+      @row-click="onRowClick"
+    >
+      <el-table-column type="selection" width="48" :selectable="row => row.reviewStatus !== 2" />
       <el-table-column prop="orderNo" label="工单" width="140" />
       <el-table-column prop="productName" label="产品" />
       <el-table-column prop="operationName" label="工序" width="100" />
-      <el-table-column prop="userName" label="输入例：张三（输入姓名筛选）搜索" width="90" />
+      <el-table-column prop="userName" label="报工人" width="90" />
       <el-table-column prop="goodQty" label="良品" width="70" />
       <el-table-column prop="defectQty" label="不良" width="70" />
       <el-table-column label="可报上限" width="160">
@@ -68,13 +143,8 @@
         </template>
       </el-table-column>
       <el-table-column prop="reportTime" label="报工时间" width="170" />
-      <el-table-column label="操作" width="160" fixed="right">
-        <template #default="{ row }">
-          <el-button v-if="row.reviewStatus === 0" link type="success" @click="onApprove(row)">通过</el-button>
-          <el-button v-if="row.reviewStatus !== 2" link type="danger" @click="openReject(row)">退回</el-button>
-        </template>
-      </el-table-column>
     </mes-table>
+    <mes-pager v-model:page="page" v-model:page-size="pageSize" :total="total" @change="load" />
 
     <el-dialog v-model="rejectDlg" title="退回报工" width="420px">
       <el-form label-width="80px">
@@ -124,17 +194,84 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { getPendingReviews, getReviewOrderOptions, approveReview, rejectReview, batchApproveReview } from '@/api/review'
+import { getProductList } from '@/api/base'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const route = useRoute()
 const isAdmin = Number(localStorage.getItem('role') || 0) === 1
 const list = ref([])
 const selected = ref([])
+const tableRef = ref(null)
 const orderOptions = ref([])
-const q = ref({ orderNo: '', userName: '', reviewStatus: 0, page: 1, pageSize: 50 })
+const productOptions = ref([])
+const total = ref(0)
+const page = ref(1)
+const pageSize = ref(20)
+
+const FILTER_FIELDS = [
+  { key: 'reviewStatus', label: '复核状态', valueType: 'reviewStatus' },
+  { key: 'keyword', label: '工单号/产品', valueType: 'text' },
+  { key: 'orderNo', label: '工单号', valueType: 'text' },
+  { key: 'productCode', label: '产品编号', valueType: 'text' },
+  { key: 'productName', label: '产品名称', valueType: 'text' },
+  { key: 'operationName', label: '工序', valueType: 'text' },
+  { key: 'userName', label: '报工人', valueType: 'text' },
+  { key: 'goodQty', label: '良品数', valueType: 'number' },
+  { key: 'reportTime', label: '报工时间', valueType: 'date' }
+]
+const REVIEW_STATUS_OPTIONS = [
+  { value: 0, label: '待复核' },
+  { value: 1, label: '已通过' },
+  { value: 2, label: '已退回' }
+]
+
+const filterFieldKey = ref('reviewStatus')
+const filterOp = ref('eq')
+const filterValue = ref('0')
+
+const currentFilterMeta = computed(() =>
+  FILTER_FIELDS.find(f => f.key === filterFieldKey.value) || FILTER_FIELDS[0]
+)
+const quickFilterOps = computed(() => {
+  const t = currentFilterMeta.value?.valueType || 'text'
+  if (t === 'number' || t === 'date') {
+    return [
+      { value: 'eq', label: '等于' },
+      { value: 'gt', label: '大于' },
+      { value: 'lt', label: '小于' }
+    ]
+  }
+  if (t === 'reviewStatus') {
+    return [{ value: 'eq', label: '等于' }]
+  }
+  return [
+    { value: 'contains', label: '包含' },
+    { value: 'eq', label: '等于' }
+  ]
+})
+const filterValuePlaceholder = computed(() => {
+  const t = currentFilterMeta.value?.valueType
+  if (t === 'number') return '输入数字'
+  return '输入筛选值'
+})
+const isProductFilterField = computed(() =>
+  filterFieldKey.value === 'productCode' || filterFieldKey.value === 'productName'
+)
+const productFilterPlaceholder = computed(() =>
+  filterFieldKey.value === 'productCode' ? '选择或输入产品编号' : '选择或输入产品名称'
+)
+function productFilterOptionLabel(p) {
+  return `${p.code || ''} ${p.name || ''}`.trim()
+}
+function productFilterOptionValue(p) {
+  return filterFieldKey.value === 'productCode' ? (p.code || '') : (p.name || '')
+}
+
+const selectedOne = computed(() => selected.value.length === 1 ? selected.value[0] : null)
+const selectedPending = computed(() => selected.value.filter(r => r.reviewStatus === 0))
 const rejectDlg = ref(false)
 const rejectReason = ref('')
 const rejectId = ref(null)
@@ -152,10 +289,17 @@ const batchAbnormalRows = ref([])
 const batchLoading = ref(false)
 
 onMounted(async () => {
-  if (route.query.orderNo) q.value.orderNo = String(route.query.orderNo)
-  if (route.query.reviewStatus != null && route.query.reviewStatus !== '')
-    q.value.reviewStatus = Number(route.query.reviewStatus)
-  await Promise.all([loadOrderOptions(), load()])
+  if (route.query.orderNo) {
+    filterFieldKey.value = 'orderNo'
+    filterOp.value = 'contains'
+    filterValue.value = String(route.query.orderNo)
+  }
+  if (route.query.reviewStatus != null && route.query.reviewStatus !== '') {
+    filterFieldKey.value = 'reviewStatus'
+    filterOp.value = 'eq'
+    filterValue.value = String(Number(route.query.reviewStatus))
+  }
+  await Promise.all([loadOrderOptions(), loadProductOptions(), load()])
 })
 
 async function loadOrderOptions() {
@@ -167,12 +311,69 @@ async function loadOrderOptions() {
   }))
 }
 
-async function load() {
-  const res = await getPendingReviews(q.value)
-  list.value = res.data?.list || []
+async function loadProductOptions() {
+  try {
+    const products = await getProductList({ page: 1, pageSize: 200 })
+    productOptions.value = products.data?.list || []
+  } catch (error) {
+    productOptions.value = []
+    console.error('[报工复核] 加载产品列表失败', error)
+  }
 }
 
-function onSel(rows) { selected.value = rows }
+async function load() {
+  const params = {
+    filterField: filterFieldKey.value || 'reviewStatus',
+    filterOp: filterOp.value || 'eq',
+    page: page.value,
+    pageSize: pageSize.value
+  }
+  if (filterValue.value != null && String(filterValue.value).trim() !== '') {
+    params.filterValue = String(filterValue.value).trim()
+  }
+  const res = await getPendingReviews(params)
+  list.value = res.data?.list || []
+  total.value = res.data?.total || 0
+  selected.value = []
+  await nextTick()
+  tableRef.value?.clearSelection?.()
+}
+
+function onFilterFieldChange() {
+  const t = currentFilterMeta.value?.valueType
+  if (t === 'number' || t === 'date' || t === 'reviewStatus') filterOp.value = 'eq'
+  else filterOp.value = 'contains'
+  filterValue.value = t === 'reviewStatus' ? '0' : ''
+  const allowed = new Set(quickFilterOps.value.map(o => o.value))
+  if (!allowed.has(filterOp.value)) {
+    filterOp.value = quickFilterOps.value[0]?.value || 'eq'
+  }
+}
+
+function onSearch() {
+  page.value = 1
+  load()
+}
+
+function onReset() {
+  filterFieldKey.value = 'reviewStatus'
+  filterOp.value = 'eq'
+  filterValue.value = '0'
+  page.value = 1
+  load()
+}
+
+function onSel(rows) { selected.value = rows || [] }
+
+/** 点行切换勾选；批量通过仍可多选勾选框 */
+function onRowClick(row, column, event) {
+  if (event?.target?.closest?.('button, a, .el-checkbox, input, label')) return
+  if (row.reviewStatus === 2) return
+  const table = tableRef.value
+  if (!table?.toggleRowSelection) return
+  const checked = selected.value.some(r => r.id === row.id)
+  table.toggleRowSelection(row, !checked)
+}
 
 function rowClassName({ row }) {
   return row.qtyAbnormal ? 'qty-abnormal-row' : ''
@@ -184,6 +385,38 @@ function formatDuration(m) {
   if (h && min) return `${h}小时${min}分`
   if (h) return `${h}小时`
   return `${min}分`
+}
+
+function requireOne(actionLabel) {
+  if (selected.value.length > 1) {
+    ElMessage.warning(`「${actionLabel}」一次只能选一条，请先只勾选一条（批量请用「批量通过」）`)
+    return null
+  }
+  if (!selectedOne.value) {
+    ElMessage.warning(`请先勾选一条报工再${actionLabel}`)
+    return null
+  }
+  return selectedOne.value
+}
+
+function onToolbarApprove() {
+  const row = requireOne('通过')
+  if (!row) return
+  if (row.reviewStatus !== 0) {
+    ElMessage.warning('只有待复核的报工才能通过')
+    return
+  }
+  onApprove(row)
+}
+
+function onToolbarReject() {
+  const row = requireOne('退回')
+  if (!row) return
+  if (row.reviewStatus === 2) {
+    ElMessage.warning('已经退回的报工不用再退')
+    return
+  }
+  openReject(row)
 }
 
 async function doApprove(id) {
@@ -231,8 +464,11 @@ async function onReject() {
 }
 
 async function onBatch() {
-  const rows = selected.value.slice()
-  if (!rows.length) return
+  const rows = selectedPending.value.slice()
+  if (!rows.length) {
+    ElMessage.warning('请先勾选待复核的报工再批量通过')
+    return
+  }
   const abnormal = rows.filter(r => r.qtyAbnormal)
   const ok = rows.filter(r => !r.qtyAbnormal)
   if (!abnormal.length) {
@@ -277,6 +513,9 @@ async function confirmBatchOkOnly() {
 
 <style scoped>
 .toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+.toolbar-field { width: 150px; }
+.toolbar-match { width: 100px; }
+.toolbar-value { width: 200px; }
 .wage-miss { color: #f56c6c; margin-right: 4px; }
 .qty-abnormal-tag { margin-left: 6px; }
 .dlg-body { margin: 0 0 12px; line-height: 1.6; color: #606266; }

@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>制造业企业的Agent架构 · 老胡 · 车间小工单 × 金蝶</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+      background: #1a1d24;
+      color: #e8eaed;
+    }
+
+    /* 整页铺满：上工具条 + 中间大海报 + 底栏 */
+    .layout {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+    }
+
+    .top {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 16px;
+      background: #111318;
+      border-bottom: 1px solid #2a2f3a;
+    }
+    .top h1 {
+      font-size: 16px;
+      font-weight: 800;
+      color: #c4b5fd;
+    }
+    .top .meta { font-size: 13px; color: #9aa3b2; }
+    .top a { color: #a78bfa; }
+
+    .viewer {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px 16px;
+      overflow: auto;
+      background: #0f1115;
+    }
+
+    /* 海报尽量占满可视区宽度，高度随图 */
+    .frame {
+      width: min(100%, 1100px);
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 8px 40px rgba(0,0,0,.45);
+      overflow: hidden;
+    }
+    .frame img {
+      display: block;
+      width: 100%;
+      height: auto;
+      /* 大屏上图更高，可读字 */
+      max-height: calc(100vh - 150px);
+      object-fit: contain;
+      object-position: top center;
+      background: #fff;
+      margin: 0 auto;
+    }
+
+    /* 超宽屏：允许海报再放大一档 */
+    @media (min-width: 1280px) {
+      .frame { width: min(100%, 1242px); }
+      .frame img { max-height: calc(100vh - 140px); }
+    }
+
+    .bottom {
+      padding: 10px 16px 14px;
+      background: #111318;
+      border-top: 1px solid #2a2f3a;
+    }
+    .nav {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      max-width: 1242px;
+      margin: 0 auto;
+    }
+    .nav button.nav-btn {
+      flex: 0 0 auto;
+      border: 1px solid #4b5568;
+      background: #1f2430;
+      color: #fff;
+      border-radius: 8px;
+      padding: 12px 18px;
+      font-size: 15px;
+      cursor: pointer;
+    }
+    .nav button.nav-btn:disabled { opacity: .35; cursor: default; }
+    .nav button.nav-btn:not(:disabled):hover { background: #2d3548; }
+
+    .mid {
+      flex: 1;
+      text-align: center;
+      min-width: 0;
+    }
+    .pager {
+      font-size: 14px;
+      font-weight: 700;
+      color: #e5e7eb;
+      margin-bottom: 8px;
+    }
+    .dots {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+    }
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: none;
+      background: #4b5568;
+      cursor: pointer;
+      padding: 0;
+    }
+    .dot.on { background: #8b5cf6; }
+
+    .thumbs {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+      gap: 8px;
+      max-width: 1242px;
+      margin: 12px auto 0;
+    }
+    .thumbs button {
+      border: 2px solid transparent;
+      border-radius: 6px;
+      padding: 0;
+      background: #1f2430;
+      cursor: pointer;
+      overflow: hidden;
+    }
+    .thumbs button.on { border-color: #8b5cf6; }
+    .thumbs img {
+      width: 100%;
+      display: block;
+      aspect-ratio: 3 / 4;
+      object-fit: cover;
+      object-position: top;
+    }
+
+    .extra {
+      max-width: 1242px;
+      margin: 16px auto 0;
+      display: grid;
+      grid-template-columns: 1fr 1.4fr;
+      gap: 12px;
+    }
+    @media (max-width: 800px) {
+      .extra { grid-template-columns: 1fr; }
+      .frame img { max-height: none; } /* 手机上整图纵向滚看清 */
+      .viewer { align-items: flex-start; }
+    }
+
+    .card {
+      background: #1f2430;
+      border: 1px solid #2a2f3a;
+      border-radius: 10px;
+      padding: 14px;
+    }
+    .card h3 { font-size: 14px; margin-bottom: 10px; color: #c4b5fd; }
+    .card img.qr {
+      width: 100%;
+      max-width: 240px;
+      display: block;
+      margin: 0 auto;
+      border-radius: 8px;
+      background: #fff;
+    }
+    .card textarea {
+      width: 100%;
+      min-height: 140px;
+      background: #111318;
+      border: 1px solid #374151;
+      border-radius: 8px;
+      color: #e5e7eb;
+      padding: 10px;
+      font-size: 13px;
+      font-family: inherit;
+      line-height: 1.55;
+      resize: vertical;
+    }
+    .card .actions { margin-top: 8px; display: flex; gap: 8px; align-items: center; }
+    .card .actions button {
+      background: #7c3aed;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .note { font-size: 12px; color: #9aa3b2; }
+
+    .zoom-tip {
+      font-size: 12px;
+      color: #9aa3b2;
+      text-align: center;
+      margin-top: 6px;
+    }
+    .zoom-tip button {
+      background: transparent;
+      border: 1px solid #4b5568;
+      color: #c4b5fd;
+      border-radius: 6px;
+      padding: 4px 10px;
+      margin-left: 8px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <header class="top">
+      <h1>制造业企业的Agent架构 · 老胡版</h1>
+      <div class="meta">
+        车间小工单 × 金蝶 · 一页一个重点 ·
+        <a href="https://mp.weixin.qq.com/s/NdeM4sfOSivN2KdOiNKeqQ" target="_blank" rel="noopener">对标原文思路</a>
+      </div>
+    </header>
+
+    <main class="viewer" id="viewer">
+      <div class="frame">
+        <img id="main" src="posters/00-cover.jpg" alt="Agent架构海报" />
+      </div>
+    </main>
+
+    <footer class="bottom">
+      <div class="nav">
+        <button type="button" class="nav-btn" id="prev" disabled>上一张</button>
+        <div class="mid">
+          <div class="pager" id="pager">1 / 9 · 能力矩阵 · Agent中枢</div>
+          <div class="dots" id="dots"></div>
+          <div class="zoom-tip">
+            看不清可点「原图打开」放大，或 Ctrl + 滚轮放大页面
+            <button type="button" id="openFull">原图打开</button>
+          </div>
+        </div>
+        <button type="button" class="nav-btn" id="next">下一张</button>
+      </div>
+
+      <div class="thumbs" id="thumbs"></div>
+
+      <div class="extra">
+        <div class="card">
+          <h3>扫码加老胡</h3>
+          <img class="qr" src="wechat-card.jpg" alt="金蝶云开发 老胡 微信二维码" />
+        </div>
+        <div class="card">
+          <h3>朋友圈文案</h3>
+          <textarea id="copyText">分享一套落地制造业企业的Agent架构（车间小工单 × 金蝶版）。
+
+系统解决「看得见」；岗位助手解决中间「谁去干」这一段——
+齐套欠料、异常催办、报工复核、进度追溯、排产建议、计件对账。
+
+金蝶管订单物料库存，小工单管报工派工工资；MCP 取数。
+低风险出清单催办；高风险金蝶最多存草稿，提交审核仍由人点。
+
+资料要齐。想看演示扫二维码加我：金蝶云开发 老胡</textarea>
+          <div class="actions">
+            <button type="button" id="copyBtn">复制文案</button>
+            <span class="note" id="copyMsg"></span>
+          </div>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      var posters = [
+        { src: "posters/00-cover.jpg", title: "封面" },
+        { src: "posters/01-modules.jpg", title: "八种能力" },
+        { src: "posters/02-flow.jpg", title: "助手怎么跑" },
+        { src: "posters/03-kit.jpg", title: "01 齐套欠料" },
+        { src: "posters/04-exception.jpg", title: "02 异常催办" },
+        { src: "posters/05-review.jpg", title: "03 报工复核" },
+        { src: "posters/06-progress.jpg", title: "04 进度追溯" },
+        { src: "posters/07-schedule.jpg", title: "05 排产建议" },
+        { src: "posters/08-wage.jpg", title: "06 计件对账" },
+        { src: "wechat-card.jpg", title: "加微信 · 老胡" }
+      ];
+      var i = 0;
+      var main = document.getElementById("main");
+      var dots = document.getElementById("dots");
+      var thumbs = document.getElementById("thumbs");
+      var prev = document.getElementById("prev");
+      var next = document.getElementById("next");
+      var pager = document.getElementById("pager");
+
+      posters.forEach(function (p, idx) {
+        var d = document.createElement("button");
+        d.type = "button";
+        d.className = "dot" + (idx ? "" : " on");
+        d.title = p.title;
+        d.addEventListener("click", function () { go(idx); });
+        dots.appendChild(d);
+
+        var t = document.createElement("button");
+        t.type = "button";
+        if (!idx) t.className = "on";
+        t.title = p.title;
+        var img = document.createElement("img");
+        img.src = p.src;
+        img.alt = p.title;
+        t.appendChild(img);
+        t.addEventListener("click", function () { go(idx); });
+        thumbs.appendChild(t);
+      });
+
+      function go(n) {
+        i = Math.max(0, Math.min(posters.length - 1, n));
+        main.src = posters[i].src;
+        main.alt = posters[i].title;
+        [].forEach.call(dots.children, function (el, idx) {
+          el.classList.toggle("on", idx === i);
+        });
+        [].forEach.call(thumbs.children, function (el, idx) {
+          el.classList.toggle("on", idx === i);
+        });
+        prev.disabled = !i;
+        next.disabled = i === posters.length - 1;
+        pager.textContent = (i + 1) + " / " + posters.length + " · " + posters[i].title;
+        document.getElementById("viewer").scrollTop = 0;
+      }
+
+      prev.onclick = function () { go(i - 1); };
+      next.onclick = function () { go(i + 1); };
+
+      document.getElementById("openFull").onclick = function () {
+        window.open(posters[i].src, "_blank");
+      };
+
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "ArrowLeft") go(i - 1);
+        if (e.key === "ArrowRight") go(i + 1);
+      });
+
+      var x0 = 0;
+      main.addEventListener("touchstart", function (e) {
+        x0 = e.changedTouches[0].screenX;
+      }, { passive: true });
+      main.addEventListener("touchend", function (e) {
+        var dx = e.changedTouches[0].screenX - x0;
+        if (dx < -50) go(i + 1);
+        if (dx > 50) go(i - 1);
+      }, { passive: true });
+
+      document.getElementById("copyBtn").onclick = function () {
+        var t = document.getElementById("copyText").value;
+        var m = document.getElementById("copyMsg");
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(t).then(function () { m.textContent = "已复制"; });
+        } else {
+          document.getElementById("copyText").select();
+          m.textContent = "请 Ctrl+C";
+        }
+      };
+    })();
+  </script>
+</body>
+</html>

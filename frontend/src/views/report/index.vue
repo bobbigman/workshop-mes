@@ -8,15 +8,93 @@
     <ValueTip :text="VALUE_TIPS.report" />
     <div class="toolbar">
       <el-select
-        v-model="q.orderNo"
+        v-model="filterFieldKey"
+        placeholder="筛选字段"
+        class="toolbar-field"
+        @change="onFilterFieldChange"
+      >
+        <el-option
+          v-for="f in FILTER_FIELDS"
+          :key="f.key"
+          :label="f.label"
+          :value="f.key"
+        />
+      </el-select>
+      <el-select v-model="filterOp" class="toolbar-match">
+        <el-option
+          v-for="o in quickFilterOps"
+          :key="o.value"
+          :label="o.label"
+          :value="o.value"
+        />
+      </el-select>
+      <el-select
+        v-if="currentFilterMeta?.valueType === 'userType'"
+        v-model="filterValue"
+        clearable
+        placeholder="选择人员类型"
+        class="toolbar-value"
+        @keyup.enter="onSearch"
+      >
+        <el-option
+          v-for="o in USER_TYPE_OPTIONS"
+          :key="o.value"
+          :label="o.label"
+          :value="String(o.value)"
+        />
+      </el-select>
+      <el-select
+        v-else-if="currentFilterMeta?.valueType === 'reviewStatus'"
+        v-model="filterValue"
+        clearable
+        placeholder="选择复核状态"
+        class="toolbar-value"
+        @keyup.enter="onSearch"
+      >
+        <el-option
+          v-for="o in REVIEW_STATUS_OPTIONS"
+          :key="o.value"
+          :label="o.label"
+          :value="String(o.value)"
+        />
+      </el-select>
+      <el-date-picker
+        v-else-if="currentFilterMeta?.valueType === 'date'"
+        v-model="filterValue"
+        type="date"
+        value-format="YYYY-MM-DD"
+        placeholder="选择日期"
+        class="toolbar-value"
+        clearable
+      />
+      <el-select
+        v-else-if="isProductFilterField"
+        v-model="filterValue"
+        clearable
+        filterable
+        allow-create
+        default-first-option
+        :placeholder="productFilterPlaceholder"
+        class="toolbar-value"
+        @keyup.enter="onSearch"
+      >
+        <el-option
+          v-for="p in productOptions"
+          :key="p.id"
+          :label="productFilterOptionLabel(p)"
+          :value="productFilterOptionValue(p)"
+        />
+      </el-select>
+      <el-select
+        v-else-if="filterFieldKey === 'orderNo'"
+        v-model="filterValue"
         filterable
         clearable
         allow-create
         default-first-option
-        placeholder="工单编号"
-        style="width:220px"
-        @change="load"
-        @clear="load"
+        placeholder="选择或输入工单号"
+        class="toolbar-value"
+        @keyup.enter="onSearch"
       >
         <el-option
           v-for="o in orderOptions"
@@ -25,22 +103,35 @@
           :value="o.value"
         />
       </el-select>
-      <el-input v-model="q.productCode" placeholder="产品编号" clearable style="width:160px" />
-      <el-input v-model="q.productName" placeholder="产品名称" clearable style="width:160px" />
-      <el-select v-model="q.userType" clearable placeholder="人员类型" style="width:140px" @change="load">
-        <el-option v-for="o in USER_TYPE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
-      </el-select>
-      <el-button type="primary" @click="load">查询</el-button>
+      <el-input
+        v-else
+        v-model="filterValue"
+        clearable
+        :placeholder="filterValuePlaceholder"
+        class="toolbar-value"
+        @keyup.enter="onSearch"
+      />
+      <el-button type="primary" @click="onSearch">查询</el-button>
+      <el-button @click="onReset">重置</el-button>
       <el-button type="success" @click="openCreate()">+ 报工</el-button>
       <el-button v-if="canProxy" type="primary" plain @click="openProxy()">代报工</el-button>
       <el-button v-if="isAdmin" type="warning" @click="openBatch()">一键补报未完工序</el-button>
       <el-button v-if="isAdmin" @click="openPending">待补报开工记录</el-button>
+      <el-button @click="onToolbarEdit">修改</el-button>
+      <el-button @click="onToolbarChangeLogs">修改记录</el-button>
     </div>
-    <mes-table table-key="views/report/index:1" :data="list">
+    <mes-table
+      ref="tableRef"
+      table-key="views/report/index:1"
+      :data="list"
+      @selection-change="onSelectionChange"
+      @row-click="onRowClick"
+    >
+      <el-table-column type="selection" width="48" fixed />
       <el-table-column prop="orderNo" label="工单编号" />
       <el-table-column prop="productName" label="产品" />
       <el-table-column prop="operationName" label="工序" />
-      <el-table-column prop="userName" label="报输入输入工人姓名搜索姓名搜索" width="90" />
+      <el-table-column prop="userName" label="报工人" width="90" />
       <el-table-column label="人员类型" width="110">
         <template #default="{ row }">
           <el-tag :type="userTypeTagType(row.userType)" size="small">{{ userTypeLabel(row.userType) }}</el-tag>
@@ -70,22 +161,24 @@
         </template>
       </el-table-column>
       <el-table-column prop="reportTime" label="时间" width="170" />
-      <el-table-column label="操作" width="140">
-        <template #default="{ row }">
-          <el-button
-            link
-            type="primary"
-            :disabled="row.reviewStatus === 1 || row.settledFlag"
-            @click="openEdit(row)"
-          >修改</el-button>
-          <el-button link type="info" @click="openChangeLogs(row)">修改记录</el-button>
-        </template>
-      </el-table-column>
     </mes-table>
+    <mes-pager v-model:page="page" v-model:page-size="pageSize" :total="total" @change="load" />
     </template>
 
     <!-- 新增报工（电脑端） -->
-    <el-dialog v-model="createDlg" title="新增报工" width="560px" @closed="resetCreate">
+    <el-dialog v-model="createDlg" width="560px" @closed="resetCreate">
+      <template #header>
+        <div class="create-dlg-header">
+          <span class="create-dlg-title">新增报工</span>
+          <el-button
+            text
+            class="create-help-btn"
+            title="报工说明"
+            aria-label="报工说明"
+            @click="openCreateHelp()"
+          >？</el-button>
+        </div>
+      </template>
       <el-form :model="createForm" label-width="90px">
         <el-form-item label="工单号" required>
           <el-select
@@ -152,6 +245,9 @@
         <el-form-item v-if="isAdmin && !shareEnabled" label="计时补报">
           <el-date-picker v-model="createTimes" type="datetimerange" value-format="YYYY-MM-DDTHH:mm:ss" start-placeholder="实际开始" end-placeholder="实际结束" />
         </el-form-item>
+        <el-form-item v-else-if="!isAdmin" label="计时补报">
+          <el-button link type="info" class="create-backfill-link" @click="openCreateHelp('backfill')">计时补报（管理员用）</el-button>
+        </el-form-item>
         <el-form-item label="多人报工">
           <el-checkbox v-model="shareEnabled">多人共同报工</el-checkbox>
         </el-form-item>
@@ -195,6 +291,22 @@
         <el-button @click="createDlg=false">取消</el-button>
         <el-button type="primary" :loading="submitting" :disabled="locked" @click="onCreate(false)">提交</el-button>
         <el-button type="success" :loading="submitting" :disabled="locked" @click="onCreate(true)">继续报工</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="createHelpDlg" :title="reportCreateHelp.title" width="480px" append-to-body>
+      <div class="create-help-body">
+        <p v-for="(line, i) in reportCreateHelp.public" :key="'p' + i">{{ line }}</p>
+        <p v-for="(line, i) in reportCreateHelp.backfill" :key="'b' + i" class="create-help-backfill">{{ line }}</p>
+        <el-button link type="primary" @click="createHelpReasonOpen = !createHelpReasonOpen">
+          {{ reportCreateHelp.backfillReason.link }}
+        </el-button>
+        <div v-if="createHelpReasonOpen" class="create-help-reason">
+          <p v-for="(line, i) in reportCreateHelp.backfillReason.body" :key="'r' + i">{{ line }}</p>
+        </div>
+      </div>
+      <template #footer>
+        <el-button type="primary" @click="createHelpDlg = false">知道了</el-button>
       </template>
     </el-dialog>
 
@@ -475,9 +587,10 @@
 </template>
 <script setup>
 import ProcessingRequirements from '@/components/ProcessingRequirements.vue'
-import { ref, computed, onMounted, onActivated, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onActivated, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getReportList, updateReport, submitReport, batchReport, getDefectsByOp, getOrderByNo, getOrderList, getReportCandidates, getReportChangeLogs } from '@/api/prod'
+import { getProductList } from '@/api/base'
 import { getUserList } from '@/api/sys'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getPendingWorkSessions, reportPendingWorkSession } from '@/api/workSession'
@@ -487,6 +600,7 @@ import { VALUE_TIPS } from '@/constants/valueTips'
 import ManagementTimeRange from '@/components/ManagementTimeRange.vue'
 import { canOpenReportManagement, isReportManagementEntry, managementTimeError } from '@/utils/reportManagement'
 import { USER_TYPE_OPTIONS, userTypeLabel, userTypeTagType } from '@/constants/userType'
+import { reportCreateHelp } from '@/help/reportCreateHelp'
 
 const route = useRoute()
 const router = useRouter()
@@ -510,11 +624,134 @@ const pendingError = ref(false)
 let batchLoadVersion = 0
 let pendingLoadVersion = 0
 const list = ref([]), dlg = ref(false), createDlg = ref(false), defectOptions = ref([])
+const page = ref(1), pageSize = ref(20), total = ref(0)
+const tableRef = ref(null)
+const selectedRows = ref([])
+const selectedOne = computed(() => selectedRows.value.length === 1 ? selectedRows.value[0] : null)
+const createHelpDlg = ref(false)
+const createHelpReasonOpen = ref(false)
+function openCreateHelp(focus) {
+  createHelpReasonOpen.value = focus === 'backfill'
+  createHelpDlg.value = true
+}
 const logDlg = ref(false), changeLogs = ref([]), logLoading = ref(false)
 const submitting = ref(false)
 const orderDetail = ref(null)
 const orderOptions = ref([])
-const q = ref({ orderNo: '', productCode: '', productName: '', userType: null })
+const productOptions = ref([])
+
+const FILTER_FIELDS = [
+  { key: 'keyword', label: '工单号/产品', valueType: 'text' },
+  { key: 'orderNo', label: '工单号', valueType: 'text' },
+  { key: 'productCode', label: '产品编号', valueType: 'text' },
+  { key: 'productName', label: '产品名称', valueType: 'text' },
+  { key: 'operationName', label: '工序', valueType: 'text' },
+  { key: 'userName', label: '报工人', valueType: 'text' },
+  { key: 'userType', label: '人员类型', valueType: 'userType' },
+  { key: 'reviewStatus', label: '复核状态', valueType: 'reviewStatus' },
+  { key: 'goodQty', label: '良品数', valueType: 'number' },
+  { key: 'reportTime', label: '报工时间', valueType: 'date' }
+]
+const REVIEW_STATUS_OPTIONS = [
+  { value: 0, label: '待复核' },
+  { value: 1, label: '已通过' },
+  { value: 2, label: '已退回' }
+]
+const filterFieldKey = ref('keyword')
+const filterOp = ref('contains')
+const filterValue = ref('')
+const currentFilterMeta = computed(() =>
+  FILTER_FIELDS.find(f => f.key === filterFieldKey.value) || FILTER_FIELDS[0]
+)
+const quickFilterOps = computed(() => {
+  const t = currentFilterMeta.value?.valueType || 'text'
+  if (t === 'number' || t === 'date') {
+    return [
+      { value: 'eq', label: '等于' },
+      { value: 'gt', label: '大于' },
+      { value: 'lt', label: '小于' }
+    ]
+  }
+  if (t === 'userType' || t === 'reviewStatus') {
+    return [{ value: 'eq', label: '等于' }]
+  }
+  return [
+    { value: 'contains', label: '包含' },
+    { value: 'eq', label: '等于' }
+  ]
+})
+const filterValuePlaceholder = computed(() => {
+  const t = currentFilterMeta.value?.valueType
+  if (t === 'number') return '输入数字'
+  return '输入筛选值'
+})
+const isProductFilterField = computed(() =>
+  filterFieldKey.value === 'productCode' || filterFieldKey.value === 'productName'
+)
+const productFilterPlaceholder = computed(() =>
+  filterFieldKey.value === 'productCode' ? '选择或输入产品编号' : '选择或输入产品名称'
+)
+function productFilterOptionLabel(p) {
+  return `${p.code || ''} ${p.name || ''}`.trim()
+}
+function productFilterOptionValue(p) {
+  return filterFieldKey.value === 'productCode' ? (p.code || '') : (p.name || '')
+}
+function onFilterFieldChange() {
+  filterValue.value = ''
+  const t = currentFilterMeta.value?.valueType
+  if (t === 'number' || t === 'date' || t === 'userType' || t === 'reviewStatus') filterOp.value = 'eq'
+  else filterOp.value = 'contains'
+  const allowed = new Set(quickFilterOps.value.map(o => o.value))
+  if (!allowed.has(filterOp.value)) {
+    filterOp.value = quickFilterOps.value[0]?.value || 'eq'
+  }
+}
+function onSearch() {
+  page.value = 1
+  load()
+}
+function onReset() {
+  filterFieldKey.value = 'keyword'
+  filterOp.value = 'contains'
+  filterValue.value = ''
+  page.value = 1
+  load()
+}
+function onSelectionChange(rows) {
+  selectedRows.value = rows || []
+}
+function onRowClick(row, column, event) {
+  if (event?.target?.closest?.('button, a, .el-checkbox, input, label')) return
+  const table = tableRef.value
+  if (!table?.toggleRowSelection) return
+  table.clearSelection?.()
+  table.toggleRowSelection(row, true)
+}
+function requireOne(actionLabel) {
+  if (selectedRows.value.length > 1) {
+    ElMessage.warning(`「${actionLabel}」一次只能选一条报工，请先只勾选一条`)
+    return null
+  }
+  if (!selectedOne.value) {
+    ElMessage.warning(`请先勾选一条报工再${actionLabel}`)
+    return null
+  }
+  return selectedOne.value
+}
+function onToolbarEdit() {
+  const row = requireOne('修改')
+  if (!row) return
+  if (row.reviewStatus === 1 || row.settledFlag) {
+    ElMessage.warning(row.settledFlag ? '已结算的报工不能再改' : '已复核通过的报工不能再改')
+    return
+  }
+  openEdit(row)
+}
+function onToolbarChangeLogs() {
+  const row = requireOne('修改记录')
+  if (row) openChangeLogs(row)
+}
 const form = ref({
   id: null, operationId: null, operationName: '',
   goodQty: 0, defectQty: 0, defectId: null, hours: 0, minutes: 0
@@ -759,8 +996,22 @@ onMounted(async () => {
     else if (route.query.action === 'pending') openPending()
     return
   }
-  if (!route.query.order) await Promise.all([load(), loadOrderOptions()])
+  if (!route.query.order) {
+    await Promise.all([load(), loadOrderOptions(), loadProductOptions()])
+  } else {
+    await loadProductOptions()
+  }
 })
+
+async function loadProductOptions() {
+  try {
+    const products = await getProductList({ page: 1, pageSize: 200 })
+    productOptions.value = products.data?.list || []
+  } catch (error) {
+    productOptions.value = []
+    console.error('[报工] 加载产品列表失败', error)
+  }
+}
 
 // PC 标签页按路径缓存；从工单再次进入时不会重新 mounted。
 onActivated(async () => {
@@ -786,15 +1037,20 @@ async function loadOrderOptions() {
 
 async function load() {
   const params = {
-    orderNo: q.value.orderNo || undefined,
-    productCode: q.value.productCode || undefined,
-    productName: q.value.productName || undefined,
-    page: 1,
-    pageSize: 100
+    filterField: filterFieldKey.value || 'keyword',
+    filterOp: filterOp.value || 'contains',
+    page: page.value,
+    pageSize: pageSize.value
   }
-  if (q.value.userType != null) params.userType = q.value.userType
+  if (filterValue.value != null && String(filterValue.value).trim() !== '') {
+    params.filterValue = String(filterValue.value).trim()
+  }
   const res = await getReportList(params)
   list.value = res.data.list || []
+  total.value = res.data.total || 0
+  selectedRows.value = []
+  await nextTick()
+  tableRef.value?.clearSelection?.()
 }
 
 function onCreateOrderChange(val) {
@@ -1245,7 +1501,7 @@ async function onSave() {
     durationMinutes,
     source: 1
   })
-  ElMessage.success('工单工单已保存，可在工单列表中查看和管理，可在工单列表中查看和管理')
+  ElMessage.success('报工已保存')
   dlg.value = false
   await load()
 }
@@ -1389,7 +1645,20 @@ async function onBatchSubmit() {
 }
 </script>
 <style scoped>
-.toolbar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.toolbar{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.toolbar-field{width:150px}
+.toolbar-match{width:100px}
+.toolbar-value{width:200px}
+.create-dlg-header{display:flex;align-items:center;gap:4px;padding-right:28px}
+.create-dlg-title{font-size:16px;font-weight:600;line-height:1.5;color:var(--el-text-color-primary)}
+.create-help-btn{padding:0 4px;min-height:auto;font-size:16px;font-weight:600;color:var(--el-text-color-secondary)}
+.create-backfill-link{padding:0;color:#909399}
+.create-help-body{line-height:1.65;color:#303133;font-size:14px}
+.create-help-body p{margin:0 0 10px}
+.create-help-backfill{color:#606266}
+.create-help-reason{margin-top:8px;padding:10px 12px;background:#f5f7fa;border-radius:4px;color:#606266;font-size:13px}
+.create-help-reason p{margin:0 0 8px}
+.create-help-reason p:last-child{margin-bottom:0}
 .duration{display:flex;gap:8px;align-items:center}
 .summary{display:flex;gap:16px;color:#606266;font-size:13px}
 .hint{margin-left:8px;color:#909399;font-size:12px}

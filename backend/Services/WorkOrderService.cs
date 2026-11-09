@@ -11,7 +11,7 @@ public interface IWorkOrderService
     Task<ApiResult<WorkOrderStatusCountsDto>> GetStatusCountsAsync(long factoryId);
     Task<ApiResult<WorkOrderDetailDto>> GetAsync(long id, long factoryId);
     Task<ApiResult<object?>> CreateAsync(WorkOrderCreateDto dto, long currentUserId, long factoryId);
-    Task<ApiResult<object?>> UpdateAsync(long id, WorkOrderUpdateDto dto, long factoryId);
+    Task<ApiResult<object?>> UpdateAsync(long id, WorkOrderUpdateDto dto, long currentUserId, long factoryId);
     Task<ApiResult<object?>> TransitionAsync(long id, string action, long factoryId);
     Task<ApiResult<object?>> CopyAsync(long id, long currentUserId, long factoryId);
     Task<ApiResult<object?>> DeleteAsync(long id);
@@ -25,7 +25,7 @@ public class WorkOrderQueryDto
 {
     public string? Keyword { get; set; }
     public byte? Status { get; set; }
-    public bool ExcludeCancelled { get; set; }  // H5 列表排除已作废(3)
+    public bool ExcludeCancelled { get; set; }  // 「全部」/H5：排除已作废(3)、已挂起(6)及草稿/待审
     /// <summary>为 true 时只返回未结束工单（status 非 2 非 3），供报工下拉。</summary>
     public bool ExcludeFinished { get; set; }
     public int Page { get; set; } = 1;
@@ -33,8 +33,17 @@ public class WorkOrderQueryDto
     /// <summary>可选；须为本厂 work_order 字段。值空白时不筛，但仍校验 ID。</summary>
     public long? CustomFieldId { get; set; }
     public string? CustomFieldValue { get; set; }
-    /// <summary>exact | contains；默认 exact。单选/数字仅 exact。</summary>
+    /// <summary>exact | contains；默认 exact。单选/数字仅 exact。兼容旧端；优先用 FilterField。</summary>
     public string? CustomFieldMatch { get; set; }
+
+    /// <summary>
+    /// 快捷过滤字段：keyword | orderNo | productCode | productName | qty | dueDate | cf_{id}。
+    /// 有值时优先于 Keyword + CustomField*。
+    /// </summary>
+    public string? FilterField { get; set; }
+    /// <summary>eq | contains | gt | lt。默认：文本 contains，其它 eq。</summary>
+    public string? FilterOp { get; set; }
+    public string? FilterValue { get; set; }
 }
 
 public class WorkOrderStatusCountsDto
@@ -46,6 +55,10 @@ public class WorkOrderStatusCountsDto
     public int Cancelled { get; set; }
     /// <summary>docs/425：草稿(status=4)</summary>
     public int Draft { get; set; }
+    /// <summary>docs/435：待审核(status=5)</summary>
+    public int PendingAudit { get; set; }
+    /// <summary>docs/437：已挂起(status=6)</summary>
+    public int Suspended { get; set; }
 }
 
 public class WorkOrderCreateDto
@@ -59,8 +72,10 @@ public class WorkOrderCreateDto
     public int Qty { get; set; }
     public DateTime? DueDate { get; set; }           // 计划交期，可空
     public Dictionary<long, string> Ext { get; set; } = new();
-    /// <summary>docs/425：true=暂存为草稿(4)不锁价；false=提交未开始(0)并锁价。</summary>
+    /// <summary>兼容旧客户端：true=draft；false=approve。优先看 SaveAction。</summary>
     public bool AsDraft { get; set; }
+    /// <summary>docs/435：draft=暂存(4)；pending=保存待审(5)不锁价；approve=审核锁价→未开始(0)。</summary>
+    public string? SaveAction { get; set; }
 }
 
 public class WorkOrderPlanDto
@@ -80,8 +95,10 @@ public class WorkOrderUpdateDto
     public DateTime? DueDate { get; set; }           // 计划交期，可空
     public List<WorkOrderPlanDto>? PlanQty { get; set; } // 工序计划数
     public Dictionary<long, string>? Ext { get; set; }   // 自定义字段
-    /// <summary>docs/425：仅草稿单有效；true=继续暂存；false=提交为未开始并锁价。已生效单忽略，保存必须锁价。</summary>
+    /// <summary>兼容旧客户端：true=draft；false=approve。优先看 SaveAction。</summary>
     public bool AsDraft { get; set; }
+    /// <summary>docs/435：draft / pending / approve。已生效(0/1)仅允许 approve 语义（锁价校验）。</summary>
+    public string? SaveAction { get; set; }
 }
 
 public class WorkOrderListOpDto
@@ -156,6 +173,12 @@ public class WorkOrderDetailDto
     public bool Reopened { get; set; }
     public DateTime? DueDate { get; set; }
     public string DueState { get; set; } = "";       // normal/warning/overdue
+    /// <summary>docs/436：创建人姓名；空则前端显示 —</summary>
+    public string CreatedByName { get; set; } = "";
+    public DateTime CreatedAt { get; set; }
+    /// <summary>docs/436：审核人姓名；未审为空</summary>
+    public string AuditedByName { get; set; } = "";
+    public DateTime? AuditedAt { get; set; }
     public Dictionary<long, string> Ext { get; set; } = new();
     public List<WorkOrderTaskDto> Tasks { get; set; } = new();
 }
@@ -166,59 +189,86 @@ public class WorkOrderService : IWorkOrderService
     private readonly WechatEventService? _events;
     public WorkOrderService(AppDbContext db, WechatEventService? events = null) { _db = db; _events = events; }
 
+    /// <summary>docs/435：4 草稿、5 待审核 —— 未审核不可报工/不进现场列表。</summary>
+    public static bool IsPreAuditStatus(byte status) => status is 4 or 5;
+
+    /// <summary>draft|pending|approve；空则回落 asDraft（true→draft，false→approve）。</summary>
+    public static string ResolveSaveAction(bool asDraft, string? saveAction)
+    {
+        var a = (saveAction ?? "").Trim().ToLowerInvariant();
+        if (a is "draft" or "pending" or "approve") return a;
+        return asDraft ? "draft" : "approve";
+    }
+
+    /// <summary>docs/436：仅首次审核写入；已有审核时间则不改。</summary>
+    public static void StampFirstAudit(ProdWorkOrder order, long userId)
+    {
+        if (order.AuditedAt.HasValue) return;
+        order.AuditedBy = userId;
+        order.AuditedAt = DateTime.Now;
+    }
+
     public async Task<ApiResult<PageResult<WorkOrderListDto>>> QueryAsync(WorkOrderQueryDto query, long factoryId)
     {
         await TenantDataGuard.WorkOrdersAsync(_db, factoryId);
         var q = from o in _db.WorkOrders.AsNoTracking()
                 where o.FactoryId == factoryId
                 join p in _db.Products.AsNoTracking().Where(p => p.FactoryId == factoryId) on o.ProductId equals p.Id
-                select new { o, ProductName = p.Name, ProductCode = p.Code };
+                select new WorkOrderQueryJoin { Order = o, ProductName = p.Name, ProductCode = p.Code };
 
-        if (!string.IsNullOrWhiteSpace(query.Keyword))
-            q = q.Where(x => x.o.OrderNo.Contains(query.Keyword) || x.ProductName.Contains(query.Keyword) || x.ProductCode.Contains(query.Keyword));
         if (query.Status.HasValue)
-            q = q.Where(x => x.o.Status == query.Status.Value);
+            q = q.Where(x => x.Order.Status == query.Status.Value);
         else if (query.ExcludeFinished)
-            q = q.Where(x => x.o.Status != 2 && x.o.Status != 3);
+            q = q.Where(x => x.Order.Status != 2 && x.Order.Status != 3 && x.Order.Status != 6);
         else if (query.ExcludeCancelled)
-            // 「全部」/现场列表：不含已作废、不含草稿（docs/425）
-            q = q.Where(x => x.o.Status != 3 && x.o.Status != 4);
+            // 「全部」/现场列表：不含已作废、已挂起、草稿、待审核（docs/425/435/437）
+            q = q.Where(x => x.Order.Status != 3 && x.Order.Status != 4 && x.Order.Status != 5 && x.Order.Status != 6);
 
-        var filter = await ParseCustomFieldFilterAsync(query, factoryId);
-        if (filter != null)
+        if (!string.IsNullOrWhiteSpace(query.FilterField))
         {
-            var fieldId = filter.Value.FieldId;
-            var value = filter.Value.Value;
-            if (filter.Value.Match == "exact")
+            q = await ApplyQuickFilterAsync(q, query, factoryId);
+        }
+        else
+        {
+            if (!string.IsNullOrWhiteSpace(query.Keyword))
+                q = q.Where(x => x.Order.OrderNo.Contains(query.Keyword) || x.ProductName.Contains(query.Keyword) || x.ProductCode.Contains(query.Keyword));
+
+            var filter = await ParseCustomFieldFilterAsync(query, factoryId);
+            if (filter != null)
             {
-                q = q.Where(x => _db.CustomFieldValues.AsNoTracking()
-                    .Any(v => v.FieldId == fieldId && v.Value == value && v.TargetId == x.o.Id));
-            }
-            else
-            {
-                var likePattern = "%" + EscapeLikePattern(value) + "%";
-                q = q.Where(x => _db.CustomFieldValues.AsNoTracking()
-                    .Any(v => v.FieldId == fieldId && v.Value != null
-                              && EF.Functions.Like(v.Value, likePattern)
-                              && v.TargetId == x.o.Id));
+                var fieldId = filter.Value.FieldId;
+                var value = filter.Value.Value;
+                if (filter.Value.Match == "exact")
+                {
+                    q = q.Where(x => _db.CustomFieldValues.AsNoTracking()
+                        .Any(v => v.FieldId == fieldId && v.Value == value && v.TargetId == x.Order.Id));
+                }
+                else
+                {
+                    var likePattern = "%" + EscapeLikePattern(value) + "%";
+                    q = q.Where(x => _db.CustomFieldValues.AsNoTracking()
+                        .Any(v => v.FieldId == fieldId && v.Value != null
+                                  && EF.Functions.Like(v.Value, likePattern)
+                                  && v.TargetId == x.Order.Id));
+                }
             }
         }
 
         var total = await q.CountAsync();
-        var list = await q.OrderByDescending(x => x.o.Id)
+        var list = await q.OrderByDescending(x => x.Order.Id)
             .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
             .Select(x => new WorkOrderListDto
             {
-                Id = x.o.Id,
-                OrderNo = x.o.OrderNo,
+                Id = x.Order.Id,
+                OrderNo = x.Order.OrderNo,
                 ProductCode = x.ProductCode,
                 ProductName = x.ProductName,
-                Qty = x.o.Qty,
-                PlanQty = x.o.Qty,
-                Status = x.o.Status,
-                Reopened = x.o.Reopened,
-                DueDate = x.o.DueDate,
-                CreatedAt = x.o.CreatedAt
+                Qty = x.Order.Qty,
+                PlanQty = x.Order.Qty,
+                Status = x.Order.Status,
+                Reopened = x.Order.Reopened,
+                DueDate = x.Order.DueDate,
+                CreatedAt = x.Order.CreatedAt
             }).ToListAsync();
 
         await FillListProgressAsync(list, factoryId);
@@ -237,6 +287,130 @@ public class WorkOrderService : IWorkOrderService
             item.DueState = DueStateHelper.Calc(item.Status, item.DueDate, now);
 
         return ApiResult<PageResult<WorkOrderListDto>>.Ok(new PageResult<WorkOrderListDto> { List = list, Total = total });
+    }
+
+    /// <summary>工单列表联表投影（便于快捷过滤复用）。</summary>
+    private sealed class WorkOrderQueryJoin
+    {
+        public ProdWorkOrder Order { get; set; } = null!;
+        public string ProductName { get; set; } = "";
+        public string ProductCode { get; set; } = "";
+    }
+
+    /// <summary>
+    /// 快捷过滤：字段 + 比较符 + 值（对标金蝶列表快捷过滤）。
+    /// 值空白：已选字段但不筛。
+    /// </summary>
+    private async Task<IQueryable<WorkOrderQueryJoin>> ApplyQuickFilterAsync(
+        IQueryable<WorkOrderQueryJoin> q, WorkOrderQueryDto query, long factoryId)
+    {
+        var field = query.FilterField!.Trim();
+        var value = string.IsNullOrWhiteSpace(query.FilterValue) ? "" : query.FilterValue.Trim();
+        if (value.Length > 256)
+            throw ThrowHelper.Biz(nameof(QueryAsync), "筛选值太长，最多 256 个字符，请缩短后重试。");
+
+        var op = string.IsNullOrWhiteSpace(query.FilterOp)
+            ? ""
+            : query.FilterOp.Trim().ToLowerInvariant();
+
+        // 值空：不应用条件（与旧自定义字段行为一致）
+        if (value.Length == 0)
+            return q;
+
+        if (field.StartsWith("cf_", StringComparison.OrdinalIgnoreCase)
+            && long.TryParse(field.AsSpan(3), out var cfId) && cfId > 0)
+        {
+            var cfField = await _db.CustomFields.AsNoTracking()
+                .FirstOrDefaultAsync(f => f.Id == cfId && f.FactoryId == factoryId)
+                ?? throw ThrowHelper.Biz(nameof(QueryAsync), "所选自定义字段不存在，可能已被删除。请重新选择筛选字段。");
+            if (cfField.Target != "work_order")
+                throw ThrowHelper.Biz(nameof(QueryAsync), "当前筛选只支持工单级自定义字段。");
+
+            if (string.IsNullOrEmpty(op))
+                op = cfField.FieldType == "text" ? "contains" : "eq";
+            if (op is not ("eq" or "contains" or "gt" or "lt"))
+                throw ThrowHelper.Biz(nameof(QueryAsync), "比较方式只支持：等于、包含、大于、小于。");
+            if (op is "gt" or "lt")
+                throw ThrowHelper.Biz(nameof(QueryAsync), "自定义字段暂不支持大于/小于，请用「等于」或「包含」。");
+            if (cfField.FieldType is "single" or "number" && op == "contains")
+                throw ThrowHelper.Biz(nameof(QueryAsync), "单选/数字字段不支持「包含」，请改用「等于」。");
+
+            if (op == "eq")
+            {
+                return q.Where(x => _db.CustomFieldValues.AsNoTracking()
+                    .Any(v => v.FieldId == cfId && v.Value == value && v.TargetId == x.Order.Id));
+            }
+            var likePattern = "%" + EscapeLikePattern(value) + "%";
+            return q.Where(x => _db.CustomFieldValues.AsNoTracking()
+                .Any(v => v.FieldId == cfId && v.Value != null
+                          && EF.Functions.Like(v.Value, likePattern)
+                          && v.TargetId == x.Order.Id));
+        }
+
+        if (string.IsNullOrEmpty(op))
+            op = field is "qty" or "dueDate" ? "eq" : "contains";
+        if (op is not ("eq" or "contains" or "gt" or "lt"))
+            throw ThrowHelper.Biz(nameof(QueryAsync), "比较方式只支持：等于、包含、大于、小于。");
+
+        switch (field)
+        {
+            case "keyword":
+                if (op is "gt" or "lt")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "「工单号/产品」只支持等于或包含。");
+                if (op == "eq")
+                    return q.Where(x => x.Order.OrderNo == value || x.ProductName == value || x.ProductCode == value);
+                return q.Where(x => x.Order.OrderNo.Contains(value) || x.ProductName.Contains(value) || x.ProductCode.Contains(value));
+
+            case "orderNo":
+                if (op is "gt" or "lt")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "工单号只支持等于或包含。");
+                return op == "eq"
+                    ? q.Where(x => x.Order.OrderNo == value)
+                    : q.Where(x => x.Order.OrderNo.Contains(value));
+
+            case "productCode":
+                if (op is "gt" or "lt")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "产品编号只支持等于或包含。");
+                return op == "eq"
+                    ? q.Where(x => x.ProductCode == value)
+                    : q.Where(x => x.ProductCode.Contains(value));
+
+            case "productName":
+                if (op is "gt" or "lt")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "产品名称只支持等于或包含。");
+                return op == "eq"
+                    ? q.Where(x => x.ProductName == value)
+                    : q.Where(x => x.ProductName.Contains(value));
+
+            case "qty":
+                if (op == "contains")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "数量不支持「包含」，请用等于/大于/小于。");
+                if (!int.TryParse(value, out var qty))
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "数量请输入整数。");
+                return op switch
+                {
+                    "eq" => q.Where(x => x.Order.Qty == qty),
+                    "gt" => q.Where(x => x.Order.Qty > qty),
+                    _ => q.Where(x => x.Order.Qty < qty)
+                };
+
+            case "dueDate":
+                if (op == "contains")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "交期不支持「包含」，请用等于/大于/小于。");
+                if (!DateTime.TryParse(value, out var due))
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "交期请输入有效日期，例如 2026-11-07。");
+                var day = due.Date;
+                var next = day.AddDays(1);
+                return op switch
+                {
+                    "eq" => q.Where(x => x.Order.DueDate != null && x.Order.DueDate >= day && x.Order.DueDate < next),
+                    "gt" => q.Where(x => x.Order.DueDate != null && x.Order.DueDate >= next),
+                    _ => q.Where(x => x.Order.DueDate != null && x.Order.DueDate < day)
+                };
+
+            default:
+                throw ThrowHelper.Biz(nameof(QueryAsync), $"不支持的筛选字段「{field}」。请重新选择。");
+        }
     }
 
     /// <summary>
@@ -411,6 +585,8 @@ public class WorkOrderService : IWorkOrderService
         var done = map.GetValueOrDefault((byte)2, 0);
         var cancelled = map.GetValueOrDefault((byte)3, 0);
         var draft = map.GetValueOrDefault((byte)4, 0);
+        var pendingAudit = map.GetValueOrDefault((byte)5, 0);
+        var suspended = map.GetValueOrDefault((byte)6, 0);
         return ApiResult<WorkOrderStatusCountsDto>.Ok(new WorkOrderStatusCountsDto
         {
             NotStarted = notStarted,
@@ -418,7 +594,9 @@ public class WorkOrderService : IWorkOrderService
             Done = done,
             Cancelled = cancelled,
             Draft = draft,
-            // 「全部」与 H5 一致：不含已作废、不含草稿
+            PendingAudit = pendingAudit,
+            Suspended = suspended,
+            // 「全部」与 H5 一致：不含已作废、已挂起、草稿、待审核
             All = notStarted + doing + done
         });
     }
@@ -478,6 +656,15 @@ public class WorkOrderService : IWorkOrderService
             }
         }
 
+        var userIds = new List<long>();
+        if (order.CreatedBy is long cb) userIds.Add(cb);
+        if (order.AuditedBy is long ab) userIds.Add(ab);
+        var nameMap = userIds.Count == 0
+            ? new Dictionary<long, string>()
+            : await _db.Users.AsNoTracking()
+                .Where(u => userIds.Contains(u.Id))
+                .ToDictionaryAsync(u => u.Id, u => u.Name);
+
         return new WorkOrderDetailDto
         {
             Id = order.Id,
@@ -490,6 +677,10 @@ public class WorkOrderService : IWorkOrderService
             Reopened = reopened,
             DueDate = order.DueDate,
             DueState = DueStateHelper.Calc(status, order.DueDate, DateTime.Now),
+            CreatedByName = order.CreatedBy is long c && nameMap.TryGetValue(c, out var cn) ? cn : "",
+            CreatedAt = order.CreatedAt,
+            AuditedByName = order.AuditedBy is long a && nameMap.TryGetValue(a, out var an) ? an : "",
+            AuditedAt = order.AuditedAt,
             Ext = ext,
             Tasks = tasks
         };
@@ -618,6 +809,10 @@ public class WorkOrderService : IWorkOrderService
             throw ThrowHelper.Biz(nameof(CreateAsync), "找不到要复制的工单，可能工单号有误或该工单不属于本厂。请到「工单」中搜索确认源工单是否存在且归属正确。");
         var product = await _db.Products.FirstOrDefaultAsync(p => p.Id == dto.ProductId && p.FactoryId == factoryId)
             ?? throw ThrowHelper.Biz(nameof(CreateAsync), "产品不存在");
+        if (product.Status == 0)
+            throw ThrowHelper.Biz(nameof(CreateAsync), "该产品已禁用，不能用来新建工单。请到「产品定义」反禁用，或换一个启用中的产品。");
+        if (product.AuditStatus != 1)
+            throw ThrowHelper.Biz(nameof(CreateAsync), "该产品还没审核，不能用来新建工单。请到「产品定义」点「审核」后再选。");
         if (dto.Qty <= 0)
             throw ThrowHelper.Biz(nameof(CreateAsync), "生产数量必须填写大于0的数字。");
         var extIds = (dto.Ext ?? new()).Keys.ToList();
@@ -634,13 +829,19 @@ public class WorkOrderService : IWorkOrderService
 
         var orderNo = await NextOrderNoAsync(dto.OrderNo, factoryId);
 
+        var action = ResolveSaveAction(dto.AsDraft, dto.SaveAction);
         var order = new ProdWorkOrder
         {
             FactoryId = factoryId,
             OrderNo = orderNo,
             ProductId = product.Id,
             Qty = dto.Qty,
-            Status = dto.AsDraft ? (byte)4 : (byte)0,
+            Status = action switch
+            {
+                "draft" => (byte)4,
+                "pending" => (byte)5,
+                _ => (byte)0
+            },
             DueDate = dto.DueDate,
             CreatedBy = currentUserId,
             CreatedAt = DateTime.Now
@@ -655,15 +856,21 @@ public class WorkOrderService : IWorkOrderService
             if (source.ProductId == dto.ProductId) dto.OperationAttributes = await new OperationAttributeService(_db).ReadOrderAsync(source.Id, factoryId);
         }
         await new OperationAttributeService(_db).SaveOrderAsync(order, dto.OperationAttributes);
-        // docs/425：暂存不锁价；提交必须全部工序取价成功
-        if (!dto.AsDraft)
+        // docs/435：仅审核锁价；暂存/待审不 BindAsync
+        if (action == "approve")
+        {
             await new OperationPricingService(_db).BindAsync(order, dto.QuoteTokens);
+            StampFirstAudit(order, currentUserId);
+        }
+        else
+            order.Status = action == "draft" ? (byte)4 : (byte)5;
         await SaveExtAsync(order.Id, dto.Ext);
+        await _db.SaveChangesAsync();
         await tx.CommitAsync();
         return ApiResult<object?>.OkMsg();
     }
 
-    public async Task<ApiResult<object?>> UpdateAsync(long id, WorkOrderUpdateDto dto, long factoryId)
+    public async Task<ApiResult<object?>> UpdateAsync(long id, WorkOrderUpdateDto dto, long currentUserId, long factoryId)
     {
         await using var tx = await _db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
         await OperationPriceListService.LockFactoryAsync(_db,factoryId);
@@ -673,11 +880,14 @@ public class WorkOrderService : IWorkOrderService
         await WechatEventService.LockOrderAsync(_db, order);
         if (order.Status == 3)
             throw ThrowHelper.Biz(nameof(UpdateAsync), "该工单已作废，不能再编辑。如需调整，请先在「工单」中恢复该工单，或新建一张工单。");
+        if (order.Status == 6)
+            throw ThrowHelper.Biz(nameof(UpdateAsync), "该工单已挂起，不能再编辑。如需调整，请先在「工单」中点「恢复生产」后再改。");
         if (order.Status == 2)
             throw ThrowHelper.Biz(nameof(UpdateAsync), "这张工单已经结束了，不能修改。如果需要改，请先在电脑端把工单撤回再修改。");
-        // docs/425：已生效单不能改回草稿；草稿用 AsDraft 区分暂存/提交
-        if (order.Status != 4 && dto.AsDraft)
-            throw ThrowHelper.Biz(nameof(UpdateAsync), "工单已经生效并提交过取价，不能改回草稿状态。请直接保存修改内容（保存前需确保取价成功）。");
+        var action = ResolveSaveAction(dto.AsDraft, dto.SaveAction);
+        // docs/435：已生效(0/1)不能退回草稿/待审；仅草稿/待审可用 draft|pending
+        if (!IsPreAuditStatus(order.Status) && action is "draft" or "pending")
+            throw ThrowHelper.Biz(nameof(UpdateAsync), "工单已经审核并锁价，不能改回草稿或已保存。如需改工艺单价，请复制新单重新审核；本单请直接保存数量、交期等修改。");
 
         // 工单号
         if (!string.IsNullOrWhiteSpace(dto.OrderNo))
@@ -696,6 +906,10 @@ public class WorkOrderService : IWorkOrderService
         {
             var product = await _db.Products.FirstOrDefaultAsync(p => p.Id == dto.ProductId.Value && p.FactoryId == factoryId)
                 ?? throw ThrowHelper.Biz(nameof(UpdateAsync), "产品不存在");
+            if (product.Status == 0)
+                throw ThrowHelper.Biz(nameof(UpdateAsync), "该产品已禁用，不能换到这个产品。请到「产品定义」反禁用，或换一个启用中的产品。");
+            if (product.AuditStatus != 1)
+                throw ThrowHelper.Biz(nameof(UpdateAsync), "该产品还没审核，不能换到这个产品。请到「产品定义」点「审核」后再选。");
             var hasReport = await _db.Reports.AnyAsync(r => r.OrderId == id);
             if (hasReport)
                 throw ThrowHelper.Biz(nameof(UpdateAsync), "这张工单已经有人报过工了，不能更换产品。如需更换产品，请新建一张工单。");
@@ -747,14 +961,28 @@ public class WorkOrderService : IWorkOrderService
             await SaveExtAsync(id, dto.Ext);
 
         await new OperationAttributeService(_db).SaveOrderAsync(order, dto.OperationAttributes);
-        var stayDraft = order.Status == 4 && dto.AsDraft;
-        if (!stayDraft)
+        if (action == "draft")
         {
-            await new OperationPricingService(_db).BindAsync(order, dto.QuoteTokens);
-            if (order.Status == 4) order.Status = 0; // 草稿提交 → 未开始
+            order.Status = 4;
         }
-        if (order.Status != 4)
+        else if (action == "pending")
+        {
+            order.Status = 5;
+        }
+        else
+        {
+            // 审核或已生效单保存：必须锁价成功
+            var firstAudit = IsPreAuditStatus(order.Status);
+            await new OperationPricingService(_db).BindAsync(order, dto.QuoteTokens);
+            if (firstAudit)
+            {
+                order.Status = 0;
+                StampFirstAudit(order, currentUserId);
+            }
+        }
+        if (!IsPreAuditStatus(order.Status))
             await RecalcStatusAsync(order);
+        await _db.SaveChangesAsync();
         await tx.CommitAsync();
         return ApiResult<object?>.OkMsg();
     }
@@ -771,13 +999,13 @@ public class WorkOrderService : IWorkOrderService
         switch (action)
         {
             case "start":
-                if (order.Status == 4) throw ThrowHelper.Biz(nameof(TransitionAsync), "这张工单还是草稿状态，请先点「提交」使其生效，然后再点「开始」启动生产。");
-                if (order.Status != 0) throw ThrowHelper.Biz(nameof(TransitionAsync), "该工单不在「未开始」状态，无法开始。请确认工单当前状态是否正确，或刷新页面后重试。");
+                if (IsPreAuditStatus(order.Status)) throw ThrowHelper.Biz(nameof(TransitionAsync), "这张工单还没审核锁价，请先在电脑端点「审核」后再点「开始」。");
+                if (order.Status != 0) throw ThrowHelper.Biz(nameof(TransitionAsync), "该工单不在「已审核」状态，无法开始。请确认工单当前状态是否正确，或刷新页面后重试。");
                 order.Status = 1;
                 order.Reopened = false;
                 break;
             case "finish":
-                if (order.Status != 1) throw ThrowHelper.Biz(nameof(TransitionAsync), "该工单不在「执行中」状态，无法结束。请确认工单是否已开始生产，或刷新页面查看最新状态。");
+                if (order.Status != 1) throw ThrowHelper.Biz(nameof(TransitionAsync), "该工单不在「报工中」状态，无法结束。请确认工单是否已开始生产，或刷新页面查看最新状态。");
                 order.Status = 2;
                 order.Reopened = false;
                 break;
@@ -796,14 +1024,41 @@ public class WorkOrderService : IWorkOrderService
                 else throw ThrowHelper.Biz(nameof(TransitionAsync), "该工单当前状态不允许撤回，请到工单详情页确认当前流转节点。");
                 break;
             case "cancel":
-                // 草稿(4)也可作废
-                if (order.Status == 2 || order.Status == 3) throw ThrowHelper.Biz(nameof(TransitionAsync), "该工单当前状态不允许作废。通常只有未开始或执行中的工单可以作废，请确认工单状态后重试。");
+                // 草稿(4)/待审核(5)/已挂起(6)也可作废
+                if (order.Status == 2 || order.Status == 3) throw ThrowHelper.Biz(nameof(TransitionAsync), "该工单当前状态不允许作废。通常只有已审核、报工中、已挂起、草稿或已保存的工单可以作废，请确认工单状态后重试。");
                 order.Status = 3;
                 order.Reopened = false;
                 break;
             case "restore":
-                if (order.Status != 3) throw ThrowHelper.Biz(nameof(TransitionAsync), "该工单未被作废，不需要恢复操作；要恢复已作废工单，请在「工单」中找到已作废状态的工单再点恢复。");
+                if (order.Status != 3) throw ThrowHelper.Biz(nameof(TransitionAsync), "该工单未被作废，不需要恢复操作；要恢复已作废工单，请在「工单」中找到已作废状态的工单再点恢复。已挂起请用「恢复生产」。");
                 order.Status = 0;
+                order.Reopened = false;
+                break;
+            case "hang":
+                // docs/437：报工中 → 已挂起（暂停还要继续）
+                if (order.Status != 1) throw ThrowHelper.Biz(nameof(TransitionAsync), "只有报工中的工单可以挂起。请确认工单当前状态后重试。");
+                order.Status = 6;
+                order.Reopened = false;
+                break;
+            case "unhang":
+                // docs/437：已挂起 → 报工中
+                if (order.Status != 6) throw ThrowHelper.Biz(nameof(TransitionAsync), "该工单未挂起，不需要恢复生产；已作废请用「恢复」。");
+                order.Status = 1;
+                order.Reopened = false;
+                break;
+            case "unaudit":
+                // 反审核：仅已锁价且无报工；解锁单价，退回已保存(5)
+                if (IsPreAuditStatus(order.Status) || order.Status is 2 or 3)
+                    throw ThrowHelper.BizUser("当前不需要反审核");
+                if (order.Status is not (0 or 1))
+                    throw ThrowHelper.BizUser("当前不需要反审核");
+                if (await _db.Reports.AnyAsync(r => r.OrderId == order.Id))
+                    throw ThrowHelper.BizUser("已报工，操作终止");
+                var lockedTasks = await _db.WorkOrderOperations.Where(t => t.WorkOrderId == order.Id).ToListAsync();
+                foreach (var t in lockedTasks) t.ProcessingPrice = null;
+                order.AuditedBy = null;
+                order.AuditedAt = null;
+                order.Status = 5;
                 order.Reopened = false;
                 break;
             default:
@@ -946,16 +1201,16 @@ public class WorkOrderService : IWorkOrderService
         await _db.SaveChangesAsync();
     }
 
-    /// <summary>按工序任务重算工单完成状态。注意：本方法不修改已作废(3)。docs/422：reopened 时报满保持执行中。</summary>
+    /// <summary>按工序任务重算工单完成状态。注意：本方法不修改已作废(3)、已挂起(6)。docs/422：reopened 时报满保持执行中。</summary>
     public async Task RecalcStatusAsync(ProdWorkOrder order)
     {
         await using var ownedTx = _db.Database.CurrentTransaction == null ? await _db.Database.BeginTransactionAsync() : null;
         await OperationPriceListService.LockFactoryAsync(_db,order.FactoryId);
         await WechatEventService.LockOrderAsync(_db, order);
         var beforeStatus = order.Status;
-        if (order.Status == 3) return;
-        // docs/425：草稿不参与报工驱动的状态重算
-        if (order.Status == 4) return;
+        if (order.Status == 3 || order.Status == 6) return;
+        // docs/425/435：草稿/待审核不参与报工驱动的状态重算
+        if (IsPreAuditStatus(order.Status)) return;
 
         var hasReport = await _db.Reports.AnyAsync(r => r.OrderId == order.Id && r.ReviewStatus != 2);
         if (!hasReport)

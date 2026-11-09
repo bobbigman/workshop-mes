@@ -18,7 +18,7 @@
     <section class="em-filter-panel">
       <div class="em-toolbar">
         <el-input v-model="filters.keyword" class="em-kw" :prefix-icon="Search" clearable placeholder="搜索工单号、产品编号或名称，例：WO20261001" @keyup.enter="onFilter" @clear="onFilter" />
-        <el-select v-model="filters.status" class="em-status" clearable placeholder="全部状态" @change="onFilter"><el-option :value="0" label="未开始" /><el-option :value="1" label="执行中" /><el-option :value="2" label="已结束" /></el-select>
+        <el-select v-model="filters.status" class="em-status" clearable placeholder="全部状态" @change="onFilter"><el-option :value="0" label="已审核" /><el-option :value="1" label="报工中" /><el-option :value="2" label="已结束" /></el-select>
         <el-date-picker v-model="dueRange" class="em-date" type="daterange" value-format="YYYY-MM-DD" start-placeholder="交期开始" end-placeholder="交期结束" @change="onFilter" />
         <el-button type="primary" @click="onFilter">查询</el-button><el-button @click="resetFilters">重置</el-button><el-tooltip content="工单统计随关键词和交期筛选变化，已作废的工单不计入；异常和待办数量按当前账号权限统计" placement="bottom"><button type="button" class="em-scope-help" aria-label="查看统计范围说明">ⓘ 统计范围</button></el-tooltip>
       </div>
@@ -73,7 +73,7 @@
           <el-table-column label="计划交期" width="145"><template #default="{ row }"><span :class="dueClass(row)">{{ formatDue(row.dueDate) }}</span></template></el-table-column>
           <el-table-column label="操作" width="175" fixed="right"><template #default="{ row }"><el-button link type="primary" @click="goOrderDetail(row)">{{ canHandleAbnormal ? '详情 / 派工' : '详情' }}</el-button><el-button v-if="row.status === 0 || row.status === 1" link type="primary" @click="goReport(row)">报工</el-button><el-button v-if="row.hasOpenAbnormal && canHandleAbnormal" link type="danger" @click="goAbnormal()">异常</el-button></template></el-table-column>
         </mes-table>
-        <div class="em-pager"><el-pagination v-model:current-page="page" v-model:page-size="pageSize" :total="data.orders?.total || 0" :page-sizes="[10,20,50]" layout="total, sizes, prev, pager, next" @current-change="() => refresh(true)" @size-change="onPageSize" /></div>
+        <div class="em-pager"><el-pagination v-model:current-page="page" v-model:page-size="pageSize" :total="data.orders?.total || 0" :page-sizes="[10,20,50,100]" layout="total, sizes, prev, pager, next, jumper" @current-change="() => refresh(true)" @size-change="onPageSize" /></div>
       </section>
       <aside class="em-side">
         <section class="em-panel em-overdue"><header class="em-panel-h"><h3>交期预警 <em>{{ data.overdueOrders?.total || 0 }}</em></h3><span class="sub">超期工单</span></header><div class="em-panel-caption">随关键词、交期筛选 · 最多 10 单</div><div class="em-overdue-list"><div v-if="!data.overdueOrders?.list?.length" class="em-empty sm">暂无超期工单</div><button v-for="o in data.overdueOrders?.list || []" :key="o.id" class="em-due-item" @click="goOrderDetail(o)"><strong :title="o.orderNo">{{ o.orderNo }}</strong><span>{{ o.productName }}</span><small>交期 {{ formatDue(o.dueDate) }}</small></button></div></section>
@@ -117,7 +117,7 @@ let seq = 0
 let inFlight = false
 let errToastAt = 0
 
-const STATUS = { 0: '未开始', 1: '执行中', 2: '已结束', 3: '已作废' }
+const STATUS = { 0: '已审核', 1: '报工中', 2: '已结束', 3: '已作废', 6: '已挂起' }
 function statusLabel(s) { return STATUS[s] ?? s }
 function statusTag(s) { return s === 0 ? 'info' : s === 1 ? 'primary' : s === 2 ? 'success' : 'danger' }
 function formatDue(t) { return t ? String(t).replace('T', ' ').slice(0, 16) : '—' }
@@ -139,8 +139,8 @@ function opClass(op) {
 const summaryCards = computed(() => {
   const s = data.value.summary || {}
   return [
-    { key: 'ns', label: '未开始', value: s.notStarted || 0, status: 0, tone: 'blue', icon: Clock },
-    { key: 'do', label: '执行中', value: s.doing || 0, status: 1, tone: 'blue', icon: VideoPlay },
+    { key: 'ns', label: '已审核', value: s.notStarted || 0, status: 0, tone: 'blue', icon: Clock },
+    { key: 'do', label: '报工中', value: s.doing || 0, status: 1, tone: 'blue', icon: VideoPlay },
     { key: 'dn', label: '已结束', value: s.done || 0, status: 2, tone: 'green', icon: CircleCheck },
     { key: 'dw', label: '临期', value: s.dueWarning || 0, status: undefined, tone: 'amber', icon: AlarmClock },
     { key: 'ov', label: '超期', value: s.dueOverdue || 0, status: undefined, tone: 'red', icon: Warning }

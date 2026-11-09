@@ -9,33 +9,44 @@ using ahu.MicrosoftMes.Models;
 
 namespace ahu.MicrosoftMes.Mcp;
 
-public class McpKeyListItemDto
+/// <summary>本厂当前 MCP 钥匙状态（每厂一把，不展示历史列表）。</summary>
+public class McpKeyStatusDto
 {
-    public long KeyId { get; set; }
-    public long FactoryId { get; set; }
-    public string FactoryName { get; set; } = "";
+    public bool HasActive { get; set; }
+    public long? KeyId { get; set; }
     public string KeyAlias { get; set; } = "";
-    public byte Status { get; set; }
+    public DateTime? CreatedAt { get; set; }
     public DateTime? ExpireAt { get; set; }
-    public DateTime CreatedAt { get; set; }
-    public string? Remark { get; set; }
+    /// <summary>库里是否有明文，可随时查看/复制报文。旧钥匙无明文时须重新生成一次。</summary>
+    public bool CanReveal { get; set; }
 }
 
 public class McpKeyCreateResultDto
 {
     public long KeyId { get; set; }
     public string KeyAlias { get; set; } = "";
-    /// <summary>明文钥匙，仅创建时返回一次。</summary>
     public string ApiKey { get; set; } = "";
-    /// <summary>MCP 连接地址（来自 Mcp:Url 或当前站点 /mcp）。</summary>
     public string McpUrl { get; set; } = "";
-    /// <summary>账套展示，如「HY伞业 (HY001)」。</summary>
     public string FactoryLabel { get; set; } = "";
-    /// <summary>完整连接报文，整段可复制。</summary>
     public string ConnectionText { get; set; } = "";
-    /// <summary>本次是否先吊销了本厂旧有效钥匙。</summary>
     public bool RevokedOld { get; set; }
-    public string Tip { get; set; } = "请立即复制发给客户，关闭后不再显示";
+    public string Tip { get; set; } = "报文已保存，管理员可随时再复制";
+}
+
+public class McpKeyConnectionDto
+{
+    public long KeyId { get; set; }
+    public string KeyAlias { get; set; } = "";
+    public string ApiKey { get; set; } = "";
+    public string McpUrl { get; set; } = "";
+    public string FactoryLabel { get; set; } = "";
+    public string ConnectionText { get; set; } = "";
+}
+
+public class McpKeyRevealDto
+{
+    /// <summary>当前登录管理员的登录密码（防旁人点「复制报文」）。</summary>
+    public string? Password { get; set; }
 }
 
 public class McpKeyFactoryOptionDto
@@ -48,9 +59,10 @@ public class McpKeyFactoryOptionDto
 public interface IMcpKeyService
 {
     Task<ApiResult<List<McpKeyFactoryOptionDto>>> ListFactoriesAsync(long factoryId);
-    Task<ApiResult<List<McpKeyListItemDto>>> ListAsync(long factoryId);
+    Task<ApiResult<McpKeyStatusDto>> GetStatusAsync(long factoryId);
+    Task<ApiResult<McpKeyConnectionDto>> GetConnectionAsync(long factoryId, long userId, string? password, string mcpUrl);
     Task<ApiResult<McpKeyCreateResultDto>> CreateAsync(long factoryId, string mcpUrl);
-    Task<ApiResult<object?>> RevokeAsync(long keyId, long factoryId);
+    Task<ApiResult<object?>> RevokeActiveAsync(long factoryId);
 }
 
 public class McpKeyService : IMcpKeyService
@@ -79,28 +91,74 @@ public class McpKeyService : IMcpKeyService
         return ApiResult<List<McpKeyFactoryOptionDto>>.Ok(list);
     }
 
-    public async Task<ApiResult<List<McpKeyListItemDto>>> ListAsync(long factoryId)
+    public async Task<ApiResult<McpKeyStatusDto>> GetStatusAsync(long factoryId)
     {
         if (factoryId <= 0)
             throw ThrowHelper.BizUser("无法确定当前操作的工厂。请确认已登录并选择了正确的工厂后再管理 MCP 访问钥匙。");
 
-        var list = await (
-            from k in _db.McpKeys.AsNoTracking()
-            join f in _db.Factories.AsNoTracking() on k.FactoryId equals f.Id
-            where k.FactoryId == factoryId
-            orderby k.KeyId descending
-            select new McpKeyListItemDto
-            {
-                KeyId = k.KeyId,
-                FactoryId = k.FactoryId,
-                FactoryName = f.FactoryName,
-                KeyAlias = k.KeyAlias,
-                Status = k.Status,
-                ExpireAt = k.ExpireAt,
-                CreatedAt = k.CreatedAt,
-                Remark = k.Remark
-            }).ToListAsync();
-        return ApiResult<List<McpKeyListItemDto>>.Ok(list);
+        var row = await _db.McpKeys.AsNoTracking()
+            .Where(k => k.FactoryId == factoryId && k.Status == 1)
+            .OrderByDescending(k => k.KeyId)
+            .FirstOrDefaultAsync();
+
+        if (row == null)
+        {
+            return ApiResult<McpKeyStatusDto>.Ok(new McpKeyStatusDto { HasActive = false });
+        }
+
+        return ApiResult<McpKeyStatusDto>.Ok(new McpKeyStatusDto
+        {
+            HasActive = true,
+            KeyId = row.KeyId,
+            KeyAlias = row.KeyAlias,
+            CreatedAt = row.CreatedAt,
+            ExpireAt = row.ExpireAt,
+            CanReveal = !string.IsNullOrEmpty(row.ApiKeyPlain)
+        });
+    }
+
+    public async Task<ApiResult<McpKeyConnectionDto>> GetConnectionAsync(long factoryId, long userId, string? password, string mcpUrl)
+    {
+        if (factoryId <= 0)
+            throw ThrowHelper.BizUser("无法确定当前操作的工厂。请确认已登录并选择了正确的工厂后再管理 MCP 访问钥匙。");
+        if (userId <= 0)
+            throw ThrowHelper.BizUser("登录已失效，请重新登录后再复制报文。");
+        if (string.IsNullOrWhiteSpace(password))
+            throw ThrowHelper.BizUser("请输入当前账号的登录密码后再复制报文。");
+        if (string.IsNullOrWhiteSpace(mcpUrl))
+            throw ThrowHelper.Biz(nameof(GetConnectionAsync), "MCP 服务地址还没设置。请在后端设置文件 appsettings.json 中填写 Mcp:Url，或确认当前站点可通过 /mcp 路径访问服务。");
+
+        var user = await _db.Users.AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Id == userId && u.FactoryId == factoryId && u.Status == 1);
+        if (user == null)
+            throw ThrowHelper.BizUser("当前账号无效或已停用，请重新登录后再试。");
+        if (!PasswordHelper.Verify(password, user.Password))
+            throw ThrowHelper.BizUser("密码不正确。请输入当前登录账号的密码，不要把密码告诉别人。");
+
+        var row = await _db.McpKeys.AsNoTracking()
+            .Where(k => k.FactoryId == factoryId && k.Status == 1)
+            .OrderByDescending(k => k.KeyId)
+            .FirstOrDefaultAsync();
+        if (row == null)
+            throw ThrowHelper.BizUser("本厂还没有有效的 MCP 钥匙，请先生成报文。");
+        if (string.IsNullOrEmpty(row.ApiKeyPlain))
+            throw ThrowHelper.BizUser("这把钥匙是旧版生成的，库里没有明文，无法再查看。请点「重新生成」一次，之后即可随时复制（对接方需改用新报文）。");
+
+        var factory = await _db.Factories.AsNoTracking().FirstOrDefaultAsync(f => f.Id == factoryId)
+            ?? throw ThrowHelper.BizUser("工厂不存在");
+        var url = mcpUrl.Trim().TrimEnd('/');
+        var factoryLabel = FormatFactoryLabel(factory);
+        var plain = row.ApiKeyPlain;
+
+        return ApiResult<McpKeyConnectionDto>.Ok(new McpKeyConnectionDto
+        {
+            KeyId = row.KeyId,
+            KeyAlias = row.KeyAlias,
+            ApiKey = plain,
+            McpUrl = url,
+            FactoryLabel = factoryLabel,
+            ConnectionText = BuildConnectionText(factoryLabel, url, plain)
+        });
     }
 
     public async Task<ApiResult<McpKeyCreateResultDto>> CreateAsync(long factoryId, string mcpUrl)
@@ -125,7 +183,10 @@ public class McpKeyService : IMcpKeyService
             .ToListAsync();
         var revokedOld = oldKeys.Count > 0;
         foreach (var old in oldKeys)
+        {
             old.Status = 0;
+            old.ApiKeyPlain = null; // 吊销后清明文，避免旧钥残留
+        }
 
         var alias = $"{factory.FactoryName}-MCP";
         var plain = GenerateKey(32);
@@ -134,15 +195,14 @@ public class McpKeyService : IMcpKeyService
             FactoryId = factoryId,
             KeyAlias = alias,
             ApiKeyHash = PasswordHelper.Hash(plain),
+            ApiKeyPlain = plain,
             Status = 1,
             ExpireAt = null,
             CreatedAt = DateTime.Now,
             Remark = null
         };
         var url = mcpUrl.Trim().TrimEnd('/');
-        var factoryLabel = string.IsNullOrWhiteSpace(factory.FactoryCode)
-            ? factory.FactoryName
-            : $"{factory.FactoryName} ({factory.FactoryCode})";
+        var factoryLabel = FormatFactoryLabel(factory);
         var connectionText = BuildConnectionText(factoryLabel, url, plain);
 
         _db.McpKeys.Add(row);
@@ -154,8 +214,8 @@ public class McpKeyService : IMcpKeyService
             factory.FactoryName, factory.Id, alias, row.KeyId, revokedOld);
 
         var tip = revokedOld
-            ? "已吊销旧钥匙，客户需改用新报文。请立即复制发给客户，关闭后不再显示"
-            : "请立即复制发给客户，关闭后不再显示";
+            ? "已吊销旧钥匙。请把新报文发给对接方更新；本页可随时再复制"
+            : "报文已保存，管理员可随时再复制";
 
         return ApiResult<McpKeyCreateResultDto>.Ok(new McpKeyCreateResultDto
         {
@@ -169,6 +229,39 @@ public class McpKeyService : IMcpKeyService
             Tip = tip
         });
     }
+
+    public async Task<ApiResult<object?>> RevokeActiveAsync(long factoryId)
+    {
+        if (factoryId <= 0)
+            throw ThrowHelper.BizUser("无法确定当前工厂");
+
+        var rows = await _db.McpKeys
+            .Where(k => k.FactoryId == factoryId && k.Status == 1)
+            .ToListAsync();
+        if (rows.Count == 0)
+            return ApiResult<object?>.OkMsg();
+
+        var factoryName = await _db.Factories.AsNoTracking()
+            .Where(f => f.Id == factoryId)
+            .Select(f => f.FactoryName)
+            .FirstOrDefaultAsync() ?? "";
+
+        foreach (var row in rows)
+        {
+            row.Status = 0;
+            row.ApiKeyPlain = null;
+            _logger.LogInformation(
+                "MCP 钥匙已吊销 factory={FactoryName}({FactoryId}) alias={Alias} keyId={KeyId}",
+                factoryName, factoryId, row.KeyAlias, row.KeyId);
+        }
+        await _db.SaveChangesAsync();
+        return ApiResult<object?>.OkMsg();
+    }
+
+    private static string FormatFactoryLabel(SysFactory factory) =>
+        string.IsNullOrWhiteSpace(factory.FactoryCode)
+            ? factory.FactoryName
+            : $"{factory.FactoryName} ({factory.FactoryCode})";
 
     private static string BuildConnectionText(string factoryLabel, string url, string plain) =>
         JsonSerializer.Serialize(new
@@ -190,32 +283,6 @@ public class McpKeyService : IMcpKeyService
             WriteIndented = true,
             Encoder = JavaScriptEncoder.Create(UnicodeRanges.All)
         });
-
-    public async Task<ApiResult<object?>> RevokeAsync(long keyId, long factoryId)
-    {
-        if (factoryId <= 0)
-            throw ThrowHelper.BizUser("无法确定当前工厂");
-
-        var row = await _db.McpKeys.FirstOrDefaultAsync(k => k.KeyId == keyId && k.FactoryId == factoryId);
-        if (row == null)
-            throw ThrowHelper.BizUser("要撤销的访问钥匙不存在或已被撤销。请刷新钥匙列表确认目标钥匙是否还在。");
-        if (row.Status == 0)
-            return ApiResult<object?>.OkMsg();
-
-        var factoryName = await _db.Factories.AsNoTracking()
-            .Where(f => f.Id == row.FactoryId)
-            .Select(f => f.FactoryName)
-            .FirstOrDefaultAsync() ?? "";
-
-        row.Status = 0;
-        await _db.SaveChangesAsync();
-
-        _logger.LogInformation(
-            "MCP 钥匙已吊销 factory={FactoryName}({FactoryId}) alias={Alias} keyId={KeyId}",
-            factoryName, row.FactoryId, row.KeyAlias, row.KeyId);
-
-        return ApiResult<object?>.OkMsg();
-    }
 
     private static string GenerateKey(int length)
     {

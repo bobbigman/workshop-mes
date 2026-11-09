@@ -41,6 +41,14 @@ public class AbnormalQueryDto
     public byte? Status { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 20;
+
+    /// <summary>
+    /// 快捷过滤：keyword | orderNo | description | reporterName | abnormalType | reportedAt。
+    /// 与 Status 页签可并存。
+    /// </summary>
+    public string? FilterField { get; set; }
+    public string? FilterOp { get; set; }
+    public string? FilterValue { get; set; }
 }
 
 public class AbnormalListDto
@@ -164,6 +172,95 @@ public class AbnormalService : IAbnormalService
         return ApiResult<List<AbnormalHandlerDto>>.Ok(list);
     }
 
+    private IQueryable<ProdAbnormal> ApplyQuickFilter(IQueryable<ProdAbnormal> q, AbnormalQueryDto query, long factoryId)
+    {
+        var field = query.FilterField!.Trim();
+        var value = string.IsNullOrWhiteSpace(query.FilterValue) ? "" : query.FilterValue.Trim();
+        if (value.Length > 256)
+            throw ThrowHelper.Biz(nameof(QueryAsync), "筛选值太长，最多 256 个字符，请缩短后重试。");
+
+        var op = string.IsNullOrWhiteSpace(query.FilterOp)
+            ? ""
+            : query.FilterOp.Trim().ToLowerInvariant();
+
+        if (value.Length == 0)
+            return q;
+
+        if (string.IsNullOrEmpty(op))
+            op = field is "abnormalType" or "reportedAt" ? "eq" : "contains";
+        if (op is not ("eq" or "contains" or "gt" or "lt"))
+            throw ThrowHelper.Biz(nameof(QueryAsync), "比较方式只支持：等于、包含、大于、小于。");
+
+        switch (field)
+        {
+            case "keyword":
+                if (op is "gt" or "lt")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "「工单号/描述」只支持等于或包含。");
+                if (op == "eq")
+                {
+                    return q.Where(a => a.Description == value
+                        || (a.WorkOrderId != null && _db.WorkOrders.AsNoTracking()
+                            .Any(o => o.Id == a.WorkOrderId && o.FactoryId == factoryId && o.OrderNo == value)));
+                }
+                return q.Where(a => a.Description.Contains(value)
+                    || (a.WorkOrderId != null && _db.WorkOrders.AsNoTracking()
+                        .Any(o => o.Id == a.WorkOrderId && o.FactoryId == factoryId && o.OrderNo.Contains(value))));
+
+            case "orderNo":
+                if (op is "gt" or "lt")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "工单号只支持等于或包含。");
+                if (op == "eq")
+                {
+                    return q.Where(a => a.WorkOrderId != null && _db.WorkOrders.AsNoTracking()
+                        .Any(o => o.Id == a.WorkOrderId && o.FactoryId == factoryId && o.OrderNo == value));
+                }
+                return q.Where(a => a.WorkOrderId != null && _db.WorkOrders.AsNoTracking()
+                    .Any(o => o.Id == a.WorkOrderId && o.FactoryId == factoryId && o.OrderNo.Contains(value)));
+
+            case "description":
+                if (op is "gt" or "lt")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "描述只支持等于或包含。");
+                return op == "eq"
+                    ? q.Where(a => a.Description == value)
+                    : q.Where(a => a.Description.Contains(value));
+
+            case "reporterName":
+                if (op is "gt" or "lt")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "上报人只支持等于或包含。");
+                if (op == "eq")
+                {
+                    return q.Where(a => _db.Users.AsNoTracking()
+                        .Any(u => u.Id == a.ReportedBy && u.Name == value));
+                }
+                return q.Where(a => _db.Users.AsNoTracking()
+                    .Any(u => u.Id == a.ReportedBy && u.Name.Contains(value)));
+
+            case "abnormalType":
+                if (op != "eq")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "异常类型只支持「等于」。");
+                if (!byte.TryParse(value, out var type) || type is < 1 or > 3)
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "异常类型取值无效，请重新选择。");
+                return q.Where(a => a.AbnormalType == type);
+
+            case "reportedAt":
+                if (op == "contains")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "上报时间不支持「包含」，请用等于/大于/小于。");
+                if (!DateTime.TryParse(value, out var dayRaw))
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "上报时间请输入有效日期，例如 2026-11-07。");
+                var day = dayRaw.Date;
+                var next = day.AddDays(1);
+                return op switch
+                {
+                    "eq" => q.Where(a => a.ReportedAt >= day && a.ReportedAt < next),
+                    "gt" => q.Where(a => a.ReportedAt >= next),
+                    _ => q.Where(a => a.ReportedAt < day)
+                };
+
+            default:
+                throw ThrowHelper.Biz(nameof(QueryAsync), $"不支持的筛选字段「{field}」。请重新选择。");
+        }
+    }
+
     public async Task<ApiResult<PageResult<AbnormalListDto>>> QueryAsync(AbnormalQueryDto query, long factoryId)
     {
         if (query.Page < 1) query.Page = 1;
@@ -172,6 +269,8 @@ public class AbnormalService : IAbnormalService
         var q = _db.Abnormals.AsNoTracking().Where(a => a.FactoryId == factoryId);
         if (query.Status.HasValue)
             q = q.Where(a => a.Status == query.Status.Value);
+        if (!string.IsNullOrWhiteSpace(query.FilterField))
+            q = ApplyQuickFilter(q, query, factoryId);
 
         var total = await q.CountAsync();
         var rows = await q.OrderByDescending(a => a.ReportedAt).ThenByDescending(a => a.Id)

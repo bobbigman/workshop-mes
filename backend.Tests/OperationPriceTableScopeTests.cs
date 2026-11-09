@@ -68,10 +68,11 @@ public class OperationPriceTableScopeTests
     [Fact] public void Selection_IsAtTableLevel_AndLegacyBlocks()
     {
         var common=AttributePriceListTests.Table();var specific=AttributePriceListTests.Table();specific.Id=2;specific.ProductId=10;
-        Assert.Same(specific,OperationPriceListService.SelectTable(new[]{common,specific},10,42));
-        Assert.Same(common,OperationPriceListService.SelectTable(new[]{common,specific},11,42));
+        Assert.Same(specific,OperationPriceListService.SelectTable(new[]{common,specific},10,42,"P10","合片"));
+        Assert.Same(common,OperationPriceListService.SelectTable(new[]{common,specific},11,42,"P11","合片"));
         var old=AttributePriceListTests.Detail();old.SchemaVersion=1;common.Details=OperationPricingService.Write(old);
-        Assert.Throws<BusinessException>(()=>OperationPriceListService.SelectTable(new[]{common,specific},10,42));
+        var legacy=Assert.Throws<BusinessException>(()=>OperationPriceListService.SelectTable(new[]{common,specific},10,42,"P10","合片"));
+        Assert.Contains("工序「合片」还有旧版价目未转换完", legacy.Message);
     }
     [Fact] public async Task Status_LocksOperation_PreservesStopped_AndRejectsStaleWrites()
     {

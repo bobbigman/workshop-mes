@@ -157,12 +157,14 @@ public class AuthService : IAuthService
             })
             .ToList();
         var (selectToken, jti) = JwtHelper.CreateSelectFactoryToken(_jwt, claims);
+        // NeverRemove：避免内存压力压缩时把未过期的选厂 jti 清掉，导致 JWT 仍有效但缓存未命中（表现为「选厂凭证无效」）
         _cache.Set(
             SelectTokenCachePrefix + jti,
             1,
             new MemoryCacheEntryOptions
             {
-                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(JwtHelper.SelectFactoryExpireMinutes)
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(JwtHelper.SelectFactoryExpireMinutes),
+                Priority = CacheItemPriority.NeverRemove
             });
 
         return ApiResult<LoginResultDto>.Ok(new LoginResultDto

@@ -1,0 +1,155 @@
+{
+  "src": "D:\\workspace\\pkub\\bee\\ui-prototype\\创建工单弹窗美化预览.html",
+  "url": "file:///D:/workspace/pkub/bee/ui-prototype/%E5%88%9B%E5%BB%BA%E5%B7%A5%E5%8D%95%E5%BC%B9%E7%AA%97%E7%BE%8E%E5%8C%96%E9%A2%84%E8%A7%88.html",
+  "outdir": "D:\\workspace\\pkub\\bee\\ui-prototype\\_shots",
+  "include": [
+    "lint",
+    "screenshots",
+    "structure"
+  ],
+  "shots": {
+    "desktop": {
+      "screenshot": "D:\\workspace\\pkub\\bee\\ui-prototype\\_shots\\创建工单弹窗美化预览_desktop.jpg",
+      "screenshotBytes": 64560,
+      "truncated": false,
+      "structure": {
+        "title": "创建工单弹窗 · 轻量美化预览",
+        "firstH1": "",
+        "viewport": {
+          "w": 1440,
+          "h": 900
+        },
+        "fullpage": {
+          "w": 1440,
+          "h": 1327
+        },
+        "counts": {
+          "section": 0,
+          "h1": 0,
+          "h2": 0,
+          "img": 0,
+          "canvas": 0,
+          "svg": 1,
+          "links": 0,
+          "buttons": 8
+        }
+      },
+      "consoleErrors": [],
+      "consoleWarnings": [],
+      "horizontalOverflow": [],
+      "resourceErrors": [],
+      "emojiUsageWarning": [
+        {
+          "tag": "div",
+          "chars": "★",
+          "contextText": "带 ★ 为取价必填，提交前需取价成功"
+        },
+        {
+          "tag": "span",
+          "chars": "★",
+          "contextText": "★"
+        },
+        {
+          "tag": "span",
+          "chars": "★",
+          "contextText": "★"
+        }
+      ],
+      "emojiUsageHint": "warning · 含义：页面正文里检出 emoji 字符（U+1F300–U+1FAFF 或 U+2600–U+27BF 平面）。SKILL.md 视觉设计段明确禁用 emoji——不作图标、不作装饰、不放进数据。 | 修法：换成内联 SVG 图标（<svg viewBox=\"0 0 24 24\">）建立风格连贯的图标语言。 | 豁免：(1) **用户品牌资产明确包含 emoji**（罕见，但如即时通讯、社交媒体主题的产物合理）；(2) 主题本身就是关于 emoji 的（emoji 历史 / 表情包研究 / Unicode 演进）；(3) 引用某条真实文本原文（如推文截图的文字版），emoji 是内容而非装饰——保留原文可接受，但仍应权衡；(4) 装饰性 dingbat（如 U+2713 勾选符 ✓、U+2192 箭头 →、U+2605 星 ★）落入 U+2600–U+27BF 平面被误报的，如确认是符号非 emoji 可忽略。",
+      "reportSource": "cdp"
+    }
+  },
+  "engine": "chrome_cli",
+  "chromiumExec": "C:\\Users\\bob/AppData/Local/ms-playwright\\chromium_headless_shell-1234\\chrome-headless-shell-win64\\chrome-headless-shell.exe",
+  "engineDegraded": true,
+  "engineDegradedReason": "playwright 未装",
+  "elapsedSec": 4.67,
+  "schemaVersion": 2,
+  "status": "warning",
+  "engineInfo": {
+    "name": "chrome_cli",
+    "degraded": true,
+    "degradedReasons": [
+      "playwright 未装"
+    ]
+  },
+  "input": {
+    "original": "D:\\workspace\\pkub\\bee\\ui-prototype\\创建工单弹窗美化预览.html",
+    "resolvedPath": "D:\\workspace\\pkub\\bee\\ui-prototype\\创建工单弹窗美化预览.html",
+    "baseUrl": "file:///D:/workspace/pkub/bee/ui-prototype/%E5%88%9B%E5%BB%BA%E5%B7%A5%E5%8D%95%E5%BC%B9%E7%AA%97%E7%BE%8E%E5%8C%96%E9%A2%84%E8%A7%88.html",
+    "protocol": "file",
+    "cwd": "D:\\workspace\\pkub\\bee",
+    "mediaMode": {
+      "reducedMotion": true
+    }
+  },
+  "artifacts": {
+    "screenshots": [
+      {
+        "viewport": "desktop",
+        "path": "D:\\workspace\\pkub\\bee\\ui-prototype\\_shots\\创建工单弹窗美化预览_desktop.jpg",
+        "size": 64560,
+        "visualCoverage": {
+          "complete": true,
+          "reason": null
+        }
+      }
+    ]
+  },
+  "summary": {
+    "blocker": 0,
+    "error": 0,
+    "warning": 3,
+    "info": 0
+  },
+  "findings": [
+    {
+      "ruleId": "emojiUsageWarning",
+      "severity": "warning",
+      "kind": "typography",
+      "viewport": "desktop",
+      "selector": "div",
+      "evidence": {
+        "tag": "div",
+        "chars": "★",
+        "contextText": "带 ★ 为取价必填，提交前需取价成功"
+      },
+      "dedupeKey": "emojiUsageWarning|desktop|div|0"
+    },
+    {
+      "ruleId": "emojiUsageWarning",
+      "severity": "warning",
+      "kind": "typography",
+      "viewport": "desktop",
+      "selector": "span",
+      "evidence": {
+        "tag": "span",
+        "chars": "★",
+        "contextText": "★"
+      },
+      "dedupeKey": "emojiUsageWarning|desktop|span|1"
+    },
+    {
+      "ruleId": "emojiUsageWarning",
+      "severity": "warning",
+      "kind": "typography",
+      "viewport": "desktop",
+      "selector": "span",
+      "evidence": {
+        "tag": "span",
+        "chars": "★",
+        "contextText": "★"
+      },
+      "dedupeKey": "emojiUsageWarning|desktop|span|2"
+    }
+  ],
+  "prioritizedActions": [
+    {
+      "ruleId": "emojiUsageWarning",
+      "severity": "warning",
+      "viewport": "desktop",
+      "selector": "div"
+    }
+  ],
+  "reportPath": "D:\\workspace\\pkub\\bee\\ui-prototype\\_shots\\report.json"
+}

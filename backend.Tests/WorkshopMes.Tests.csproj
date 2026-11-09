@@ -21,4 +21,12 @@
     </ProjectReference>
   </ItemGroup>
 
+  <!-- 旧价型/BasePriceRule/ProcessingChoices 已删，下列文件无法编译；属性价目以 AttributePriceListTests 为准 -->
+  <ItemGroup>
+    <Compile Remove="OperationPricingTests.cs" />
+    <Compile Remove="OperationPriceTableScopeTests.cs" />
+    <Compile Remove="ReportPriceSnapshotTests.cs" />
+    <Compile Remove="TimedWageTests.cs" />
+  </ItemGroup>
+
 </Project>

@@ -16,36 +16,52 @@
         <div class="toolbar">
           <el-button type="primary" @click="openRule()">新建规则</el-button>
           <el-button :loading="loading" @click="loadRules">刷新</el-button>
+          <el-button @click="onToolbarOpenRule">{{ selectedRule?.targetChannel === 'group' || !selectedRule ? '编辑' : '查看' }}</el-button>
+          <el-button :loading="saving" @click="onToolbarToggleRule">{{ selectedRule?.enabled ? '停用' : (selectedRule ? '启用' : '启用/停用') }}</el-button>
         </div>
-        <mes-table table-key="views/wechat-alert/MessageRules:1" :data="rules" v-loading="loading" empty-text="还没有消息规则。点「新建规则」创建一条即可；创建后只对之后发生的报工、工单事件生效。">
+        <mes-table
+          ref="rulesTableRef"
+          table-key="views/wechat-alert/MessageRules:1"
+          :data="rules"
+          v-loading="loading"
+          empty-text="还没有消息规则。点「新建规则」创建一条即可；创建后只对之后发生的报工、工单事件生效。"
+          @selection-change="onRulesSelectionChange"
+          @row-click="onRulesRowClick"
+        >
+          <el-table-column type="selection" width="48" fixed />
           <el-table-column prop="name" label="规则名称" min-width="130" />
           <el-table-column label="事件" min-width="110"><template #default="{ row }">{{ events[row.eventType] }}</template></el-table-column>
           <el-table-column label="发送方式" width="100"><template #default="{ row }">{{ row.targetChannel === 'group' ? '群消息' : '旧规则（停用）' }}</template></el-table-column>
           <el-table-column label="条件" min-width="150"><template #default="{ row }">{{ conditionText(row) }}</template></el-table-column>
           <el-table-column label="接收人/@人" min-width="160" show-overflow-tooltip><template #default="{ row }">{{ row.toUser || (row.targetChannel === 'group' ? '只发群，不 @' : '沿用旧版默认接收人') }}</template></el-table-column>
           <el-table-column label="状态" width="80"><template #default="{ row }"><el-tag :type="row.enabled ? 'success' : 'info'">{{ row.targetChannel !== 'group' ? '已停用' : row.enabled ? '启用' : '停用' }}</el-tag></template></el-table-column>
-          <el-table-column label="操作" width="150"><template #default="{ row }">
-            <el-button link type="primary" @click="openRule(row)">{{ row.targetChannel === 'group' ? '编辑' : '查看' }}</el-button>
-            <el-button link :disabled="saving || row.targetChannel !== 'group'" @click="toggleRule(row)">{{ row.enabled ? '停用' : '启用' }}</el-button>
-          </template></el-table-column>
         </mes-table>
       </el-tab-pane>
       <el-tab-pane label="发送记录" name="deliveries">
-        <div class="toolbar"><el-button :loading="loadingDeliveries" @click="loadDeliveries">刷新记录</el-button></div>
-        <mes-table table-key="views/wechat-alert/MessageRules:2" :data="deliveries" v-loading="loadingDeliveries" empty-text="暂无发送记录。当报工、工单变更等事件触发规则后，这里会显示每次发送的结果。">
+        <div class="toolbar">
+          <el-button :loading="loadingDeliveries" @click="loadDeliveries">刷新记录</el-button>
+          <el-button @click="onToolbarDetail">详情</el-button>
+          <el-button :loading="acting" @click="onToolbarRetry">重试</el-button>
+          <el-button @click="onToolbarVerify">核实</el-button>
+        </div>
+        <mes-table
+          ref="deliveriesTableRef"
+          table-key="views/wechat-alert/MessageRules:2"
+          :data="deliveries"
+          v-loading="loadingDeliveries"
+          empty-text="暂无发送记录。当报工、工单变更等事件触发规则后，这里会显示每次发送的结果。"
+          @selection-change="onDeliveriesSelectionChange"
+          @row-click="onDeliveriesRowClick"
+        >
+          <el-table-column type="selection" width="48" fixed />
           <el-table-column prop="ruleName" label="规则" min-width="110" />
           <el-table-column label="事件" min-width="110"><template #default="{ row }">{{ events[row.eventType] }}</template></el-table-column>
           <el-table-column label="发生时间" min-width="160"><template #default="{ row }">{{ formatTime(row.occurredAt) }}</template></el-table-column>
           <el-table-column prop="toUser" label="接收人" min-width="120" show-overflow-tooltip />
           <el-table-column label="状态" min-width="110"><template #default="{ row }">{{ statuses[row.status] || row.status }}</template></el-table-column>
           <el-table-column prop="error" label="失败原因" min-width="150" show-overflow-tooltip />
-          <el-table-column label="操作" width="170"><template #default="{ row }">
-            <el-button link type="primary" @click="showDetail(row)">详情</el-button>
-            <el-button v-if="['failed', 'partial'].includes(row.status) && rules.some(rule => rule.id === row.ruleId && rule.targetChannel === 'group')" link type="primary" :disabled="acting" @click="retry(row)">重试</el-button>
-            <el-button v-if="row.status === 'unknown'" link type="warning" @click="openVerify(row)">核实</el-button>
-          </template></el-table-column>
         </mes-table>
-        <el-pagination v-model:current-page="page" :page-size="20" :total="total" layout="prev, pager, next, total" @current-change="loadDeliveries" />
+        <mes-pager v-model:page="page" v-model:page-size="pageSize" :total="total" @change="loadDeliveries" />
       </el-tab-pane>
     </el-tabs>
     <el-dialog v-model="ruleDialog" :title="ruleId ? '编辑规则' : '新建规则'" width="640px" :close-on-click-modal="false">
@@ -101,7 +117,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getWechatRules, createWechatRule, updateWechatRule, getWechatDeliveries, getWechatAttempts, retryWechatDelivery, verifyWechatDelivery } from '@/api/wechat-events'
 
@@ -120,7 +136,7 @@ const templates = {
 const kinds = { abnormal_device: '仅设备故障', abnormal_material: '仅物料短缺', abnormal_quality: '仅质量异常' }
 const conditionText = row => row.conditionType === 'defect_rate' ? `本次不良率 > ${row.threshold}%` : (kinds[row.conditionType] || '每次提醒')
 const tab = ref('rules'), rules = ref([]), deliveries = ref([]), attempts = ref([])
-const page = ref(1), total = ref(0), loading = ref(false), loadingDeliveries = ref(false), saving = ref(false), acting = ref(false)
+const page = ref(1), pageSize = ref(20), total = ref(0), loading = ref(false), loadingDeliveries = ref(false), saving = ref(false), acting = ref(false)
 const ruleDialog = ref(false), ruleId = ref(null), form = ref({})
 const detailDialog = ref(false), detail = ref(null), verifyDialog = ref(false), verifyId = ref(null), verification = ref({ sent: true, note: '' })
 const verifyCanRequeue = computed(() => rules.value.some(rule => rule.id === deliveries.value.find(row => row.id === verifyId.value)?.ruleId && rule.targetChannel === 'group'))
@@ -129,10 +145,91 @@ const sample = { 工单号: 'WO-示例', 产品编号: 'P-001', 产品名称: '�
 const preview = computed(() => (form.value.template || '').replace(/\{([^{}]+)\}/g, (_, key) => sample[key] ?? `【未知：${key}】`))
 const tokenText = token => `{${token}}`
 const formatTime = value => value ? value.replace('T', ' ').slice(0, 19) : '—'
+
+const rulesTableRef = ref(null), selectedRules = ref([])
+const selectedRule = computed(() => selectedRules.value.length === 1 ? selectedRules.value[0] : null)
+const deliveriesTableRef = ref(null), selectedDeliveries = ref([])
+const selectedDelivery = computed(() => selectedDeliveries.value.length === 1 ? selectedDeliveries.value[0] : null)
+
 onMounted(loadRules)
 watch(tab, value => { if (value === 'deliveries') loadDeliveries() })
-async function loadRules() { loading.value = true; try { const res = await getWechatRules(); rules.value = res.data || [] } finally { loading.value = false } }
-async function loadDeliveries() { loadingDeliveries.value = true; try { const res = await getWechatDeliveries({ page: page.value, pageSize: 20 }); deliveries.value = res.data?.list || []; total.value = res.data?.total || 0 } finally { loadingDeliveries.value = false } }
+async function loadRules() {
+  loading.value = true
+  try {
+    const res = await getWechatRules()
+    rules.value = res.data || []
+    selectedRules.value = []
+    await nextTick()
+    rulesTableRef.value?.clearSelection?.()
+  } finally { loading.value = false }
+}
+async function loadDeliveries() {
+  loadingDeliveries.value = true
+  try {
+    const res = await getWechatDeliveries({ page: page.value, pageSize: pageSize.value })
+    deliveries.value = res.data?.list || []
+    total.value = res.data?.total || 0
+    selectedDeliveries.value = []
+    await nextTick()
+    deliveriesTableRef.value?.clearSelection?.()
+  } finally { loadingDeliveries.value = false }
+}
+function onRulesSelectionChange(rows) { selectedRules.value = rows || [] }
+function onRulesRowClick(row, column, event) {
+  if (event?.target?.closest?.('button, a, .el-checkbox, input, label')) return
+  const table = rulesTableRef.value
+  if (!table?.toggleRowSelection) return
+  table.clearSelection?.(); table.toggleRowSelection(row, true)
+}
+function requireRule(actionLabel) {
+  if (selectedRules.value.length > 1) { ElMessage.warning(`「${actionLabel}」一次只能选一条`); return null }
+  if (!selectedRule.value) { ElMessage.warning(`请先勾选一条规则再${actionLabel}`); return null }
+  return selectedRule.value
+}
+function onToolbarOpenRule() {
+  const row = requireRule(selectedRule.value?.targetChannel === 'group' || !selectedRule.value ? '编辑' : '查看')
+  if (row) openRule(row)
+}
+function onToolbarToggleRule() {
+  const row = requireRule(selectedRule.value?.enabled ? '停用' : '启用')
+  if (!row) return
+  if (row.targetChannel !== 'group') {
+    ElMessage.warning('旧规则不能启用/停用，请新建群机器人规则')
+    return
+  }
+  toggleRule(row)
+}
+function onDeliveriesSelectionChange(rows) { selectedDeliveries.value = rows || [] }
+function onDeliveriesRowClick(row, column, event) {
+  if (event?.target?.closest?.('button, a, .el-checkbox, input, label')) return
+  const table = deliveriesTableRef.value
+  if (!table?.toggleRowSelection) return
+  table.clearSelection?.(); table.toggleRowSelection(row, true)
+}
+function requireDelivery(actionLabel) {
+  if (selectedDeliveries.value.length > 1) { ElMessage.warning(`「${actionLabel}」一次只能选一条`); return null }
+  if (!selectedDelivery.value) { ElMessage.warning(`请先勾选一条发送记录再${actionLabel}`); return null }
+  return selectedDelivery.value
+}
+function onToolbarDetail() { const row = requireDelivery('详情'); if (row) showDetail(row) }
+function onToolbarRetry() {
+  const row = requireDelivery('重试')
+  if (!row) return
+  if (!['failed', 'partial'].includes(row.status) || !rules.value.some(rule => rule.id === row.ruleId && rule.targetChannel === 'group')) {
+    ElMessage.warning('只有失败或部分成功、且规则仍是群机器人的记录才能重试')
+    return
+  }
+  retry(row)
+}
+function onToolbarVerify() {
+  const row = requireDelivery('核实')
+  if (!row) return
+  if (row.status !== 'unknown') {
+    ElMessage.warning('只有「结果未知」的发送记录才需要核实')
+    return
+  }
+  openVerify(row)
+}
 function openRule(row) {
   ruleId.value = row?.id || null
   form.value = row ? { name: row.name, eventType: row.eventType, conditionType: row.conditionType, threshold: row.threshold, targetChannel: row.targetChannel || 'session', webhookKey: row.webhookKey || '', toUser: row.toUser || '', template: row.template, enabled: row.enabled }

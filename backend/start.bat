@@ -61,6 +61,11 @@ echo Keep this window open. Close = stop.
 echo ----------------------------------------
 echo.
 
+rem 上传表单缓冲避开系统 Temp（Defender 易锁 ASPNETCORE_*.tmp）
+if not exist "App_Data\temp" mkdir "App_Data\temp"
+set "TEMP=%CD%\App_Data\temp"
+set "TMP=%TEMP%"
+
 set ASPNETCORE_URLS=http://0.0.0.0:8080
 WorkshopMes.exe
 set EXITCODE=%ERRORLEVEL%

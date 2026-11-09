@@ -18,9 +18,17 @@ public class ReviewQueryDto
 {
     public string? OrderNo { get; set; }
     public string? UserName { get; set; }
-    public byte? ReviewStatus { get; set; } = 0; // 默认待复核
+    public byte? ReviewStatus { get; set; } = 0; // 默认待复核（无 FilterField 时）
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 20;
+
+    /// <summary>
+    /// 快捷过滤：keyword | orderNo | productCode | productName | operationName | userName | reviewStatus | goodQty | reportTime。
+    /// 有值时优先于 OrderNo/UserName/ReviewStatus。
+    /// </summary>
+    public string? FilterField { get; set; }
+    public string? FilterOp { get; set; }
+    public string? FilterValue { get; set; }
 }
 
 public class RejectDto
@@ -76,6 +84,117 @@ public class ReviewService : IReviewService
         _events = events;
     }
 
+    private sealed class ReviewQueryJoin
+    {
+        public ProdReport Report { get; set; } = null!;
+        public ProdWorkOrder Order { get; set; } = null!;
+        public string ProductName { get; set; } = "";
+        public string ProductCode { get; set; } = "";
+        public string OperationName { get; set; } = "";
+        public SysUser User { get; set; } = null!;
+    }
+
+    private static IQueryable<ReviewQueryJoin> ApplyQuickFilter(IQueryable<ReviewQueryJoin> q, ReviewQueryDto query)
+    {
+        var field = query.FilterField!.Trim();
+        var value = string.IsNullOrWhiteSpace(query.FilterValue) ? "" : query.FilterValue.Trim();
+        if (value.Length > 256)
+            throw ThrowHelper.Biz(nameof(PendingAsync), "筛选值太长，最多 256 个字符，请缩短后重试。");
+
+        var op = string.IsNullOrWhiteSpace(query.FilterOp)
+            ? ""
+            : query.FilterOp.Trim().ToLowerInvariant();
+
+        if (value.Length == 0)
+            return q;
+
+        if (string.IsNullOrEmpty(op))
+            op = field is "goodQty" or "reportTime" or "reviewStatus" ? "eq" : "contains";
+        if (op is not ("eq" or "contains" or "gt" or "lt"))
+            throw ThrowHelper.Biz(nameof(PendingAsync), "比较方式只支持：等于、包含、大于、小于。");
+
+        switch (field)
+        {
+            case "keyword":
+                if (op is "gt" or "lt")
+                    throw ThrowHelper.Biz(nameof(PendingAsync), "「工单号/产品」只支持等于或包含。");
+                if (op == "eq")
+                    return q.Where(x => x.Order.OrderNo == value || x.ProductName == value || x.ProductCode == value);
+                return q.Where(x => x.Order.OrderNo.Contains(value) || x.ProductName.Contains(value) || x.ProductCode.Contains(value));
+
+            case "orderNo":
+                if (op is "gt" or "lt")
+                    throw ThrowHelper.Biz(nameof(PendingAsync), "工单号只支持等于或包含。");
+                return op == "eq"
+                    ? q.Where(x => x.Order.OrderNo == value)
+                    : q.Where(x => x.Order.OrderNo.Contains(value));
+
+            case "productCode":
+                if (op is "gt" or "lt")
+                    throw ThrowHelper.Biz(nameof(PendingAsync), "产品编号只支持等于或包含。");
+                return op == "eq"
+                    ? q.Where(x => x.ProductCode == value)
+                    : q.Where(x => x.ProductCode.Contains(value));
+
+            case "productName":
+                if (op is "gt" or "lt")
+                    throw ThrowHelper.Biz(nameof(PendingAsync), "产品名称只支持等于或包含。");
+                return op == "eq"
+                    ? q.Where(x => x.ProductName == value)
+                    : q.Where(x => x.ProductName.Contains(value));
+
+            case "operationName":
+                if (op is "gt" or "lt")
+                    throw ThrowHelper.Biz(nameof(PendingAsync), "工序只支持等于或包含。");
+                return op == "eq"
+                    ? q.Where(x => x.OperationName == value)
+                    : q.Where(x => x.OperationName.Contains(value));
+
+            case "userName":
+                if (op is "gt" or "lt")
+                    throw ThrowHelper.Biz(nameof(PendingAsync), "报工人只支持等于或包含。");
+                return op == "eq"
+                    ? q.Where(x => x.User.Name == value)
+                    : q.Where(x => x.User.Name.Contains(value));
+
+            case "reviewStatus":
+                if (op != "eq")
+                    throw ThrowHelper.Biz(nameof(PendingAsync), "复核状态只支持「等于」。");
+                if (!byte.TryParse(value, out var reviewStatus))
+                    throw ThrowHelper.Biz(nameof(PendingAsync), "复核状态取值无效，请重新选择。");
+                return q.Where(x => x.Report.ReviewStatus == reviewStatus);
+
+            case "goodQty":
+                if (op == "contains")
+                    throw ThrowHelper.Biz(nameof(PendingAsync), "良品数不支持「包含」，请用等于/大于/小于。");
+                if (!int.TryParse(value, out var goodQty))
+                    throw ThrowHelper.Biz(nameof(PendingAsync), "良品数请输入整数。");
+                return op switch
+                {
+                    "eq" => q.Where(x => x.Report.GoodQty == goodQty),
+                    "gt" => q.Where(x => x.Report.GoodQty > goodQty),
+                    _ => q.Where(x => x.Report.GoodQty < goodQty)
+                };
+
+            case "reportTime":
+                if (op == "contains")
+                    throw ThrowHelper.Biz(nameof(PendingAsync), "报工时间不支持「包含」，请用等于/大于/小于。");
+                if (!DateTime.TryParse(value, out var reportDayRaw))
+                    throw ThrowHelper.Biz(nameof(PendingAsync), "报工时间请输入有效日期，例如 2026-11-07。");
+                var day = reportDayRaw.Date;
+                var next = day.AddDays(1);
+                return op switch
+                {
+                    "eq" => q.Where(x => x.Report.ReportTime >= day && x.Report.ReportTime < next),
+                    "gt" => q.Where(x => x.Report.ReportTime >= next),
+                    _ => q.Where(x => x.Report.ReportTime < day)
+                };
+
+            default:
+                throw ThrowHelper.Biz(nameof(PendingAsync), $"不支持的筛选字段「{field}」。请重新选择。");
+        }
+    }
+
     public async Task<ApiResult<PageResult<ReviewListDto>>> PendingAsync(ReviewQueryDto query, long factoryId, long currentUserId)
     {
         var reviewer = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == currentUserId)
@@ -89,15 +208,29 @@ public class ReviewService : IReviewService
                 join p in _db.Products.AsNoTracking() on o.ProductId equals p.Id
                 join op in _db.Operations.AsNoTracking() on r.OperationId equals op.Id
                 join u in _db.Users.AsNoTracking() on r.UserId equals u.Id
-                select new { r, o, p, op, u };
+                select new ReviewQueryJoin
+                {
+                    Report = r,
+                    Order = o,
+                    ProductName = p.Name,
+                    ProductCode = p.Code,
+                    OperationName = op.Name,
+                    User = u
+                };
 
-        var status = query.ReviewStatus ?? 0;
-        q = q.Where(x => x.r.ReviewStatus == status);
-
-        if (!string.IsNullOrWhiteSpace(query.OrderNo))
-            q = q.Where(x => x.o.OrderNo.Contains(query.OrderNo));
-        if (!string.IsNullOrWhiteSpace(query.UserName))
-            q = q.Where(x => x.u.Name.Contains(query.UserName));
+        if (!string.IsNullOrWhiteSpace(query.FilterField))
+        {
+            q = ApplyQuickFilter(q, query);
+        }
+        else
+        {
+            var status = query.ReviewStatus ?? 0;
+            q = q.Where(x => x.Report.ReviewStatus == status);
+            if (!string.IsNullOrWhiteSpace(query.OrderNo))
+                q = q.Where(x => x.Order.OrderNo.Contains(query.OrderNo));
+            if (!string.IsNullOrWhiteSpace(query.UserName))
+                q = q.Where(x => x.User.Name.Contains(query.UserName));
+        }
 
         // 班组长：本组 = 自己部门 ∩ 报工人部门非空（docs/22）
         if (reviewer.Role == 3)
@@ -108,32 +241,32 @@ public class ReviewService : IReviewService
             var allowedUserIds = await _db.DepartmentUsers.AsNoTracking()
                 .Where(x => myDeptIds.Contains(x.DepartmentId))
                 .Select(x => x.UserId).Distinct().ToListAsync();
-            q = q.Where(x => allowedUserIds.Contains(x.r.UserId));
+            q = q.Where(x => allowedUserIds.Contains(x.Report.UserId));
         }
 
         var total = await q.CountAsync();
-        var rows = await q.OrderByDescending(x => x.r.ReportTime)
+        var rows = await q.OrderByDescending(x => x.Report.ReportTime)
             .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
             .Select(x => new
             {
-                x.r.Id,
-                OrderId = x.o.Id,
-                OrderQty = x.o.Qty,
-                ProductId = x.o.ProductId,
-                OperationId = x.r.OperationId,
-                OrderNo = x.o.OrderNo,
-                ProductName = x.p.Name,
-                OperationName = x.op.Name,
-                UserName = x.u.Name,
-                UserId = x.r.UserId,
-                GoodQty = x.r.GoodQty,
-                DefectQty = x.r.DefectQty,
-                DurationMinutes = x.r.DurationMinutes,
-                ReviewStatus = x.r.ReviewStatus,
-                RejectReason = x.r.RejectReason,
-                ReportTime = x.r.ReportTime,
-                UnitPrice = x.r.UnitPrice,
-                WageAmount = x.r.WageAmount
+                x.Report.Id,
+                OrderId = x.Order.Id,
+                OrderQty = x.Order.Qty,
+                ProductId = x.Order.ProductId,
+                OperationId = x.Report.OperationId,
+                OrderNo = x.Order.OrderNo,
+                ProductName = x.ProductName,
+                OperationName = x.OperationName,
+                UserName = x.User.Name,
+                UserId = x.Report.UserId,
+                GoodQty = x.Report.GoodQty,
+                DefectQty = x.Report.DefectQty,
+                DurationMinutes = x.Report.DurationMinutes,
+                ReviewStatus = x.Report.ReviewStatus,
+                RejectReason = x.Report.RejectReason,
+                ReportTime = x.Report.ReportTime,
+                UnitPrice = x.Report.UnitPrice,
+                WageAmount = x.Report.WageAmount
             }).ToListAsync();
 
         var list = rows.Select(x => new ReviewListDto

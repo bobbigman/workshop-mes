@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>车间报工系统 · 财务介绍</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23123B4F'/%3E%3Cpath d='M20 34l8 8 18-18' stroke='%23E8763A' stroke-width='6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#F4F6F8;
+    --panel:#FFFFFF;
+    --ink:#1B2830;
+    --ink-2:#5A6A73;
+    --navy:#123B4F;
+    --accent:#E8763A;
+    --line:#E3E9ED;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;
+    font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+    line-height:1.65;
+  }
+  .wrap{max-width:980px;margin:0 auto;padding:0 20px}
+  img,svg{vertical-align:middle}
+
+  /* ===== 顶部 ===== */
+  header{
+    background:var(--navy);
+    color:#fff;
+    padding:56px 0 60px;
+  }
+  .brand{
+    font-size:14px;
+    letter-spacing:.08em;
+    color:#B9CDD9;
+    margin:0 0 18px;
+  }
+  h1{
+    font-size:clamp(28px,5vw,40px);
+    line-height:1.25;
+    margin:0 0 16px;
+    max-width:16em;
+    font-weight:700;
+  }
+  .lead{
+    font-size:16px;
+    color:#D7E3EA;
+    max-width:34em;
+    margin:0;
+  }
+  .lead b{color:#fff}
+
+  /* ===== 区块通用 ===== */
+  section{padding:52px 0}
+  .sec-title{
+    font-size:22px;
+    margin:0 0 8px;
+    font-weight:700;
+  }
+  .sec-sub{
+    color:var(--ink-2);
+    font-size:15px;
+    margin:0 0 30px;
+  }
+
+  /* ===== 三个好处 ===== */
+  .benefits{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:14px;
+  }
+  .benefit{
+    background:var(--panel);
+    border-left:4px solid var(--accent);
+    padding:20px 22px;
+  }
+  .benefit h3{
+    margin:0 0 6px;
+    font-size:17px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  .benefit h3 svg{flex:0 0 auto}
+  .benefit p{margin:0;color:var(--ink-2);font-size:15px}
+
+  /* ===== 真实界面 · 工人端（深底） ===== */
+  .worker{background:var(--navy);color:#fff}
+  .worker .sec-title{color:#fff}
+  .worker .sec-sub{color:#B9CDD9}
+  .phones{
+    display:flex;
+    gap:16px;
+    align-items:center;
+    justify-content:center;
+    flex-wrap:wrap;
+  }
+  .phone{
+    flex:1 1 240px;
+    max-width:320px;
+    background:#fff;
+    border-radius:20px;
+    padding:14px 14px 18px;
+    box-shadow:0 12px 30px rgba(0,0,0,.28);
+  }
+  .phone img{
+    width:100%;
+    height:auto;
+    border-radius:12px;
+    display:block;
+    background:#F4F6F8;
+  }
+  .phone .cap{
+    margin-top:12px;
+    font-size:14px;
+    color:var(--ink);
+    text-align:center;
+  }
+  .phone .cap b{color:var(--accent)}
+  .arrow{
+    flex:0 0 auto;
+    font-size:30px;
+    font-weight:700;
+    color:var(--accent);
+    padding:0 2px;
+  }
+  .worker-note{
+    margin-top:26px;
+    text-align:center;
+    font-size:13px;
+    color:#9FB6C2;
+  }
+
+  /* ===== 真实界面 · 财务端（浅底） ===== */
+  .finance .wide{
+    background:var(--panel);
+    border-radius:16px;
+    padding:14px;
+    box-shadow:0 8px 24px rgba(0,0,0,.08);
+  }
+  .wide img{
+    width:100%;
+    height:auto;
+    display:block;
+    border-radius:10px;
+    background:#F4F6F8;
+  }
+  .finance-note{
+    margin-top:20px;
+    font-size:15px;
+    color:var(--ink-2);
+  }
+  .finance-note b{color:var(--ink)}
+
+  /* ===== 收尾 ===== */
+  .closing{
+    background:var(--navy);
+    color:#fff;
+    text-align:center;
+    padding:56px 0;
+  }
+  .closing p{max-width:30em;margin:0 auto;font-size:17px;color:#E9F1F5}
+  .closing .cta{
+    display:inline-block;
+    margin-top:24px;
+    background:var(--accent);
+    color:#fff;
+    border:0;
+    font-size:16px;
+    font-weight:600;
+    padding:13px 30px;
+    border-radius:999px;
+    cursor:pointer;
+    min-height:44px;
+  }
+  .closing .cta:focus-visible{outline:3px solid #FFC49B;outline-offset:2px}
+  .closing .contact{margin-top:16px;font-size:14px;color:#9FB6C2}
+  .toast{
+    position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);
+    background:#123B4F;color:#fff;padding:12px 20px;border-radius:10px;font-size:15px;
+    opacity:0;pointer-events:none;transition:.25s;box-shadow:0 6px 20px rgba(0,0,0,.2);
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  @media (min-width:768px){
+    .benefits{grid-template-columns:repeat(3,1fr);gap:18px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .toast{transition:none}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <p class="brand">微聚 · 车间报工系统</p>
+    <h1>月底算工资，能不能不加班？</h1>
+    <p class="lead">工人扫码报工，干了多少活、该多少钱，系统<b>自动记好</b>。月底工资、成本报表一点就出来，不用再一张张手填、来回核对。</p>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2 class="sec-title">这东西，主要帮你省这三件事</h2>
+    <p class="sec-sub">都是财务最常被折腾的地方</p>
+
+    <div class="benefits">
+      <div class="benefit">
+        <h3>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E8763A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12l2.6 2.6L16 9"/></svg>
+          工资算得准
+        </h3>
+        <p>干了多少活、计件多少钱，系统按工单自动算，月底不用一笔笔对账。</p>
+      </div>
+      <div class="benefit">
+        <h3>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E8763A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18M7 15h4"/></svg>
+          金额实时透明
+        </h3>
+        <p>工人扫完码，当天的数量和金额当场可见，谁干多少一目了然，少扯皮。</p>
+      </div>
+      <div class="benefit">
+        <h3>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E8763A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12l4-4 4 4 4-4 4 4"/><path d="M3 17l4-4 4 4 4-4 4 4"/></svg>
+          不良、异常查得到
+        </h3>
+        <p>报工时报不良数，车间异常能上报；哪里总出问题，都有记录能查。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="worker">
+  <div class="wrap">
+    <h2 class="sec-title">工人那边：扫一下，就报上工了</h2>
+    <p class="sec-sub">手机就是扫码枪，车间师傅一学就会</p>
+
+    <div class="phones">
+      <div class="phone">
+        <img src="assets/report-fill.png" alt="工人扫码后填写本次报工数量">
+        <p class="cap">扫到工单，填这次干的数量</p>
+      </div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="phone">
+        <img src="assets/report-salary.png" alt="我的工资：单价乘数量等于金额">
+        <p class="cap"><b>单价×数量＝金额</b>，当天就看得见</p>
+      </div>
+    </div>
+
+    <p class="worker-note">图为演示数据：单价、数量、金额明明白白，还带「待复核」状态，谁算的都查得到。</p>
+  </div>
+</section>
+
+<section class="finance">
+  <div class="wrap">
+    <h2 class="sec-title">财务这边：月底一键出表，能对上账</h2>
+    <p class="sec-sub">不用再从表里抄一遍</p>
+
+    <div class="wide">
+      <img src="assets/salary-detail.png" alt="电脑工资单与工资明细，逐项可对账">
+    </div>
+
+    <p class="finance-note">全厂工资<b>一张表、全是已确认</b>；点开明细，<b>按工序、按单价</b>，每一笔都能和报工对得上。应发合计＝计件明细合计，不靠抄表。</p>
+  </div>
+</section>
+
+<div class="closing">
+  <div class="wrap">
+    <p>你要是感兴趣，改天我发你一两分钟的小视频看看，不耽误你。</p>
+    <button class="cta" id="contactBtn" type="button">想看小视频，怎么联系我？</button>
+    <p class="contact">微信 / 电话：联系我即可，价格以正式报价为准。</p>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite">欢迎来聊，我发你看～具体方案按咱们厂实际情况定。</div>
+
+<script>
+  (function(){
+    var toast=document.getElementById('toast');
+    var btn=document.getElementById('contactBtn');
+    if(btn&&toast){
+      btn.addEventListener('click',function(){
+        toast.classList.add('show');
+        clearTimeout(toast._t);
+        toast._t=setTimeout(function(){toast.classList.remove('show')},2600);
+      });
+    }
+  })();
+</script>
+</body>
+</html>

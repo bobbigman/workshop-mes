@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>车间管理系统 · 演示原型</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%232456A6' d='M12 2 4 6v6c0 5 3.4 8.6 8 10 4.6-1.4 8-5 8-10V6l-8-4z'/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#eef1f6; --card:#ffffff; --ink:#17233b; --muted:#6b7280;
+  --line:#dfe4ec; --brand:#2456a6; --brand-ink:#1b3f7d; --accent:#e8730c;
+  --ok:#178a4e; --warn:#c2410c; --soft:#eef2fa;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:"PingFang SC","Microsoft YaHei","Segoe UI",sans-serif;background:var(--bg);color:var(--ink);line-height:1.5}
+a{color:var(--brand);text-decoration:none}
+.topbar{position:sticky;top:0;z-index:30;background:#ffffff;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:18px;padding:10px 20px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:17px}
+.brand .logo{width:26px;height:26px;border-radius:7px;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px}
+.topnav{display:flex;gap:4px;flex-wrap:wrap}
+.topnav button{border:0;background:transparent;color:var(--muted);padding:8px 12px;border-radius:8px;cursor:pointer;font-size:14px;font-family:inherit}
+.topnav button.active,.topnav button:hover{background:var(--soft);color:var(--brand-ink);font-weight:600}
+.badge-demo{margin-left:auto;background:var(--accent);color:#fff;font-size:12px;padding:4px 10px;border-radius:20px;font-weight:600;white-space:nowrap}
+main{max-width:1180px;margin:0 auto;padding:20px 16px 40px}
+.view{display:none}
+.view.active{display:block}
+.page-head{display:flex;align-items:center;gap:12px;margin:6px 0 16px;flex-wrap:wrap}
+.page-head h1{font-size:22px;margin:0}
+.page-head .sub{color:var(--muted);font-size:13px;flex-basis:100%}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px;overflow-x:auto}
+.card h2{font-size:16px;margin:0 0 12px}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.btn{border:0;border-radius:8px;padding:9px 16px;cursor:pointer;font-size:14px;font-family:inherit;font-weight:600}
+.btn-primary{background:var(--brand);color:#fff}
+.btn-accent{background:var(--accent);color:#fff}
+.btn-ghost{background:#fff;color:var(--brand-ink);border:1px solid var(--line)}
+.btn-sm{padding:6px 12px;font-size:13px}
+.btn-ok{background:var(--ok);color:#fff}
+table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:14px}
+th,td{padding:9px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle;word-break:break-word}
+th{color:var(--muted);font-weight:600;font-size:12.5px;background:#fafbfd}
+tbody tr:hover{background:#f8faff}
+.tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:12px;font-weight:600}
+.tag-blue{background:#e6edfa;color:var(--brand-ink)}
+.tag-orange{background:#fdeeda;color:var(--warn)}
+.tag-green{background:#e4f5ec;color:var(--ok)}
+.tag-gray{background:#eef0f4;color:var(--muted)}
+.chip{display:inline-block;background:var(--soft);color:var(--brand-ink);border-radius:6px;padding:2px 8px;font-size:12px;margin:2px}
+.form-grid{display:grid;grid-template-columns:1fr;gap:12px}
+@media(min-width:640px){.form-grid{grid-template-columns:repeat(2,1fr)}.form-grid.col3{grid-template-columns:repeat(3,1fr)}}
+.field label{display:block;font-size:13px;color:var(--muted);margin-bottom:5px}
+.field .req{color:var(--accent)}
+.field input,.field select{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:16px;font-family:inherit;background:#fff}
+.field input:focus,.field select:focus{outline:2px solid #c7d7f4;border-color:var(--brand)}
+.row-actions{display:flex;gap:8px}
+.price{color:var(--accent);font-weight:700}
+.muted{color:var(--muted);font-size:13px}
+.small{font-size:12px}
+.notice{background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:8px 12px;font-size:13px;color:var(--warn);margin-bottom:12px}
+/* 手机框（工人端） */
+.phone{max-width:400px;margin:0 auto;background:#f7f8fa;border:1px solid var(--line);border-radius:22px;overflow:hidden;box-shadow:0 10px 30px rgba(23,35,59,.12)}
+.phone-head{background:#fff;border-bottom:1px solid var(--line);padding:14px 16px;display:flex;align-items:center;justify-content:space-between}
+.phone-head b{font-size:15px}
+.phone-body{padding:16px}
+/* 弹窗 */
+.modal{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;background:rgba(15,23,42,.55);padding:16px}
+.modal.open{display:flex}
+.modal-card{background:#fff;border-radius:16px;max-width:360px;width:100%;padding:26px 22px;text-align:center;position:relative;overflow:hidden}
+.modal-card h3{margin:10px 0 4px;font-size:18px}
+.celebrate{background:linear-gradient(180deg,#ffe9d2,#fff);height:150px;display:flex;align-items:center;justify-content:center;margin:-26px -22px 12px;border-radius:16px 16px 0 0}
+.celebrate .coin{width:84px;height:84px;border-radius:50%;background:radial-gradient(circle at 32% 30%,#ffd977,#e8730c);display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:800;color:#fff;box-shadow:0 6px 18px rgba(232,115,12,.4)}
+.modal-big{font-size:30px;font-weight:800;color:var(--accent)}
+.modal-line{color:var(--muted);font-size:13px;margin:4px 0}
+.modal-rows{margin:14px 0;text-align:left;background:#fafbfd;border-radius:10px;padding:10px 14px}
+.modal-rows div{display:flex;justify-content:space-between;font-size:14px;padding:5px 0;border-bottom:1px dashed var(--line)}
+.modal-rows div:last-child{border-bottom:0}
+.modal-rows span{color:var(--muted)}
+/* toast */
+#toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:80;background:#17233b;color:#fff;padding:10px 18px;border-radius:10px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .25s;max-width:88%}
+#toast.show{opacity:1}
+.money-input{font-size:16px}
+input[type=number]{font-size:16px}
+.cond-link{background:none;border:0;color:var(--brand-ink);cursor:pointer;font:inherit;text-align:left;padding:2px 0;text-decoration:underline dotted;line-height:1.5}
+.dd-menu{background:var(--bg);border:1px dashed var(--line);border-radius:8px;padding:5px;display:flex;flex-direction:column;gap:2px;margin-top:4px;min-width:130px}
+.dd-menu button{background:none;border:0;padding:8px 10px;text-align:left;border-radius:6px;font:inherit;font-size:14px;color:var(--ink);cursor:pointer}
+.dd-menu button:hover{background:#eef1fa}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="logo">伞</span>车间管理系统 · 演示原型</div>
+  <nav class="topnav" id="nav">
+    <button data-view="product">产品定义</button>
+    <button data-view="price">工序价目表</button>
+    <button data-view="order">工单建单</button>
+    <button data-view="report">工人报工</button>
+    <button data-view="result">报工结果</button>
+  </nav>
+  <span class="badge-demo">演示 · 模拟数据</span>
+</header>
+<main>
+
+  <!-- ===== 视图：产品定义 ===== -->
+  <section id="view-product" class="view active">
+    <div class="page-head">
+      <h1>产品定义</h1>
+      <span class="sub">建 5 个演示产品 · 只填核心固有字段，不为每个小差异建编码</span>
+    </div>
+    <div class="notice">演示说明：产品只维护伞型/尺寸/骨数/材质/涂层等固有字段；丝印、内标等每单差异放到工单对应工序填。</div>
+    <div class="card">
+      <div class="toolbar">
+        <button class="btn btn-primary" id="btnNewProduct">新建产品</button>
+        <span class="muted" id="prodCount"></span>
+      </div>
+      <table>
+        <colgroup><col style="width:12%"><col style="width:12%"><col style="width:9%"><col style="width:7%"><col style="width:9%"><col style="width:7%"><col style="width:10%"><col style="width:10%"><col style="width:9%"><col style="width:15%"></colgroup>
+        <thead><tr>
+          <th>编号</th><th>名称</th><th>伞型</th><th>尺寸</th><th>骨数</th><th>折叠</th><th>材质</th><th>涂层</th><th>单位</th><th>操作</th>
+        </tr></thead>
+        <tbody id="prodBody"></tbody>
+      </table>
+    </div>
+
+    <!-- 产品表单 -->
+    <div class="card" id="prodFormCard">
+      <h2 id="prodFormTitle">新建产品</h2>
+      <div class="form-grid col3">
+        <div class="field"><label>产品编号 <span class="req">*</span></label><input id="f_code" placeholder="如 P-A01"></div>
+        <div class="field"><label>产品名称 <span class="req">*</span></label><input id="f_name" placeholder="如 直骨25寸"></div>
+        <div class="field"><label>库存单位</label><select id="f_unit"><option>把</option><option>打</option><option>件</option><option>套</option></select></div>
+        <div class="field"><label>伞型</label><select id="f_umbrella"></select></div>
+        <div class="field"><label>尺寸(寸)</label><input id="f_size" type="number" min="0" step="0.1" placeholder="如 25"></div>
+        <div class="field"><label>骨数(K)</label><input id="f_rib" type="number" min="0" step="1" placeholder="如 8"></div>
+        <div class="field"><label>折叠结构</label><select id="f_folding"></select></div>
+        <div class="field"><label>层次结构</label><select id="f_structure"></select></div>
+        <div class="field"><label>伞面形状</label><select id="f_shape"></select></div>
+        <div class="field"><label>材质</label><select id="f_fabric"></select></div>
+        <div class="field"><label>涂层</label><select id="f_coating"></select></div>
+        <div class="field"><label>备注</label><input id="f_remark" placeholder="选填"></div>
+      </div>
+      <div class="toolbar" style="margin-top:14px">
+        <button class="btn btn-primary" id="btnSaveProduct">保存</button>
+        <button class="btn btn-ghost" id="btnCancelProduct">取消</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 视图：工序价目表 ===== -->
+  <section id="view-price" class="view">
+    <div class="page-head"><h1>工序价目表</h1><span class="sub">两级取价：产品级优先 + 模板兜底 · 展示字段</span></div>
+    <div class="notice">演示说明：参照金蝶采购价目表——单据头管"这张表给哪个产品、几时有效、能不能用"；单据体每行管"哪个工序、什么条件、多少数量、多少钱"。</div>
+    <div class="card">
+      <div class="card-head" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+        <h2 style="margin:0">工序价目表 · 列表</h2>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-sm btn-primary" id="pl_add">＋ 新增价目表</button>
+          <button class="btn btn-sm btn-ghost" onclick="renderPriceList()">刷新</button>
+        </div>
+      </div>
+      <table id="plTable" style="table-layout:fixed">
+        <colgroup><col style="width:13%"><col style="width:13%"><col style="width:13%"><col style="width:8%"><col style="width:8%"><col style="width:16%"><col style="width:29%"></colgroup>
+        <thead><tr><th>单据编号</th><th>价目表类型</th><th>对应Excel表</th><th>明细行数</th><th>单据状态</th><th>生效~失效</th><th>操作</th></tr></thead>
+        <tbody id="plRows"></tbody>
+      </table>
+      <div class="small muted" style="margin-top:8px">说明：每张 Excel 工序价目表＝一张工序价目表。点"编辑"进入详情；保存后"价目表类型"锁定不可改。明细行不列工序/备注字段，计价口径用文字注明，避免维护负担。</div>
+    </div>
+    <div class="card">
+      <h2>价目表 · 单据头</h2>
+      <div class="form-grid col3">
+        <div class="field"><label>价目表编号</label><input id="ph_id" value="PRICE-2026-01" readonly style="background:#f6f7fa"></div>
+        <div class="field"><label>价目表类型</label><select id="ph_table"></select></div>
+        <div class="field"><label>产品</label><select id="ph_product"></select></div>
+        <div class="field"><label>生效日期</label><input id="ph_from" type="date" value="2026-01-01"></div>
+        <div class="field"><label>失效日期</label><input id="ph_to" type="date" value="2026-12-31"></div>
+        <div class="field"><label>状态</label><select id="ph_status"><option>已启用</option><option>草稿</option><option>停用</option></select></div>
+        <div class="field" style="grid-column:1 / -1"><label>备注（口径说明）</label><input id="ph_remark" placeholder="如：计价单位按打，特殊口径见说明"></div>
+      </div>
+      <div class="toolbar" style="margin-top:12px">
+        <button class="btn btn-primary" id="ph_save">保存</button>
+        <button class="btn btn-ghost" onclick="toast('演示中：提交审核')">提交</button>
+        <button class="btn btn-ghost" onclick="toast('演示中：审核')">审核</button>
+        <button class="btn btn-ghost" onclick="toast('演示中：退出返回列表')">退出</button>
+      </div>
+      <div class="small muted" style="margin-top:8px">说明：单据头选"价目表"＝看哪张工序价目表（对应客户Excel 9 个可见 sheet）；选"产品"＝模拟真实取价场景。单据体每行标了"取价条件（字段+规则）"，系统就是用产品固有属性＋工单-工序工艺属性去撞这些条件来取价。凡表内还有"待确认"行，整张表只能存草稿。</div>
+    </div>
+    <div class="card">
+      <h2>价目表 · 单据体（明细行）</h2>
+      <div class="body-toolbar" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+        <div class="dropdown" style="position:relative">
+          <button class="btn btn-sm btn-primary" id="bd_add_btn">＋ 新增行 ▾</button>
+          <div class="dd-menu" id="bd_menu" hidden>
+            <button data-act="add">新增行</button>
+            <button data-act="ins">插入行</button>
+          </div>
+        </div>
+        <button class="btn btn-sm btn-ghost" id="bd_del">删除行</button>
+        <button class="btn btn-sm btn-ghost" onclick="toast('演示中：批量填充/导入待做')">批量填充</button>
+        <button class="btn btn-sm btn-ghost" onclick="toast('演示中：行操作待做')">行操作</button>
+        <span class="small muted">（参照金蝶：单据体可新增/删除明细行，未保存前为暂存）</span>
+      </div>
+      <table>
+        <colgroup><col style="width:6%"><col style="width:20%"><col style="width:28%"><col style="width:12%"><col style="width:12%"><col style="width:8%"><col style="width:14%"></colgroup>
+        <thead><tr><th>行号</th><th>品名/规格</th><th>取价条件(字段+规则)</th><th>数量范围(从~到)</th><th>单价(元)</th><th>单位</th><th>收费组</th></tr></thead>
+        <tbody id="opRows"></tbody>
+      </table>
+      <div class="small muted" style="margin-top:8px">说明：产品级行＝该产品直接一价（优先）；模板行＝按属性条件+数量区间兜底。收费组单选互斥、命中任一取价一次、不同组可叠加。关键属性匹配不到 → 缺价提示，不当 0。</div>
+    </div>
+    <div class="card">
+      <h2>取价机制说明</h2>
+      <ol class="small" style="margin:0;padding-left:18px;color:var(--muted)">
+        <li>报工时，若此价目表针对某产品，直接按该产品行取价（优先）。</li>
+        <li>若为通用模板（或该产品无产品级行），按"产品固有属性＋工单-工序工艺属性"合并匹配模板行的条件+数量区间（兜底）。</li>
+        <li>丝印、内标、外标、特殊伞面等收费组：单选互斥、命中任一取价一次、不累计，不同组可叠加。</li>
+        <li>关键属性匹配不到 → 提示缺价，不当 0。</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ===== 视图：工单建单 ===== -->
+  <section id="view-order" class="view">
+    <div class="page-head"><h1>工单建单</h1><span class="sub">选产品 → 按工序补工艺字段 → 自动试算单价</span></div>
+    <div class="notice">演示说明：产品固有属性自动带出；丝印/内标/特殊伞面等差异在对应工序填，系统按产品固有+工序工艺合并取价。</div>
+    <div class="card">
+      <h2>新建工单</h2>
+      <div class="form-grid col3">
+        <div class="field"><label>工单编号</label><input id="wo_id" value="WO-2001" readonly style="background:#f6f7fa"></div>
+        <div class="field"><label>产品 <span class="req">*</span></label><select id="wo_product"></select></div>
+        <div class="field"><label>工序 <span class="req">*</span></label><select id="wo_op"></select></div>
+        <div class="field"><label>数量(把)</label><input id="wo_qty" type="number" min="1" value="1200"></div>
+      </div>
+      <div style="margin-top:14px">
+        <div class="muted small" style="margin-bottom:6px">产品固有属性（自动带出）</div>
+        <div id="orderAttr" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+      </div>
+      <div style="margin-top:14px">
+        <div class="muted small" style="margin-bottom:6px">工单-工序工艺字段（按需填，补差异）</div>
+        <div class="form-grid col3" id="orderCraft"></div>
+      </div>
+      <div style="margin-top:16px;background:var(--soft);border-radius:10px;padding:12px 16px">
+        <div class="muted small">试算结果</div>
+        <div id="orderCalc" style="display:flex;flex-wrap:wrap;gap:18px;margin-top:6px"></div>
+      </div>
+      <div class="toolbar" style="margin-top:14px">
+        <button class="btn btn-primary" id="btnSaveWO">保存工单</button>
+        <button class="btn btn-accent" id="btnCalcWO">重新试算</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>已建工单</h2>
+      <table>
+        <colgroup><col style="width:16%"><col style="width:16%"><col style="width:12%"><col style="width:16%"><col style="width:22%"><col style="width:18%"></colgroup>
+        <thead><tr><th>工单</th><th>产品</th><th>工序</th><th>数量</th><th>工艺差异</th><th>单价</th></tr></thead>
+        <tbody id="woList"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===== 视图：工人报工 ===== -->
+  <section id="view-report" class="view">
+    <div class="page-head"><h1>工人报工</h1><span class="sub">H5 手机端模拟 · 扫码/选工单工序，实时算价</span></div>
+    <div class="phone">
+      <div class="phone-head"><b>报工</b><span class="small muted" id="phoneTime"></span></div>
+      <div class="phone-body">
+        <div class="field" style="margin-bottom:12px"><label>工单（扫码/选择）</label><select id="rp_wo"></select></div>
+        <div class="field" style="margin-bottom:12px"><label>工序</label><select id="rp_op"></select></div>
+        <div style="display:flex;gap:10px;margin-bottom:12px">
+          <div class="field" style="flex:1"><label>报工数量(把)</label><input id="rp_qty" type="number" min="1" value="1200"></div>
+          <div class="field" style="flex:1"><label>合格数</label><input id="rp_good" type="number" min="0" value="1200"></div>
+        </div>
+        <div style="display:flex;gap:10px;margin-bottom:14px">
+          <div class="field" style="flex:1"><label>不良数</label><input id="rp_bad" type="number" min="0" value="0"></div>
+          <div class="field" style="flex:1"><label>人员</label><select id="rp_worker"><option>张师傅</option><option>李师傅</option><option>王师傅</option></select></div>
+        </div>
+        <div style="background:var(--soft);border-radius:10px;padding:12px;margin-bottom:14px">
+          <div class="small muted">本工序单价</div>
+          <div style="font-size:28px;font-weight:800;color:var(--accent)" id="rp_unit">—</div>
+          <div class="small muted" id="rp_calc" style="margin-top:2px"></div>
+        </div>
+        <button class="btn btn-accent" style="width:100%;font-size:16px;padding:12px" id="btnReport">提交报工</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 视图：报工结果 ===== -->
+  <section id="view-result" class="view">
+    <div class="page-head"><h1>报工结果</h1><span class="sub">H5 手机端模拟 · 金额回显与到账弹窗</span></div>
+    <div class="notice">演示说明：报工提交后，本次合格数量按本工序单价计算，立即弹出"到账"金额（仿支付宝/拼多多喜庆弹窗）。</div>
+    <div class="phone">
+      <div class="phone-body" style="padding-top:26px;text-align:center">
+        <div class="celebrate"><div class="coin">¥</div></div>
+        <div style="font-size:15px;font-weight:600;margin-top:6px">报工成功，已计入工资</div>
+        <div class="modal-big" id="rs_amount">0</div>
+        <div class="modal-line" id="rs_meta"></div>
+        <div class="modal-rows" id="rs_rows"></div>
+        <div style="margin-top:18px"><span class="tag tag-green">本次到账</span></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div id="toast"></div>
+
+<div class="modal" id="modal">
+  <div class="modal-card">
+    <div class="celebrate"><div class="coin">¥</div></div>
+    <h3>报工成功 · 已到账</h3>
+    <div class="modal-big" id="md_amount">0</div>
+    <div class="modal-line" id="md_meta"></div>
+    <div class="modal-rows" id="md_rows"></div>
+    <button class="btn btn-ok" style="width:100%;font-size:16px;padding:11px" id="md_close">收下这笔工资</button>
+  </div>
+</div>
+
+<div class="modal" id="condModal">
+  <div class="modal-card" style="max-width:540px;text-align:left">
+    <h3 style="margin:0 0 6px">取价条件 · 维护</h3>
+    <div class="small muted" style="margin-bottom:12px">为这条价目表定"什么情况下适用"：选字段、运算符、值，可加多组（各组为 AND 关系）。不用手打整句。</div>
+    <div id="condGroups"></div>
+    <button class="btn btn-ghost btn-sm" id="condAdd">＋ 添加条件组</button>
+    <div class="toolbar" style="margin-top:14px">
+      <button class="btn btn-primary" id="condSave">保存</button>
+      <button class="btn btn-ghost" id="condCancel">取消</button>
+    </div>
+  </div>
+</div>
+
+
+<script>
+/* ===== 数据（演示·模拟） ===== */
+const PRODUCTS = [
+  {code:"P-A01",name:"直骨25寸",unit:"把",umbrella:"直骨",size:25,rib:8,folding:"直骨",structure:"单层",shape:"普通",fabric:"碰击布",coating:"无",remark:""},
+  {code:"P-B01",name:"三折27寸",unit:"把",umbrella:"三折",size:27,rib:7,folding:"三折",structure:"上下层",shape:"普通",fabric:"高密度",coating:"黑胶",remark:""},
+  {code:"P-C01",name:"直骨34寸",unit:"把",umbrella:"直骨",size:34,rib:8,folding:"直骨",structure:"上下层",shape:"方形",fabric:"高密度",coating:"银胶",remark:""},
+  {code:"P-D01",name:"三折21寸",unit:"把",umbrella:"三折",size:21,rib:6,folding:"三折",structure:"单层",shape:"普通",fabric:"碰击布",coating:"色胶",remark:""},
+  {code:"P-E01",name:"偏心伞27寸",unit:"把",umbrella:"偏心伞",size:27,rib:10,folding:"直骨",structure:"单层",shape:"偏心",fabric:"POE",coating:"钛银",remark:""}
+];
+const OPTS = {
+  umbrella:["直骨","三折","两折","四折","五折","六折","反三折","高尔夫","偏心伞","风扇伞","沙滩伞","头盔伞","莲花伞","玩具伞","鸭子伞","情侣伞","背包伞","灯光伞","海滩伞","电动伞","夹具伞","彩虹伞"],
+  folding:["三折","两折","四折","五折","六折","直骨","反三折"],
+  structure:["单层","上下层","内外层","双层","上下层+内外层"],
+  shape:["普通","方形","四方","偏心","圆边","莲花","反伞"],
+  fabric:["碰击布","涤纶","POE","高密度","记忆布","30D纳米","厚棉布","薄棉布","普通布","纳米"],
+  coating:["无","黑胶","彩胶","银胶","钛银","色胶"]
+};
+const OPS = ["合片","缝伞","拉边","小裁","顶带","打珠尾","品检","包装"];
+/* 工序工艺属性：key -> {label, type, options} */
+const CRAFT_FIELDS = {
+  print_panels:{label:"丝印片数",type:"number",opts:[0,1,2,3,4,5,6,8],apply:["合片"]},
+  inner_group:{label:"内标/拷克边组",type:"select",opts:["内标","拷克边"],apply:["合片"]},
+  outer_group:{label:"外标/夹带/狗牙边/顶标组",type:"select",opts:["外标","夹带","狗牙边","顶标"],apply:["合片"]},
+  special_spec:{label:"特殊伞面规格",type:"select",opts:["黑胶","彩胶","银胶","钛银","高密度","记忆布","30D纳米","无拉边","反光条","包边","接边"],apply:["合片"]},
+  needle:{label:"针数规格",type:"number",opts:["10","11.5"],apply:["合片"]},
+  stack:{label:"叠片",type:"select",opts:["有","无"],apply:["合片","打珠尾"]},
+  mesh:{label:"网纱",type:"select",opts:["有","无"],apply:["合片","缝伞","小裁","品检"]},
+  ribbon_len:{label:"拉带长度",type:"select",opts:["30以下","30-40","41-60","61-74","75-90","91-120","121-130","131-180","210-250"],apply:["伞带.木耳花"]},
+  color:{label:"颜色",type:"select",opts:["红","蓝","黑","白","绿","黄","紫","粉","透明","花伞"],apply:[]}
+};
+/* 价目表（演示：合片） base价按伞型/尺寸；工艺附加价按收费组 */
+const BASE_PRICE = {
+  "25寸直骨":5.00,"27寸三折":6.20,"34寸直骨":8.80,"21寸三折":4.50,"27寸偏心伞":7.60
+};
+const CRAFT_PRICE = {
+  print_panels:{1:0.25,2:0.5,4:0.5,8:1.65},
+  inner_group:0.25, outer_group:0.55, special_spec:0.55, stack:1.6
+};
+/* 工单试算记录 */
+let WOS = [
+  {id:"WO-1001",code:"P-A01",op:"合片",qty:1200,craft:{"print_panels":1}},
+  {id:"WO-1002",code:"P-B01",op:"合片",qty:600,craft:{"outer_group":"外标"}}
+];
+let editCode=null;
+const $=id=>document.getElementById(id);
+function toast(msg){const t=$("toast");t.textContent=msg;t.classList.add("show");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show"),2600);}
+function fillSelect(el,opts,val){el.innerHTML="";opts.forEach(o=>{const v=document.createElement("option");v.value=o;v.textContent=o;if(val!==undefined&&String(o)===String(val))v.selected=true;el.appendChild(v);});}
+
+/* ===== 路由 ===== */
+const navBtns=document.querySelectorAll("#nav button");
+function showView(v){document.querySelectorAll(".view").forEach(s=>s.classList.remove("active"));const el=document.getElementById("view-"+v);if(el)el.classList.add("active");navBtns.forEach(b=>b.classList.toggle("active",b.dataset.view===v));}
+function route(){let v=location.hash.replace("#/","")||"product";if(!["product","price","order","report","result"].includes(v))v="product";showView(v);if(v==="price")renderPrice();if(v==="order")renderOrder();if(v==="report")renderReport();if(v==="result")renderResult();}
+navBtns.forEach(b=>b.addEventListener("click",()=>location.hash="#/"+b.dataset.view));
+window.addEventListener("hashchange",route);
+
+/* ===== 产品视图 ===== */
+function productRow(p){
+  const coat=p.coating&&p.coating!=="无"?"<span class='tag tag-blue'>"+p.coating+"</span>":"<span class='tag tag-gray'>无</span>";
+  return `<tr><td>${p.code}</td><td>${p.name}</td><td>${p.umbrella}</td><td>${p.size}寸</td><td>${p.rib}K</td><td>${p.folding}</td><td>${p.fabric}</td><td>${coat}</td><td>${p.unit}</td><td><div class="row-actions"><button class="btn btn-ghost btn-sm" data-edit="${p.code}">编辑</button><button class="btn btn-ghost btn-sm" data-del="${p.code}">删除</button></div></td></tr>`;
+}
+function renderProducts(){const t=$("prodBody");t.innerHTML=PRODUCTS.map(productRow).join("");$("prodCount").textContent="共 "+PRODUCTS.length+" 个演示产品";}
+function prodField(p){
+  fillSelect($("f_umbrella"),OPTS.umbrella,p.umbrella);fillSelect($("f_folding"),OPTS.folding,p.folding);
+  fillSelect($("f_structure"),OPTS.structure,p.structure);fillSelect($("f_shape"),OPTS.shape,p.shape);
+  fillSelect($("f_fabric"),OPTS.fabric,p.fabric);fillSelect($("f_coating"),OPTS.coating,p.coating);
+  $("f_code").value=p.code;$("f_name").value=p.name;$("f_unit").value=p.unit;
+  $("f_size").value=p.size;$("f_rib").value=p.rib;$("f_remark").value=p.remark||"";
+}
+function resetProductForm(){editCode=null;$("prodFormTitle").textContent="新建产品";["code","name","size","rib","remark"].forEach(k=>$("f_"+k).value="");fillSelect($("f_umbrella"),OPTS.umbrella);fillSelect($("f_folding"),OPTS.folding);fillSelect($("f_structure"),OPTS.structure);fillSelect($("f_shape"),OPTS.shape);fillSelect($("f_fabric"),OPTS.fabric);fillSelect($("f_coating"),OPTS.coating);$("prodFormCard").scrollIntoView({behavior:"smooth"});}
+$("btnNewProduct").addEventListener("click",resetProductForm);
+$("btnCancelProduct").addEventListener("click",resetProductForm);
+$("btnSaveProduct").addEventListener("click",()=>{
+  const code=$("f_code").value.trim(),name=$("f_name").value.trim();
+  if(!code||!name){toast("产品编号和名称为必填");return;}
+  if(!editCode && PRODUCTS.some(p=>p.code===code)){toast("产品编号已存在");return;}
+  const obj={code:editCode||code,name,unit:$("f_unit").value,umbrella:$("f_umbrella").value,size:+$("f_size").value||0,rib:+$("f_rib").value||0,folding:$("f_folding").value,structure:$("f_structure").value,shape:$("f_shape").value,fabric:$("f_fabric").value,coating:$("f_coating").value,remark:$("f_remark").value.trim()};
+  if(editCode){const i=PRODUCTS.findIndex(p=>p.code===editCode);if(i>-1)PRODUCTS[i]=obj;}else{PRODUCTS.push(obj);}
+  renderProducts();toast("已保存产品 "+code);resetProductForm();
+});
+$("prodBody").addEventListener("click",e=>{
+  const ed=e.target.closest("[data-edit]"),del=e.target.closest("[data-del]");
+  if(ed){const p=PRODUCTS.find(x=>x.code===ed.dataset.edit);if(!p)return;editCode=p.code;$("prodFormTitle").textContent="编辑产品 · "+p.code;prodField(p);$("prodFormCard").scrollIntoView({behavior:"smooth"});}
+  if(del){PRODUCTS.splice(PRODUCTS.findIndex(x=>x.code===del.dataset.del),1);renderProducts();toast("已删除");}
+});
+renderProducts();
+
+/* ===== 工序价目表视图 ===== */
+function priceOf(product){return BASE_PRICE[(product.size+"寸"+product.umbrella)]??(4.5+product.size*0.08).toFixed(2);}
+function renderPrice(){
+  fillSelect($("ph_table"),Object.keys(PRICE_DATA));
+  fillSelect($("ph_product"),["通用模板",...PRODUCTS.map(p=>p.code+" "+p.name)]);
+  renderPriceBody();
+  renderPriceList();
+}
+/* 单据体：按客户 Excel 9 个可见 sheet 分组。每行 = [工序, 品名/规格, 取价条件(字段+规则), 数量范围, 单价, 收费组, 备注] */
+const PRICE_DATA={
+  "缝伞大裁计时":[
+    ["缝伞","27寸以下直骨","尺寸<27 · 伞型=直骨","不限","10.50","—",""],
+    ["缝伞","27寸以上直骨(含27寸)","尺寸≥27 · 伞型=直骨","不限","11.50","—",""],
+    ["缝伞","27寸以下三折：3折8K","伞型=三折 · 骨数=8","不限","15.00","—","内外层加+3"],
+    ["缝伞","3折7K","伞型=三折 · 骨数=7","不限","13.20","—",""],
+    ["缝伞","3折6K","伞型=三折 · 骨数=6","不限","12.50","—",""],
+    ["缝伞","27寸三折高尔夫","尺寸=27 · 伞型=高尔夫","不限","15.50","—",""],
+    ["缝伞","27寸以上挂布吊线","尺寸≥27 · 工艺动作=挂布吊线","不限","22.00","—",""]
+  ],
+    "合片":[
+    ["合片","6K","骨数=6","不限","4.20","—",""],
+    ["合片","25寸以下","尺寸<25","不限","4.60","—","9K5.7，10K6，12K7.3"],
+    ["合片","25寸8K","尺寸=25 · 骨数=8","不限","5.00","—","9K5.8，10K6.3，12K7.8"],
+    ["合片","27寸以上(含27寸)","尺寸≥27","不限","5.80","—","9K6.6，10K7.8，12K9"],
+    ["合片","32寸8K","尺寸=32 · 骨数=8","不限","6.30","—","32寸上下层18，内挖椭圆孔16.2"],
+    ["合片","27寸以下上下双层","尺寸<27 · 层次=上下层","不限","15.50","—","34寸内挖椭圆孔+1"],
+    ["合片","27寸以上高尔夫上下双层","尺寸≥27 · 伞型=高尔夫 · 层次=上下层","不限","16.50","—",""],
+    ["合片","30寸上下层+内外层","尺寸=30 · 层次=上下层+内外层","不限","45.00","—",""],
+    ["合片","1片丝印","丝印片数=1","1~1","+0.25","丝印","<span class='tag tag-orange'>待确认</span> 按打附加"],
+    ["合片","2片-4片丝印.剪线头.对线.折叠标","丝印片数∈[2,4]","2~4","+0.50","丝印","<span class='tag tag-orange'>待确认</span> 按打附加"],
+    ["合片","5片-8片丝印","丝印片数∈[5,8]","5~8","+1.65","丝印","<span class='tag tag-orange'>待确认</span> 按打附加"],
+    ["合片","内标，拷克边","内标组∈{内标,拷克边}","不限","+0.25","内标组","单选互斥·命中一次"],
+    ["合片","外标，夹带，狗牙边，伞顶标","外标组命中任一","不限","+0.55","外标组","单选互斥·命中一次"],
+    ["合片","黑胶.彩胶、高密度.记忆布.钛银.无拉边.反光条.包边.接边.30D纳米，银胶","特殊伞面命中任一","不限","+0.55","特殊伞面","<span class='tag tag-orange'>待确认</span> 单选互斥"],
+    ["合片","上层夹带","工艺动作=上层夹带","不限","0.70","—",""],
+    ["合片","10针27寸以下","针数=10 · 尺寸<27","不限","+0.55","针数",""],
+    ["合片","10针27寸以上","针数=10 · 尺寸≥27","不限","+0.75","针数",""],
+    ["合片","11.5针","针数=11.5","不限","+1.00","针数",""],
+    ["合片","双层伞面叠片","叠片=双层","不限","+1.60","叠片",""],
+    ["合片","三角片接网纱","工艺动作=三角片接网纱","不限","6.40","—",""],
+    ["合片","莲花伞包边，含标","伞型=莲花伞 · 工艺动作=包边","不限","17.50","—",""],
+    ["合片","30寸接边","尺寸=30 · 工艺动作=接边","不限","5.80","—",""],
+    ["合片","27寸-30寸网纱","尺寸∈[27,30] · 工艺动作=网纱","不限","10.30","—",""],
+    ["合片","32寸网纱","尺寸=32 · 工艺动作=网纱","不限","10.85","—",""],
+    ["合片","27寸以下滚花边，包边","尺寸<27 · 工艺动作∈{滚花边,包边}","不限","5.00","—","10K:5"],
+    ["合片","30寸包边、30寸压边","尺寸=30 · 工艺动作∈{包边,压边}","不限","6.40","—",""],
+    ["合片","直骨27寸以下内外两层伞面包边","伞型=直骨 · 尺寸<27 · 工艺动作=包边","不限","7.00","—",""],
+    ["合片","直骨27寸以上内外两层伞面包边","伞型=直骨 · 尺寸≥27 · 工艺动作=包边","不限","8.20","—","32寸+0.5"],
+    ["合片","帽子伞拉两边","伞型=帽子伞 · 工艺动作=拉两边","不限","1.40","—",""],
+    ["合片","POE外层，内层包8边（灯光伞）","材质=POE · 伞型=灯光伞 · 工艺动作=包8边","不限","18.00","—",""],
+    ["合片","27寸以下POE包边","尺寸<27 · 材质=POE · 工艺动作=包边","不限","5.80","—",""],
+    ["合片","27寸以上POE包边","尺寸≥27 · 材质=POE · 工艺动作=包边","不限","6.80","—",""],
+    ["合片","26寸4K1片丝印","尺寸=26 · 骨数=4 · 丝印片数=1","不限","5.20","丝印",""],
+    ["合片","夹具伞","伞型=夹具伞","不限","16.50","—",""],
+    ["合片","27寸以下大小片方形（含丝印）","尺寸<27 · 伞面=方形 · 丝印>0","不限","7.70","—",""],
+    ["合片","27寸以上大小片方形（含丝印）","尺寸≥27 · 伞面=方形 · 丝印>0","不限","8.80","—",""],
+    ["合片","27寸以下大小片方形 上下层（含丝印）","尺寸<27 · 伞面=方形 · 层次=上下层","不限","22.00","—",""],
+    ["合片","27寸以上大小片方形 上下层（含丝印）","尺寸≥27 · 伞面=方形 · 层次=上下层","不限","24.00","—","32寸以上加2"],
+    ["合片","21寸加耳朵童伞","尺寸=21 · 伞型=童伞 · 工艺动作=加耳朵","不限","8.00","—",""],
+    ["合片","23寸反向伞内层加网纱","尺寸=23 · 伞型=反向伞 · 工艺动作=内层加网纱","不限","9.30","—",""],
+    ["合片","3折27寸以下检16片一起合","伞型=三折 · 尺寸<27 · 工艺动作=检16片一起合","不限","17.60","—","单层高密度+1，双层高密度+1.5"],
+    ["合片","3折27寸以上检16片一起合","伞型=三折 · 尺寸≥27 · 工艺动作=检16片一起合","不限","22.00","—",""],
+    ["合片","3折内外层一起包边","伞型=三折 · 工艺动作=内外层一起包边","不限","6.00","—",""],
+    ["合片","高尔夫内外层一起包边（含叠片、剪内外层线头）","伞型=高尔夫 · 工艺动作=内外层一起包边","不限","10.00","—",""],
+    ["合片","23寸8K三折上下层彩虹伞","尺寸=23 · 骨数=8 · 伞型=三折 · 伞面=彩虹","不限","22.00","—",""],
+    ["合片","27寸10K三折上下层彩虹伞10针+标","尺寸=27 · 骨数=10 · 伞型=三折 · 针数=10","不限","22.80","—",""],
+    ["合片","27寸7K三折30D黑胶+无边","尺寸=27 · 骨数=7 · 伞型=三折 · 材质=30D · 涂层=黑胶","不限","16.20","—",""],
+    ["合片","21寸情侣伞（偏心伞）","尺寸=21 · 伞型=情侣伞 · 伞面=偏心","不限","9.00","—",""],
+    ["合片","21寸情侣伞 上下层（偏心伞）黑胶","尺寸=21 · 伞型=情侣伞 · 层次=上下层 · 涂层=黑胶","不限","26.00","—",""],
+    ["合片","32寸头盔伞合片（含黑胶+无边+夹带）","尺寸=32 · 伞型=头盔伞 · 涂层=黑胶","不限","18.10","—",""],
+    ["合片","32寸头盔伞包边","尺寸=32 · 伞型=头盔伞 · 工艺动作=包边","不限","8.20","—",""],
+    ["合片","23寸耳朵伞","尺寸=23 · 伞型=耳朵伞","不限","7.10","—",""],
+    ["合片","耳朵伞加耳朵","伞型=耳朵伞 · 工艺动作=加耳朵","不限","13.00","—",""],
+    ["合片","荷叶伞6K包边加剪角","伞型=荷叶伞 · 骨数=6 · 工艺动作=包边加剪角","不限","8.80","—",""],
+    ["合片","23寸背包伞","尺寸=23 · 伞型=背包伞","不限","7.20","—",""],
+    ["合片","25寸/31寸8K沙滩伞接8片厚棉布","尺寸∈{25,31} · 骨数=8 · 伞型=沙滩伞 · 工艺动作=接8片厚棉布","不限","27.50","—",""],
+    ["合片","25寸/31寸8K沙滩伞8片包边厚棉布","尺寸∈{25,31} · 骨数=8 · 伞型=沙滩伞 · 工艺动作=8片包边","不限","16.50","—",""],
+    ["合片","25寸/31寸8K沙滩伞素色厚棉布","尺寸∈{25,31} · 骨数=8 · 伞型=沙滩伞 · 材质=厚棉布","不限","26.40","—",""],
+    ["合片","6寸8K玩具伞薄棉布","尺寸=6 · 骨数=8 · 伞型=玩具伞 · 材质=薄棉布","不限","5.50","—",""],
+    ["合片","四方帆布包边","伞面=方形 · 材质=帆布 · 工艺动作=包边","不限","5.50","—",""],
+    ["合片","27寸以下三折内外层+内外各2片POE","尺寸<27 · 伞型=三折 · 材质=POE","不限","25.00","—",""],
+    ["合片","34寸8K 6片丝印+2片POE","尺寸=34 · 骨数=8 · 丝印片数=6 · 材质=POE","不限","14.50","—",""]
+  ],
+  "包装 ": [
+    ["包装","装伞头（不含打胶）","工艺动作=装伞头","不限","0.70","—","检查伞头"],
+    ["包装","装伞尾（含打胶）","工艺动作=装伞尾","不限","0.70","—","检查伞尾"],
+    ["包装","压中棒（头尾）装伞笠","工艺动作=压中棒装伞笠","不限","0.60","—",""],
+    ["包装","打钉","工艺动作=打钉","不限","0.65","—",""],
+    ["包装","钻孔上螺丝","工艺动作=钻孔上螺丝","不限","1.35","—",""],
+    ["包装","1件套，2件套伞束","工艺动作=伞束","不限","0.40","—",""]
+  ],
+  "品检":[
+    ["品检","27寸以下三折6K7K8K9K","尺寸<27 · 伞型=三折","不限","3.50","—",""],
+    ["品检","27寸以上三折","尺寸≥27 · 伞型=三折","不限","4.00","—",""],
+    ["品检","27寸以下直骨","尺寸<27 · 伞型=直骨","不限","3.00","—",""],
+    ["品检","27寸以上直骨","尺寸≥27 · 伞型=直骨","不限","3.30","—",""],
+    ["品检","27寸三折以下上下层/内外层","尺寸<27 · 层次∈{上下层,内外层}","不限","4.10","—",""],
+    ["品检","19寸-21寸五折6K7K8K","尺寸∈[19,21] · 伞型=五折","不限","4.65","—",""]
+  ],
+  "伞带.木耳花":[
+    ["伞带.木耳花","伞带+标","工艺动作=伞带+标","不限","2.40","—",""],
+    ["伞带.木耳花","木耳花","工艺动作=木耳花","不限","0.90","—",""],
+    ["伞带.木耳花","拉带30公分以下","拉带长度<30","不限","0.50","—",""],
+    ["伞带.木耳花","拉带30公分-40公分","拉带长度∈[30,40]","不限","0.55","—",""],
+    ["伞带.木耳花","拉带41公分-60公分","拉带长度∈[41,60]","不限","0.65","—",""],
+    ["伞带.木耳花","拉带61公分-74公分","拉带长度∈[61,74]","不限","0.77","—",""]
+  ],
+  "拉边":[
+    ["拉边","25寸以下(不含25寸)","尺寸<25","不限","0.045","—",""],
+    ["拉边","纳米、热转印、钛银、高密布、30D","材质∈{纳米,热转印,钛银,高密度,30D}","不限","0.055","—","高尔夫高密度布+0.01"],
+    ["拉边","25寸-32寸","尺寸∈[25,32]","不限","0.055","—",""],
+    ["拉边","反光条包边、接网纱、接边、包边","工艺动作命中(反光条/接网纱/接边/包边)","不限","0.07","—",""]
+  ],
+  "小裁":[
+    ["小裁","6K","骨数=6","不限","1.25","—",""],
+    ["小裁","25寸以下","尺寸<25","不限","1.40","—",""],
+    ["小裁","25寸-32寸","尺寸∈[25,32]","不限","1.80","—","34寸+0.2"],
+    ["小裁","25寸以下热转印","尺寸<25 · 材质=热转印","不限","3.50","—",""],
+    ["小裁","高尔夫上下层，上层1.35+下层2.15","伞型=高尔夫 · 层次=上下层","不限","3.50","—",""]
+  ],
+  "顶带":[
+    ["顶带","27寸以下打顶","尺寸<27 · 工艺动作=打顶","不限","0.75","—",""],
+    ["顶带","27寸以下打带","尺寸<27 · 工艺动作=打带","不限","0.75","—",""],
+    ["顶带","27-32寸打顶(含网纱)偏心伞","尺寸∈[27,32] · 工艺动作=打顶","不限","0.75","—","34寸、方形伞+0.08"],
+    ["顶带","打网纱8个角","工艺动作=打网纱8角","不限","13.50","—","高密度、银胶、黑胶+2"],
+    ["顶带","34寸挖孔打顶、打带","尺寸=34 · 工艺动作∈{打顶,打带}","不限","1.08","—",""],
+    ["顶带","43寸打顶、打带","尺寸=43 · 工艺动作∈{打顶,打带}","不限","2.20","—",""]
+  ],
+  "打珠尾":[
+    ["珠尾","6K","骨数=6","不限","2.30","—",""],
+    ["珠尾","27寸以下3折","尺寸<27 · 伞型=三折","不限","2.60","—","27寸+0.2"],
+    ["珠尾","小直骨、高尔夫，2折，包边,葫芦珠，黑胶，方形","工艺条件命中任一","不限","+0.20","—","偏心伞+0.4"],
+    ["珠尾","花边","工艺动作=花边","不限","+0.90","—",""],
+    ["珠尾","27寸以下双层叠伞面","尺寸<27 · 叠片=双层","不限","7.00","—",""],
+    ["珠尾","27寸以上双层叠伞面","尺寸≥27 · 叠片=双层","不限","7.50","—",""]
+  ]
+};
+function renderPriceBody(){
+  const tab=($("ph_table").value||"");
+  const unit=tab.indexOf("拉边")>-1 ? "码" : "打";
+  const rows=PRICE_DATA[tab]||[];
+  $("opRows").innerHTML=rows.map((r,i)=>{
+    const group=r[5]==="—"?'<span class="muted small">—</span>':'<span class="tag tag-gray">'+r[5]+'</span>';
+    const price=r[4].startsWith("+")?'<span class="price">'+r[4]+'</span>':'<span class="price">'+r[4]+'</span>';
+    return `<tr><td>${i+1}</td><td>${r[1]}</td><td class="small"><button class="cond-link" data-cond-idx="${i}" title="点此编辑取价条件">${r[2]}</button></td><td>${r[3]}</td><td class="price">${price}</td><td class="muted">${unit}</td><td>${group}</td></tr>`;
+  }).join("");
+}
+const PRICE_STATUS={};const PRICE_LOCKED={};
+Object.keys(PRICE_DATA).forEach(k=>{PRICE_STATUS[k]="草稿";PRICE_LOCKED[k]=false;});
+function prNo(i){return "PRICE-2026-"+String(i+1).padStart(2,"0");}
+function renderPriceList(){
+  $("plRows").innerHTML=Object.keys(PRICE_DATA).map((k,i)=>{
+    const locked=PRICE_LOCKED[k];
+    return `<tr>
+      <td>${prNo(i)}</td>
+      <td>${k}</td>
+      <td class="small muted">${k}（Excel ${k} 表）</td>
+      <td>${PRICE_DATA[k].length}</td>
+      <td>${locked?'<span class="tag tag-green">已启用</span>':'<span class="tag tag-gray">草稿</span>'}</td>
+      <td class="small muted">2026-01-01 ~ 2026-12-31</td>
+      <td class="small"><button class="btn btn-sm btn-ghost" data-edit="${i}">编辑</button> <button class="btn btn-sm btn-ghost" data-del="${i}">删除</button></td>
+    </tr>`;
+  }).join("");
+}
+$("plRows").addEventListener("click",e=>{
+  const ed=e.target.getAttribute("data-edit");
+  const dl=e.target.getAttribute("data-del");
+  const keys=Object.keys(PRICE_DATA);
+  if(ed!==null){const k=keys[+ed];$("ph_table").value=k;$("ph_table").disabled=!!PRICE_LOCKED[k];$("ph_id").value=prNo(+ed);renderPriceBody();toast("打开价目表："+k);return;}
+  if(dl!==null){const k=keys[+dl];delete PRICE_DATA[k];delete PRICE_STATUS[k];delete PRICE_LOCKED[k];fillSelect($("ph_table"),Object.keys(PRICE_DATA));renderPriceList();renderPriceBody();toast("已删除价目表："+k);}
+});
+$("pl_add").addEventListener("click",()=>{
+  const n="新价目表"+(Object.keys(PRICE_DATA).length+1);
+  PRICE_DATA[n]=[[n,"新规格","尺寸=","不限","0.00","—",""]];
+  PRICE_STATUS[n]="草稿";PRICE_LOCKED[n]=false;
+  fillSelect($("ph_table"),Object.keys(PRICE_DATA));
+  $("ph_table").value=n;$("ph_id").value=prNo(Object.keys(PRICE_DATA).length-1);renderPriceBody();renderPriceList();toast("已新增价目表（草稿）");
+});
+$("ph_save").addEventListener("click",()=>{
+  const k=$("ph_table").value;if(!k){toast("请先选择价目表");return;}
+  PRICE_LOCKED[k]=true;$("ph_table").disabled=true;
+  renderPriceList();toast("已保存 · 价目表类型已锁定，不可更改");
+});
+$("ph_table").addEventListener("change",renderPriceBody);
+$("ph_product").addEventListener("change",renderPriceBody);
+
+/* ===== 取价条件编辑器 ===== */
+const COND_FIELDS=[
+  "尺寸","骨数","丝印片数","针数","伞型","折叠","层次","伞面形状","材质","涂层","内标组","外标组","特殊伞面","叠片","工艺动作"
+];
+const COND_OPS=["=","<","≤","≥","∈"];
+let condRowIdx=null;
+function parseCond(str){
+  const groups=[];
+  (str||"").split("·").forEach(part=>{
+    const s=(part||"").trim();if(!s)return;
+    let field=null,op="=",val="";
+    for(const f of COND_FIELDS){if(s.indexOf(f)===0){field=f;break;}}
+    if(!field){groups.push({field:COND_FIELDS[0],op,val:s});return;}
+    const rest=s.slice(field.length).trim();
+    const sym=COND_OPS.find(o=>rest.indexOf(o)===0);
+    if(sym){op=sym;val=rest.slice(sym.length).replace(/^[\[{]/,"").replace(/[\]}]$/,"").trim();}
+    else if(rest.indexOf("∈")>-1){op="∈";val=rest.split("∈")[1].replace(/^[\[{]/,"").replace(/[\]}]$/,"").trim();}
+    else{val=rest;}
+    groups.push({field,op,val});
+  });
+  return groups.length?groups:[{field:"尺寸",op:"=",val:""}];
+}
+function buildCond(groups){
+  return groups.map(g=>{
+    const v=(g.val||"").trim();
+    if(g.op==="∈")return g.field+"∈{"+v.replace(/[,，]/g,",")+"}";
+    if(g.op==="=")return g.field+"="+v;
+    return g.field+g.op+v;
+  }).join(" · ");
+}
+function condRowHTML(g){
+  const fieldOpts=COND_FIELDS.map(f=>`<option${f===g.field?' selected':''}>${f}</option>`).join("");
+  const opOpts=COND_OPS.map(o=>`<option value="${o}"${o===g.op?' selected':''}>${o==="∈"?"属于组":o}</option>`).join("");
+  return `<div class="cond-row" style="display:grid;grid-template-columns:1fr 1fr 1.2fr auto;gap:6px;margin-bottom:6px;align-items:center">
+    <select class="cc-f" style="padding:7px;border:1px solid var(--line);border-radius:7px;font-family:inherit">${fieldOpts}</select>
+    <select class="cc-o" style="padding:7px;border:1px solid var(--line);border-radius:7px;font-family:inherit">${opOpts}</select>
+    <input class="cc-v" value="${(g.val||"").replace(/"/g,'&quot;')}" placeholder="值：数字 / 范围如 27,30 / 从下拉也成" style="padding:7px;border:1px solid var(--line);border-radius:7px;font-family:inherit">
+    <button class="btn btn-ghost btn-sm cc-d" title="删除该组">删</button>
+  </div>`;
+}
+function renderCondGroups(){
+  $("condGroups").innerHTML=condGroups.map(condRowHTML).join("");
+}
+function openCondEditor(i){
+  condRowIdx=i;
+  const rows=PRICE_DATA[$("ph_table").value]||[];
+  condGroups=parseCond(rows[i]?rows[i][2]:"");
+  renderCondGroups();
+  $("condModal").classList.add("open");
+}
+function saveCond(){
+  const rows=PRICE_DATA[$("ph_table").value]||[];
+  if(condRowIdx===null||!rows[condRowIdx]){toast("没有可保存的行");return;}
+  const gs=[];
+  document.querySelectorAll("#condGroups .cond-row").forEach(row=>{
+    gs.push({field:row.querySelector(".cc-f").value,op:row.querySelector(".cc-o").value,val:row.querySelector(".cc-v").value});
+  });
+  rows[condRowIdx][2]=buildCond(gs);
+  renderPriceBody();
+  $("condModal").classList.remove("open");
+  toast("取价条件已保存");
+}
+let condGroups=[];
+$("condAdd").addEventListener("click",()=>{condGroups.push({field:"尺寸",op:"=",val:""});renderCondGroups();});
+$("condGroups").addEventListener("click",e=>{
+  const del=e.target.closest(".cc-d");
+  if(!del)return;
+  const row=del.closest(".cond-row");
+  const idx=[...document.querySelectorAll("#condGroups .cond-row")].indexOf(row);
+  condGroups.splice(idx,1);renderCondGroups();
+});
+$("condSave").addEventListener("click",saveCond);
+$("condCancel").addEventListener("click",()=>$("condModal").classList.remove("open"));
+$("opRows").addEventListener("click",e=>{
+  const c=e.target.closest("[data-cond-idx]");
+  if(c)openCondEditor(+c.dataset.condIdx);
+});
+$("bd_add_btn").addEventListener("click",()=>{$("bd_menu").hidden=!$("bd_menu").hidden;});
+document.addEventListener("click",e=>{if(!e.target.closest(".dropdown")){$("bd_menu").hidden=true;}});
+$("bd_menu").addEventListener("click",e=>{
+  const act=e.target.getAttribute("data-act");if(!act)return;
+  $("bd_menu").hidden=true;
+  const tab=$("ph_table").value||"合片";
+  const rows=PRICE_DATA[tab]||[];
+  const newRow=[tab.replace(/\s+$/,""),"新规格","尺寸=","不限","0.00","—","<span class='tag tag-orange'>待确认</span> 未定价"];
+  if(act==="add"){rows.push(newRow);toast("已新增行（暂存）");}
+  else{rows.splice(1,0,newRow);toast("已在首行后插入（暂存）");}
+  renderPriceBody();
+});
+$("bd_del").addEventListener("click",()=>{
+  const tab=$("ph_table").value||"合片";
+  const rows=PRICE_DATA[tab]||[];
+  if(rows.length<2){toast("至少保留一行");return;}
+  rows.pop();
+  renderPriceBody();
+  toast("已删除末行（暂存）");
+});
+
+
+/* ===== 工单建单视图 ===== */
+function craftFieldsFor(op){return Object.entries(CRAFT_FIELDS).filter(([k,v])=>v.apply.length===0||v.apply.includes(op));}
+function orderAttrHTML(p){return `<span class="chip">伞型 ${p.umbrella}</span><span class="chip">${p.size}寸</span><span class="chip">${p.rib}K</span><span class="chip">${p.folding}</span><span class="chip">${p.structure}</span><span class="chip">${p.fabric}</span><span class="chip">涂层 ${p.coating}</span>`;}
+function renderOrder(){
+  fillSelect($("wo_product"),PRODUCTS.map(p=>p.code+" "+p.name));
+  fillSelect($("wo_op"),OPS);
+  orderChange();
+  renderWOList();
+}
+function orderChange(){
+  const pcode=($("wo_product").value||"").split(" ")[0];
+  const p=PRODUCTS.find(x=>x.code===pcode);
+  $("orderAttr").innerHTML=p?orderAttrHTML(p):"<span class='muted small'>请选择产品</span>";
+  const op=$("wo_op").value;
+  const box=$("orderCraft");box.innerHTML="";
+  craftFieldsFor(op).forEach(([k,v])=>{
+    const lab=document.createElement("div");lab.className="field";
+    lab.innerHTML=`<label>${v.label}</label>`+(v.type==="number"?
+      `<input type="number" step="0.1" min="0" id="cf_${k}" data-k="${k}">`:
+      `<select id="cf_${k}" data-k="${k}">${["",...v.opts].map(o=>`<option value="${o}">${o}</option>`).join("")}</select>`);
+    box.appendChild(lab);
+  });
+  calcOrder();
+}
+function craftValues(){
+  const o={};document.querySelectorAll("#orderCraft [data-k]").forEach(el=>{const k=el.dataset.k;const v=el.value.trim();if(v!=="")o[k]=v.type==="number"?+v:v;});
+  return o;
+}
+function calcOrder(){
+  const pcode=($("wo_product").value||"").split(" ")[0];
+  const p=PRODUCTS.find(x=>x.code===pcode);if(!p){$("orderCalc").innerHTML="<span class='muted'>请选择产品</span>";return;}
+  let base=priceOf(p);let extra=0;const items=[];
+  const craft=craftValues();
+  if(craft.print_panels&&CRAFT_PRICE.print_panels){const v=craft.print_panels;const add=Object.keys(CRAFT_PRICE.print_panels).filter(k=>v>=k).pop();if(add!==undefined)extra+=CRAFT_PRICE.print_panels[add];}
+  if(craft.inner_group)extra+=CRAFT_PRICE.inner_group;
+  if(craft.outer_group)extra+=CRAFT_PRICE.outer_group;
+  if(craft.special_spec)extra+=CRAFT_PRICE.special_spec;
+  if(craft.stack==="有")extra+=CRAFT_PRICE.stack;
+  const unit=+base+extra;const qty=+$("wo_qty").value||0;
+  items.push(["基础单价",base+" 元/把"]);
+  if(extra>0)items.push(["工艺附加","+ "+extra.toFixed(2)+" 元/把"]);
+  items.push(["本工序单价",unit.toFixed(2)+" 元/把"]);
+  items.push(["预计金额",(unit*qty).toLocaleString("zh-CN",{minimumFractionDigits:0})+" 元"]);
+  $("orderCalc").innerHTML=items.map(([k,v])=>`<div><span class="muted small">${k}</span><span class="price" style="margin-left:6px">${v}</span></div>`).join("");
+}
+function renderWOList(){
+  $("woList").innerHTML=WOS.map(w=>{
+    const p=PRODUCTS.find(x=>x.code===w.code);const base=p?priceOf(p):0;let extra=0;
+    if(w.craft.print_panels){const add=Object.keys(CRAFT_PRICE.print_panels).filter(k=>w.craft.print_panels>=k).pop();if(add!==undefined)extra+=CRAFT_PRICE.print_panels[add];}
+    if(w.craft.inner_group)extra+=CRAFT_PRICE.inner_group;
+    if(w.craft.outer_group)extra+=CRAFT_PRICE.outer_group;
+    if(w.craft.special_spec)extra+=CRAFT_PRICE.special_spec;
+    if(w.craft.stack==="有")extra+=CRAFT_PRICE.stack;
+    const unit=(+base+extra).toFixed(2);
+    const dif=Object.entries(w.craft).map(([k,v])=>`${CRAFT_FIELDS[k]?CRAFT_FIELDS[k].label:k}:${v}`).join("、")||"—";
+    return `<tr><td>${w.id}</td><td>${w.code}</td><td>${w.op}</td><td>${w.qty.toLocaleString()}</td><td class="small">${dif}</td><td class="price">${unit} 元/把</td></tr>`;
+  }).join("");
+}
+["wo_product","wo_op","wo_qty"].forEach(id=>$(id).addEventListener("change",orderChange));
+$("btnCalcWO").addEventListener("click",orderChange);
+$("btnSaveWO").addEventListener("click",()=>{
+  const pcode=($("wo_product").value||"").split(" ")[0];
+  if(!pcode){toast("请选择产品");return;}
+  const id=$("wo_id").value.trim()||("WO-"+Date.now().toString().slice(-5));
+  WOS.push({id,code:pcode,op:$("wo_op").value,qty:+$("wo_qty").value||0,craft:craftValues()});
+  $("wo_id").value="WO-"+Date.now().toString().slice(-5);
+  renderWOList();orderChange();toast("工单已保存，报工时自动取价");
+});
+
+/* ===== 工人报工视图 ===== */
+let lastReport=null;
+function woUnit(w){
+  const p=PRODUCTS.find(x=>x.code===w.code);const base=p?priceOf(p):0;let extra=0;
+  const c=w.craft||{};
+  if(c.print_panels){const add=Object.keys(CRAFT_PRICE.print_panels).filter(k=>c.print_panels>=k).pop();if(add!==undefined)extra+=CRAFT_PRICE.print_panels[add];}
+  if(c.inner_group)extra+=CRAFT_PRICE.inner_group;
+  if(c.outer_group)extra+=CRAFT_PRICE.outer_group;
+  if(c.special_spec)extra+=CRAFT_PRICE.special_spec;
+  if(c.stack==="有")extra+=CRAFT_PRICE.stack;
+  return {base:+base,extra,unit:+(+base+extra)};
+}
+function renderReport(){
+  $("phoneTime").textContent=new Date().toLocaleTimeString("zh-CN",{hour:"2-digit",minute:"2-digit"});
+  fillSelect($("rp_wo"),WOS.map(w=>w.id+" · "+w.code));
+  fillSelect($("rp_op"),OPS);
+  reportCalc();
+}
+function reportCalc(){
+  const w=WOS.find(x=>x.id===($("rp_wo").value||"").split(" ")[0]);
+  if(!w){$("rp_unit").textContent="—";$("rp_calc").textContent="";return;}
+  const u=woUnit(w);const qty=+$("rp_qty").value||0;
+  $("rp_unit").textContent=u.unit.toFixed(2)+" 元/把";
+  $("rp_calc").textContent="基础 "+u.base.toFixed(2)+" + 附加 "+u.extra.toFixed(2)+" = "+u.unit.toFixed(2)+" 元/把 · "+qty.toLocaleString()+" 把";
+}
+$("rp_wo").addEventListener("change",reportCalc);
+$("rp_qty").addEventListener("input",reportCalc);
+$("btnReport").addEventListener("click",()=>{
+  const w=WOS.find(x=>x.id===($("rp_wo").value||"").split(" ")[0]);
+  if(!w){toast("请选择工单");return;}
+  const op=$("rp_op").value;
+  const good=+$("rp_good").value||0;const qty=+$("rp_qty").value||0;
+  if(good<0){toast("合格数不能为负");return;}
+  const u=woUnit(w);const amount=u.unit*good;
+  lastReport={w,op,good,bad:+$("rp_bad").value||0,qty,unit:u.unit,amount,worker:$("rp_worker").value};
+  const p=PRODUCTS.find(x=>x.code===w.code);
+  $("md_amount").textContent=amount.toLocaleString("zh-CN",{minimumFractionDigits:2})+ " 元";
+  $("md_meta").textContent=w.id+" · "+(p?p.name:"")+" · "+op;
+  $("md_rows").innerHTML=`<div><span>报工数量</span><span>${qty.toLocaleString()} 把</span></div><div><span>合格数</span><span>${good.toLocaleString()} 把</span></div><div><span>本工序单价</span><span>${u.unit.toFixed(2)} 元/把</span></div><div><span>报工工人</span><span>${$("rp_worker").value}</span></div>`;
+  $("modal").classList.add("open");
+  renderResult();
+});
+$("md_close").addEventListener("click",()=>{$("modal").classList.remove("open");});
+
+/* ===== 报工结果视图 ===== */
+function renderResult(){
+  if(!lastReport){$("rs_amount").textContent="—";$("rs_meta").textContent="尚无报工记录，请先到『工人报工』提交一笔。";$("rs_rows").innerHTML="";return;}
+  const r=lastReport;const p=PRODUCTS.find(x=>x.code===r.w.code);
+  $("rs_amount").textContent=r.amount.toLocaleString("zh-CN",{minimumFractionDigits:2})+ " 元";
+  $("rs_meta").textContent=r.w.id+" · "+(p?p.name:"")+" · "+r.op+" · "+r.worker;
+  $("rs_rows").innerHTML=`<div><span>报工数量</span><span>${r.qty.toLocaleString()} 把</span></div><div><span>合格数</span><span>${r.good.toLocaleString()} 把</span></div><div><span>本工序单价</span><span>${r.unit.toFixed(2)} 元/把</span></div><div><span>本次到账</span><span class="price">${r.amount.toLocaleString("zh-CN",{minimumFractionDigits:2})} 元</span></div>`;
+}
+</script>
+</body>
+</html>

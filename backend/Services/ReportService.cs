@@ -179,6 +179,15 @@ public class ReportQueryDto
     public byte? UserType { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 20;
+
+    /// <summary>
+    /// 快捷过滤字段：keyword | orderNo | productCode | productName | operationName | userName | userType | reviewStatus | goodQty | reportTime。
+    /// 有值时优先于 OrderNo/Product*/UserType/ReviewStatus。
+    /// </summary>
+    public string? FilterField { get; set; }
+    /// <summary>eq | contains | gt | lt</summary>
+    public string? FilterOp { get; set; }
+    public string? FilterValue { get; set; }
 }
 
 public class ReportMineQueryDto
@@ -302,7 +311,7 @@ public class ReportService : IReportService
                 }
             }
 
-            if (order.Status == 4) throw ThrowHelper.BizUser("这张工单还是草稿状态，还不能报工。请让管理员在电脑端把工单提交后再来扫码报工。");
+            if (WorkOrderService.IsPreAuditStatus(order.Status)) throw ThrowHelper.BizUser("这张工单还没审核锁价，还不能报工。请让管理员在电脑端点「审核」后再来扫码报工。");
             if (order.Status >= 2) throw ThrowHelper.BizUser("这张工单已经做完或作废了，不能再报工。如果有误，找班组长或管理员处理。");
             var task = await _db.WorkOrderOperations
                 .FirstOrDefaultAsync(t => t.WorkOrderId == order.Id && t.OperationId == dto.OperationId);
@@ -434,12 +443,14 @@ public class ReportService : IReportService
         if (user.FactoryId != order.FactoryId)
             throw ThrowHelper.Biz(where, "你不能操作别的厂的工单，只能做自己厂的，请确认扫的二维码是本厂工单。");
 
-        if (order.Status == 4)
-            throw ThrowHelper.Biz(where, "工单为草稿，请先在电脑端提交后再报工");
+        if (WorkOrderService.IsPreAuditStatus(order.Status))
+            throw ThrowHelper.Biz(where, "工单还没审核锁价，请先在电脑端点「审核」后再报工");
         if (order.Status == 2)
             throw ThrowHelper.Biz(where, "这张工单已经结束了，不能再报工。有疑问找班组长或管理员确认。");
         if (order.Status == 3)
             throw ThrowHelper.Biz(where, "这张工单已经作废了，不能再报工。有疑问找班组长或管理员确认。");
+        if (order.Status == 6)
+            throw ThrowHelper.Biz(where, "这张工单已挂起，暂时不能报工。请让管理员在电脑端点「恢复生产」后再报。");
 
         var taskExists = await _db.WorkOrderOperations.AnyAsync(t => t.WorkOrderId == order.Id && t.OperationId == dto.OperationId);
         if (taskExists == false)
@@ -784,7 +795,7 @@ public class ReportService : IReportService
         foreach (var p in parts)
         {
             var u = await _db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == p.UserId)
-                ?? throw ThrowHelper.Biz(nameof(SubmitAsync), $"参与人在系统中找不到（{p.UserId}），请检查人员列表并移除无效人员后重试。");
+                ?? throw ThrowHelper.Biz(nameof(SubmitAsync), "参与人在系统中找不到，请检查人员列表并移除无效人员后重试。");
             if (u.Status != 1)
                 throw ThrowHelper.Biz(nameof(SubmitAsync), $"参与人 {u.Name} 已被停用，无法参与报工；请到人员管理中确认该员工状态，或更换为有效人员。");
             if (!await ReportPermissionHelper.CanReportOperationAsync(_db, p.UserId, u.Role, dto.OperationId))
@@ -922,7 +933,7 @@ public class ReportService : IReportService
             ValidateQty(a.GoodQty, a.DefectQty, a.DefectId, (a.DurationMinutes ?? 0), nameof(SubmitAsync));
 
             var u = await _db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == a.UserId)
-                ?? throw ThrowHelper.Biz(nameof(SubmitAsync), $"被代报人在系统中不存在（{a.UserId}），请检查人员列表并修正后重试。");
+                ?? throw ThrowHelper.Biz(nameof(SubmitAsync), "被代报人在系统中不存在，请检查人员列表并修正后重试。");
             if (u.FactoryId != factoryId)
                 throw ThrowHelper.Biz(nameof(SubmitAsync), $"被代报人 {u.Name} 不属于当前工厂，无法为其代报；请确认该人员所属工厂或切换到对应工厂操作。");
             if (u.Status != 1)
@@ -1067,6 +1078,126 @@ public class ReportService : IReportService
         return ApiResult<object?>.OkMsg();
     }
 
+    private sealed class ReportQueryJoin
+    {
+        public ProdReport Report { get; set; } = null!;
+        public ProdWorkOrder Order { get; set; } = null!;
+        public string ProductName { get; set; } = "";
+        public string ProductCode { get; set; } = "";
+        public string OperationName { get; set; } = "";
+        public SysUser User { get; set; } = null!;
+        public string? DefectName { get; set; }
+    }
+
+    /// <summary>快捷过滤：字段 + 比较符 + 值（对标工单列表）。值空白不筛。</summary>
+    private static IQueryable<ReportQueryJoin> ApplyQuickFilter(IQueryable<ReportQueryJoin> q, ReportQueryDto query)
+    {
+        var field = query.FilterField!.Trim();
+        var value = string.IsNullOrWhiteSpace(query.FilterValue) ? "" : query.FilterValue.Trim();
+        if (value.Length > 256)
+            throw ThrowHelper.Biz(nameof(QueryAsync), "筛选值太长，最多 256 个字符，请缩短后重试。");
+
+        var op = string.IsNullOrWhiteSpace(query.FilterOp)
+            ? ""
+            : query.FilterOp.Trim().ToLowerInvariant();
+
+        if (value.Length == 0)
+            return q;
+
+        if (string.IsNullOrEmpty(op))
+            op = field is "goodQty" or "reportTime" or "userType" or "reviewStatus" ? "eq" : "contains";
+        if (op is not ("eq" or "contains" or "gt" or "lt"))
+            throw ThrowHelper.Biz(nameof(QueryAsync), "比较方式只支持：等于、包含、大于、小于。");
+
+        switch (field)
+        {
+            case "keyword":
+                if (op is "gt" or "lt")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "「工单号/产品」只支持等于或包含。");
+                if (op == "eq")
+                    return q.Where(x => x.Order.OrderNo == value || x.ProductName == value || x.ProductCode == value);
+                return q.Where(x => x.Order.OrderNo.Contains(value) || x.ProductName.Contains(value) || x.ProductCode.Contains(value));
+
+            case "orderNo":
+                if (op is "gt" or "lt")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "工单号只支持等于或包含。");
+                return op == "eq"
+                    ? q.Where(x => x.Order.OrderNo == value)
+                    : q.Where(x => x.Order.OrderNo.Contains(value));
+
+            case "productCode":
+                if (op is "gt" or "lt")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "产品编号只支持等于或包含。");
+                return op == "eq"
+                    ? q.Where(x => x.ProductCode == value)
+                    : q.Where(x => x.ProductCode.Contains(value));
+
+            case "productName":
+                if (op is "gt" or "lt")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "产品名称只支持等于或包含。");
+                return op == "eq"
+                    ? q.Where(x => x.ProductName == value)
+                    : q.Where(x => x.ProductName.Contains(value));
+
+            case "operationName":
+                if (op is "gt" or "lt")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "工序只支持等于或包含。");
+                return op == "eq"
+                    ? q.Where(x => x.OperationName == value)
+                    : q.Where(x => x.OperationName.Contains(value));
+
+            case "userName":
+                if (op is "gt" or "lt")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "报工人只支持等于或包含。");
+                return op == "eq"
+                    ? q.Where(x => x.User.Name == value)
+                    : q.Where(x => x.User.Name.Contains(value));
+
+            case "userType":
+                if (op != "eq")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "人员类型只支持「等于」。");
+                if (!byte.TryParse(value, out var userType))
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "人员类型取值无效，请重新选择。");
+                return q.Where(x => x.User.UserType == userType);
+
+            case "reviewStatus":
+                if (op != "eq")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "复核状态只支持「等于」。");
+                if (!byte.TryParse(value, out var reviewStatus))
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "复核状态取值无效，请重新选择。");
+                return q.Where(x => x.Report.ReviewStatus == reviewStatus);
+
+            case "goodQty":
+                if (op == "contains")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "良品数不支持「包含」，请用等于/大于/小于。");
+                if (!int.TryParse(value, out var goodQty))
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "良品数请输入整数。");
+                return op switch
+                {
+                    "eq" => q.Where(x => x.Report.GoodQty == goodQty),
+                    "gt" => q.Where(x => x.Report.GoodQty > goodQty),
+                    _ => q.Where(x => x.Report.GoodQty < goodQty)
+                };
+
+            case "reportTime":
+                if (op == "contains")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "报工时间不支持「包含」，请用等于/大于/小于。");
+                if (!DateTime.TryParse(value, out var reportDayRaw))
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "报工时间请输入有效日期，例如 2026-11-07。");
+                var day = reportDayRaw.Date;
+                var next = day.AddDays(1);
+                return op switch
+                {
+                    "eq" => q.Where(x => x.Report.ReportTime >= day && x.Report.ReportTime < next),
+                    "gt" => q.Where(x => x.Report.ReportTime >= next),
+                    _ => q.Where(x => x.Report.ReportTime < day)
+                };
+
+            default:
+                throw ThrowHelper.Biz(nameof(QueryAsync), $"不支持的筛选字段「{field}」。请重新选择。");
+        }
+    }
+
     public async Task<ApiResult<PageResult<ReportListDto>>> QueryAsync(ReportQueryDto query, long factoryId, long? userId = null)
     {
         var q = from r in _db.Reports.AsNoTracking()
@@ -1077,45 +1208,61 @@ public class ReportService : IReportService
                 join u in _db.Users.AsNoTracking() on r.UserId equals u.Id
                 join d in _db.DefectItems.AsNoTracking() on r.DefectId equals d.Id into dg
                 from d in dg.DefaultIfEmpty()
-                select new { r, o, p, op, u, DefectName = d == null ? null : d.Name };
+                select new ReportQueryJoin
+                {
+                    Report = r,
+                    Order = o,
+                    ProductName = p.Name,
+                    ProductCode = p.Code,
+                    OperationName = op.Name,
+                    User = u,
+                    DefectName = d == null ? null : d.Name
+                };
 
-        if (!string.IsNullOrWhiteSpace(query.OrderNo))
-            q = q.Where(x => x.o.OrderNo.Contains(query.OrderNo));
-        if (!string.IsNullOrWhiteSpace(query.ProductCode))
-            q = q.Where(x => x.p.Code.Contains(query.ProductCode));
-        if (!string.IsNullOrWhiteSpace(query.ProductName))
-            q = q.Where(x => x.p.Name.Contains(query.ProductName));
-        if (query.ReviewStatus.HasValue)
-            q = q.Where(x => x.r.ReviewStatus == query.ReviewStatus.Value);
-        if (query.UserType.HasValue)
-            q = q.Where(x => x.u.UserType == query.UserType.Value);
+        if (!string.IsNullOrWhiteSpace(query.FilterField))
+        {
+            q = ApplyQuickFilter(q, query);
+        }
+        else
+        {
+            if (!string.IsNullOrWhiteSpace(query.OrderNo))
+                q = q.Where(x => x.Order.OrderNo.Contains(query.OrderNo));
+            if (!string.IsNullOrWhiteSpace(query.ProductCode))
+                q = q.Where(x => x.ProductCode.Contains(query.ProductCode));
+            if (!string.IsNullOrWhiteSpace(query.ProductName))
+                q = q.Where(x => x.ProductName.Contains(query.ProductName));
+            if (query.ReviewStatus.HasValue)
+                q = q.Where(x => x.Report.ReviewStatus == query.ReviewStatus.Value);
+            if (query.UserType.HasValue)
+                q = q.Where(x => x.User.UserType == query.UserType.Value);
+        }
 
         if (userId.HasValue)
-            q = q.Where(x => x.r.UserId == userId.Value);
+            q = q.Where(x => x.Report.UserId == userId.Value);
 
         var total = await q.CountAsync();
-        var list = await q.OrderByDescending(x => x.r.ReportTime)
+        var list = await q.OrderByDescending(x => x.Report.ReportTime)
             .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
             .Select(x => new ReportListDto
             {
-                Id = x.r.Id,
-                OperationId = x.r.OperationId,
-                OrderNo = x.o.OrderNo,
-                ProductName = x.p.Name,
-                OperationName = x.op.Name,
-                UserName = x.u.Name,
-                UserType = x.u.UserType,
-                GoodQty = x.r.GoodQty,
-                DefectQty = x.r.DefectQty,
-                DefectId = x.r.DefectId,
+                Id = x.Report.Id,
+                OperationId = x.Report.OperationId,
+                OrderNo = x.Order.OrderNo,
+                ProductName = x.ProductName,
+                OperationName = x.OperationName,
+                UserName = x.User.Name,
+                UserType = x.User.UserType,
+                GoodQty = x.Report.GoodQty,
+                DefectQty = x.Report.DefectQty,
+                DefectId = x.Report.DefectId,
                 DefectName = x.DefectName,
-                DurationMinutes = x.r.DurationMinutes,
-                ReviewStatus = x.r.ReviewStatus,
-                RejectReason = x.r.RejectReason,
-                ReportTime = x.r.ReportTime,
-                UnitPrice = x.r.UnitPrice,
-                WageAmount = x.r.WageAmount,
-                SettledFlag = x.r.SettledFlag
+                DurationMinutes = x.Report.DurationMinutes,
+                ReviewStatus = x.Report.ReviewStatus,
+                RejectReason = x.Report.RejectReason,
+                ReportTime = x.Report.ReportTime,
+                UnitPrice = x.Report.UnitPrice,
+                WageAmount = x.Report.WageAmount,
+                SettledFlag = x.Report.SettledFlag
             }).ToListAsync();
 
         await FillReportExtAsync(list, factoryId);
@@ -1159,12 +1306,14 @@ public class ReportService : IReportService
                 return ApiResult<BatchReportResultDto>.Ok(new BatchReportResultDto { OperationCount = 0, ReportCount = 0 });
         }
 
-        if (order.Status == 4)
-            throw ThrowHelper.Biz(nameof(BatchReportAsync), "工单为草稿，请先在电脑端提交后再报工");
+        if (WorkOrderService.IsPreAuditStatus(order.Status))
+            throw ThrowHelper.Biz(nameof(BatchReportAsync), "工单还没审核锁价，请先在电脑端点「审核」后再补报");
         if (order.Status == 2)
             throw ThrowHelper.Biz(nameof(BatchReportAsync), "这张工单已经做完了，不能再补报了；如有特殊情况找管理员处理。");
         if (order.Status == 3)
             throw ThrowHelper.Biz(nameof(BatchReportAsync), "这张工单已经作废了，不能再补报了；如有误找管理员确认。");
+        if (order.Status == 6)
+            throw ThrowHelper.Biz(nameof(BatchReportAsync), "这张工单已挂起，不能补报。请先在电脑端点「恢复生产」后再补报。");
 
         // 事务外先算待报工序，给拆分校验用；锁内再重查防并发
         var ratio = (await QtyCfgAsync(order.FactoryId)).OverrunRatio;
@@ -1205,7 +1354,7 @@ public class ReportService : IReportService
                 throw ThrowHelper.Biz(nameof(BatchReportAsync), "所有工序已报满");
             EnsureQtyWithinRemain(pending, dto.GoodQty, nameof(BatchReportAsync), ratio > 0);
 
-            if (order.Status == 4) throw ThrowHelper.BizUser("工单为草稿，请先在电脑端提交后再报工");
+            if (WorkOrderService.IsPreAuditStatus(order.Status)) throw ThrowHelper.BizUser("工单还没审核锁价，请先在电脑端点「审核」后再补报");
             if (order.Status >= 2) throw ThrowHelper.BizUser("这张工单已经结束或作废了，不能再补报，找管理员确认一下情况。");
             var now = DateTime.Now;
             var reportCount = 0;
@@ -1372,9 +1521,11 @@ public class ReportService : IReportService
             foreach (var a in allocations)
             {
                 if (!pendingIds.Contains(a.OperationId))
-                    throw ThrowHelper.Biz(loc, $"工序 {a.OperationId} 不在待报列表中，可能已经报满或不在本次补报范围内，请刷新待报工序列表后重试。");
+                    throw ThrowHelper.Biz(loc, "工序不在待报列表中，可能已经报满或不在本次补报范围内，请刷新待报工序列表后重试。");
+                var opName = pending.First(p => p.OperationId == a.OperationId).OperationName;
+                var opLabel = string.IsNullOrWhiteSpace(opName) ? "该工序" : $"工序【{opName}】";
                 if (a.Users == null || a.Users.Count == 0)
-                    throw ThrowHelper.Biz(loc, $"工序 {a.OperationId} 的拆分报工需要指定参与人员，请添加拆分人员后再提交。");
+                    throw ThrowHelper.Biz(loc, $"{opLabel}的拆分报工需要指定参与人员，请添加拆分人员后再提交。");
                 var sum = 0;
                 var list = new List<(long UserId, int GoodQty)>();
                 foreach (var u in a.Users)
@@ -1387,7 +1538,7 @@ public class ReportService : IReportService
                     list.Add((u.UserId, u.GoodQty));
                 }
                 if (sum != goodQty)
-                    throw ThrowHelper.Biz(loc, $"工序 {a.OperationId} 拆分各人员数量之和（{sum}）必须等于本次补报总数（{goodQty}），请核对拆分明细后重新提交。");
+                    throw ThrowHelper.Biz(loc, $"{opLabel}拆分各人员数量之和（{sum}）必须等于本次补报总数（{goodQty}），请核对拆分明细后重新提交。");
                 result[a.OperationId] = list;
             }
         }
@@ -1518,10 +1669,10 @@ public class ReportService : IReportService
         }
     }
 
-    /// <summary>按工序任务重算工单状态（进度轨：排除已退回，docs/22；重开 docs/422）。</summary>
+    /// <summary>按工序任务重算工单状态（进度轨：排除已退回，docs/22；重开 docs/422；挂起 docs/437）。</summary>
     private async Task RecalcStatusAsync(ProdWorkOrder order)
     {
-        if (order.Status == 3) return;
+        if (order.Status == 3 || order.Status == 6) return;
 
         var hasReport = await _db.Reports.AnyAsync(r => r.OrderId == order.Id && r.ReviewStatus != 2);
         if (!hasReport)

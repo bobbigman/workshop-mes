@@ -5,14 +5,69 @@
     <template v-if="!editing">
       <h2>工序价目表</h2>
       <div class="toolbar">
-        <el-input v-model="filters.keyword" clearable placeholder="例：JG2024001 / 车削工序（填编号或名称都能搜）" style="width:190px" @keyup.enter="search" />
-        <el-select v-model="filters.operationId" clearable placeholder="全部工序" style="width:150px"><el-option v-for="o in operations" :key="o.id" :label="o.name" :value="o.id" /></el-select>
-        <el-select v-model="filters.status" clearable placeholder="全部状态" style="width:125px"><el-option v-for="(v,k) in statuses" :key="k" :label="v" :value="Number(k)" /></el-select>
-        <el-date-picker v-model="filters.date" value-format="YYYY-MM-DD" placeholder="选择日期查当天有效的价目表" style="width:160px" />
-        <el-button @click="search">查询</el-button><el-button @click="reset">重置</el-button><el-button @click="load">刷新</el-button>
+        <el-select v-model="filterFieldKey" placeholder="筛选字段" class="toolbar-field" @change="onFilterFieldChange">
+          <el-option v-for="f in FILTER_FIELDS" :key="f.key" :label="f.label" :value="f.key" />
+        </el-select>
+        <el-select v-model="filterOp" class="toolbar-match">
+          <el-option v-for="o in quickFilterOps" :key="o.value" :label="o.label" :value="o.value" />
+        </el-select>
+        <el-select v-if="currentFilterMeta?.valueType === 'status'" v-model="filterValue" clearable placeholder="状态" class="toolbar-value" @keyup.enter="search">
+          <el-option v-for="(v,k) in statuses" :key="k" :label="v" :value="String(k)" />
+        </el-select>
+        <el-select v-else-if="currentFilterMeta?.valueType === 'pricingType'" v-model="filterValue" clearable placeholder="工价计算方式" class="toolbar-value" @keyup.enter="search">
+          <el-option v-for="(v,k) in pricingTypes" :key="k" :label="v" :value="String(k)" />
+        </el-select>
+        <el-select v-else-if="currentFilterMeta?.valueType === 'operation'" v-model="filterValue" clearable filterable placeholder="选择工序" class="toolbar-value" @keyup.enter="search">
+          <el-option v-for="o in operations" :key="o.id" :label="o.name" :value="String(o.id)" />
+        </el-select>
+        <el-select
+          v-else-if="isProductFilterField"
+          v-model="filterValue"
+          clearable
+          filterable
+          allow-create
+          default-first-option
+          :placeholder="productFilterPlaceholder"
+          class="toolbar-value"
+          @keyup.enter="search"
+        >
+          <el-option
+            v-for="p in products"
+            :key="p.id"
+            :label="filterFieldKey === 'productCode' ? (p.code || '') : (p.name || '')"
+            :value="filterFieldKey === 'productCode' ? (p.code || '') : (p.name || '')"
+          />
+        </el-select>
+        <el-date-picker
+          v-else-if="currentFilterMeta?.valueType === 'date'"
+          v-model="filterValue"
+          type="date"
+          value-format="YYYY-MM-DD"
+          :placeholder="filterValuePlaceholder"
+          class="toolbar-value"
+          clearable
+        />
+        <el-input v-else v-model="filterValue" clearable :placeholder="filterValuePlaceholder" class="toolbar-value" @keyup.enter="search" />
+        <el-button type="primary" @click="search">查询</el-button>
+        <el-button @click="reset">重置</el-button>
         <el-button type="primary" @click="create">＋ 新增价目表</el-button>
+        <el-button @click="onToolbarBrowse">查看</el-button>
+        <el-button @click="onToolbarEdit">编辑</el-button>
+        <el-button @click="onToolbarAdjust">调整工价</el-button>
+        <el-button @click="onToolbarHistory">调价记录</el-button>
+        <el-button @click="onToolbarCopy">复制</el-button>
+        <el-button type="danger" @click="onToolbarDelete">删除</el-button>
       </div>
-      <mes-table table-key="views/operation-price-list/index:1" :data="list" border stripe>
+      <mes-table
+        ref="tableRef"
+        table-key="views/operation-price-list/index:1"
+        :data="list"
+        border
+        stripe
+        @selection-change="onSelectionChange"
+        @row-click="onRowClick"
+      >
+        <el-table-column type="selection" width="48" fixed />
         <el-table-column label="单据编号" min-width="150"><template #default="{row}"><el-button link type="primary" @click="open(row.id,true)">{{row.code}}</el-button></template></el-table-column>
         <el-table-column prop="name" label="名称" min-width="150" />
         <el-table-column label="价目表类型 / 工序" min-width="150"><template #default="{row}">{{opName(row.operationId)}}</template></el-table-column>
@@ -22,9 +77,8 @@
         <el-table-column label="状态" width="95"><template #default="{row}"><el-tag :type="row.status===1?'success':row.status===2?'info':'warning'">{{statuses[row.status]}}</el-tag></template></el-table-column>
         <el-table-column label="生效 ~ 失效" min-width="205"><template #default="{row}">{{day(row.effectiveFrom)}} ~ {{row.effectiveTo?day(row.effectiveTo):'长期'}}</template></el-table-column>
         <el-table-column label="更新时间" min-width="160"><template #default="{row}">{{row.updatedAt?.replace('T',' ').slice(0,19)}}</template></el-table-column>
-        <el-table-column label="操作" width="330" fixed="right"><template #default="{row}"><el-button link type="primary" @click="open(row.id,false)">编辑</el-button><el-button v-if="row.status===1" link type="primary" @click="adjustId=row.id;adjustVisible=true">调整工价</el-button><el-button link @click="historyId=row.id;historyVisible=true">调价记录</el-button><el-button link @click="copy(row)">复制</el-button><el-button link type="danger" :disabled="row.status!==0||!!row.activatedAt" @click="removeTable(row)">删除</el-button></template></el-table-column>
       </mes-table>
-      <el-pagination v-model:current-page="filters.page" :page-size="20" :total="total" layout="prev,pager,next,total" @current-change="load" />
+      <mes-pager v-model:page="page" v-model:page-size="pageSize" :total="total" @change="load" />
     </template>
     <template v-else>
       <div class="toolbar">
@@ -109,7 +163,7 @@
   </div>
 </template>
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import PriceChangeDialog from './PriceChangeDialog.vue'
 import PriceChangeHistory from './PriceChangeHistory.vue'
 const historyVisible=ref(false),historyId=ref(null)
@@ -122,7 +176,45 @@ import { getCustomFields } from '@/api/prod'
 import { queryPriceLists,getPriceList,savePriceList,previewAttributePrice,changePriceListStatus,deletePriceList } from '@/api/operationPriceList'
 import AttributeConditions from '@/components/AttributeConditions.vue'
 const statuses={0:'草稿',1:'启用',2:'停用'},kinds={base:'基础价',extra:'附加价',final:'最终价'},pricingTypes={1:'计件',2:'计时',3:'单笔固定'}
-const list=ref([]),total=ref(0),filters=ref({page:1}),operations=ref([]),units=ref([]),products=ref([]),allFields=ref([])
+const list=ref([]),total=ref(0),page=ref(1),pageSize=ref(20),operations=ref([]),units=ref([]),products=ref([]),allFields=ref([])
+const tableRef=ref(null),selectedRows=ref([])
+const selectedOne=computed(()=>selectedRows.value.length===1?selectedRows.value[0]:null)
+const FILTER_FIELDS=[
+  {key:'keyword',label:'编号/名称',valueType:'text'},
+  {key:'code',label:'单据编号',valueType:'text'},
+  {key:'name',label:'名称',valueType:'text'},
+  {key:'status',label:'状态',valueType:'status'},
+  {key:'operationId',label:'工序',valueType:'operation'},
+  {key:'pricingType',label:'工价计算方式',valueType:'pricingType'},
+  {key:'productCode',label:'产品编号',valueType:'product'},
+  {key:'productName',label:'产品名称',valueType:'product'},
+  {key:'date',label:'有效日期',valueType:'date'},
+  {key:'effectiveFrom',label:'生效日期',valueType:'date'}
+]
+const filterFieldKey=ref('keyword'),filterOp=ref('contains'),filterValue=ref('')
+const currentFilterMeta=computed(()=>FILTER_FIELDS.find(f=>f.key===filterFieldKey.value)||FILTER_FIELDS[0])
+const isProductFilterField=computed(()=>filterFieldKey.value==='productCode'||filterFieldKey.value==='productName')
+const productFilterPlaceholder=computed(()=>filterFieldKey.value==='productCode'?'选择或输入产品编号':'选择或输入产品名称')
+const quickFilterOps=computed(()=>{
+  const t=currentFilterMeta.value?.valueType
+  if(t==='status'||t==='pricingType'||t==='operation') return [{value:'eq',label:'等于'}]
+  if(t==='date') return filterFieldKey.value==='date'
+    ? [{value:'eq',label:'等于'}]
+    : [{value:'eq',label:'等于'},{value:'gt',label:'大于'},{value:'lt',label:'小于'}]
+  return [{value:'contains',label:'包含'},{value:'eq',label:'等于'}]
+})
+const filterValuePlaceholder=computed(()=>{
+  if(filterFieldKey.value==='date') return '查当天仍有效的价目表'
+  if(filterFieldKey.value==='effectiveFrom') return '生效日期'
+  return '例：JG2024001 / 车削'
+})
+function onFilterFieldChange(){
+  filterValue.value=''
+  const t=currentFilterMeta.value?.valueType
+  filterOp.value=(t==='status'||t==='pricingType'||t==='operation'||t==='date')?'eq':'contains'
+  const allowed=new Set(quickFilterOps.value.map(o=>o.value))
+  if(!allowed.has(filterOp.value)) filterOp.value=quickFilterOps.value[0]?.value||'eq'
+}
 const editing=ref(false),readonly=ref(false),loading=ref(false),saving=ref(false),id=ref(null),form=ref({}),baseline=ref(''),previewProduct=ref(null),previewAttributes=ref({}),previewing=ref(false),previewError=ref(''),quote=ref(null)
 const selected=ref(null),addMenu=ref(false),expanded=ref([]),conditionDialog=ref(false),conditionDraft=ref([]),conditionRow=ref(null),unlimited=ref(false),rowDialog=ref(false),rowDraft=ref(null),rowOriginal=ref(null)
 const fields=computed(()=>allFields.value.filter(f=>f.target==='product'||f.operationId===form.value.operationId)),craftFields=computed(()=>fields.value.filter(f=>f.target==='work_order_task'))
@@ -140,9 +232,40 @@ const browseHeader=computed(()=>[
   {label:'备注',value:form.value.remark||'—'}
 ])
 onMounted(async()=>{loading.value=true;try{const [o,u,p,f,c]=await Promise.all([getOperationList({pageSize:1000}),getUnitList(),getProductList({pageSize:1000}),getCustomFields('product'),getCustomFields('work_order_task')]);operations.value=o.data.list;units.value=u.data;products.value=p.data.list;allFields.value=[...f.data,...c.data];await load()}finally{loading.value=false}})
-async function load(){const r=await queryPriceLists(filters.value);list.value=r.data.list;total.value=r.data.total}
-async function search(){filters.value.page=1;await load()}
-async function reset(){filters.value={page:1};await load()}
+async function load(){
+  const params={page:page.value,pageSize:pageSize.value,filterField:filterFieldKey.value||'keyword',filterOp:filterOp.value||'contains'}
+  if(filterValue.value!=null&&String(filterValue.value).trim()!=='') params.filterValue=String(filterValue.value).trim()
+  const r=await queryPriceLists(params)
+  list.value=r.data.list;total.value=r.data.total
+  selectedRows.value=[]
+  await nextTick()
+  tableRef.value?.clearSelection?.()
+}
+async function search(){page.value=1;await load()}
+async function reset(){filterFieldKey.value='keyword';filterOp.value='contains';filterValue.value='';page.value=1;await load()}
+function onSelectionChange(rows){selectedRows.value=rows||[]}
+function onRowClick(row,column,event){
+  if(event?.target?.closest?.('button, a, .el-checkbox, input, label')) return
+  const table=tableRef.value
+  if(!table?.toggleRowSelection) return
+  table.clearSelection?.();table.toggleRowSelection(row,true)
+}
+function requireOne(actionLabel){
+  if(selectedRows.value.length>1){ElMessage.warning(`「${actionLabel}」一次只能选一条`);return null}
+  if(!selectedOne.value){ElMessage.warning(`请先勾选一条价目表再${actionLabel}`);return null}
+  return selectedOne.value
+}
+function onToolbarBrowse(){const row=requireOne('查看');if(row) open(row.id,true)}
+function onToolbarEdit(){const row=requireOne('编辑');if(row) open(row.id,false)}
+function onToolbarAdjust(){const row=requireOne('调整工价');if(!row) return;if(row.status!==1){ElMessage.warning('只有启用中的价目表才能调整工价');return}adjustId.value=row.id;adjustVisible.value=true}
+function onToolbarHistory(){const row=requireOne('调价记录');if(row){historyId.value=row.id;historyVisible.value=true}}
+function onToolbarCopy(){const row=requireOne('复制');if(row) copy(row)}
+function onToolbarDelete(){
+  const row=requireOne('删除')
+  if(!row) return
+  if(row.status!==0||row.activatedAt){ElMessage.warning('只能删除从未启用过的草稿价目表');return}
+  removeTable(row)
+}
 function create(){id.value=null;form.value={code:'',name:'',operationId:null,pricingType:1,productId:null,remark:'',activatedAt:null,status:0,effectiveFrom:new Date().toLocaleDateString('sv-SE'),effectiveTo:null,priceUnit:'',reportUnitId:null,unitsPerPriceUnit:1,expectedVersion:'',details:{schemaVersion:2,requiredFieldIds:[],groups:[],rows:[]}};start(false)}
 function start(read){readonly.value=read;editing.value=true;selected.value=null;addMenu.value=false;quote.value=null;previewError.value='';previewAttributes.value={};baseline.value=JSON.stringify(form.value)}
 async function open(key,read){loading.value=true;try{const r=await getPriceList(key);id.value=key;form.value={...r.data,effectiveFrom:day(r.data.effectiveFrom),effectiveTo:day(r.data.effectiveTo),expectedVersion:r.data.version};start(read)}finally{loading.value=false}}
@@ -157,7 +280,7 @@ function pricingTypeChanged(){if(form.value.pricingType===2){form.value.priceUni
   ElMessage.info('工价计算方式已切换；计时和单笔固定只允许一个主价行，不支持收费组和附加行，请检查并调整价格行')}
 async function save(){saving.value=true;try{const payload=clone(form.value);payload.productId=payload.productId||null;const r=await savePriceList(id.value,payload);const saved=(await getPriceList(r.data)).data;editing.value=false;await load();ElMessage.success(`已保存，当前状态：${statuses[saved.status]}`)}finally{saving.value=false}}
 async function setStatus(status){saving.value=true;try{await changePriceListStatus(id.value,status,form.value.version);await open(id.value,readonly.value);ElMessage.success(status===1?'已启用':'已停用')}finally{saving.value=false}}
-async function removeTable(row){try{await ElMessageBox.confirm(`确定删除草稿价目表 ${row.code} 吗？删除后无法恢复`,'删除价目表')}catch(a){if(a==='cancel'||a==='close')return;throw a}await deletePriceList(row.id,row.version);await load();ElMessage.success('已删除成功成功')}
+async function removeTable(row){try{await ElMessageBox.confirm(`确定删除草稿价目表 ${row.code} 吗？删除后无法恢复`,'删除价目表')}catch(a){if(a==='cancel'||a==='close')return;throw a}await deletePriceList(row.id,row.version);await load();ElMessage.success('已删除')}
 function addGroup(){let key;do{key=`g${crypto.randomUUID().slice(0,8)}`}while(form.value.details.groups.some(g=>g.key===key));form.value.details.groups.push({key,name:'',required:true,conditions:[]})}
 function removeGroup(g){if(form.value.details.rows.some(r=>r.groupKey===g.key)){ElMessage.error('该收费组正在被价格行使用，无法删除；请先在下方表格中移除或修改引用它的价格行，再删除收费组');return}form.value.details.groups.splice(form.value.details.groups.indexOf(g),1)}
 function addRow(insert){const r={rowId:crypto.randomUUID(),label:'',kind:'base',conditions:[],amount:null,deductPrice:0,groupKey:null,includedRowIds:[],confirmed:false,source:'',note:''};const i=selected.value?form.value.details.rows.indexOf(selected.value):-1;form.value.details.rows.splice(insert&&i>=0?i:form.value.details.rows.length,0,r);selected.value=r;addMenu.value=false}
@@ -172,5 +295,5 @@ async function preview(){quote.value=null;previewError.value='';if(!previewProdu
 </script>
 <style scoped>
 .browse-notice{margin-bottom:12px}.copyable,.browse-content{user-select:text;cursor:text;overflow-wrap:anywhere;white-space:pre-wrap}.price-table :deep(.cell){user-select:text}
-.toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:16px 0}.toolbar h2{flex:1;margin:0}h2 small{font-size:14px;color:#606266}.header-form{display:grid;grid-template-columns:repeat(3,minmax(230px,1fr));margin-top:20px;gap:0 16px}.wide{grid-column:span 2}.hint,.legacy{font-size:12px;color:#606266;line-height:1.8}.legacy{padding:10px}.header-form .el-select{width:100%}.el-pagination{margin-top:16px}.body-tools{padding-top:12px}@media(max-width:1100px){.header-form{grid-template-columns:repeat(2,minmax(230px,1fr))}}
+.toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:16px 0}.toolbar-field{width:150px}.toolbar-match{width:100px}.toolbar-value{width:200px}.toolbar h2{flex:1;margin:0}h2 small{font-size:14px;color:#606266}.header-form{display:grid;grid-template-columns:repeat(3,minmax(230px,1fr));margin-top:20px;gap:0 16px}.wide{grid-column:span 2}.hint,.legacy{font-size:12px;color:#606266;line-height:1.8}.legacy{padding:10px}.header-form .el-select{width:100%}.el-pagination{margin-top:16px}.body-tools{padding-top:12px}@media(max-width:1100px){.header-form{grid-template-columns:repeat(2,minmax(230px,1fr))}}
 </style>

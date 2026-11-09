@@ -112,7 +112,7 @@ public class ExecutionMonitorService : IExecutionMonitorService
         // 轻量行拉到内存：排序依赖 DueStateHelper / 异常集合，避免 EF 翻译失败
         var light = await (
             from o in _db.WorkOrders.AsNoTracking()
-            where o.FactoryId == factoryId && o.Status != 3
+            where o.FactoryId == factoryId && o.Status != 3 && o.Status != 6
             join p in _db.Products.AsNoTracking() on o.ProductId equals p.Id
             select new LightOrder
             {
@@ -340,7 +340,7 @@ public class ExecutionMonitorService : IExecutionMonitorService
         if (query.PageSize < 1) query.PageSize = 20;
         if (query.PageSize > MaxPageSize) query.PageSize = MaxPageSize;
         if (query.Status.HasValue && query.Status.Value > 2)
-            throw ThrowHelper.Biz(nameof(NormalizeQuery), "状态只能选未开始、执行中或已结束，请选择正确的筛选项。");
+            throw ThrowHelper.Biz(nameof(NormalizeQuery), "状态只能选已审核、报工中或已结束，请选择正确的筛选项。");
         if (query.DueFrom.HasValue && query.DueTo.HasValue && query.DueFrom.Value.Date > query.DueTo.Value.Date)
             throw ThrowHelper.Biz(nameof(NormalizeQuery), "交期起止日期范围不合法，请检查开始日期是否早于结束日期后重试。");
         if (query.Keyword != null)

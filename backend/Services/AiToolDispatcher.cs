@@ -182,7 +182,7 @@ public class AiToolDispatcher
             {
                 keyword = new { type = "string", description = "工单号/产品名/产品编号关键词" },
                 productCode = new { type = "string", description = "产品编号精确" },
-                statuses = new { type = "array", items = new { type = "integer" }, description = "状态列表：0未开始1执行中2已结束3已作废；未完成用[0,1]" },
+                statuses = new { type = "array", items = new { type = "integer" }, description = "状态列表：0已审核1报工中2已结束3已作废6已挂起；未完成用[0,1]" },
                 dueFrom = new { type = "string", description = "交期起 yyyy-MM-dd 或 今天/明天" },
                 dueToExclusive = new { type = "string", description = "交期止（不含）yyyy-MM-dd；与 dueFrom 组成半开区间" },
                 dueRelative = new { type = "string", description = "相对交期：今天/明天/逾期；优先于 dueFrom/dueToExclusive" },

@@ -1,0 +1,131 @@
+{
+  "src": "D:\\workspace\\pkub\\bee\\docs\\演示原型\\车间管理系统演示原型.html",
+  "url": "file:///D:/workspace/pkub/bee/docs/%E6%BC%94%E7%A4%BA%E5%8E%9F%E5%9E%8B/%E8%BD%A6%E9%97%B4%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F%E6%BC%94%E7%A4%BA%E5%8E%9F%E5%9E%8B.html",
+  "outdir": "D:\\workspace\\pkub\\bee\\docs\\演示原型\\_shots",
+  "include": [
+    "lint",
+    "screenshots",
+    "structure"
+  ],
+  "shots": {
+    "desktop": {
+      "screenshot": "D:\\workspace\\pkub\\bee\\docs\\演示原型\\_shots\\车间管理系统演示原型_desktop.jpg",
+      "screenshotBytes": 56891,
+      "truncated": false,
+      "structure": {
+        "title": "车间管理系统 · 演示原型",
+        "firstH1": "产品定义",
+        "viewport": {
+          "w": 1440,
+          "h": 900
+        },
+        "fullpage": {
+          "w": 1440,
+          "h": 1096
+        },
+        "counts": {
+          "section": 5,
+          "h1": 5,
+          "h2": 7,
+          "img": 0,
+          "canvas": 0,
+          "svg": 0,
+          "links": 0,
+          "buttons": 37
+        }
+      },
+      "consoleErrors": [],
+      "consoleWarnings": [],
+      "horizontalOverflow": [],
+      "resourceErrors": [],
+      "reportSource": "cdp"
+    },
+    "mobile": {
+      "screenshot": "D:\\workspace\\pkub\\bee\\docs\\演示原型\\_shots\\车间管理系统演示原型_mobile.jpg",
+      "screenshotBytes": 82271,
+      "truncated": false,
+      "structure": {
+        "title": "车间管理系统 · 演示原型",
+        "firstH1": "产品定义",
+        "viewport": {
+          "w": 390,
+          "h": 844
+        },
+        "fullpage": {
+          "w": 390,
+          "h": 2173
+        },
+        "counts": {
+          "section": 5,
+          "h1": 5,
+          "h2": 7,
+          "img": 0,
+          "canvas": 0,
+          "svg": 0,
+          "links": 0,
+          "buttons": 37
+        }
+      },
+      "consoleErrors": [],
+      "consoleWarnings": [],
+      "horizontalOverflow": [],
+      "resourceErrors": [],
+      "reportSource": "cdp"
+    }
+  },
+  "engine": "chrome_cli",
+  "chromiumExec": "C:\\Users\\bob/AppData/Local/ms-playwright\\chromium_headless_shell-1234\\chrome-headless-shell-win64\\chrome-headless-shell.exe",
+  "engineDegraded": true,
+  "engineDegradedReason": "playwright 未装",
+  "elapsedSec": 8.42,
+  "schemaVersion": 2,
+  "status": "pass",
+  "engineInfo": {
+    "name": "chrome_cli",
+    "degraded": true,
+    "degradedReasons": [
+      "playwright 未装"
+    ]
+  },
+  "input": {
+    "original": "D:\\workspace\\pkub\\bee\\docs\\演示原型\\车间管理系统演示原型.html",
+    "resolvedPath": "D:\\workspace\\pkub\\bee\\docs\\演示原型\\车间管理系统演示原型.html",
+    "baseUrl": "file:///D:/workspace/pkub/bee/docs/%E6%BC%94%E7%A4%BA%E5%8E%9F%E5%9E%8B/%E8%BD%A6%E9%97%B4%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F%E6%BC%94%E7%A4%BA%E5%8E%9F%E5%9E%8B.html",
+    "protocol": "file",
+    "cwd": "D:\\workspace\\pkub\\bee",
+    "mediaMode": {
+      "reducedMotion": true
+    }
+  },
+  "artifacts": {
+    "screenshots": [
+      {
+        "viewport": "desktop",
+        "path": "D:\\workspace\\pkub\\bee\\docs\\演示原型\\_shots\\车间管理系统演示原型_desktop.jpg",
+        "size": 56891,
+        "visualCoverage": {
+          "complete": true,
+          "reason": null
+        }
+      },
+      {
+        "viewport": "mobile",
+        "path": "D:\\workspace\\pkub\\bee\\docs\\演示原型\\_shots\\车间管理系统演示原型_mobile.jpg",
+        "size": 82271,
+        "visualCoverage": {
+          "complete": true,
+          "reason": null
+        }
+      }
+    ]
+  },
+  "summary": {
+    "blocker": 0,
+    "error": 0,
+    "warning": 0,
+    "info": 0
+  },
+  "findings": [],
+  "prioritizedActions": [],
+  "reportPath": "D:\\workspace\\pkub\\bee\\docs\\演示原型\\_shots\\report.json"
+}

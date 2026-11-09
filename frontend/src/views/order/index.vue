@@ -2,48 +2,125 @@
   <div>
     <ValueTip :text="VALUE_TIPS.order" />
     <div class="toolbar">
-      <el-input v-model="keyword" class="toolbar-search" placeholder="输入工单号或产品名称搜索" clearable @keyup.enter="onSearch" />
-      <template v-if="customFields.length">
-        <el-select
-          v-model="filterFieldId"
-          clearable
-          placeholder="自定义字段"
-          class="toolbar-field"
-          @change="onFilterFieldChange"
-        >
-          <el-option v-for="f in customFields" :key="f.id" :label="f.fieldName" :value="f.id" />
-        </el-select>
-        <el-select
-          v-if="filterField && filterField.fieldType === 'text'"
-          v-model="filterMatch"
-          class="toolbar-match"
-        >
-          <el-option value="exact" label="精确匹配" />
-          <el-option value="contains" label="包含" />
-        </el-select>
-        <el-select
-          v-if="filterField && filterField.fieldType === 'single'"
-          v-model="filterValue"
-          clearable
-          filterable
-          placeholder="输入要匹配的输入要匹配的选项值"
-          class="toolbar-value"
-          @keyup.enter="onSearch"
-        >
-          <el-option v-for="o in (filterField.options || [])" :key="o" :label="o" :value="o" />
-        </el-select>
-        <el-input
-          v-else-if="filterField"
-          v-model="filterValue"
-          clearable
-          :placeholder="filterField.fieldType === 'number' ? '输入精确数字进行筛选' : '输入关键词或数值进行筛选'"
-          class="toolbar-value"
-          @keyup.enter="onSearch"
+      <!-- 快捷过滤：字段 + 比较符 + 值（对标金蝶） -->
+      <el-select
+        v-model="filterFieldKey"
+        placeholder="筛选字段"
+        class="toolbar-field"
+        @change="onFilterFieldChange"
+      >
+        <el-option
+          v-for="f in quickFilterFields"
+          :key="f.key"
+          :label="f.label"
+          :value="f.key"
         />
-      </template>
-      <el-button @click="onSearch">查询</el-button>
+      </el-select>
+      <el-select v-model="filterOp" class="toolbar-match">
+        <el-option
+          v-for="o in quickFilterOps"
+          :key="o.value"
+          :label="o.label"
+          :value="o.value"
+        />
+      </el-select>
+      <el-select
+        v-if="currentFilterMeta?.valueType === 'single'"
+        v-model="filterValue"
+        clearable
+        filterable
+        allow-create
+        default-first-option
+        placeholder="选择或输入选项值"
+        class="toolbar-value"
+        @keyup.enter="onSearch"
+      >
+        <el-option
+          v-for="opt in (currentFilterMeta.options || [])"
+          :key="opt"
+          :label="opt"
+          :value="opt"
+        />
+      </el-select>
+      <el-date-picker
+        v-else-if="currentFilterMeta?.valueType === 'date'"
+        v-model="filterValue"
+        type="date"
+        value-format="YYYY-MM-DD"
+        placeholder="选择日期"
+        class="toolbar-value"
+        clearable
+      />
+      <el-select
+        v-else-if="isProductFilterField"
+        v-model="filterValue"
+        clearable
+        filterable
+        allow-create
+        default-first-option
+        :placeholder="productFilterPlaceholder"
+        class="toolbar-value"
+        @keyup.enter="onSearch"
+      >
+        <el-option
+          v-for="p in productOptions"
+          :key="p.id"
+          :label="productFilterOptionLabel(p)"
+          :value="productFilterOptionValue(p)"
+        />
+      </el-select>
+      <el-input
+        v-else
+        v-model="filterValue"
+        clearable
+        :placeholder="filterValuePlaceholder"
+        class="toolbar-value"
+        @keyup.enter="onSearch"
+      />
+      <el-button type="primary" @click="onSearch">查询</el-button>
       <el-button @click="onReset">重置</el-button>
-      <el-button v-if="isAdmin" type="primary" @click="openCreate">+ 创建工单</el-button>
+      <el-dropdown v-if="isAdmin" trigger="click" @command="onCreateMenu">
+        <el-button type="primary">
+          新增<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+        </el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="create">新增</el-dropdown-item>
+            <el-dropdown-item command="copy">复制</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+      <el-button v-if="isAdmin" @click="onToolbarEdit">编辑</el-button>
+      <el-dropdown v-if="isAdmin" trigger="click" @command="onAuditMenu">
+        <el-button>
+          审核<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+        </el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="approve">审核</el-dropdown-item>
+            <el-dropdown-item command="unaudit">反审核</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+      <el-dropdown v-if="isAdmin" trigger="click" @command="onBizMenu">
+        <el-button>
+          业务操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+        </el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="start">开始</el-dropdown-item>
+            <el-dropdown-item command="finish">关闭工单</el-dropdown-item>
+            <el-dropdown-item command="hang">挂起</el-dropdown-item>
+            <el-dropdown-item command="unhang">恢复生产</el-dropdown-item>
+            <el-dropdown-item command="withdraw">撤回</el-dropdown-item>
+            <el-dropdown-item command="cancel">作废</el-dropdown-item>
+            <el-dropdown-item command="restore">恢复</el-dropdown-item>
+            <el-dropdown-item command="print" divided>打印</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+      <el-button type="success" @click="onToolbarReport">报工</el-button>
+      <el-button v-if="isAdmin" type="danger" @click="onToolbarDelete">删除</el-button>
       <el-button v-if="isAdmin && canPrint" @click="printSettingDlg = true">打印设置</el-button>
     </div>
 
@@ -61,8 +138,23 @@
     </div>
 
     <!-- 桌面：表格；手机：卡片，避免窄屏挤成碎字 -->
-    <mes-table table-key="views/order/index:1" legacy-order-widths class="pc-table" :data="list" border show-overflow-tooltip>
-      <el-table-column prop="orderNo" column-key="orderNo" label="工单编号" min-width="260" class-name="col-order-no" />
+    <mes-table
+      ref="tableRef"
+      table-key="views/order/index:1"
+      legacy-order-widths
+      class="pc-table"
+      :data="list"
+      border
+      show-overflow-tooltip
+      @selection-change="onSelectionChange"
+      @row-click="onRowClick"
+    >
+      <el-table-column type="selection" width="48" fixed />
+      <el-table-column prop="orderNo" column-key="orderNo" label="工单编号" min-width="200" class-name="col-order-no">
+        <template #default="{ row }">
+          <el-button link type="primary" @click="openDetail(row)">{{ row.orderNo }}</el-button>
+        </template>
+      </el-table-column>
       <el-table-column prop="productName" column-key="productName" label="产品" min-width="120" />
       <el-table-column prop="qty" column-key="qty" label="数量" width="110" />
       <el-table-column column-key="progress" label="进度" width="160">
@@ -94,21 +186,6 @@
       </el-table-column>
       <el-table-column prop="createdAt" column-key="createdAt" label="创建时间" width="180">
         <template #default="{ row }">{{ formatDue(row.createdAt) }}</template>
-      </el-table-column>
-      <el-table-column label="操作" min-width="460" fixed="right" :show-overflow-tooltip="false" :resizable="false">
-        <template #default="{ row }">
-          <div class="op-btns">
-          <el-button link type="primary" @click="openDetail(row)">详情</el-button>
-          <el-button v-if="isAdmin && canEdit(row)" link type="primary" @click="openEdit(row)">编辑</el-button>
-          <el-button v-if="canReport(row)" link type="success" @click="goReport(row)">报工</el-button>
-          <template v-if="isAdmin">
-            <el-button v-for="a in actions(row)" :key="a.key" link :type="a.type" @click="onTransition(row, a.key)">{{ a.label }}</el-button>
-          </template>
-          <el-button v-if="isAdmin" link type="primary" @click="onCopy(row)">复制</el-button>
-          <el-button v-if="canPrint" link type="primary" @click="onPrint(row)">打印</el-button>
-          <el-button v-if="isAdmin" link type="danger" @click="onDelete(row)">删除</el-button>
-          </div>
-        </template>
       </el-table-column>
     </mes-table>
 
@@ -144,47 +221,73 @@
         </div>
       </div>
     </div>
+    <mes-pager v-model:page="page" v-model:page-size="pageSize" :total="total" @change="load" />
 
     <!-- 创建/编辑 -->
-    <el-dialog v-model="dlg" :title="editingId ? '编辑工单' : copyFromId ? '复制工单' : '创建工单'" :close-on-click-modal="!saving" :close-on-press-escape="!saving" :show-close="!saving" width="620px">
+    <el-dialog
+      v-model="dlg"
+      class="order-edit-dialog"
+      fullscreen
+      :title="editingId ? '编辑工单' : copyFromId ? '复制工单' : '创建工单'"
+      :close-on-click-modal="!saving"
+      :close-on-press-escape="!saving"
+      :show-close="!saving"
+    >
       <el-alert v-if="copyFromId" title="请核对数量并填写本次交期。工序计划会按当前产品工艺重新生成，之前的报工记录和派工信息不会带过来。" type="info" :closable="false" style="margin-bottom:12px" />
-      <el-form :disabled="saving" :model="form" label-width="90px">
-        <el-form-item label="工单号">
-          <el-input v-model="form.orderNo" placeholder="留空则系统自动生成工单号" />
-        </el-form-item>
-        <el-form-item label="产品" required>
-          <el-select v-model="form.productId" filterable style="width:100%" @change="onProductChange">
-            <el-option v-for="p in productOptions" :key="p.id" :label="p.code + ' ' + p.name" :value="p.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="数量" required>
-          <el-input-number v-model="form.qty" :min="1" />
-        </el-form-item>
-        <el-form-item label="计划交期">
-          <el-date-picker v-model="form.dueDate" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="选择交期日期和时间，留空表示不设交期" style="width:100%" />
-        </el-form-item>
-        <el-form-item v-if="form.tasks.length" label="工序计划">
+      <el-form class="order-edit-form" :disabled="saving" :model="form" label-width="90px">
+        <div class="order-form-grid">
+          <el-form-item label="工单号">
+            <el-input v-model="form.orderNo" placeholder="留空则系统自动生成工单号" />
+          </el-form-item>
+          <el-form-item label="产品" required>
+            <el-select v-model="form.productId" filterable style="width:100%" @change="onProductChange">
+              <el-option v-for="p in productOptions" :key="p.id" :label="p.code + ' ' + p.name" :value="p.id" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="数量" required>
+            <el-input-number v-model="form.qty" :min="1" />
+          </el-form-item>
+          <el-form-item label="计划交期">
+            <el-date-picker v-model="form.dueDate" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="选择交期，可留空" style="width:100%" />
+          </el-form-item>
+          <el-form-item v-for="f in customFields" :key="f.id" :label="f.fieldName">
+            <el-select v-if="f.fieldType === 'single'" v-model="form.ext[f.id]" clearable style="width:100%">
+              <el-option v-for="o in f.options" :key="o" :label="o" :value="o" />
+            </el-select>
+            <el-input v-else v-model="form.ext[f.id]" />
+          </el-form-item>
+        </div>
+        <el-form-item v-if="form.tasks.length" label="工序计划" class="order-form-full">
           <div v-for="t in form.tasks" :key="t.operationId" class="plan-row">
             <span class="plan-name">{{ t.operationName }}</span>
             <el-input-number v-model="t.planQty" :min="t.doneQty" size="small" />
           </div>
           <div class="plan-hint">计划数量不能小于该工序已经报工的良品数；如需调低计划数，先到「报工」核实已报数量</div>
         </el-form-item>
-        <el-form-item v-for="f in customFields" :key="f.id" :label="f.fieldName">
-          <el-select v-if="f.fieldType === 'single'" v-model="form.ext[f.id]" clearable style="width:100%">
-            <el-option v-for="o in f.options" :key="o" :label="o" :value="o" />
-          </el-select>
-          <el-input v-else v-model="form.ext[f.id]" />
-        </el-form-item>
-        <WorkOrderProcessing v-if="dlg" ref="processingEditor" :product-id="form.productId" :tasks="processingTasks" :copy="!!copyFromId" :disabled="saving" />
+        <WorkOrderProcessing
+          v-if="dlg"
+          ref="processingEditor"
+          :product-id="form.productId"
+          :tasks="processingTasks"
+          :copy="!!copyFromId"
+          :disabled="saving"
+          :approve-mode="!editingId || editingStatus === 4 || editingStatus === 5"
+        />
       </el-form>
       <template #footer>
-        <el-button :disabled="saving" @click="dlg = false">取消</el-button>
-        <template v-if="!editingId || editingStatus === 4">
-          <el-button :loading="saving" @click="onSave(true)">暂存</el-button>
-          <el-button type="primary" :loading="saving" @click="onSave(false)">提交</el-button>
+        <el-button :disabled="saving || requoting" @click="dlg = false">取消</el-button>
+        <el-button
+          v-if="!editingId || editingStatus === 4 || editingStatus === 5"
+          :loading="requoting"
+          :disabled="saving || !form.productId"
+          @click="onRequote"
+        >重新取价</el-button>
+        <template v-if="!editingId || editingStatus === 4 || editingStatus === 5">
+          <el-button :loading="saving" :disabled="requoting" @click="onSave('draft')">暂存</el-button>
+          <el-button type="primary" :loading="saving" :disabled="requoting" @click="onSave('pending')">保存</el-button>
+          <el-button v-if="editingId" :loading="saving" :disabled="requoting" @click="onSave('approve')">审核</el-button>
         </template>
-        <el-button v-else type="primary" :loading="saving" @click="onSave(false)">保存</el-button>
+        <el-button v-else type="primary" :loading="saving" @click="onSave('approve')">保存</el-button>
       </template>
     </el-dialog>
 
@@ -293,6 +396,12 @@
         </mes-table>
         <div v-else class="kf-empty">暂无</div>
       </div>
+      <div class="order-sys-meta">
+        创建人：{{ detail.createdByName || '—' }}
+        · 创建时间：{{ formatDue(detail.createdAt) }}
+        · 审核人：{{ detail.auditedByName || '—' }}
+        · 审核时间：{{ detail.auditedAt ? formatDue(detail.auditedAt) : '—' }}
+      </div>
       <el-image-viewer
         v-if="imgPreviewVisible"
         :url-list="imgPreviewUrls"
@@ -315,8 +424,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { ArrowDown } from '@element-plus/icons-vue'
 import WorkOrderProcessing from '@/components/WorkOrderProcessing.vue'
 import { getOrderList, getOrder, getOrderStatusCounts, createOrder, updateOrder, transitionOrder, deleteOrder, getCustomFields } from '@/api/prod'
 import { getProductList } from '@/api/base'
@@ -333,25 +443,32 @@ import { canUse, FEATURE, currentTier } from '@/utils/licenseTier'
 
 const router = useRouter()
 const processingEditor = ref(null), processingTasks = ref([])
+const tableRef = ref(null)
 const route = useRoute()
 const role = Number(localStorage.getItem('role') || 0)
 const isAdmin = role === 1
 const canAssign = role === 1 || role === 3
 const canPrint = canUse(currentTier(), FEATURE.PrintLabel)
-const list = ref([]), keyword = ref(''), statusTab = ref('1')
-/** 编辑中工单状态；新建/复制为 null；4=草稿 → 显示暂存/提交 */
+const list = ref([]), statusTab = ref('1')
+const page = ref(1), pageSize = ref(20), total = ref(0)
+const selectedRows = ref([])
+const selectedOne = computed(() => selectedRows.value.length === 1 ? selectedRows.value[0] : null)
+function rowStatus(row) { return Number(row?.status) }
+/** 编辑中工单状态；新建/复制为 null；4草稿/5待审 → 暂存/保存/审核 */
 const editingStatus = ref(null)
-const counts = ref({ all: 0, notStarted: 0, doing: 0, done: 0, cancelled: 0, draft: 0 })
+const counts = ref({ all: 0, notStarted: 0, doing: 0, done: 0, cancelled: 0, draft: 0, pendingAudit: 0, suspended: 0 })
 const statusTabs = computed(() => [
   { key: '', label: '全部', count: counts.value.all },
   { key: '4', label: '草稿', count: counts.value.draft },
-  { key: '0', label: '未开始', count: counts.value.notStarted },
-  { key: '1', label: '执行中', count: counts.value.doing },
+  { key: '5', label: '已保存', count: counts.value.pendingAudit },
+  { key: '0', label: '已审核', count: counts.value.notStarted },
+  { key: '1', label: '报工中', count: counts.value.doing },
+  { key: '6', label: '已挂起', count: counts.value.suspended },
   { key: '2', label: '已结束', count: counts.value.done },
   { key: '3', label: '已作废', count: counts.value.cancelled }
 ])
 const dlg = ref(false), editingId = ref(null), detailDlg = ref(false)
-const copyFromId = ref(null), saving = ref(false)
+const copyFromId = ref(null), saving = ref(false), requoting = ref(false)
 const printSettingDlg = ref(false), printLabelDlg = ref(false), printOrderId = ref(null)
 const form = ref({ orderNo: '', productId: null, qty: 1, dueDate: null, ext: {}, tasks: [] })
 const detail = ref({ orderNo: '', productName: '', qty: 0, status: 0, tasks: [] })
@@ -365,7 +482,71 @@ const productOptions = ref([]), customFields = ref([]), workerOptions = ref([])
 const deptOptionsMap = ref({})
 /** @type {import('vue').Ref<Record<number, {userId:number,name:string,reportCount:number,goodQty:number}[]>>} */
 const suggestMap = ref({})
-const filterFieldId = ref(null), filterMatch = ref('exact'), filterValue = ref('')
+/** 快捷过滤：默认「工单号/产品 + 包含」 */
+const filterFieldKey = ref('keyword')
+const filterOp = ref('contains')
+const filterValue = ref('')
+
+const SYS_FILTER_FIELDS = [
+  { key: 'keyword', label: '工单号/产品', valueType: 'text' },
+  { key: 'orderNo', label: '工单号', valueType: 'text' },
+  { key: 'productCode', label: '产品编号', valueType: 'text' },
+  { key: 'productName', label: '产品名称', valueType: 'text' },
+  { key: 'qty', label: '数量', valueType: 'number' },
+  { key: 'dueDate', label: '计划交期', valueType: 'date' }
+]
+
+const quickFilterFields = computed(() => {
+  const customs = (customFields.value || []).map(f => ({
+    key: `cf_${f.id}`,
+    label: f.fieldName,
+    valueType: f.fieldType === 'single' ? 'single' : f.fieldType === 'number' ? 'number' : 'text',
+    options: f.options || []
+  }))
+  return [...SYS_FILTER_FIELDS, ...customs]
+})
+
+const currentFilterMeta = computed(() =>
+  quickFilterFields.value.find(f => f.key === filterFieldKey.value) || SYS_FILTER_FIELDS[0]
+)
+
+const quickFilterOps = computed(() => {
+  const t = currentFilterMeta.value?.valueType || 'text'
+  if (t === 'number' || t === 'date') {
+    return [
+      { value: 'eq', label: '等于' },
+      { value: 'gt', label: '大于' },
+      { value: 'lt', label: '小于' }
+    ]
+  }
+  if (t === 'single') {
+    return [{ value: 'eq', label: '等于' }]
+  }
+  return [
+    { value: 'contains', label: '包含' },
+    { value: 'eq', label: '等于' }
+  ]
+})
+
+const filterValuePlaceholder = computed(() => {
+  const t = currentFilterMeta.value?.valueType
+  if (t === 'number') return '输入数字'
+  return '输入筛选值'
+})
+
+/** 产品编号/名称：可搜索下拉，复用建单产品列表；允许手输做「包含」 */
+const isProductFilterField = computed(() =>
+  filterFieldKey.value === 'productCode' || filterFieldKey.value === 'productName'
+)
+const productFilterPlaceholder = computed(() =>
+  filterFieldKey.value === 'productCode' ? '选择或输入产品编号' : '选择或输入产品名称'
+)
+function productFilterOptionLabel(p) {
+  return `${p.code || ''} ${p.name || ''}`.trim()
+}
+function productFilterOptionValue(p) {
+  return filterFieldKey.value === 'productCode' ? (p.code || '') : (p.name || '')
+}
 
 const listColumns = computed(() =>
   (customFields.value || [])
@@ -374,17 +555,26 @@ const listColumns = computed(() =>
     .sort((a, b) => a.id - b.id)
 )
 
-const filterField = computed(() =>
-  (customFields.value || []).find(f => f.id === filterFieldId.value) || null
-)
-
-const STATUS = { 0: '未开始', 1: '执行中', 2: '已结束', 3: '已作废', 4: '草稿' }
+const STATUS = { 0: '已审核', 1: '报工中', 2: '已结束', 3: '已作废', 4: '草稿', 5: '已保存', 6: '已挂起' }
 function statusLabel(s) { return STATUS[s] ?? s }
-function statusTag(s) { return s === 4 ? '' : s === 0 ? 'info' : s === 1 ? 'warning' : s === 2 ? 'success' : 'danger' }
+function statusTag(s) {
+  if (s === 4 || s === 5) return ''
+  if (s === 0) return 'info'
+  if (s === 1) return 'warning'
+  if (s === 2) return 'success'
+  if (s === 6) return 'warning'
+  return 'danger'
+}
 function formatDue(t) { return t ? String(t).replace('T', ' ').slice(0, 16) : '—' }
 function dueStateClass(row) { return row.dueState === 'overdue' ? 'due-overdue' : row.dueState === 'warning' ? 'due-warning' : '' }
-function canEdit(row) { return row.status === 0 || row.status === 1 || row.status === 4 }
-function canReport(row) { return row.status === 0 || row.status === 1 }
+function canEdit(row) {
+  const s = rowStatus(row)
+  return s === 0 || s === 1 || s === 4 || s === 5
+}
+function canReport(row) {
+  const s = rowStatus(row)
+  return s === 0 || s === 1
+}
 function goReport(row) { router.push({ path: '/report', query: { order: row.orderNo } }) }
 function extCell(row, fieldId) {
   const ext = row.ext || {}
@@ -394,13 +584,170 @@ function extCell(row, fieldId) {
 
 function actions(row) {
   const a = []
-  if (row.status === 0) a.push({ key: 'start', label: '开始', type: 'success' })
-  if (row.status === 1) a.push({ key: 'finish', label: '结束', type: 'success' })
-  if (row.status === 1) a.push({ key: 'withdraw', label: '撤回', type: 'warning' })
-  if (row.status === 2) a.push({ key: 'withdraw', label: '撤回', type: 'warning' })
-  if (row.status === 0 || row.status === 1 || row.status === 4) a.push({ key: 'cancel', label: '作废', type: 'danger' })
-  if (row.status === 3) a.push({ key: 'restore', label: '恢复', type: 'primary' })
+  const s = rowStatus(row)
+  if (s === 0) a.push({ key: 'start', label: '开始', type: 'success' })
+  if (s === 1) a.push({ key: 'finish', label: '关闭工单', type: 'success' })
+  if (s === 1) a.push({ key: 'hang', label: '挂起', type: 'warning' })
+  if (s === 6) a.push({ key: 'unhang', label: '恢复生产', type: 'primary' })
+  if (s === 1) a.push({ key: 'withdraw', label: '撤回', type: 'warning' })
+  if (s === 2) a.push({ key: 'withdraw', label: '撤回', type: 'warning' })
+  if (s === 0 || s === 1 || s === 4 || s === 5 || s === 6) a.push({ key: 'cancel', label: '作废', type: 'danger' })
+  if (s === 3) a.push({ key: 'restore', label: '恢复', type: 'primary' })
   return a
+}
+
+function onSelectionChange(rows) {
+  selectedRows.value = rows || []
+}
+
+/** 点行即单选，避免只点了行却没勾上导致顶栏全灰 */
+function onRowClick(row, column, event) {
+  if (event?.target?.closest?.('button, a, .el-checkbox, input, label')) return
+  const table = tableRef.value
+  if (!table?.toggleRowSelection) return
+  table.clearSelection?.()
+  table.toggleRowSelection(row, true)
+}
+
+function requireOne(actionLabel) {
+  if (selectedRows.value.length > 1) {
+    ElMessage.warning(`「${actionLabel}」一次只能选一张工单，请先只勾选一张`)
+    return null
+  }
+  if (!selectedOne.value) {
+    ElMessage.warning(`请先勾选一张工单再${actionLabel}`)
+    return null
+  }
+  return selectedOne.value
+}
+
+function onCreateMenu(cmd) {
+  if (cmd === 'create') {
+    openCreate()
+    return
+  }
+  if (cmd === 'copy') {
+    const row = requireOne('复制')
+    if (row) onCopy(row)
+  }
+}
+
+async function onAuditMenu(cmd) {
+  const row = requireOne(cmd === 'unaudit' ? '反审核' : '审核')
+  if (!row) return
+  const s = rowStatus(row)
+  const stayAll = statusTab.value === ''
+  const keepId = row.id
+  if (cmd === 'approve') {
+    if (s !== 4 && s !== 5) {
+      ElMessage.error('只有「草稿」或「已保存」的工单可以审核')
+      return
+    }
+    try {
+      await updateOrder(row.id, { saveAction: 'approve', asDraft: false, quoteTokens: {} })
+      ElMessage.success('已审核锁价，工人可在报工页看到并开始报工')
+      if (!stayAll) statusTab.value = '0'
+      page.value = 1
+      await load({ reselectId: stayAll ? keepId : null })
+    } catch (_) {
+      // http 拦截器已提示；缺价时引导进编辑补齐
+      ElMessage.info('请在编辑里补全取价后再点「审核」')
+      await openEdit(row)
+    }
+    return
+  }
+  if (cmd === 'unaudit') {
+    if (s !== 0 && s !== 1) {
+      ElMessage.error('当前不需要反审核')
+      return
+    }
+    await ElMessageBox.confirm(
+      `反审核后工单「${row.orderNo}」退回「已保存」，单价解锁，需重新审核才能报工。确认反审核？`,
+      '反审核',
+      { type: 'warning' }
+    )
+    await transitionOrder(row.id, 'unaudit')
+    ElMessage.success('已反审核，单价已解锁')
+    if (!stayAll) statusTab.value = '5'
+    page.value = 1
+    await load({ reselectId: stayAll ? keepId : null })
+  }
+}
+
+function onBizMenu(cmd) {
+  const labels = { start: '开始', finish: '关闭工单', hang: '挂起', unhang: '恢复生产', withdraw: '撤回', cancel: '作废', restore: '恢复', print: '打印' }
+  const row = requireOne(labels[cmd] || '操作')
+  if (!row) return
+  if (cmd === 'print') {
+    if (!canPrint) {
+      ElMessage.warning('当前账号未开通打印能力')
+      return
+    }
+    onPrint(row)
+    return
+  }
+  const allowed = actions(row).some(a => a.key === cmd)
+  if (!allowed) {
+    ElMessage.warning(`当前状态「${statusLabel(row.status)}」不能${labels[cmd]}`)
+    return
+  }
+  onTransition(row, cmd)
+}
+
+function onToolbarEdit() {
+  const rows = selectedRows.value || []
+  if (!rows.length) {
+    ElMessage.warning('请先勾选工单再编辑')
+    return
+  }
+  const blocked = rows.filter(r => !canEdit(r))
+  if (blocked.length) {
+    ElMessage.warning(blocked.map(r => `${r.orderNo},${statusLabel(r.status)}，只能看详情。`).join('\n'))
+    return
+  }
+  if (rows.length > 1) {
+    ElMessage.warning('一次只能编辑一张工单，请只勾选一张')
+    return
+  }
+  openEdit(rows[0])
+}
+
+function onToolbarReport() {
+  const row = requireOne('报工')
+  if (row && canReport(row)) goReport(row)
+  else if (row) ElMessage.warning('只有「已审核」或「报工中」的工单可以报工')
+}
+
+function onToolbarDelete() {
+  const row = requireOne('删除')
+  if (row) onDelete(row)
+}
+
+async function clearSelection() {
+  selectedRows.value = []
+  await nextTick()
+  tableRef.value?.clearSelection?.()
+}
+
+/** 刷新后按 id 勾回（仅「全部」页签审核/反审核后用） */
+async function reselectById(id) {
+  if (id == null) return
+  await nextTick()
+  const row = list.value.find(r => r.id === id)
+  const table = tableRef.value
+  if (!row || !table?.toggleRowSelection) return
+  table.toggleRowSelection(row, true)
+}
+
+async function onRequote() {
+  if (requoting.value || saving.value) return
+  if (!processingEditor.value?.requoteAll) return
+  requoting.value = true
+  try {
+    await processingEditor.value.requoteAll()
+  } finally {
+    requoting.value = false
+  }
 }
 
 onMounted(async () => {
@@ -415,7 +762,7 @@ onMounted(async () => {
       ElMessage.error('无法打开该工单，可能是链接已过期或工单已被删除，请回到「工单」列表页重新查找并打开')
     }
   }
-  if (!isAdmin) return
+  // 快捷过滤「产品编号/名称」与建单表单共用同一份产品列表
   const products = await getProductList({ page: 1, pageSize: 200 })
   productOptions.value = products.data.list || []
 })
@@ -438,17 +785,27 @@ async function loadDeptOptions(row) {
 async function loadFields() {
   const fields = await getCustomFields('work_order')
   customFields.value = fields.data || []
-  // 已删除的筛选字段：清理条件，避免反复提交失效 ID
-  if (filterFieldId.value && !customFields.value.some(f => f.id === filterFieldId.value)) {
-    filterFieldId.value = null
-    filterValue.value = ''
-    filterMatch.value = 'exact'
+  // 自定义字段被删：回到默认「工单号/产品」
+  if (String(filterFieldKey.value).startsWith('cf_')) {
+    const id = Number(String(filterFieldKey.value).slice(3))
+    if (!customFields.value.some(f => f.id === id)) {
+      filterFieldKey.value = 'keyword'
+      filterOp.value = 'contains'
+      filterValue.value = ''
+    }
   }
 }
 
 function onFilterFieldChange() {
   filterValue.value = ''
-  filterMatch.value = 'exact'
+  const t = currentFilterMeta.value?.valueType
+  if (t === 'number' || t === 'date' || t === 'single') filterOp.value = 'eq'
+  else filterOp.value = 'contains'
+  // 若当前比较符不适用于新字段，纠正
+  const allowed = new Set(quickFilterOps.value.map(o => o.value))
+  if (!allowed.has(filterOp.value)) {
+    filterOp.value = quickFilterOps.value[0]?.value || 'eq'
+  }
 }
 
 async function loadCounts() {
@@ -460,53 +817,54 @@ async function loadCounts() {
     doing: d.doing || 0,
     done: d.done || 0,
     cancelled: d.cancelled || 0,
-    draft: d.draft || 0
+    draft: d.draft || 0,
+    pendingAudit: d.pendingAudit || 0,
+    suspended: d.suspended || 0
   }
 }
 
-async function load() {
+async function load(opts = {}) {
   await loadFields()
   await loadCounts()
   const params = {
-    keyword: keyword.value,
-    page: 1,
-    pageSize: 100
+    page: page.value,
+    pageSize: pageSize.value,
+    filterField: filterFieldKey.value || 'keyword',
+    filterOp: filterOp.value || 'contains'
   }
   if (statusTab.value === '') {
-    // 「全部」与数量一致：不含已作废
+    // 「全部」与数量一致：不含已作废、已挂起
     params.excludeCancelled = true
   } else {
     params.status = statusTab.value
   }
-  if (filterFieldId.value) {
-    params.customFieldId = filterFieldId.value
-    const f = filterField.value
-    if (f && (f.fieldType === 'single' || f.fieldType === 'number')) {
-      params.customFieldMatch = 'exact'
-    } else {
-      params.customFieldMatch = filterMatch.value || 'exact'
-    }
-    if (filterValue.value != null && String(filterValue.value).trim() !== '') {
-      params.customFieldValue = String(filterValue.value).trim()
-    }
+  if (filterValue.value != null && String(filterValue.value).trim() !== '') {
+    params.filterValue = String(filterValue.value).trim()
   }
   const res = await getOrderList(params)
   list.value = res.data.list || []
+  total.value = res.data.total || 0
+  await clearSelection()
+  if (opts.reselectId != null) await reselectById(opts.reselectId)
 }
 
-function onSearch() { load() }
+function onSearch() {
+  page.value = 1
+  load()
+}
 function onStatusTab(key) {
   if (statusTab.value === key) return
   statusTab.value = key
+  page.value = 1
   load()
 }
 
 function onReset() {
-  keyword.value = ''
-  filterFieldId.value = null
-  filterMatch.value = 'exact'
+  filterFieldKey.value = 'keyword'
+  filterOp.value = 'contains'
   filterValue.value = ''
   statusTab.value = '1'
+  page.value = 1
   load()
 }
 
@@ -543,20 +901,25 @@ function onProductChange() {
   if (editingId.value) form.value.tasks = []
 }
 
-/** @param {boolean} asDraft true=暂存；false=提交或正式保存 */
-async function onSave(asDraft = false) {
+/** @param {'draft'|'pending'|'approve'} saveAction */
+async function onSave(saveAction = 'approve') {
   if (saving.value) return
   if (!form.value.productId || form.value.qty <= 0) {
     ElMessage.error('请先选择一个产品，并在数量栏填写大于零的数字后再保存')
     return
   }
+  const needQuote = saveAction === 'approve'
   let quoteTokens
-  try { quoteTokens = processingEditor.value?.getQuoteTokens(!asDraft) || {} } catch (e) { ElMessage.error(e.message); return }
   saving.value = true
   try {
+    // 仅审核/已生效保存需取价齐全；暂存、待审允许缺价
+    if (needQuote && processingEditor.value?.ensureQuotes) await processingEditor.value.ensureQuotes()
+    try { quoteTokens = processingEditor.value?.getQuoteTokens(needQuote) || {} } catch (e) { ElMessage.error(e.message); return }
+    const asDraft = saveAction === 'draft'
     if (editingId.value) {
       const payload = {
         asDraft,
+        saveAction,
         quoteTokens, operationAttributes: processingEditor.value?.getOperationAttributes(),
         orderNo: form.value.orderNo || undefined,
         productId: form.value.productId,
@@ -566,38 +929,64 @@ async function onSave(asDraft = false) {
         planQty: form.value.tasks.length ? form.value.tasks.map(t => ({ operationId: t.operationId, planQty: t.planQty })) : undefined
       }
       await updateOrder(editingId.value, payload)
-      ElMessage.success(asDraft ? '工单工单工单工单已暂存为草稿，可随时到工单列表中继续编辑，可在工单列表中继续编辑或提交为草稿，可随时到工单列表中继续编辑，可在工单列表中继续编辑或提交' : (editingStatus.value === 4 ? '工单工单已提交，工人可在报工页面看到并开始报工，工人可在报工页面看到并开始报工' : '工单工单已保存，可在工单列表中查看和管理，可在工单列表中查看和管理'))
+      const msg = saveAction === 'draft'
+        ? '已暂存为草稿，可随时继续编辑'
+        : saveAction === 'pending'
+          ? '已保存；审核前工人看不到、也不能报工'
+          : (editingStatus.value === 4 || editingStatus.value === 5
+            ? '已审核锁价，工人可在报工页看到并开始报工'
+            : '已保存')
+      ElMessage.success(msg)
     } else {
       await createOrder({
         asDraft,
+        saveAction,
         quoteTokens, operationAttributes: processingEditor.value?.getOperationAttributes(),
         copyFromId: copyFromId.value, orderNo: form.value.orderNo || undefined,
         productId: form.value.productId, qty: form.value.qty, dueDate: form.value.dueDate || null, ext: form.value.ext
       })
-      ElMessage.success(asDraft ? '已暂存为草稿' : '已提交')
+      ElMessage.success(
+        saveAction === 'draft' ? '已暂存为草稿'
+          : saveAction === 'pending' ? '已保存，待审核'
+            : '已审核锁价'
+      )
     }
     dlg.value = false
+    // 落到对应页签，避免仍停在「已审核」以为保存=审核
+    if (saveAction === 'draft') statusTab.value = '4'
+    else if (saveAction === 'pending') statusTab.value = '5'
+    else if (!editingId.value || editingStatus.value === 4 || editingStatus.value === 5) statusTab.value = '0'
+    page.value = 1
     await load()
   } finally { saving.value = false }
 }
 
 async function onTransition(row, action) {
-  const labelMap = { start: '开始', finish: '结束', withdraw: '撤回', cancel: '作废', restore: '恢复' }
-  let tip = `确认${labelMap[action]}工单 ${row.orderNo}？操作后立即生效`
-  if (action === 'withdraw' && row.status === 2) {
-    tip = `这张单之前已结束。撤回后重新回到执行中，可以继续报工；即使数量报满也不会自动结束，需要再点一次【结束】才关闭工单。历史报工记录保留不删。确认撤回工单 ${row.orderNo}？`
+  const labelMap = { start: '开始', finish: '关闭工单', hang: '挂起', unhang: '恢复生产', withdraw: '撤回', cancel: '作废', restore: '恢复' }
+  let tip = `确认${labelMap[action]}${action === 'finish' ? '' : '工单'} ${row.orderNo}？操作后立即生效`
+  if (action === 'finish') {
+    tip = `关闭后进入【已结束】：不能再报工/补报，也不能改数量、交期；历史报工保留。可在【已结束】点【撤回】再打开（报满也不会自动结束，需再点【关闭工单】）。这和【作废】不同——作废是这单不做了，走【已作废】再【恢复】。确认关闭工单 ${row.orderNo}？`
+  } else if (action === 'hang') {
+    tip = `挂起后进入【已挂起】：暂时不能报工/补报，也不算在产。以后还要做时，在【已挂起】点【恢复生产】回报工中。与【作废】不同：挂起是暂停，作废是这单不做了。确认挂起工单 ${row.orderNo}？`
+  } else if (action === 'unhang') {
+    tip = `恢复生产后回到【报工中】，可以继续报工。确认恢复生产工单 ${row.orderNo}？`
+  } else if (action === 'withdraw' && row.status === 2) {
+    tip = `这张单当前在【已结束】。撤回后回到报工中，可以继续报工；即使数量报满也不会自动结束，需要再点【关闭工单】。历史报工记录保留不删。确认撤回工单 ${row.orderNo}？`
   } else if (action === 'withdraw' && row.status === 1) {
-    tip = `撤回后工单退回未开始，工人报工时将选不到这张单；已报的良品、不良记录和工资数据都保留不删。确认撤回工单 ${row.orderNo}？`
+    tip = `撤回后工单退回已审核；已报的良品、不良记录和工资数据都保留不删。确认撤回工单 ${row.orderNo}？`
   } else if (action === 'cancel') {
-    tip = `作废后这张单不能再报工和补报；历史报工记录保留，可在【已作废】页签点【恢复】重新启用。确认作废工单 ${row.orderNo}？`
+    tip = `作废后这张单不能再报工和补报；历史报工记录保留，可在【已作废】页签点【恢复】重新启用。与【关闭工单】不同：作废表示这单不做了，不是完工收口。确认作废工单 ${row.orderNo}？`
   } else if (action === 'restore') {
-    tip = `作废后点【恢复】，工单回到未开始，可继续编辑和报工。确认恢复工单 ${row.orderNo}？`
+    tip = `作废后点【恢复】，工单回到已审核，可继续编辑和报工。确认恢复工单 ${row.orderNo}？`
   }
   await ElMessageBox.confirm(tip, '提示', { type: 'warning' })
   await transitionOrder(row.id, action)
   let okMsg = '操作已完成'
-  if (action === 'withdraw' && row.status === 2) okMsg = '已重新打开'
-  else if (action === 'withdraw' && row.status === 1) okMsg = '已退回未开始'
+  if (action === 'finish') okMsg = '已关闭，进入已结束'
+  else if (action === 'hang') okMsg = '已挂起'
+  else if (action === 'unhang') okMsg = '已恢复生产'
+  else if (action === 'withdraw' && row.status === 2) okMsg = '已重新打开'
+  else if (action === 'withdraw' && row.status === 1) okMsg = '已退回已审核'
   ElMessage.success(okMsg)
   await load()
 }
@@ -720,9 +1109,9 @@ async function onDelete(row) {
 
 <style scoped>
 .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: var(--app-section-gap); flex-wrap: wrap; }
-.toolbar-search { width: 220px; }
-.toolbar-field { width: 160px; }
-.toolbar-match { width: 120px; }
+.toolbar-field { width: 150px; }
+.toolbar-match { width: 100px; }
+.toolbar-value { width: 200px; }
 .toolbar-value { width: 180px; }
 .status-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: var(--app-section-gap); }
 .status-tab {
@@ -738,13 +1127,24 @@ async function onDelete(row) {
 }
 :deep(td.col-order-no) { font-weight: 600; }
 :deep(td.col-order-no .cell) { white-space: nowrap; }
-.op-btns { display: flex; flex-wrap: nowrap; align-items: center; gap: 2px 10px; }
-.op-btns :deep(.el-button) { margin-left: 0; }
 .due-warning { color: var(--app-warning); }
 .due-overdue { color: var(--app-danger); font-weight: 600; }
+.order-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 16px;
+}
+.order-form-grid :deep(.el-form-item) { margin-bottom: 12px; }
+.order-form-full { margin-top: 4px; }
 .plan-row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
 .plan-name { width: 120px; }
 .plan-hint { color: var(--app-text-3); font-size: 12px; }
+@media (min-width: 1000px) {
+  .order-form-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .order-form-grid { grid-template-columns: 1fr; }
+}
 .detail-tasks { margin-top: var(--app-section-gap); }
 .assign-cell { display: flex; flex-direction: column; }
 .assign-suggest { margin-bottom: 6px; }
@@ -761,6 +1161,14 @@ async function onDelete(row) {
 .kf-block { margin-top: var(--app-section-gap); }
 .kf-title { font-weight: 600; margin-bottom: 8px; color: #303133; }
 .kf-empty { color: var(--app-text-3, #909399); font-size: 13px; padding: 4px 0; }
+.order-sys-meta {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--el-border-color-lighter, #ebeef5);
+  font-size: 12px;
+  color: var(--app-text-3, #909399);
+  line-height: 1.6;
+}
 
 .m-list { display: none; }
 .m-empty { text-align: center; color: var(--app-text-3); padding: 40px 0; }
@@ -780,5 +1188,25 @@ async function onDelete(row) {
 @media (max-width: 768px) {
   .pc-table { display: none; }
   .m-list { display: block; }
+}
+</style>
+<style>
+/* 弹窗 teleport 到 body，须非 scoped 才能套中；fullscreen 铺满 */
+.order-edit-dialog.el-dialog.is-fullscreen {
+  display: flex;
+  flex-direction: column;
+  margin: 0 !important;
+  border-radius: 0;
+}
+.order-edit-dialog.el-dialog.is-fullscreen .el-dialog__header { flex: none; }
+.order-edit-dialog.el-dialog.is-fullscreen .el-dialog__body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  max-height: none;
+  padding-top: 8px;
+}
+.order-edit-dialog.el-dialog.is-fullscreen .el-dialog__footer {
+  flex: none;
+  border-top: 1px solid var(--el-border-color-lighter);
 }
 </style>

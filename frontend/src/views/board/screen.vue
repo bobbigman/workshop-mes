@@ -45,8 +45,8 @@
         <aside class="col-left">
           <h3 class="group-title">生产状态 · 工单</h3>
           <div class="stat-grid production-stats">
-            <div class="stat"><div class="n">{{ notStarted }}</div><div class="l">未开始</div></div>
-            <div class="stat"><div class="n">{{ data.doingOrders }}</div><div class="l">执行中</div></div>
+            <div class="stat"><div class="n">{{ notStarted }}</div><div class="l">已审核</div></div>
+            <div class="stat"><div class="n">{{ data.doingOrders }}</div><div class="l">报工中</div></div>
             <div class="stat"><div class="n">{{ data.doneOrders }}</div><div class="l">已完成</div></div>
           </div>
           <h3 class="group-title">风险状态 · 可重叠</h3>

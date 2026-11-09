@@ -178,6 +178,14 @@ public class AppDbContext : DbContext
             e.Property(x => x.FactoryId).HasColumnName("factory_id");
             e.Property(x => x.Code).HasColumnName("code").HasMaxLength(64);
             e.Property(x => x.Name).HasColumnName("name").HasMaxLength(128);
+            e.Property(x => x.Status).HasColumnName("status").HasDefaultValue((byte)1);
+            e.Property(x => x.AuditStatus).HasColumnName("audit_status").HasDefaultValue((byte)0);
+            e.Property(x => x.AuditedBy).HasColumnName("audited_by");
+            e.Property(x => x.AuditedAt).HasColumnName("audited_at");
+            e.Property(x => x.ForbidBy).HasColumnName("forbid_by");
+            e.Property(x => x.ForbidAt).HasColumnName("forbid_at");
+            e.Property(x => x.UnforbidBy).HasColumnName("unforbid_by");
+            e.Property(x => x.UnforbidAt).HasColumnName("unforbid_at");
             e.Property(x => x.CreatedAt).HasColumnName("created_at");
         });
 
@@ -203,6 +211,14 @@ public class AppDbContext : DbContext
             e.Property(x => x.FactoryId).HasColumnName("factory_id");
             e.Property(x => x.Code).HasColumnName("code").HasMaxLength(64);
             e.Property(x => x.Name).HasColumnName("name").HasMaxLength(128);
+            e.Property(x => x.Status).HasColumnName("status").HasDefaultValue((byte)1);
+            e.Property(x => x.AuditStatus).HasColumnName("audit_status").HasDefaultValue((byte)0);
+            e.Property(x => x.AuditedBy).HasColumnName("audited_by");
+            e.Property(x => x.AuditedAt).HasColumnName("audited_at");
+            e.Property(x => x.ForbidBy).HasColumnName("forbid_by");
+            e.Property(x => x.ForbidAt).HasColumnName("forbid_at");
+            e.Property(x => x.UnforbidBy).HasColumnName("unforbid_by");
+            e.Property(x => x.UnforbidAt).HasColumnName("unforbid_at");
             e.Property(x => x.CreatedAt).HasColumnName("created_at");
         });
 
@@ -227,6 +243,14 @@ public class AppDbContext : DbContext
             e.Property(x => x.Supplier).HasColumnName("supplier").HasMaxLength(128);
             e.Property(x => x.Price).HasColumnName("price").HasPrecision(12, 2);
             e.Property(x => x.IsRiskFocus).HasColumnName("is_risk_focus").HasDefaultValue(false);
+            e.Property(x => x.Status).HasColumnName("status").HasDefaultValue((byte)1);
+            e.Property(x => x.AuditStatus).HasColumnName("audit_status").HasDefaultValue((byte)0);
+            e.Property(x => x.AuditedBy).HasColumnName("audited_by");
+            e.Property(x => x.AuditedAt).HasColumnName("audited_at");
+            e.Property(x => x.ForbidBy).HasColumnName("forbid_by");
+            e.Property(x => x.ForbidAt).HasColumnName("forbid_at");
+            e.Property(x => x.UnforbidBy).HasColumnName("unforbid_by");
+            e.Property(x => x.UnforbidAt).HasColumnName("unforbid_at");
             e.Property(x => x.CreatedAt).HasColumnName("created_at");
         });
 
@@ -243,6 +267,8 @@ public class AppDbContext : DbContext
             e.Property(x => x.DueDate).HasColumnName("due_date");
             e.Property(x => x.CreatedBy).HasColumnName("created_by");
             e.Property(x => x.CreatedAt).HasColumnName("created_at");
+            e.Property(x => x.AuditedBy).HasColumnName("audited_by");
+            e.Property(x => x.AuditedAt).HasColumnName("audited_at");
         });
 
         modelBuilder.Entity<ProdWorkOrderOperation>(e =>
@@ -575,6 +601,7 @@ public class AppDbContext : DbContext
             e.Property(x => x.FactoryId).HasColumnName("factory_id");
             e.Property(x => x.KeyAlias).HasColumnName("key_alias").HasMaxLength(64);
             e.Property(x => x.ApiKeyHash).HasColumnName("api_key_hash").HasMaxLength(255);
+            e.Property(x => x.ApiKeyPlain).HasColumnName("api_key_plain").HasMaxLength(128);
             e.Property(x => x.Status).HasColumnName("status");
             e.Property(x => x.ExpireAt).HasColumnName("expire_at");
             e.Property(x => x.CreatedAt).HasColumnName("created_at");

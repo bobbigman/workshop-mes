@@ -123,8 +123,8 @@ public static class SeedData
         var prodA = await EnsureProduct(db, factory.Id, "WJ-001", "五金冲压件A", unitJian.Id, routing.Id);
         await EnsureProduct(db, factory.Id, "WJ-002", "五金冲压件B", unitJian.Id, routing.Id);
 
-        var fieldBatch = await EnsureCustomField(db, factory.Id, "work_order", "批次", "single",
-            "第一批", "第二批");
+        // docs/443：批次按真厂用法手输，不用单选「第一批/第二批」
+        var fieldBatch = await EnsureCustomField(db, factory.Id, "work_order", "批次", "text");
         var fieldMat = await EnsureCustomField(db, factory.Id, "work_order", "材质", "single",
             "304不锈钢", "201不锈钢");
 
@@ -132,6 +132,25 @@ public static class SeedData
             new[] { (fieldBatch.Id, "第一批"), (fieldMat.Id, "304不锈钢") });
 
         return factory;
+    }
+
+    /// <summary>
+    /// docs/443：各厂工单「批次」若仍是演示单选，纠偏为文本并清选项；不删历史 field_value。幂等。
+    /// </summary>
+    public static async Task UpgradeWorkOrderBatchToTextAsync(AppDbContext db)
+    {
+        var fields = await db.CustomFields
+            .Where(f => f.Target == "work_order" && f.FieldName == "批次" && f.FieldType == "single")
+            .ToListAsync();
+        if (fields.Count == 0) return;
+
+        foreach (var f in fields)
+        {
+            f.FieldType = "text";
+            var opts = db.CustomFieldOptions.Where(o => o.FieldId == f.Id);
+            db.CustomFieldOptions.RemoveRange(opts);
+        }
+        await db.SaveChangesAsync();
     }
 
     private static async Task<SysUser> EnsureUser(AppDbContext db, long factoryId,
@@ -224,6 +243,8 @@ public static class SeedData
                 FactoryId = factoryId,
                 Code = code,
                 Name = name,
+                Status = 1,
+                AuditStatus = 1, // 演示种子须已审，否则工艺路线/产品无法引用
                 CreatedAt = DateTime.Now
             };
             db.Operations.Add(op);
@@ -255,6 +276,8 @@ public static class SeedData
                 FactoryId = factoryId,
                 Code = code,
                 Name = name,
+                Status = 1,
+                AuditStatus = 1, // 演示种子须已审，否则产品无法引用
                 CreatedAt = DateTime.Now
             };
             db.Routings.Add(r);
@@ -291,6 +314,8 @@ public static class SeedData
             Name = name,
             UnitId = unitId,
             RoutingId = routingId,
+            Status = 1,
+            AuditStatus = 1, // 演示种子须已审，否则建单下拉不可见
             CreatedAt = DateTime.Now
         };
         db.Products.Add(p);
@@ -316,21 +341,33 @@ public static class SeedData
             db.CustomFields.Add(f);
             await db.SaveChangesAsync();
         }
-
-        for (var i = 0; i < options.Length; i++)
+        else if (target == "work_order" && fieldName == "批次"
+                 && fieldType == "text" && f.FieldType == "single")
         {
-            var label = options[i];
-            if (!db.CustomFieldOptions.Any(x => x.FieldId == f.Id && x.Label == label))
-            {
-                db.CustomFieldOptions.Add(new SysCustomFieldOption
-                {
-                    FieldId = f.Id,
-                    Label = label,
-                    Seq = i + 1
-                });
-            }
+            // docs/443：种子目标为文本时，纠正已存在的演示单选
+            f.FieldType = "text";
+            var oldOpts = db.CustomFieldOptions.Where(x => x.FieldId == f.Id);
+            db.CustomFieldOptions.RemoveRange(oldOpts);
+            await db.SaveChangesAsync();
         }
-        await db.SaveChangesAsync();
+
+        if (fieldType == "single")
+        {
+            for (var i = 0; i < options.Length; i++)
+            {
+                var label = options[i];
+                if (!db.CustomFieldOptions.Any(x => x.FieldId == f.Id && x.Label == label))
+                {
+                    db.CustomFieldOptions.Add(new SysCustomFieldOption
+                    {
+                        FieldId = f.Id,
+                        Label = label,
+                        Seq = i + 1
+                    });
+                }
+            }
+            await db.SaveChangesAsync();
+        }
         return f;
     }
 

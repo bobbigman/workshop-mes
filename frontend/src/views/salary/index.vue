@@ -110,7 +110,7 @@
           v-model:current-page="q.page"
           v-model:page-size="q.pageSize"
           :total="total"
-          :page-sizes="[10, 20, 50]"
+          :page-sizes="[10, 20, 50, 100]"
           layout="total, sizes, prev, pager, next, jumper"
           @current-change="loadList"
           @size-change="onPageSizeChange"
@@ -392,7 +392,7 @@ const ledgerLoading = ref(false)
 const ledger = ref(null)
 let ledgerLoaded = false
 let woOptionsLoaded = false
-const WO_STATUS = { 0: '未开始', 1: '执行中', 2: '已结束' }
+const WO_STATUS = { 0: '已审核', 1: '报工中', 2: '已结束', 3: '已作废', 6: '已挂起' }
 function woOptionLabel(o) {
   const st = WO_STATUS[o.status] ?? o.status
   const product = [o.productCode, o.productName].filter(Boolean).join(' ')

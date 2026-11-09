@@ -730,7 +730,7 @@ public partial class SalaryService : ISalaryService
         {
             if (!reports.ContainsKey(item.ReportId))
                 throw ThrowHelper.Biz(nameof(RecalcDraftAsync),
-                    $"请检查工资单明细关联的报工记录是否还存在：reportId={item.ReportId} statementId={id}");
+                    "该条报工关联的记录已不存在，请检查工资单明细对应的报工。");
         }
 
         var wageCoeff = await LoadWageCoeffAsync(statement.UserId);

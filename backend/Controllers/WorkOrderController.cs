@@ -35,7 +35,7 @@ public class WorkOrderController : ControllerBase
 
     [HttpPut("{id:long}")]
     public Task<ApiResult<object?>> Update(long id, [FromBody] WorkOrderUpdateDto dto) =>
-        _svc.UpdateAsync(id, dto, JwtHelper.GetFactoryId(User));
+        _svc.UpdateAsync(id, dto, JwtHelper.GetUserId(User), JwtHelper.GetFactoryId(User));
 
     [HttpPost("{id:long}/transition")]
     public Task<ApiResult<object?>> Transition(long id, [FromBody] TransitionDto dto) =>

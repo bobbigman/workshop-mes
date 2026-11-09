@@ -43,7 +43,7 @@ const router = useRouter()
 const list = ref([])
 const loadError = ref(false)
 
-const STATUS = { 0: '未开始', 1: '执行中', 2: '已结束', 3: '已取消' }
+const STATUS = { 0: '已审核', 1: '报工中', 2: '已结束', 3: '已作废', 6: '已挂起' }
 function statusLabel(s) { return STATUS[s] ?? s }
 function formatDue(t) { return t ? String(t).replace('T', ' ').slice(0, 16) : '—' }
 function dueClass(row) { return row.dueState === 'overdue' ? 'due-overdue' : row.dueState === 'warning' ? 'due-warning' : '' }

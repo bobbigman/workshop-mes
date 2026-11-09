@@ -17,6 +17,10 @@ public class ProdWorkOrder
     public DateTime? DueDate { get; set; }          // 计划交期；空=未设交期
     public long? CreatedBy { get; set; }            // 创建人
     public DateTime CreatedAt { get; set; }
+    /// <summary>docs/436：首次审核锁价人；未审核为空。</summary>
+    public long? AuditedBy { get; set; }
+    /// <summary>docs/436：首次审核时间；未审核为空。</summary>
+    public DateTime? AuditedAt { get; set; }
 }
 
 /// <summary>工单工序任务（工序级计划数，对标黑湖「生产任务」tab）</summary>

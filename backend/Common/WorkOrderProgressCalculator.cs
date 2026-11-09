@@ -41,7 +41,7 @@ public static class WorkOrderProgressCalculator
             if (op.PlanQty < 0)
                 throw ThrowHelper.Biz(where, $"有一道工序的计划数量填成了负数，请到「工单」找到对应工单，把该工序的计划数量改成不小于0。");
             if (op.DoneQty < 0 || op.DefectQty < 0)
-                throw ThrowHelper.Biz(where, $"报工数量汇总出了问题，系统算不过来。请找管理员检查这张工单的工序报工数据：{op.OperationId}");
+                throw ThrowHelper.Biz(where, "报工数量汇总出了问题，系统算不过来。请找管理员检查这张工单的工序报工数据。");
         }
     }
 

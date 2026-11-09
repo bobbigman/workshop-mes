@@ -17,7 +17,7 @@ public static class DueStateHelper
     /// <summary>
     /// 计算交期三态。
     /// 规则（仅未结束工单参与临期/超期）：
-    ///   1. status ≥ 2（已结束/已取消）→ Normal
+    ///   1. status ≥ 2（已结束/已作废/已挂起等）→ Normal
     ///   2. dueDate == null（未设交期）→ Normal
     ///   3. now &gt; dueDate → Overdue（已超期）
     ///   4. dueDate - now ≤ warnDays 天 → Warning（临期，含当天到期）

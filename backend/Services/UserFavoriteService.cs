@@ -62,9 +62,7 @@ file static class UserFavoriteCatalog
         new("/dept", "部门", "OfficeBuilding", FavoriteWho.Admin),
         new("/custom-field", "自定义字段", "Setting", FavoriteWho.Admin),
         new("/wechat-alert", "微信预警", "ChatDotRound", FavoriteWho.Admin),
-        new("/worker-view", "工人手机视角", "Iphone", FavoriteWho.Admin),
-        new("/report-upstream", "报工上级校验", "Connection", FavoriteWho.Admin),
-        new("/report-qty", "报工数量设置", "Histogram", FavoriteWho.Admin),
+        new("/report-setting", "报工设置", "Setting", FavoriteWho.Admin),
         new("/ai-assistant", "AI 助手", "Cpu", FavoriteWho.Admin),
         new("/login-setting", "登录页图片", "Picture", FavoriteWho.Admin),
         new("/mcp-key", "MCP 钥匙", "Key", FavoriteWho.Admin),
@@ -83,11 +81,27 @@ file static class UserFavoriteCatalog
         new("/about", "关于", "InfoFilled", FavoriteWho.All),
     ];
 
+    /// <summary>旧菜单路径合并到「报工设置」后的兼容别名。</summary>
+    private static readonly Dictionary<string, string> MenuAliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["/worker-view"] = "/report-setting",
+        ["/report-upstream"] = "/report-setting",
+        ["/report-qty"] = "/report-setting",
+    };
+
+    public static string ResolveKey(string key)
+    {
+        var k = (key ?? "").Trim();
+        if (k.Length == 0) return k;
+        return MenuAliases.TryGetValue(k, out var mapped) ? mapped : k;
+    }
+
     public static FavoriteMenu? Find(string key)
     {
+        var resolved = ResolveKey(key);
         foreach (var menu in Menus)
         {
-            if (string.Equals(menu.Key, key, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(menu.Key, resolved, StringComparison.OrdinalIgnoreCase))
                 return menu;
         }
         return null;
@@ -115,10 +129,12 @@ public class UserFavoriteService : IUserFavoriteService
             .ToListAsync();
 
         var list = new List<UserFavoriteItemDto>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var row in rows)
         {
             var menu = UserFavoriteCatalog.Find(row.MenuKey);
             if (menu == null || !UserFavoriteCatalog.CanSee(menu, role)) continue;
+            if (!seen.Add(menu.Key)) continue; // 旧三菜单合并后去重
             list.Add(ToDto(row, menu.Key, menu.Title, menu.Icon));
             if (list.Count == 12) break;
         }

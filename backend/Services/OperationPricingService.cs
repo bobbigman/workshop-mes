@@ -50,9 +50,40 @@ public class OperationPricingService(AppDbContext db)
     public async Task<List<object>> ProductAsync(long productId, long factoryId)
     {
         var product = await db.Products.AsNoTracking().SingleOrDefaultAsync(p => p.Id == productId && p.FactoryId == factoryId) ?? throw ThrowHelper.BizUser("产品不存在或非本厂");
-        return await (from s in db.RoutingSteps.AsNoTracking() join o in db.Operations.AsNoTracking() on s.OperationId equals o.Id
-            where s.RoutingId == product.RoutingId && o.FactoryId == factoryId orderby s.Seq
-            select (object)new { o.Id, o.Name }).ToListAsync();
+        var ops = await (from s in db.RoutingSteps.AsNoTracking()
+            join o in db.Operations.AsNoTracking() on s.OperationId equals o.Id
+            where s.RoutingId == product.RoutingId && o.FactoryId == factoryId
+            orderby s.Seq
+            select new { o.Id, o.Name }).ToListAsync();
+        var timeline = new PriceTimelineService(db);
+        var result = new List<object>();
+        foreach (var op in ops)
+        {
+            var requiredFieldIds = new List<long>();
+            try
+            {
+                var sel = await timeline.SelectAsync(factoryId, productId, op.Id, DateTime.Today);
+                var details = OperationPriceListService.Details(sel.Table);
+                // 必填星号 = RequiredFieldIds ∪ 基础/最终价行条件里用到的本工序工艺字段
+                // （缺了会 Matches 直接失败；收费组激活条件未填≠必填，不并入）
+                var fromRows = details.Rows
+                    .Where(r => !string.Equals(r.Kind, "extra", StringComparison.OrdinalIgnoreCase))
+                    .SelectMany(r => r.Conditions ?? new List<AttributeCondition>())
+                    .Select(c => c.FieldId);
+                requiredFieldIds = details.RequiredFieldIds.Concat(fromRows)
+                    .Where(id => sel.Fields.TryGetValue(id, out var f)
+                                 && string.Equals(f.Target, "work_order_task", StringComparison.OrdinalIgnoreCase)
+                                 && f.OperationId == op.Id)
+                    .Distinct()
+                    .ToList();
+            }
+            catch (BusinessException)
+            {
+                // 无生效价目等：不标星，取价时再总提示
+            }
+            result.Add(new { op.Id, op.Name, requiredFieldIds });
+        }
+        return result;
     }
 
     public async Task BindAsync(ProdWorkOrder order, Dictionary<long, string>? tokens)
@@ -84,9 +115,14 @@ public class OperationPricingService(AppDbContext db)
             ?? throw ThrowHelper.BizUser("工序不属于当前工单");
         if (task.ProcessingPrice == null)
         {
+            var opName = await db.Operations.AsNoTracking()
+                .Where(o => o.Id == operationId && o.FactoryId == factoryId)
+                .Select(o => o.Name)
+                .FirstOrDefaultAsync();
+            var opLabel = string.IsNullOrWhiteSpace(opName) ? "这道工序" : $"工序「{opName}」";
             OperationPriceListService.Require(
                 !await db.Reports.AnyAsync(r => r.OrderId == orderId && r.OperationId == operationId),
-                $"工单{order.OrderNo}·工序{operationId}已有报工但缺少价目表锁价，系统不能自动补价。请到「工序价目表」确认单价并锁进本单。");
+                $"工单「{order.OrderNo}」的{opLabel}已有报工但还没定单价，系统不能自动补价。请到「工序价目表」把单价锁进本单后再报工。");
             var attrs = await new OperationAttributeService(db).GetAsync(task.Id, factoryId, operationId);
             // 禁止带 workOrderId 调 Preview，避免与 BudgetAsync 循环
             var fresh = await new OperationPriceListService(db).PreviewAsync(order.ProductId, operationId, factoryId, operationAttributes: attrs);

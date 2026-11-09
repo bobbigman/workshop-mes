@@ -10,8 +10,12 @@ public class BusinessException : Exception
     /// <summary>业务错误码（默认 1，可按模块自定义）</summary>
     public int Code { get; }
 
-    public BusinessException(string message, int code = 1) : base(message)
+    /// <summary>可选附加载荷（如字段级校验的 fieldId），经中间件写入 ApiResult.data；勿命名 Data（会与 Exception.Data 冲突）。</summary>
+    public object? Payload { get; }
+
+    public BusinessException(string message, int code = 1, object? payload = null) : base(message)
     {
         Code = code;
+        Payload = payload;
     }
 }

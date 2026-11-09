@@ -29,7 +29,13 @@
           @submit.prevent="onLogin"
         >
           <el-form-item label="账号">
-            <el-input v-model="form.account" size="large" placeholder="请输入账号" autocomplete="username">
+            <el-input
+              v-model="form.account"
+              size="large"
+              placeholder="请输入账号"
+              autocomplete="username"
+              :disabled="loading || clearing"
+            >
               <template #prefix>
                 <el-icon><User /></el-icon>
               </template>
@@ -43,6 +49,7 @@
               show-password
               placeholder="请输入密码"
               autocomplete="current-password"
+              :disabled="loading || clearing"
             >
               <template #prefix>
                 <el-icon><Lock /></el-icon>
@@ -56,7 +63,7 @@
             :loading="loading"
             :disabled="clearing"
             @click="onLogin"
-          >登录</el-button>
+          >{{ loading ? '登录中…' : '登录' }}</el-button>
           <div class="forgot-row">
             <button type="button" class="ghost-link" :disabled="loading || clearing" @click="onForgotPassword">忘记密码</button>
           </div>
@@ -375,6 +382,7 @@ async function tryLoginByQr(code) {
   if (loading.value || clearing.value) return
   try {
     loading.value = true
+    localStorage.removeItem('token')
     const res = await loginByQr({ code })
     applyLoginSession(res.data)
     await goAfterLogin(res.data)
@@ -394,6 +402,8 @@ async function onLogin() {
   }
   try {
     loading.value = true
+    // 账密登录前清掉旧 JWT，避免匿名登录响应被「身份已变」静默丢弃
+    localStorage.removeItem('token')
     const res = await login({
       account: form.value.account,
       password: form.value.password
@@ -415,6 +425,9 @@ async function onLogin() {
       console.error('[登录页] 身份验证成功后打开目标页面失败', error)
       ElMessage.error('账号验证成功但页面加载失败，请刷新页面重试；若仍失败联系管理员检查后端服务。')
     }
+  } catch (error) {
+    // 业务/网络错误由 http 拦截器已提示；这里只吞掉，避免未处理 Promise 刷控制台
+    console.warn('[登录页] 登录未成功', error)
   } finally {
     loading.value = false
   }
@@ -424,7 +437,8 @@ async function onLogin() {
 async function onSelectFactory(factoryCode) {
   if (loading.value || clearing.value) return
   const code = String(factoryCode || '').trim()
-  if (!code || !selectToken.value) {
+  const ticket = selectToken.value
+  if (!code || !ticket) {
     ElMessage.error('选厂凭证无效，请返回登录页重新登录。')
     backToCredentials()
     return
@@ -432,8 +446,10 @@ async function onSelectFactory(factoryCode) {
   try {
     loading.value = true
     selectingCode.value = code
+    // 一次性票：先摘掉页面上的票，防止连点/重试拿同一张已消费票
+    selectToken.value = ''
     const res = await selectFactory({
-      selectToken: selectToken.value,
+      selectToken: ticket,
       factoryCode: code
     })
     applyLoginSession(res.data)

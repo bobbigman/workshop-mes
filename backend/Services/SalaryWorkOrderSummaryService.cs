@@ -230,7 +230,7 @@ public partial class SalaryService
         {
             if (r.ReviewStatus is not (0 or 1 or 2))
                 throw ThrowHelper.Biz(nameof(AggregateRows),
-                    $"报工{r.ReportId}的复核状态异常（{r.ReviewStatus}），无法汇总工单工资，请修正后再汇总。");
+                    "该条报工复核状态异常，无法汇总工单工资，请修正后再汇总。");
 
             if (r.ReviewStatus == 2) continue;
 

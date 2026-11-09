@@ -28,11 +28,17 @@ public class BaseOperation
     public long FactoryId { get; set; }
     public string Code { get; set; } = "";          // 工序编号
     public string Name { get; set; } = "";          // 工序名称
+    /// <summary>1启用 0禁用</summary>
+    public byte Status { get; set; } = 1;
+    /// <summary>0未审核 1已审核</summary>
+    public byte AuditStatus { get; set; }
+    public long? AuditedBy { get; set; }
+    public DateTime? AuditedAt { get; set; }
+    public long? ForbidBy { get; set; }
+    public DateTime? ForbidAt { get; set; }
+    public long? UnforbidBy { get; set; }
+    public DateTime? UnforbidAt { get; set; }
     public DateTime CreatedAt { get; set; }
-
-    // 【业务背景】报工权限=部门（三条硬规则之一）。工序可关联多个"报工权限部门"。
-    // 【TODO·填空】导航属性：报工权限部门列表（关联 BaseOperationDepartment）
-    // 【TODO·填空】导航属性：不良品项列表（关联 BaseOperationDefect）
 }
 
 /// <summary>工序-报工权限部门（仅该部门人员可报工）</summary>
@@ -58,9 +64,17 @@ public class BaseRouting
     public long FactoryId { get; set; }
     public string Code { get; set; } = "";          // 路线编号
     public string Name { get; set; } = "";          // 路线名称
+    /// <summary>1启用 0禁用</summary>
+    public byte Status { get; set; } = 1;
+    /// <summary>0未审核 1已审核</summary>
+    public byte AuditStatus { get; set; }
+    public long? AuditedBy { get; set; }
+    public DateTime? AuditedAt { get; set; }
+    public long? ForbidBy { get; set; }
+    public DateTime? ForbidAt { get; set; }
+    public long? UnforbidBy { get; set; }
+    public DateTime? UnforbidAt { get; set; }
     public DateTime CreatedAt { get; set; }
-
-    // 【TODO·填空】导航属性：工序明细（关联 BaseRoutingStep，按 seq 排序）
 }
 
 /// <summary>工艺路线-工序明细（有序）</summary>
@@ -84,6 +98,16 @@ public class BaseProduct
     public string? Supplier { get; set; }           // 供应商(扩展属性)
     public decimal? Price { get; set; }             // 单价(扩展属性，不是工价)
     public bool IsRiskFocus { get; set; }           // 综合风险简报优先关注产品（docs/251、252）
+    /// <summary>1启用 0禁用（对标金蝶禁用/反禁用）。</summary>
+    public byte Status { get; set; } = 1;
+    /// <summary>0未审核 1已审核；新建默认 0；建单须已审且启用。</summary>
+    public byte AuditStatus { get; set; }
+    public long? AuditedBy { get; set; }
+    public DateTime? AuditedAt { get; set; }
+    public long? ForbidBy { get; set; }
+    public DateTime? ForbidAt { get; set; }
+    public long? UnforbidBy { get; set; }
+    public DateTime? UnforbidAt { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 

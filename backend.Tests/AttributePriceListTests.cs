@@ -29,7 +29,7 @@ public class AttributePriceListTests
         }
     };
     public static OperationPriceList Table(AttributePriceDetails? d=null)=>new(){Id=1,FactoryId=5,Code="SIM400",OperationId=42,Status=1,EffectiveFrom=new(2026,1,1),Version="v1",PriceUnit="打",ReportUnitId=18,UnitsPerPriceUnit=12,Details=OperationPricingService.Write(d??Detail())};
-    public static ProcessingQuote Quote(int panels,AttributePriceDetails? d=null)=>OperationPriceListService.Calculate(Table(d),10,18,new(){[1]="25",[2]="8",[3]=panels.ToString()},Fields(),new(2026,10,24));
+    public static ProcessingQuote Quote(int panels,AttributePriceDetails? d=null)=>OperationPriceListService.Calculate(Table(d),10,18,new(){[1]="25",[2]="8",[3]=panels.ToString()},Fields(),new(2026,10,24),"P-SIM","合片");
 
     [Fact] public void PrintTiers_AreFixedAmounts_NotPerPanel()
     {
@@ -40,8 +40,23 @@ public class AttributePriceListTests
     }
     [Fact] public void MissingAttribute_IsNotZero_AndMismatchedUnitFails()
     {
-        Assert.Throws<BusinessException>(()=>OperationPriceListService.Calculate(Table(),10,18,new(){[1]="25",[2]="8"},Fields(),new(2026,10,24)));
-        Assert.Throws<BusinessException>(()=>OperationPriceListService.Calculate(Table(),10,19,new(){[1]="25",[2]="8",[3]="1"},Fields(),new(2026,10,24)));
+        var craftFields = Fields();
+        craftFields[3] = new(){Id=3,FactoryId=5,Target="work_order_task",FieldKey="print_panels",FieldName="丝印片数",FieldType="number",OperationId=42};
+        var missingCraft = Assert.Throws<BusinessException>(()=>OperationPriceListService.Calculate(Table(),10,18,new(){[1]="25",[2]="8"},craftFields,new(2026,10,24),"P-I01","合片"));
+        Assert.Contains("本工序工艺属性「丝印片数」未填", missingCraft.Message);
+        Assert.Contains("本页该工序下补全", missingCraft.Message);
+        Assert.DoesNotContain("产品「P-I01」缺少属性", missingCraft.Message);
+        Assert.DoesNotContain("请到建工单", missingCraft.Message);
+        Assert.DoesNotContain("产品定义", missingCraft.Message);
+        Assert.DoesNotContain("计算工价需要用到", missingCraft.Message);
+        Assert.NotNull(missingCraft.Payload);
+        var craftJson = System.Text.Json.JsonSerializer.Serialize(missingCraft.Payload);
+        Assert.Contains("\"fieldId\":3", craftJson);
+        var missingProduct = Assert.Throws<BusinessException>(()=>OperationPriceListService.Calculate(Table(),10,18,new(){[2]="8",[3]="1"},Fields(),new(2026,10,24),"P-I01","合片"));
+        Assert.Contains("缺少属性「尺寸」", missingProduct.Message);
+        Assert.Contains("产品定义", missingProduct.Message);
+        var unit = Assert.Throws<BusinessException>(()=>OperationPriceListService.Calculate(Table(),10,19,new(){[1]="25",[2]="8",[3]="1"},Fields(),new(2026,10,24),"P-I01","合片"));
+        Assert.Contains("工序「合片」", unit.Message);
     }
     [Fact] public void OverlapAndDraftPrice_CannotBeEnabled()
     {
@@ -59,9 +74,9 @@ public class AttributePriceListTests
     [Fact] public void IntervalOpenEnds_AndNonApplicableMissingFields()
     {
         var fs=Fields();var v=new Dictionary<long,string?>{[1]="25"};
-        Assert.True(OperationPriceListService.Matches(new[]{new AttributeCondition{FieldId=1,Operator="range",Min=25,Max=27,IncludeMax=false}},v,fs));
-        Assert.False(OperationPriceListService.Matches(new[]{new AttributeCondition{FieldId=1,Operator="range",Min=25,IncludeMin=false}},v,fs));
-        Assert.False(OperationPriceListService.Matches(new[]{new AttributeCondition{FieldId=2,Value="8"},new AttributeCondition{FieldId=1,Value="32"}},v,fs));
+        Assert.True(OperationPriceListService.Matches(new[]{new AttributeCondition{FieldId=1,Operator="range",Min=25,Max=27,IncludeMax=false}},v,fs,"P-SIM"));
+        Assert.False(OperationPriceListService.Matches(new[]{new AttributeCondition{FieldId=1,Operator="range",Min=25,IncludeMin=false}},v,fs,"P-SIM"));
+        Assert.False(OperationPriceListService.Matches(new[]{new AttributeCondition{FieldId=2,Value="8"},new AttributeCondition{FieldId=1,Value="32"}},v,fs,"P-SIM"));
     }
     [Fact] public void WageUsesOriginalRateAndSnapshot_AfterPriceMutation()
     {

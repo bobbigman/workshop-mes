@@ -67,6 +67,23 @@ public class PriceListInput
     public string ExpectedVersion { get; set; } = "";
     public AttributePriceDetails Details { get; set; } = new();
 }
+
+/// <summary>
+/// 列表查询。FilterField 有值时走快捷过滤；否则兼容旧 keyword/operationId/status/date。
+/// </summary>
+public class OperationPriceListQueryDto
+{
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 20;
+    public string? FilterField { get; set; }
+    public string? FilterOp { get; set; }
+    public string? FilterValue { get; set; }
+    /// <summary>旧散装参数（无 FilterField 时生效）</summary>
+    public string? Keyword { get; set; }
+    public long? OperationId { get; set; }
+    public byte? Status { get; set; }
+    public DateTime? Date { get; set; }
+}
 public record PriceRowTrace(string RowId, string Kind, bool Matched, bool Included, decimal Amount, string Reason, string Source);
 public class AttributeQuoteEvidence
 {
@@ -80,7 +97,150 @@ public class AttributeQuoteEvidence
 /// <summary>工序价目表按产品事实取价；历史金额仍使用原有Processing报价快照底座。</summary>
 public class OperationPriceListService(AppDbContext db)
 {
-    public static void Require([System.Diagnostics.CodeAnalysis.DoesNotReturnIf(false)] bool ok, string message) { if (!ok) throw ThrowHelper.BizUser(message); }
+    public static void Require([System.Diagnostics.CodeAnalysis.DoesNotReturnIf(false)] bool ok, string message, long? fieldId = null)
+    {
+        if (ok) return;
+        throw fieldId is long id
+            ? ThrowHelper.BizUser(message, new { fieldId = id })
+            : ThrowHelper.BizUser(message);
+    }
+
+    public async Task<object> QueryAsync(OperationPriceListQueryDto query, long factoryId)
+    {
+        if (query.Page < 1) query.Page = 1;
+        query.PageSize = Math.Clamp(query.PageSize < 1 ? 20 : query.PageSize, 1, 200);
+
+        var q = db.OperationPriceLists.AsNoTracking().Where(t => t.FactoryId == factoryId);
+        if (!string.IsNullOrWhiteSpace(query.FilterField))
+            q = ApplyQuickFilter(q, query, factoryId);
+        else
+        {
+            if (!string.IsNullOrWhiteSpace(query.Keyword))
+                q = q.Where(t => t.Code.Contains(query.Keyword) || t.Name.Contains(query.Keyword));
+            if (query.OperationId.HasValue)
+                q = q.Where(t => t.OperationId == query.OperationId);
+            if (query.Status.HasValue)
+                q = q.Where(t => t.Status == query.Status);
+            if (query.Date.HasValue)
+                q = ApplyValidOnDate(q, factoryId, query.Date.Value.Date);
+        }
+
+        var total = await q.CountAsync();
+        var tables = await q.OrderBy(t => t.Code).ThenBy(t => t.Id)
+            .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).ToListAsync();
+        return new { Total = total, List = tables.Select(View) };
+    }
+
+    private IQueryable<OperationPriceList> ApplyValidOnDate(IQueryable<OperationPriceList> q, long factoryId, DateTime day) =>
+        q.Where(t => db.OperationPriceRevisions.Any(r => r.FactoryId == factoryId && r.PriceListId == t.Id && !r.Superseded
+                && r.EffectiveFrom <= day && (r.EffectiveTo == null || r.EffectiveTo >= day))
+            || (!db.OperationPriceRevisions.Any(r => r.FactoryId == factoryId && r.PriceListId == t.Id)
+                && t.EffectiveFrom <= day && (t.EffectiveTo == null || t.EffectiveTo >= day)));
+
+    private IQueryable<OperationPriceList> ApplyQuickFilter(IQueryable<OperationPriceList> q, OperationPriceListQueryDto query, long factoryId)
+    {
+        var field = query.FilterField!.Trim();
+        var value = string.IsNullOrWhiteSpace(query.FilterValue) ? "" : query.FilterValue.Trim();
+        if (value.Length > 256)
+            throw ThrowHelper.Biz(nameof(QueryAsync), "筛选值太长，最多 256 个字符，请缩短后重试。");
+
+        var op = string.IsNullOrWhiteSpace(query.FilterOp) ? "" : query.FilterOp.Trim().ToLowerInvariant();
+        if (value.Length == 0)
+            return q;
+
+        if (string.IsNullOrEmpty(op))
+            op = field is "status" or "pricingType" or "operationId" or "date" or "effectiveFrom" ? "eq" : "contains";
+        if (op is not ("eq" or "contains" or "gt" or "lt"))
+            throw ThrowHelper.Biz(nameof(QueryAsync), "比较方式只支持：等于、包含、大于、小于。");
+
+        switch (field)
+        {
+            case "keyword":
+                if (op is "gt" or "lt")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "「编号/名称」只支持等于或包含。");
+                return op == "eq"
+                    ? q.Where(t => t.Code == value || t.Name == value)
+                    : q.Where(t => t.Code.Contains(value) || t.Name.Contains(value));
+
+            case "code":
+                if (op is "gt" or "lt")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "单据编号只支持等于或包含。");
+                return op == "eq" ? q.Where(t => t.Code == value) : q.Where(t => t.Code.Contains(value));
+
+            case "name":
+                if (op is "gt" or "lt")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "名称只支持等于或包含。");
+                return op == "eq" ? q.Where(t => t.Name == value) : q.Where(t => t.Name.Contains(value));
+
+            case "status":
+                if (op != "eq")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "状态只支持「等于」。");
+                if (!byte.TryParse(value, out var st) || st > 2)
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "状态取值无效，请重新选择。");
+                return q.Where(t => t.Status == st);
+
+            case "pricingType":
+                if (op != "eq")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "工价计算方式只支持「等于」。");
+                if (!byte.TryParse(value, out var pt) || pt is < 1 or > 3)
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "工价计算方式取值无效，请重新选择。");
+                return q.Where(t => t.PricingType == pt);
+
+            case "operationId":
+                if (op != "eq")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "工序只支持「等于」。");
+                if (!long.TryParse(value, out var opId) || opId <= 0)
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "工序取值无效，请重新选择。");
+                return q.Where(t => t.OperationId == opId);
+
+            case "productCode":
+                if (op is "gt" or "lt")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "产品编号只支持等于或包含。");
+                if (op == "eq")
+                {
+                    return q.Where(t => t.ProductId != null && db.Products.AsNoTracking()
+                        .Any(p => p.Id == t.ProductId && p.FactoryId == factoryId && p.Code == value));
+                }
+                return q.Where(t => t.ProductId != null && db.Products.AsNoTracking()
+                    .Any(p => p.Id == t.ProductId && p.FactoryId == factoryId && p.Code.Contains(value)));
+
+            case "productName":
+                if (op is "gt" or "lt")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "产品名称只支持等于或包含。");
+                if (op == "eq")
+                {
+                    return q.Where(t => t.ProductId != null && db.Products.AsNoTracking()
+                        .Any(p => p.Id == t.ProductId && p.FactoryId == factoryId && p.Name == value));
+                }
+                return q.Where(t => t.ProductId != null && db.Products.AsNoTracking()
+                    .Any(p => p.Id == t.ProductId && p.FactoryId == factoryId && p.Name.Contains(value)));
+
+            case "date":
+                // 某日仍有效（含修订时间线）
+                if (op != "eq")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "「有效日期」只支持等于。");
+                if (!DateTime.TryParse(value, out var dayRaw))
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "有效日期请输入有效日期，例如 2026-11-07。");
+                return ApplyValidOnDate(q, factoryId, dayRaw.Date);
+
+            case "effectiveFrom":
+                if (op == "contains")
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "生效日期不支持「包含」，请用等于/大于/小于。");
+                if (!DateTime.TryParse(value, out var fromRaw))
+                    throw ThrowHelper.Biz(nameof(QueryAsync), "生效日期请输入有效日期，例如 2026-11-07。");
+                var from = fromRaw.Date;
+                var fromNext = from.AddDays(1);
+                return op switch
+                {
+                    "eq" => q.Where(t => t.EffectiveFrom >= from && t.EffectiveFrom < fromNext),
+                    "gt" => q.Where(t => t.EffectiveFrom >= fromNext),
+                    _ => q.Where(t => t.EffectiveFrom < from)
+                };
+
+            default:
+                throw ThrowHelper.Biz(nameof(QueryAsync), $"不支持的筛选字段「{field}」。请重新选择。");
+        }
+    }
     private static bool Money(decimal value) => value is >= 0 and <= 1000000 && decimal.Round(value, 4) == value;
     private static bool Number(string? s, out decimal value) => decimal.TryParse(s, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out value);
     public static AttributePriceDetails Details(OperationPriceList table) => OperationPricingService.Read<AttributePriceDetails>(table.Details);
@@ -169,8 +329,65 @@ public class OperationPriceListService(AppDbContext db)
         return true;
     }
 
+    /// <summary>缺属性按归属分句：产品固有→产品定义；工序工艺→本页本工序（勿说「产品缺少」或「请到建工单」）。</summary>
+    public static string MissingProductAttrMsg(string productCode, string fieldName) =>
+        MissingAttrMsg(productCode, fieldName, "product");
+
+    public static string MissingAttrMsg(string productCode, SysCustomField field) =>
+        MissingAttrMsg(productCode, field.FieldName, field.Target);
+
+    public static string MissingAttrMsg(string productCode, string fieldName, string? target)
+    {
+        if (string.Equals(target, "work_order_task", StringComparison.OrdinalIgnoreCase))
+            return $"本工序工艺属性「{fieldName}」未填，无法按价目表算工价。\n请在本页该工序下补全后再取价。";
+        return $"产品「{productCode}」缺少属性「{fieldName}」，无法按价目表算工价。\n请到「产品定义」补全后再选该产品。";
+    }
+
+    static string InvalidNumberAttrMsg(string productCode, SysCustomField field)
+    {
+        if (string.Equals(field.Target, "work_order_task", StringComparison.OrdinalIgnoreCase))
+            return $"本工序工艺属性「{field.FieldName}」不是有效数字，无法按价目表算工价。\n请在本页该工序下改正后再取价。";
+        return $"产品「{productCode}」的属性「{field.FieldName}」不是有效数字，无法按价目表算工价。\n请到「产品定义」改正后再选该产品。";
+    }
+    static string FormatRequirement(AttributeCondition c)
+    {
+        if (string.Equals(c.Operator, "eq", StringComparison.OrdinalIgnoreCase))
+            return $"等于 {c.Value}";
+        var min = c.Min.HasValue ? c.Min.Value.ToString(CultureInfo.InvariantCulture) : "不限";
+        var max = c.Max.HasValue ? c.Max.Value.ToString(CultureInfo.InvariantCulture) : "不限";
+        return $"在 {min}～{max}";
+    }
+
+    /// <summary>缺规格时最多 3 条人话条件，禁止 eq/全量堆砌。</summary>
+    static string SpecMismatchHints(
+        AttributePriceDetails details,
+        IReadOnlyDictionary<long, string?> values,
+        IReadOnlyDictionary<long, SysCustomField> fields)
+    {
+        var tips = details.Rows
+            .Where(r => r.Kind != "extra")
+            .SelectMany(r => r.Conditions)
+            .GroupBy(c => c.FieldId)
+            .Take(3)
+            .Select(g =>
+            {
+                var c = g.First();
+                var name = fields.TryGetValue(c.FieldId, out var f) ? f.FieldName : $"字段{c.FieldId}";
+                var actual = values.GetValueOrDefault(c.FieldId);
+                var actualText = string.IsNullOrWhiteSpace(actual) ? "未填" : actual;
+                return $"「{name}」实际{actualText}，价目要求{FormatRequirement(c)}";
+            });
+        return string.Join("；", tips);
+    }
+
     // 先检查已知不匹配条件，再检查缺失值，防止不适用行要求填写无关属性。
-    public static bool Matches(IEnumerable<AttributeCondition> conditions, IReadOnlyDictionary<long, string?> values, IReadOnlyDictionary<long, SysCustomField> fields)
+    // missingMeansNoMatch：收费组激活条件用 false（未填=组不适用）；价目行/必填属性用 true（未填明确失败）。
+    public static bool Matches(
+        IEnumerable<AttributeCondition> conditions,
+        IReadOnlyDictionary<long, string?> values,
+        IReadOnlyDictionary<long, SysCustomField> fields,
+        string productCode,
+        bool missingMeansNoMatch = false)
     {
         var list = conditions.ToList();
         foreach (var c in list)
@@ -178,29 +395,53 @@ public class OperationPriceListService(AppDbContext db)
             if (!values.TryGetValue(c.FieldId, out var value) || string.IsNullOrWhiteSpace(value)) continue;
             if (fields[c.FieldId].FieldType == "number")
             {
-                Require(Number(value, out var n), $"产品属性{fields[c.FieldId].FieldName}不是有效数字，无法参与计算。请到「产品定义」检查该产品的属性值，确保数字类属性填了合法数值。");
+                Require(Number(value, out var n), InvalidNumberAttrMsg(productCode, fields[c.FieldId]), c.FieldId);
                 if (c.Operator == "eq") { if (!Number(c.Value, out var expected) || n != expected) return false; }
                 else if ((c.Min.HasValue && (n < c.Min || (n == c.Min && !c.IncludeMin))) || (c.Max.HasValue && (n > c.Max || (n == c.Max && !c.IncludeMax)))) return false;
             }
             else if (!string.Equals(value, c.Value, StringComparison.Ordinal)) return false;
         }
         foreach (var c in list)
-            Require(values.TryGetValue(c.FieldId, out var value) && !string.IsNullOrWhiteSpace(value), $"计算工价需要用到产品属性{fields[c.FieldId].FieldName}，但该属性值为空，无法确定工价。请到「产品定义」补齐该产品缺失的属性值后重试。");
+        {
+            if (values.TryGetValue(c.FieldId, out var value) && !string.IsNullOrWhiteSpace(value)) continue;
+            if (missingMeansNoMatch) return false;
+            Require(false, MissingAttrMsg(productCode, fields[c.FieldId]), c.FieldId);
+        }
         return true;
     }
-
-    public static ProcessingQuote Calculate(OperationPriceList table, long productId, long reportUnitId, Dictionary<long, string?> values, Dictionary<long, SysCustomField> fields, DateTime date)
+    public static ProcessingQuote Calculate(
+        OperationPriceList table,
+        long productId,
+        long reportUnitId,
+        Dictionary<long, string?> values,
+        Dictionary<long, SysCustomField> fields,
+        DateTime date,
+        string productCode,
+        string operationName)
     {
         var details = Details(table);
         Validate(details, fields, true, table.PricingType);
         Require(table.Status == 1 && date.Date >= table.EffectiveFrom.Date && (!table.EffectiveTo.HasValue || date.Date <= table.EffectiveTo.Value.Date), "这张价目表还没启用，或已经过了有效期。请到「工序价目表」页面检查该表的启用状态和有效期。");
-        Require(table.ReportUnitId == reportUnitId && table.UnitsPerPriceUnit > 0, "报工单位和折算方式对不上，系统没法算价。请联系管理员检查这道工序单价表里的单位和折算设置。");
+        Require(table.ReportUnitId == reportUnitId && table.UnitsPerPriceUnit > 0,
+            $"工序「{operationName}」的报工单位或折算与价目表不一致，无法算价。\n请管理员检查该工序价目表的单位和换算设置。");
         Require(table.PricingType == 1 || (table.UnitsPerPriceUnit == 1 && table.PriceUnit == (table.PricingType == 2 ? "小时" : "笔")), "计时或固定类型的价目表，换算数必须为1，计价单位必须是小时或笔。请到价目表编辑页修正换算数和计价单位。");
-        foreach (var id in details.RequiredFieldIds) Require(values.TryGetValue(id, out var value) && !string.IsNullOrWhiteSpace(value), $"计算工价时缺少产品属性：{fields[id].FieldName}。请到「产品定义」找到该产品，补齐缺失属性后重新取价。");
+        foreach (var id in details.RequiredFieldIds)
+            Require(values.TryGetValue(id, out var value) && !string.IsNullOrWhiteSpace(value), MissingAttrMsg(productCode, fields[id]), id);
         Require(table.ProductId == null || table.ProductId == productId, "当前使用的价目表不属于这个产品。请确认价目表表头选的产品是否正确，或换一张属于该产品的价目表。");
         var applicable = details.Rows;
-        var primary = applicable.Where(r => r.Kind != "extra" && Matches(r.Conditions, values, fields)).ToList();
-        Require(primary.Count == 1, primary.Count == 0 ? $"产品{productId}·工序{table.OperationId}·表{table.Code}缺规格的价：{string.Join("；", details.Rows.Where(r => r.Kind != "extra").SelectMany(r => r.Conditions).Select(c => $"{fields[c.FieldId].FieldName}实际={values.GetValueOrDefault(c.FieldId) ?? "未填"}，要求{c.Operator}:{c.Value ?? $"{c.Min}~{c.Max}"}"))}" : "有多张价目表同时命中了这道工序的基础/最终工价，系统无法判断用哪张。请到「工序价目表」消除重复或冲突的取价条件。");
+        var primary = applicable.Where(r => r.Kind != "extra" && Matches(r.Conditions, values, fields, productCode)).ToList();
+        if (primary.Count != 1)
+        {
+            if (primary.Count == 0)
+            {
+                var hints = SpecMismatchHints(details, values, fields);
+                var tip = $"产品「{productCode}」工序「{operationName}」在价目表「{table.Code}」上没有匹配到单价。\n请到「产品定义」或建工单「工序工艺属性」核对，或到「工序价目表」补规格行。";
+                if (!string.IsNullOrEmpty(hints)) tip += "\n" + hints;
+                Require(false, tip);
+            }
+            Require(false,
+                $"产品「{productCode}」工序「{operationName}」命中了多条基础/最终价，无法确定用哪一条。\n请到「工序价目表」检查价目表「{table.Code}」的条件，去掉重叠后再取价。");
+        }
         var price = primary[0];
         var evidence = new AttributeQuoteEvidence { PriceListId = table.Id, PriceListCode = table.Code, PricingDate = date.Date, Attributes = values.OrderBy(v => v.Key).ToDictionary(v => v.Key, v => v.Value) };
         var quote = new ProcessingQuote { SchemaVersion = 2, FactoryId = table.FactoryId, ProductId = productId, PriceType = table.PricingType, OperationId = table.OperationId, Version = table.Version, BaseName = $"{table.Code} / {price.RowId}", BasePrice = price.Amount!.Value,
@@ -210,10 +451,12 @@ public class OperationPriceListService(AppDbContext db)
         var included = new HashSet<string>();
         foreach (var group in details.Groups)
         {
-            if (!Matches(group.Conditions, values, fields)) continue;
-            var extras = applicable.Where(r => r.Kind == "extra" && r.GroupKey == group.Key && Matches(r.Conditions, values, fields)).ToList();
-            Require(extras.Count <= 1, $"收费组“{group.Name}”命中了多行价格，无法确定用哪个。请到价目表检查该收费组的区间或条件设置，消除重复命中。");
-            Require(!group.Required || extras.Count == 1, $"收费组“{group.Name}”没有匹配到任何价格行，不能按免费处理。请到价目表中为该收费组补充对应价格行。");
+            // 收费组激活条件：未填工艺属性=组不适用，不整单拦截（必填仍走 RequiredFieldIds）。
+            if (!Matches(group.Conditions, values, fields, productCode, missingMeansNoMatch: true)) continue;
+            var extras = applicable.Where(r => r.Kind == "extra" && r.GroupKey == group.Key && Matches(r.Conditions, values, fields, productCode, missingMeansNoMatch: true)).ToList();            Require(extras.Count <= 1,
+                $"收费组「{group.Name}」命中了多行价格，无法确定用哪一行。\n请到「工序价目表」检查该收费组的条件，去掉重叠后再取价。");
+            Require(!group.Required || extras.Count == 1,
+                $"收费组「{group.Name}」没有匹配到价格行，不能按免费处理。\n请到「工序价目表」为该收费组补充对应价格行。");
             if (extras.Count == 0) continue;
             var extra = extras[0];
             var isIncluded = price.IncludedRowIds.Contains(extra.RowId);
@@ -226,20 +469,29 @@ public class OperationPriceListService(AppDbContext db)
         foreach (var row in details.Rows)
             evidence.Rows.Add(new(row.RowId, row.Kind, chosen.Contains(row.RowId), included.Contains(row.RowId), row.Amount!.Value,
                 included.Contains(row.RowId) ? "已包含，不另加价" : chosen.Contains(row.RowId) ? "条件命中" : "不在产品范围、条件不符或收费组不适用", row.Source));
-        Require(quote.UnitPrice / quote.UnitsPerPriceUnit <= 1000000 && quote.DeductPrice / quote.UnitsPerPriceUnit <= 1000000, "换算后的单价超出了系统允许范围。请检查价目表的换算数和原始单价，确保换算结果在合理区间内。");
+        Require(quote.UnitPrice / quote.UnitsPerPriceUnit <= 1000000 && quote.DeductPrice / quote.UnitsPerPriceUnit <= 1000000,
+            $"价目表「{table.Code}」换算后的单价超出允许范围。\n请检查该表的换算数和原始单价。");
         quote.QuoteToken = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(OperationPricingService.Write(quote))));
         return quote;
     }
 
-    public static OperationPriceList SelectTable(IEnumerable<OperationPriceList> candidates, long productId, long operationId)
+    public static OperationPriceList SelectTable(
+        IEnumerable<OperationPriceList> candidates,
+        long productId,
+        long operationId,
+        string productCode,
+        string operationName)
     {
         var all = candidates.ToList();
-        Require(!all.Any(t => Details(t).SchemaVersion != 2), $"工序{operationId}还有旧版行级价格设置没转换完，新单无法取价。请查看系统提示的转换清单，完成旧设置迁移后再建新单。");
+        Require(!all.Any(t => Details(t).SchemaVersion != 2),
+            $"工序「{operationName}」还有旧版价目未转换完，新单无法取价。\n请先完成转换清单中的迁移后再建单。");
         var specific = all.Where(t => t.ProductId == productId).ToList();
         var common = all.Where(t => t.ProductId == null).ToList();
-        Require(specific.Count <= 1 && common.Count <= 1, $"工序{operationId}在同一范围内有多张价目表同时生效，产生冲突。请到「工序价目表」停用多余表或调整有效期，确保同一时段只有一张表生效。");
+        Require(specific.Count <= 1 && common.Count <= 1,
+            $"工序「{operationName}」同时有多张生效价目表，互相冲突。\n请到「工序价目表」停用多余表或调整有效期。");
         var selected = specific.SingleOrDefault() ?? common.SingleOrDefault();
-        Require(selected != null, $"产品{productId}·工序{operationId}没有找到任何生效的专属或通用价目表，不能按普通工价代替。请到「工序价目表」新建一张并启用。");
+        Require(selected != null,
+            $"产品「{productCode}」工序「{operationName}」没有生效的价目表，无法算工价。\n请到「工序价目表」新建并启用（专属或通用）。");
         return selected!;
     }
 

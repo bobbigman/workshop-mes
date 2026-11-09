@@ -14,19 +14,8 @@ namespace ahu.MicrosoftMes.Controllers;
 public class OperationPriceListController(AppDbContext db, PriceChangeDraftStore drafts) : ControllerBase
 {
     [HttpGet]
-    public async Task<ApiResult<object>> Query(string? keyword, long? operationId, byte? status, DateTime? date, int page = 1, int pageSize = 20)
-    {
-        var fid = JwtHelper.GetFactoryId(User);
-        var q = db.OperationPriceLists.AsNoTracking().Where(t => t.FactoryId == fid);
-        if (!string.IsNullOrWhiteSpace(keyword)) q = q.Where(t => t.Code.Contains(keyword) || t.Name.Contains(keyword));
-        if (operationId.HasValue) q = q.Where(t => t.OperationId == operationId);
-        if (status.HasValue) q = q.Where(t => t.Status == status);
-        if (date.HasValue) q = q.Where(t => db.OperationPriceRevisions.Any(r => r.FactoryId == fid && r.PriceListId == t.Id && !r.Superseded && r.EffectiveFrom <= date.Value.Date && (r.EffectiveTo == null || r.EffectiveTo >= date.Value.Date))
-            || (!db.OperationPriceRevisions.Any(r => r.FactoryId == fid && r.PriceListId == t.Id) && t.EffectiveFrom <= date.Value.Date && (t.EffectiveTo == null || t.EffectiveTo >= date.Value.Date)));
-        var total = await q.CountAsync();
-        var tables = await q.OrderBy(t => t.Code).ThenBy(t => t.Id).Skip((Math.Max(1, page)-1)*Math.Clamp(pageSize,1,200)).Take(Math.Clamp(pageSize,1,200)).ToListAsync();
-        return ApiResult<object>.Ok(new { Total = total, List = tables.Select(OperationPriceListService.View) });
-    }
+    public async Task<ApiResult<object>> Query([FromQuery] OperationPriceListQueryDto query) =>
+        ApiResult<object>.Ok(await new OperationPriceListService(db).QueryAsync(query, JwtHelper.GetFactoryId(User)));
     [HttpGet("{id:long}")]
     public async Task<ApiResult<object>> Get(long id) => ApiResult<object>.Ok(OperationPriceListService.View(await new OperationPriceListService(db).GetAsync(id, JwtHelper.GetFactoryId(User))));
     [HttpGet("product/{productId:long}")]

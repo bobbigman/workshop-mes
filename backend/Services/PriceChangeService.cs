@@ -145,35 +145,35 @@ public class PriceChangeService(AppDbContext db, PriceChangeDraftStore drafts)
             if (old.ProductId.HasValue && report.ProductId.HasValue && report.ProductId != old.ProductId) continue;
             try
             {
-                Require(report.PriceSnapshot != null, $"请检查这条报工的原始工资记录是否完整：报工{report.Id}");
+                Require(report.PriceSnapshot != null, "该条报工缺少可靠的原始工资记录，请检查后再调价。");
                 var prior = OperationPricingService.Read<ReportPriceSnapshot>(report.PriceSnapshot!);
                 _ = ReportPriceSnapshot.Calculate(report, 1m);
                 var basis = prior.Processing!;
                 var selected = await new PriceTimelineService(db).SelectAsync(factoryId,basis.ProductId,basis.OperationId,report.ReportTime,next,fields);
                 if (selected.Table.Id != id)
                 {
-                    Require(prior.PriceListId != id, $"报工{report.Id}的原价表与当前产品范围对不上，请核查。");
+                    Require(prior.PriceListId != id, "该条报工的原价表与当前产品范围对不上，请核查。");
                     continue;
                 }
                 var q = PriceTimelineService.Calculate(selected,basis.ProductId,basis.ReportUnitId,basis.AttributeEvidence!.Attributes,report.ReportTime);
                 Require(q.PriceType == prior.PriceType && q.ReportUnitId == basis.ReportUnitId && q.UnitsPerPriceUnit == basis.UnitsPerPriceUnit
-                    && q.PriceUnit == basis.PriceUnit, $"报工{report.Id}的计价类型或单位折算已变化，不能只调数字。");
+                    && q.PriceUnit == basis.PriceUnit, "该条报工的计价类型或单位折算已变化，不能只调数字。");
                 var linked = items.Where(x => x.ReportId == report.Id).ToList();
-                Require(linked.Count <= 1, $"报工{report.Id}已被多张工资单引用，需先处理冲突。");
+                Require(linked.Count <= 1, "该条报工已被多张工资单引用，需先处理冲突。");
                 var item = linked.SingleOrDefault();
                 if (item != null)
                 {
                     var statement = statements.SingleOrDefault(x => x.Id == item.StatementId);
-                    Require(statement != null && statement.FactoryId == factoryId && statement.UserId == report.UserId, $"报工{report.Id}的工资归属有矛盾，请检查。");
-                    Require(statement!.Status is 0 or 1, $"工资单{statement.Id}已发放或当前状态不能修改。");
-                    Require(report.ReviewStatus == 1 && item.PriceListId == prior.PriceListId && item.PriceType == prior.PriceType, $"报工{report.Id}的复核状态或工资来源有冲突，请检查。");
-                    Require(item.WageCoeff > 0, $"报工{report.Id}工资明细中的人员倍数无效，请检查。");
+                    Require(statement != null && statement.FactoryId == factoryId && statement.UserId == report.UserId, "该条报工的工资归属有矛盾，请检查。");
+                    Require(statement!.Status is 0 or 1, "该张工资单已发放或当前状态不能修改。");
+                    Require(report.ReviewStatus == 1 && item.PriceListId == prior.PriceListId && item.PriceType == prior.PriceType, "该条报工的复核状态或工资来源有冲突，请检查。");
+                    Require(item.WageCoeff > 0, "该条报工的工资明细中人员倍数无效，请检查。");
                     var expected = ReportPriceSnapshot.Calculate(report,item.WageCoeff);
                     Require(item.Amount == expected.Amount && (item.DeductAmount ?? 0) == expected.DeductAmount && item.UnitPrice == expected.UnitPrice
                         && item.CalcQty == expected.CalcQty && item.DurationMinutes == report.DurationMinutes && item.WageCoeff == expected.WageCoeff
-                        && report.SettledFlag == (statement.Status == 1), $"报工{report.Id}的工资明细与原始记录对不上，请检查。");
+                        && report.SettledFlag == (statement.Status == 1), "该条报工的工资明细与原始记录对不上，请检查。");
                 }
-                else Require(!report.SettledFlag, $"报工{report.Id}已结算但缺少可靠的工资明细，需补全后再操作。");
+                else Require(!report.SettledFlag, "该条报工已结算但缺少可靠的工资明细，补全后再操作。");
                 var coeff = prior.AppliedWageCoeff;
                 if (coeff == null && item != null)
                 {
@@ -181,8 +181,8 @@ public class PriceChangeService(AppDbContext db, PriceChangeDraftStore drafts)
                     var recorded = ReportPriceSnapshot.Calculate(report,item.WageCoeff);
                     if (recorded.WageAmount == report.WageAmount) coeff = item.WageCoeff;
                 }
-                Require(coeff is > 0, $"报工{report.Id}缺少可靠的历史人员倍数，请核查，不能直接套用当前倍数。");
-                Require(ReportPriceSnapshot.Calculate(report,coeff!.Value).WageAmount == report.WageAmount, $"报工{report.Id}原金额与历史人员倍数对不上，请检查。");
+                Require(coeff is > 0, "该条报工缺少可靠的历史人员倍数，请核查后再调价。");
+                Require(ReportPriceSnapshot.Calculate(report,coeff!.Value).WageAmount == report.WageAmount, "该条报工的原金额与历史人员倍数对不上，请检查。");
                 var updated = Copy(report);
                 updated.PriceSnapshot = Json(new ReportPriceSnapshot(q.AttributeEvidence!.PriceListId,q.PriceType,q.UnitPrice,q.DeductPrice)
                     { Processing = q, PriceRevisionId = q.PriceRevisionId, AppliedWageCoeff = coeff, CoefficientHistory = prior.CoefficientHistory });
@@ -198,13 +198,13 @@ public class PriceChangeService(AppDbContext db, PriceChangeDraftStore drafts)
                 }
                 plan.Changes.Add(new(report,updated,item,newItem));
             }
-            catch (BusinessException ex) { plan.Blockers.Add($"报工{report.Id}：{ex.Message}"); }
+            catch (BusinessException ex) { plan.Blockers.Add($"该条报工：{ex.Message}"); }
         }
         var affected = plan.Changes.Where(x => x.OldItem != null).Select(x => x.OldItem!.StatementId).Distinct().ToList();
         foreach (var statement in statements.Where(x => affected.Contains(x.Id)))
         {
             if (statement.TotalAmount != decimal.Round(allItems.Where(x => x.StatementId == statement.Id).Sum(x => x.Amount - (x.DeductAmount ?? 0)),2,MidpointRounding.AwayFromZero))
-                plan.Blockers.Add($"工资单{statement.Id}原合计与明细不一致，请先核查");
+                plan.Blockers.Add("该张工资单原合计与明细不一致，请先核查");
             var nextStatement = Copy(statement);
             nextStatement.Status = 0; nextStatement.ConfirmedAt = null;
             var amended = plan.Changes.Where(x => x.NewItem?.StatementId == statement.Id).ToDictionary(x => x.NewItem!.Id,x => x.NewItem!);
@@ -220,7 +220,7 @@ public class PriceChangeService(AppDbContext db, PriceChangeDraftStore drafts)
             var report = plan.SettlementReports.SingleOrDefault(x => x.Id == item.ReportId);
             var statement = plan.OldStatements.Single(x => x.Id == item.StatementId);
             if (report == null || report.FactoryId != factoryId || report.UserId != statement.UserId)
-                plan.Blockers.Add($"工资单{statement.Id}有缺失或归属冲突的报工{item.ReportId}，不能撤回确认");
+                plan.Blockers.Add("该张工资单有缺失或归属冲突的报工，不能撤回确认");
         }
         plan.Hash = MaintenanceSqlService.Hash(Json(new { today, input, old, next, fields, roots, revisions, reports, items, statements, allItems,
             plan.Changes, plan.NewStatements, plan.SettlementReports, plan.Blockers }));

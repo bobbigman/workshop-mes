@@ -24,6 +24,13 @@ try
     // 黑窗口（start.bat）要能看中文启动提示
     Console.OutputEncoding = Encoding.UTF8;
 
+    // 上传 multipart 会缓冲到 Path.GetTempPath()；系统 %TEMP% 常被 Defender 锁死导致 Access denied。
+    // 进程内改指程序目录下 App_Data\temp（与 start.bat 一致），异常上报带图等才能落盘。
+    var processTemp = Path.Combine(AppContext.BaseDirectory, "App_Data", "temp");
+    Directory.CreateDirectory(processTemp);
+    Environment.SetEnvironmentVariable("TEMP", processTemp);
+    Environment.SetEnvironmentVariable("TMP", processTemp);
+
     var builder = WebApplication.CreateBuilder(args);
 
     var instanceSection = builder.Configuration.GetSection(InstanceOptions.SectionName);
@@ -319,6 +326,8 @@ try
             Console.WriteLine("正在连接数据库并初始化…");
             db.Database.EnsureCreated();
             await DbCompat.EnsureAsync(db);
+            // docs/443：测试账套工单「批次」单选 → 文本（幂等，不删历史值）
+            await SeedData.UpgradeWorkOrderBatchToTextAsync(db);
             await db.Database.ExecuteSqlRawAsync(PriceChangeSchema.UpgradeSql);
             await PriceTimelineService.InitializeAsync(db);
 

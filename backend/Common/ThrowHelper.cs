@@ -8,9 +8,9 @@ namespace ahu.MicrosoftMes.Common;
 public static class ThrowHelper
 {
     /// <summary>面向用户的业务提示（不含方法名等技术前缀）。</summary>
-    public static BusinessException BizUser(string what)
+    public static BusinessException BizUser(string what, object? payload = null)
     {
-        return new BusinessException(what);
+        return new BusinessException(what, payload: payload);
     }
 
     public static BusinessException Biz(string where, string what)
@@ -20,8 +20,8 @@ public static class ThrowHelper
     }
 
     /// <summary>带业务错误码（如报工 soft 确认 1002）；Message 仍只放业务提示。</summary>
-    public static BusinessException BizCode(string what, int code) =>
-        new BusinessException(what, code);
+    public static BusinessException BizCode(string what, int code, object? payload = null) =>
+        new BusinessException(what, code, payload);
 
     /// <summary>执行 SQL 失败 —— Message 带 SQL 原文；可选参数快照（已建议脱敏后传入）。</summary>
     public static Exception Sql(string sql, Exception ex, string? parametersSnapshot = null)

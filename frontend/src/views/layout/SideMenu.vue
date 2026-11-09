@@ -47,22 +47,20 @@
     </el-sub-menu>
     <el-sub-menu v-if="role === 1" index="base-data">
       <template #title>基础数据</template>
+      <el-menu-item index="/user"><div class="menu-row"><span class="menu-label">用户</span><MenuStar menu-key="/user" /></div></el-menu-item>
+      <el-menu-item index="/dept"><div class="menu-row"><span class="menu-label">部门</span><MenuStar menu-key="/dept" /></div></el-menu-item>
       <el-menu-item index="/product"><div class="menu-row"><span class="menu-label">产品定义</span><MenuStar menu-key="/product" /></div></el-menu-item>
       <el-menu-item index="/routing"><div class="menu-row"><span class="menu-label">工艺路线</span><MenuStar menu-key="/routing" /></div></el-menu-item>
       <el-menu-item index="/operation"><div class="menu-row"><span class="menu-label">工序</span><MenuStar menu-key="/operation" /></div></el-menu-item>
       <el-menu-item index="/defect"><div class="menu-row"><span class="menu-label">不良品项</span><MenuStar menu-key="/defect" /></div></el-menu-item>
       <el-menu-item index="/unit"><div class="menu-row"><span class="menu-label">单位</span><MenuStar menu-key="/unit" /></div></el-menu-item>
       <el-menu-item v-if="canWage" index="/operation-price-list"><div class="menu-row"><span class="menu-label">工序价目表</span><MenuStar menu-key="/operation-price-list" /></div></el-menu-item>
+      <el-menu-item index="/custom-field"><div class="menu-row"><span class="menu-label">自定义字段</span><MenuStar menu-key="/custom-field" /></div></el-menu-item>
     </el-sub-menu>
     <el-sub-menu v-if="role === 1" index="sys-config">
       <template #title>系统配置</template>
-      <el-menu-item index="/user"><div class="menu-row"><span class="menu-label">用户</span><MenuStar menu-key="/user" /></div></el-menu-item>
-      <el-menu-item index="/dept"><div class="menu-row"><span class="menu-label">部门</span><MenuStar menu-key="/dept" /></div></el-menu-item>
-      <el-menu-item index="/custom-field"><div class="menu-row"><span class="menu-label">自定义字段</span><MenuStar menu-key="/custom-field" /></div></el-menu-item>
       <el-menu-item v-if="canWechat" index="/wechat-alert"><div class="menu-row"><span class="menu-label">微信预警</span><MenuStar menu-key="/wechat-alert" /></div></el-menu-item>
-      <el-menu-item index="/worker-view"><div class="menu-row"><span class="menu-label">工人手机视角</span><MenuStar menu-key="/worker-view" /></div></el-menu-item>
-      <el-menu-item index="/report-upstream"><div class="menu-row"><span class="menu-label">报工上级校验</span><MenuStar menu-key="/report-upstream" /></div></el-menu-item>
-      <el-menu-item index="/report-qty"><div class="menu-row"><span class="menu-label">报工数量设置</span><MenuStar menu-key="/report-qty" /></div></el-menu-item>
+      <el-menu-item index="/report-setting"><div class="menu-row"><span class="menu-label">报工设置</span><MenuStar menu-key="/report-setting" /></div></el-menu-item>
       <el-menu-item index="/login-setting"><div class="menu-row"><span class="menu-label">登录页图片</span><MenuStar menu-key="/login-setting" /></div></el-menu-item>
       <el-menu-item index="/mcp-key"><div class="menu-row"><span class="menu-label">MCP 钥匙</span><MenuStar menu-key="/mcp-key" /></div></el-menu-item>
     </el-sub-menu>

@@ -171,13 +171,15 @@ public class SysMcpAuth
     public DateTime CreatedAt { get; set; }
 }
 
-/// <summary>MCP 每厂 API Key（只存哈希，docs/96）</summary>
+/// <summary>MCP 每厂 API Key（哈希校验 + 明文供管理员再复制，docs/96）</summary>
 public class SysMcpKey
 {
     public long KeyId { get; set; }
     public long FactoryId { get; set; }
     public string KeyAlias { get; set; } = "";
     public string ApiKeyHash { get; set; } = "";
+    /// <summary>明文；仅管理员查看/复制报文用；吊销后清空</summary>
+    public string? ApiKeyPlain { get; set; }
     public byte Status { get; set; } = 1;
     public DateTime? ExpireAt { get; set; }
     public DateTime CreatedAt { get; set; }

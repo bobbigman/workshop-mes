@@ -38,7 +38,7 @@ public class WorkSessionService(AppDbContext db)
             await db.Database.ExecuteSqlInterpolatedAsync($"SELECT id FROM sys_user WITH (UPDLOCK, ROWLOCK) WHERE id={userId}");
         var order = await db.WorkOrders.FirstOrDefaultAsync(x => x.Id == orderId && x.FactoryId == user.FactoryId)
             ?? throw ThrowHelper.BizUser("这张工单找不到，或者你没有权限做这张单，请扫正确的二维码，或找班组长确认你能不能做这张单。");
-        if (order.Status == 4) throw ThrowHelper.BizUser("工单为草稿，请先在电脑端提交后再报工");
+        if (WorkOrderService.IsPreAuditStatus(order.Status)) throw ThrowHelper.BizUser("工单还没审核锁价，请先在电脑端点「审核」后再开工");
         if (order.Status >= 2) throw ThrowHelper.BizUser("这张工单已经做完或者取消了，不能再开工，如有误找班组长或管理员处理。");
         if (!await db.WorkOrderOperations.AnyAsync(x => x.WorkOrderId == orderId && x.OperationId == operationId))
             throw ThrowHelper.BizUser("该工序不属于此工单");

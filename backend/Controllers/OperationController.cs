@@ -31,4 +31,24 @@ public class OperationController : ControllerBase
 
     [HttpDelete("{id}")]
     public Task<ApiResult<object?>> Delete(long id) => _svc.DeleteAsync(id);
+
+    [HttpPost("{id:long}/forbid")]
+    [Authorize(Roles = "1")]
+    public Task<ApiResult<object?>> Forbid(long id) =>
+        _svc.ForbidAsync(id, JwtHelper.GetFactoryId(User), JwtHelper.GetUserId(User));
+
+    [HttpPost("{id:long}/unforbid")]
+    [Authorize(Roles = "1")]
+    public Task<ApiResult<object?>> Unforbid(long id) =>
+        _svc.UnforbidAsync(id, JwtHelper.GetFactoryId(User), JwtHelper.GetUserId(User));
+
+    [HttpPost("{id:long}/audit")]
+    [Authorize(Roles = "1")]
+    public Task<ApiResult<object?>> Audit(long id) =>
+        _svc.AuditAsync(id, JwtHelper.GetFactoryId(User), JwtHelper.GetUserId(User));
+
+    [HttpPost("{id:long}/unaudit")]
+    [Authorize(Roles = "1")]
+    public Task<ApiResult<object?>> Unaudit(long id) =>
+        _svc.UnauditAsync(id, JwtHelper.GetFactoryId(User), JwtHelper.GetUserId(User));
 }

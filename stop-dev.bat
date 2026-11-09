@@ -41,5 +41,7 @@ taskkill /F /FI "WINDOWTITLE eq MES-前端*" >nul 2>&1
 
 echo.
 echo 已停止。现在可以用 Visual Studio 生成/F5。
+echo 只要重启后端、前端别动：双击 restart-backend.bat。
 echo.
 pause
+

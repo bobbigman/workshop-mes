@@ -43,8 +43,8 @@
       </div>
 
       <div class="stats">
-        <div class="stat"><div class="n">{{ notStarted }}</div><div class="l">未开始</div></div>
-        <div class="stat"><div class="n">{{ data.doingOrders }}</div><div class="l">执行中</div></div>
+        <div class="stat"><div class="n">{{ notStarted }}</div><div class="l">已审核</div></div>
+        <div class="stat"><div class="n">{{ data.doingOrders }}</div><div class="l">报工中</div></div>
         <div class="stat"><div class="n">{{ data.doneOrders }}</div><div class="l">已完成</div></div>
         <div class="stat"><div class="n warn">{{ data.dueWarnCount }}</div><div class="l">临期</div></div>
         <div class="stat"><div class="n danger">{{ data.dueOverdueCount }}</div><div class="l">超期</div></div>

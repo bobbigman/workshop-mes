@@ -12,6 +12,8 @@ public static class DbCompat
     {
         // 当前实例沿用EnsureCreated；与252增量EF迁移共用幂等SQL。
         await db.Database.ExecuteSqlRawAsync(RiskBriefSchema.UpgradeSql);
+        await db.Database.ExecuteSqlRawAsync(ProductForbidSchema.UpgradeSql);
+        await db.Database.ExecuteSqlRawAsync(MasterDataLifecycleSchema.OperationAndRoutingSql);
         await db.Database.ExecuteSqlRawAsync(ReportPriceSnapshotSchema.UpgradeSql);
         // docs/240 计时工资：仅补新表与新快照列，保留历史报工时长。
         await db.Database.ExecuteSqlRawAsync(@"
@@ -120,6 +122,30 @@ END");
 IF COL_LENGTH('prod_work_order', 'reopened') IS NULL
 BEGIN
     ALTER TABLE prod_work_order ADD reopened BIT NOT NULL CONSTRAINT DF_prod_work_order_reopened DEFAULT 0;
+END");
+
+        // docs/436：首次审核锁价人/时间
+        await db.Database.ExecuteSqlRawAsync(@"
+IF COL_LENGTH('prod_work_order', 'audited_by') IS NULL
+BEGIN
+    ALTER TABLE prod_work_order ADD audited_by BIGINT NULL;
+END");
+        await db.Database.ExecuteSqlRawAsync(@"
+IF COL_LENGTH('prod_work_order', 'audited_at') IS NULL
+BEGIN
+    ALTER TABLE prod_work_order ADD audited_at DATETIME2 NULL;
+END");
+        // 历史已锁价单（0已审核/1报工中/2已结束）缺审核戳：补创建人/创建时间；幂等仅填空
+        await db.Database.ExecuteSqlRawAsync(@"
+IF COL_LENGTH('prod_work_order', 'audited_at') IS NOT NULL
+AND COL_LENGTH('prod_work_order', 'audited_by') IS NOT NULL
+BEGIN
+    UPDATE prod_work_order
+    SET audited_by = created_by,
+        audited_at = ISNULL(created_at, SYSDATETIME())
+    WHERE status IN (0, 1, 2)
+      AND audited_at IS NULL
+      AND created_by IS NOT NULL;
 END");
 
         // 工单打印标签设置（工厂级）
@@ -556,7 +582,7 @@ BEGIN
     ALTER TABLE sys_factory ADD trial_cleaned_at_utc DATETIME2 NULL;
 END");
 
-        // MCP 每厂一把 Key（docs/96）
+        // MCP 每厂一把 Key（docs/96；明文供管理员再复制报文）
         await db.Database.ExecuteSqlRawAsync(@"
 IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'sys_mcp_key')
 BEGIN
@@ -565,12 +591,17 @@ BEGIN
         factory_id   BIGINT NOT NULL,
         key_alias    NVARCHAR(64) NOT NULL,
         api_key_hash NVARCHAR(255) NOT NULL,
+        api_key_plain NVARCHAR(128) NULL,
         status       TINYINT NOT NULL CONSTRAINT DF_sys_mcp_key_status DEFAULT 1,
         expire_at    DATETIME2 NULL,
         created_at   DATETIME2 NOT NULL CONSTRAINT DF_sys_mcp_key_ca DEFAULT SYSDATETIME(),
         remark       NVARCHAR(255) NULL
     );
     CREATE INDEX ix_mcp_key_factory ON sys_mcp_key(factory_id);
+END
+IF COL_LENGTH('sys_mcp_key', 'api_key_plain') IS NULL
+BEGIN
+    ALTER TABLE sys_mcp_key ADD api_key_plain NVARCHAR(128) NULL;
 END");
 
         // MCP 会话身份绑定（docs/97，无短信）

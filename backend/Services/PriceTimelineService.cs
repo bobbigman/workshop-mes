@@ -1,3 +1,4 @@
+using ahu.MicrosoftMes.Common;
 using ahu.MicrosoftMes.Data;
 using ahu.MicrosoftMes.Models;
 using Microsoft.EntityFrameworkCore;
@@ -56,7 +57,13 @@ public class PriceTimelineService(AppDbContext db)
         await db.SaveChangesAsync();
     }
 
-    public sealed record Selection(OperationPriceList Table, Dictionary<long,SysCustomField> Fields, long? Revision);
+    public sealed record Selection(
+        OperationPriceList Table,
+        Dictionary<long, SysCustomField> Fields,
+        long? Revision,
+        string ProductCode,
+        string OperationName);
+
     public async Task<ProcessingQuote> QuoteAsync(long factoryId, long productId, long operationId, long reportUnitId,
         Dictionary<long,string?> values, DateTime date, OperationPriceList? proposed = null,
         Dictionary<long,SysCustomField>? proposedFields = null)
@@ -65,6 +72,19 @@ public class PriceTimelineService(AppDbContext db)
     public async Task<Selection> SelectAsync(long factoryId, long productId, long operationId, DateTime date, OperationPriceList? proposed = null,
         Dictionary<long,SysCustomField>? proposedFields = null)
     {
+        var productCode = await db.Products.AsNoTracking()
+            .Where(p => p.Id == productId && p.FactoryId == factoryId)
+            .Select(p => p.Code)
+            .FirstOrDefaultAsync();
+        if (string.IsNullOrWhiteSpace(productCode))
+            throw ThrowHelper.BizUser("取价时指定的产品不存在或不属于本厂。请到「产品定义」确认该产品。");
+        var operationName = await db.Operations.AsNoTracking()
+            .Where(o => o.Id == operationId && o.FactoryId == factoryId)
+            .Select(o => o.Name)
+            .FirstOrDefaultAsync();
+        if (string.IsNullOrWhiteSpace(operationName))
+            throw ThrowHelper.BizUser("取价时指定的工序不存在或不属于本厂。请到「工序」确认该工序。");
+
         var day = Day(date);
         var revisions = await db.OperationPriceRevisions.AsNoTracking().Where(x => x.FactoryId == factoryId && x.OperationId == operationId
             && !x.Superseded && x.EffectiveFrom <= day && (x.EffectiveTo == null || x.EffectiveTo >= day)).ToListAsync();
@@ -83,14 +103,16 @@ public class PriceTimelineService(AppDbContext db)
             && x.EffectiveFrom <= day && (x.EffectiveTo == null || x.EffectiveTo >= day)))
             candidates.Add((root, await new OperationAttributeService(db).FieldsAsync(factoryId, operationId), null));
         if (proposed != null) candidates.Add((proposed, proposedFields!, null));
-        var selected = OperationPriceListService.SelectTable(candidates.Select(x => x.Table), productId, operationId);
+        var selected = OperationPriceListService.SelectTable(candidates.Select(x => x.Table), productId, operationId, productCode, operationName);
         var candidate = candidates.Single(x => ReferenceEquals(x.Table, selected));
-        return new(candidate.Table,candidate.Fields,candidate.Revision);
+        return new(candidate.Table, candidate.Fields, candidate.Revision, productCode, operationName);
     }
 
     public static ProcessingQuote Calculate(Selection candidate,long productId,long reportUnitId,Dictionary<long,string?> values,DateTime date)
     {
-        var quote = OperationPriceListService.Calculate(candidate.Table, productId, reportUnitId, values, candidate.Fields, Day(date));
+        var quote = OperationPriceListService.Calculate(
+            candidate.Table, productId, reportUnitId, values, candidate.Fields, Day(date),
+            candidate.ProductCode, candidate.OperationName);
         quote.PriceRevisionId = candidate.Revision;
         quote.FieldDefinitions = Clone(candidate.Fields);
         Sign(quote);

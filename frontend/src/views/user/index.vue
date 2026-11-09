@@ -1,15 +1,26 @@
 <template>
   <div>
     <div class="toolbar">
-      <el-input v-model="keyword" placeholder="搜索姓名、登录账号或微信号，回车即可筛选" clearable style="width:220px" @keyup.enter="load" />
-      <el-select v-model="userTypeFilter" clearable placeholder="人员类型" style="width:140px" @change="load">
+      <el-input v-model="keyword" placeholder="搜索姓名、登录账号或微信号，回车即可筛选" clearable style="width:220px" @keyup.enter="onSearch" />
+      <el-select v-model="userTypeFilter" clearable placeholder="人员类型" style="width:140px" @change="onSearch">
         <el-option v-for="o in USER_TYPE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
       </el-select>
-      <el-button type="primary" @click="load">查询</el-button>
+      <el-button type="primary" @click="onSearch">查询</el-button>
       <el-button type="success" @click="openCreate">+ 创建用户</el-button>
       <ImportDialog entity-type="user" title="导入用户" @done="load" />
+      <el-button @click="onToolbarEdit">编辑</el-button>
+      <el-button @click="onToolbarQr">二维码</el-button>
+      <el-button @click="onToolbarToggle">{{ selectedOne?.status === 1 ? '停用' : (selectedOne ? '启用' : '启用/停用') }}</el-button>
+      <el-button type="danger" @click="onToolbarDelete">删除</el-button>
     </div>
-    <mes-table table-key="views/user/index:1" :data="list">
+    <mes-table
+      ref="tableRef"
+      table-key="views/user/index:1"
+      :data="list"
+      @selection-change="onSelectionChange"
+      @row-click="onRowClick"
+    >
+      <el-table-column type="selection" width="48" fixed />
       <el-table-column prop="account" label="账号" />
       <el-table-column prop="name" label="姓名" />
       <el-table-column prop="phone" label="手机号" />
@@ -39,20 +50,8 @@
           <el-tag v-else type="info" size="small">停用</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="280">
-        <template #default="{ row }">
-          <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
-          <el-button link type="primary" @click="openQr(row)">二维码</el-button>
-          <el-button
-            link
-            :type="row.status === 1 ? 'warning' : 'success'"
-            :disabled="row.status === 1 && isSelf(row)"
-            @click="onToggleStatus(row)"
-          >{{ row.status === 1 ? '停用' : '启用' }}</el-button>
-          <el-button link type="danger" @click="onDelete(row)">删除</el-button>
-        </template>
-      </el-table-column>
     </mes-table>
+    <mes-pager v-model:page="page" v-model:page-size="pageSize" :total="total" @change="load" />
 
     <el-dialog v-model="dlg" :title="editingId ? '编辑用户' : '创建用户'" width="480px">
       <el-form :model="form" label-width="110px">
@@ -121,7 +120,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import QRCode from 'qrcode'
 import {
   getUserList, createUser, updateUser, deleteUser, setUserStatus,
@@ -132,10 +131,13 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { USER_TYPE_OPTIONS, userTypeLabel, userTypeTagType } from '@/constants/userType'
 
 const list = ref([]), keyword = ref(''), userTypeFilter = ref(null), dlg = ref(false), editingId = ref(null)
+const page = ref(1), pageSize = ref(20), total = ref(0)
 const emptyForm = () => ({ account: '', phone: '', wechatId: '', wecomUserId: '', name: '', role: 1, userType: 0, wageCoeff: 1, password: '', deptIds: [] })
 const form = ref(emptyForm())
 const deptOptions = ref([])
 const currentUserId = Number(localStorage.getItem('userId') || 0)
+const tableRef = ref(null), selectedRows = ref([])
+const selectedOne = computed(() => selectedRows.value.length === 1 ? selectedRows.value[0] : null)
 
 function isSelf(row) {
   return !!currentUserId && Number(row.id) === currentUserId
@@ -154,11 +156,37 @@ onMounted(async () => {
 })
 
 async function load() {
-  const params = { keyword: keyword.value, page: 1, pageSize: 100 }
+  const params = { keyword: keyword.value, page: page.value, pageSize: pageSize.value }
   if (userTypeFilter.value != null) params.userType = userTypeFilter.value
   const res = await getUserList(params)
   list.value = res.data.list || []
+  total.value = res.data.total || 0
+  selectedRows.value = []
+  await nextTick()
+  tableRef.value?.clearSelection?.()
 }
+
+function onSearch() {
+  page.value = 1
+  load()
+}
+
+function onSelectionChange(rows) { selectedRows.value = rows || [] }
+function onRowClick(row, column, event) {
+  if (event?.target?.closest?.('button, a, .el-checkbox, input, label')) return
+  const table = tableRef.value
+  if (!table?.toggleRowSelection) return
+  table.clearSelection?.(); table.toggleRowSelection(row, true)
+}
+function requireOne(actionLabel) {
+  if (selectedRows.value.length > 1) { ElMessage.warning(`「${actionLabel}」一次只能选一条`); return null }
+  if (!selectedOne.value) { ElMessage.warning(`请先勾选一条用户再${actionLabel}`); return null }
+  return selectedOne.value
+}
+function onToolbarEdit() { const row = requireOne('编辑'); if (row) openEdit(row) }
+function onToolbarQr() { const row = requireOne('二维码'); if (row) openQr(row) }
+function onToolbarToggle() { const row = requireOne(selectedOne.value?.status === 1 ? '停用' : '启用'); if (row) onToggleStatus(row) }
+function onToolbarDelete() { const row = requireOne('删除'); if (row) onDelete(row) }
 
 function formatCoeff(v) {
   const n = Number(v)
@@ -236,6 +264,20 @@ async function onToggleStatus(row) {
   await load()
 }
 
+/** 本机回环地址打进二维码后，手机扫到的是手机自己，必定打不开 */
+function isLoopbackHost(hostname) {
+  const h = String(hostname || '').toLowerCase()
+  return h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h === '::1'
+}
+
+function assertLanOriginForQr() {
+  if (!isLoopbackHost(window.location.hostname)) return true
+  ElMessage.error(
+    '码里是本机地址，手机扫不开。请把浏览器地址改成电脑局域网地址（例 https://192.168.3.7:5173）再打开用户管理出码。'
+  )
+  return false
+}
+
 function buildLoginUrl(loginPath) {
   const origin = window.location.origin
   const path = (loginPath || '').startsWith('/') ? loginPath : `/${loginPath || ''}`
@@ -254,6 +296,7 @@ async function renderQr(info) {
 }
 
 async function openQr(row) {
+  if (!assertLanOriginForQr()) return
   qrDlg.value = true
   qrLoading.value = true
   qrDataUrl.value = ''
@@ -277,6 +320,7 @@ function onQrClosed() {
 }
 
 async function onCopyLink() {
+  if (!assertLanOriginForQr()) return
   const text = loginUrl.value
   if (!text) return
   try {
@@ -288,6 +332,7 @@ async function onCopyLink() {
 }
 
 async function onRegenerate() {
+  if (!assertLanOriginForQr()) return
   if (!qrInfo.value?.userId) return
   await ElMessageBox.confirm(
     '重新生成后，旧二维码立刻失效，已贴工牌/存手机的需替换。确定？',
@@ -305,6 +350,7 @@ async function onRegenerate() {
 }
 
 function onExportPng() {
+  if (!assertLanOriginForQr()) return
   if (!qrDataUrl.value) return
   const name = (qrInfo.value?.name || 'user').replace(/[\\/:*?"<>|]/g, '_')
   const a = document.createElement('a')
@@ -314,6 +360,7 @@ function onExportPng() {
 }
 
 function onPrintQr() {
+  if (!assertLanOriginForQr()) return
   if (!qrDataUrl.value || !qrInfo.value) return
   const name = qrInfo.value.name || ''
   const account = qrInfo.value.account || ''

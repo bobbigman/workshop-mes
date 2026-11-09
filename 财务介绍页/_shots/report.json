@@ -1,0 +1,131 @@
+{
+  "src": "D:\\workspace\\pkub\\bee\\财务介绍页\\财务介绍.html",
+  "url": "file:///D:/workspace/pkub/bee/%E8%B4%A2%E5%8A%A1%E4%BB%8B%E7%BB%8D%E9%A1%B5/%E8%B4%A2%E5%8A%A1%E4%BB%8B%E7%BB%8D.html",
+  "outdir": "D:\\workspace\\pkub\\bee\\财务介绍页\\_shots",
+  "include": [
+    "lint",
+    "screenshots",
+    "structure"
+  ],
+  "shots": {
+    "desktop": {
+      "screenshot": "D:\\workspace\\pkub\\bee\\财务介绍页\\_shots\\财务介绍_desktop.jpg",
+      "screenshotBytes": 122435,
+      "truncated": false,
+      "structure": {
+        "title": "车间报工系统 · 财务介绍",
+        "firstH1": "月底算工资，能不能不加班？",
+        "viewport": {
+          "w": 1440,
+          "h": 900
+        },
+        "fullpage": {
+          "w": 1440,
+          "h": 2583
+        },
+        "counts": {
+          "section": 3,
+          "h1": 1,
+          "h2": 3,
+          "img": 3,
+          "canvas": 0,
+          "svg": 3,
+          "links": 0,
+          "buttons": 1
+        }
+      },
+      "consoleErrors": [],
+      "consoleWarnings": [],
+      "horizontalOverflow": [],
+      "resourceErrors": [],
+      "reportSource": "cdp"
+    },
+    "mobile": {
+      "screenshot": "D:\\workspace\\pkub\\bee\\财务介绍页\\_shots\\财务介绍_mobile.jpg",
+      "screenshotBytes": 150196,
+      "truncated": false,
+      "structure": {
+        "title": "车间报工系统 · 财务介绍",
+        "firstH1": "月底算工资，能不能不加班？",
+        "viewport": {
+          "w": 390,
+          "h": 844
+        },
+        "fullpage": {
+          "w": 390,
+          "h": 3294
+        },
+        "counts": {
+          "section": 3,
+          "h1": 1,
+          "h2": 3,
+          "img": 3,
+          "canvas": 0,
+          "svg": 3,
+          "links": 0,
+          "buttons": 1
+        }
+      },
+      "consoleErrors": [],
+      "consoleWarnings": [],
+      "horizontalOverflow": [],
+      "resourceErrors": [],
+      "reportSource": "cdp"
+    }
+  },
+  "engine": "chrome_cli",
+  "chromiumExec": "C:\\Users\\bob/AppData/Local/ms-playwright\\chromium_headless_shell-1234\\chrome-headless-shell-win64\\chrome-headless-shell.exe",
+  "engineDegraded": true,
+  "engineDegradedReason": "playwright 未装",
+  "elapsedSec": 8.45,
+  "schemaVersion": 2,
+  "status": "pass",
+  "engineInfo": {
+    "name": "chrome_cli",
+    "degraded": true,
+    "degradedReasons": [
+      "playwright 未装"
+    ]
+  },
+  "input": {
+    "original": "D:\\workspace\\pkub\\bee\\财务介绍页\\财务介绍.html",
+    "resolvedPath": "D:\\workspace\\pkub\\bee\\财务介绍页\\财务介绍.html",
+    "baseUrl": "file:///D:/workspace/pkub/bee/%E8%B4%A2%E5%8A%A1%E4%BB%8B%E7%BB%8D%E9%A1%B5/%E8%B4%A2%E5%8A%A1%E4%BB%8B%E7%BB%8D.html",
+    "protocol": "file",
+    "cwd": "D:\\workspace\\pkub\\bee",
+    "mediaMode": {
+      "reducedMotion": true
+    }
+  },
+  "artifacts": {
+    "screenshots": [
+      {
+        "viewport": "desktop",
+        "path": "D:\\workspace\\pkub\\bee\\财务介绍页\\_shots\\财务介绍_desktop.jpg",
+        "size": 122435,
+        "visualCoverage": {
+          "complete": true,
+          "reason": null
+        }
+      },
+      {
+        "viewport": "mobile",
+        "path": "D:\\workspace\\pkub\\bee\\财务介绍页\\_shots\\财务介绍_mobile.jpg",
+        "size": 150196,
+        "visualCoverage": {
+          "complete": true,
+          "reason": null
+        }
+      }
+    ]
+  },
+  "summary": {
+    "blocker": 0,
+    "error": 0,
+    "warning": 0,
+    "info": 0
+  },
+  "findings": [],
+  "prioritizedActions": [],
+  "reportPath": "D:\\workspace\\pkub\\bee\\财务介绍页\\_shots\\report.json"
+}

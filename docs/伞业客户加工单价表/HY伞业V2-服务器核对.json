@@ -1,0 +1,262 @@
+{
+  "date": "2026-10-23",
+  "tried": [
+    "https://103.39.222.133:11302",
+    "https://mes.webok.net:11302"
+  ],
+  "login": {
+    "base": "https://103.39.222.133:11302",
+    "status": 200,
+    "code": 0,
+    "msg": "ok",
+    "needSelect": true,
+    "candidates": [
+      {
+        "factoryCode": "CJ001",
+        "factoryName": "太阳神厨具五金厂"
+      },
+      {
+        "factoryCode": "CJ002",
+        "factoryName": "新厨具五金厂"
+      },
+      {
+        "factoryCode": "F001",
+        "factoryName": "黑湖川菜馆"
+      },
+      {
+        "factoryCode": "HY001",
+        "factoryName": "HY伞业"
+      },
+      {
+        "factoryCode": "HY002",
+        "factoryName": "HY伞业V2"
+      }
+    ],
+    "selectFactory": {
+      "status": 200,
+      "code": 0,
+      "msg": "ok",
+      "factoryCode": "HY002",
+      "factoryName": "HY伞业V2",
+      "licenseTier": "trial"
+    }
+  },
+  "license": {
+    "code": 0,
+    "msg": "ok",
+    "data": {
+      "licenseTier": "trial",
+      "effectiveTier": "trial",
+      "expiresAtUtc": null,
+      "lastOkUtc": null,
+      "status": "disabled",
+      "message": ""
+    }
+  },
+  "operations": {
+    "status": 200,
+    "code": 0,
+    "msg": "ok",
+    "data": {
+      "list": [
+        {
+          "id": 37,
+          "code": "01",
+          "name": "大裁",
+          "deptNames": "大裁组",
+          "defectNames": "尺寸不符、布面疵点"
+        },
+        {
+          "id": 38,
+          "code": "02",
+          "name": "包边",
+          "deptNames": "合片组",
+          "defectNames": ""
+        },
+        {
+          "id": 39,
+          "code": "02-32",
+          "name": "拉边",
+          "deptNames": "拉边组",
+          "defectNames": ""
+        },
+        {
+          "id": 40,
+          "code": "03",
+          "name": "验布",
+          "deptNames": "拉边组",
+          "defectNames": "布面疵点、色差"
+        },
+        {
+          "id": 41,
+          "code": "04",
+          "name": "小裁",
+          "deptNames": "小裁组",
+          "defectNames": ""
+        },
+        {
+          "id": 42,
+          "code": "05",
+          "name": "合片",
+          "deptNames": "合片组",
+          "defectNames": "跳线脱线"
+        },
+        {
+          "id": 43,
+          "code": "06",
+          "name": "打带",
+          "deptNames": "打顶打带组",
+          "defectNames": ""
+        },
+        {
+          "id": 44,
+          "code": "07",
+          "name": "打顶",
+          "deptNames": "打顶打带组",
+          "defectNames": "布面疵点、印花不良"
+        },
+        {
+          "id": 45,
+          "code": "08",
+          "name": "打珠尾",
+          "deptNames": "打珠尾组",
+          "defectNames": "伞珠脱落"
+        },
+        {
+          "id": 46,
+          "code": "09",
+          "name": "缝伞",
+          "deptNames": "缝伞组",
+          "defectNames": ""
+        },
+        {
+          "id": 47,
+          "code": "10",
+          "name": "品检",
+          "deptNames": "品检组",
+          "defectNames": "伞骨变形断裂、开合卡涩、伞面破损"
+        },
+        {
+          "id": 48,
+          "code": "11",
+          "name": "包装",
+          "deptNames": "缝伞组",
+          "defectNames": "包装破损、附件缺失"
+        },
+        {
+          "id": 49,
+          "code": "12",
+          "name": "配件",
+          "deptNames": "配件组",
+          "defectNames": ""
+        },
+        {
+          "id": 50,
+          "code": "ZSB",
+          "name": "装伞柄",
+          "deptNames": "打顶打带组",
+          "defectNames": "伞柄松动"
+        }
+      ],
+      "total": 14
+    }
+  },
+  "products": {
+    "status": 200,
+    "code": 0,
+    "msg": "ok",
+    "data": {
+      "list": [
+        {
+          "unitId": 18,
+          "isRiskFocus": false,
+          "id": 22,
+          "code": "HY-001",
+          "name": "三折晴雨伞（黑胶防紫外线）",
+          "unitName": "把",
+          "routingName": "华煜晴雨伞标准线",
+          "supplier": null,
+          "price": null
+        },
+        {
+          "unitId": 18,
+          "isRiskFocus": false,
+          "id": 21,
+          "code": "HY-002",
+          "name": "三折全自动晴雨伞",
+          "unitName": "把",
+          "routingName": "华煜晴雨伞标准线",
+          "supplier": null,
+          "price": null
+        },
+        {
+          "unitId": 17,
+          "isRiskFocus": false,
+          "id": 20,
+          "code": "HY-003",
+          "name": "二折叠儿童伞",
+          "unitName": "套",
+          "routingName": "华煜晴雨伞标准线",
+          "supplier": "",
+          "price": null
+        },
+        {
+          "unitId": 16,
+          "isRiskFocus": false,
+          "id": 19,
+          "code": "HY-004",
+          "name": "hy-二次包装",
+          "unitName": "件",
+          "routingName": "二次包装",
+          "supplier": "",
+          "price": null
+        }
+      ],
+      "total": 4
+    }
+  },
+  "units": {
+    "status": 200,
+    "code": 0,
+    "msg": "ok",
+    "data": [
+      {
+        "id": 16,
+        "name": "件"
+      },
+      {
+        "id": 17,
+        "name": "套"
+      },
+      {
+        "id": 18,
+        "name": "把"
+      }
+    ]
+  },
+  "routings": {
+    "status": 200,
+    "code": 0,
+    "msg": "ok",
+    "data": {
+      "list": [
+        {
+          "id": 10,
+          "code": "RT-HY",
+          "name": "华煜晴雨伞标准线",
+          "stepNames": "大裁 → 包边 → 验布 → 小裁 → 打顶 → 合片 → 打带 → 配件 → 打珠尾 → 缝伞 → 品检 → 装伞柄 → 包装"
+        },
+        {
+          "id": 9,
+          "code": "003",
+          "name": "二次包装",
+          "stepNames": "品检 → 包装"
+        }
+      ],
+      "total": 2
+    }
+  },
+  "errors": [],
+  "base_ok": "https://103.39.222.133:11302",
+  "hasToken": true
+}
