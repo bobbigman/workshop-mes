@@ -125,7 +125,7 @@ public class PrintSettingService : IPrintSettingService
             var list = JsonSerializer.Deserialize<List<long>>(raw);
             return list?.Where(id => id > 0).Distinct().ToList() ?? new List<long>();
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             throw ThrowHelper.Biz(nameof(ParseCustomFieldIds),
                 $"打印自定义字段的设置格式读取失败。请检查设置内容的格式是否正确，参照说明修正后重新保存。");

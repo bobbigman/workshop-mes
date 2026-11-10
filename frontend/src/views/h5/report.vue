@@ -556,24 +556,31 @@ onMounted(async () => {
   if (canAssign) await loadAssignWorkers()
 })
 
-/** 扫工序码带入的 op：合法且在工单工序里 → 预选；否则退回手动选，不报错 */
+/** 扫工序码带入的 op：合法且在工单工序里 → 预选；仅一道可选 → 自动选中；否则手选 */
 async function tryPreselectOp() {
   if (!detail.value || loadError.value) return
+  const tasks = detail.value.tasks || []
   if (route.query.task != null) {
-    const task = (detail.value.tasks || []).find(t => String(t.id) === String(route.query.task))
-    if (!task) return
-    form.value.operationId = String(task.operationId)
-    await onOpChange()
-    return
+    const task = tasks.find(t => String(t.id) === String(route.query.task))
+    if (task) {
+      form.value.operationId = String(task.operationId)
+      await onOpChange()
+      return
+    }
   }
   const raw = route.query.op
-  if (raw == null || String(raw).trim() === '') return
-  const id = Number(raw)
-  if (!Number.isInteger(id) || id <= 0) return
-  const hit = (detail.value.tasks || []).some(t => Number(t.operationId) === id)
-  if (!hit) return
-  form.value.operationId = String(id)
-  await onOpChange()
+  if (raw != null && String(raw).trim() !== '') {
+    const id = Number(raw)
+    if (Number.isInteger(id) && id > 0 && tasks.some(t => Number(t.operationId) === id)) {
+      form.value.operationId = String(id)
+      await onOpChange()
+      return
+    }
+  }
+  if (tasks.length === 1) {
+    form.value.operationId = String(tasks[0].operationId)
+    await onOpChange()
+  }
 }
 
 /** 工单列表「派工」入口：?assign=1 时预选首道可派工序并展开派工面板 */

@@ -978,13 +978,13 @@ public class SupportDocumentService
     private static IEnumerable<string> SafeEnumerateDirectories(string root)
     {
         try { return Directory.EnumerateDirectories(root); }
-        catch (Exception ex) { throw ThrowHelper.Biz(nameof(SafeEnumerateDirectories), $"读取知识目录下的子文件夹时出错，请检查该目录的访问权限是否正常、磁盘空间是否充足。"); }
+        catch (Exception) { throw ThrowHelper.Biz(nameof(SafeEnumerateDirectories), $"读取知识目录下的子文件夹时出错，请检查该目录的访问权限是否正常、磁盘空间是否充足。"); }
     }
 
     private static IEnumerable<string> SafeEnumerateFiles(string root)
     {
         try { return Directory.EnumerateFiles(root); }
-        catch (Exception ex) { throw ThrowHelper.Biz(nameof(SafeEnumerateFiles), $"读取知识目录下的文件列表时出错，请检查该目录的访问权限是否正常、是否存在损坏文件。"); }
+        catch (Exception) { throw ThrowHelper.Biz(nameof(SafeEnumerateFiles), $"读取知识目录下的文件列表时出错，请检查该目录的访问权限是否正常、是否存在损坏文件。"); }
     }
 
     private static string ReadUtf8(string fullPath)

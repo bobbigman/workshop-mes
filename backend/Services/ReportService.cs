@@ -1731,10 +1731,11 @@ public class ReportService : IReportService
         var cfg = await _upstreamSetting.GetOrDefaultAsync(order.FactoryId);
         var hard = ReportUpstreamSettingService.IsHardForOp(cfg, operationId);
         if (hard)
-            throw ThrowHelper.Biz(where, $"上一道【{hit.PrevOpName}】还没有复核通过足够的数量，你现在还不能报工。请等上一道工序复核完成后再来报工。");
+            throw ThrowHelper.Biz(where,
+                $"上一道【{hit.PrevOpName}】复核通过只有 {hit.PrevApproved} 件；本道已报 {hit.Occupied}，这次再报 {hit.AddGoodQty}（合计 {hit.Occupied + hit.AddGoodQty}）。现在还不能报工，请等上一道复核够了再来。");
         if (confirmUpstream) return;
         throw ThrowHelper.BizCode(
-            $"上一道【{hit.PrevOpName}】复核通过的数量不太够，你确定要继续报工吗？不确定的话请先跟班组长确认。",
+            $"上一道【{hit.PrevOpName}】复核通过只有 {hit.PrevApproved} 件；本道已报 {hit.Occupied}，这次再报 {hit.AddGoodQty}（合计 {hit.Occupied + hit.AddGoodQty}）。数量不太够，确定要继续吗？",
             UpstreamSoftConfirmCode);
     }
 
@@ -1745,8 +1746,8 @@ public class ReportService : IReportService
         bool confirmUpstream,
         string where)
     {
-        var softNames = new List<string>();
-        var hardNames = new List<string>();
+        var softHits = new List<UpstreamHit>();
+        var hardHits = new List<UpstreamHit>();
         var cfg = await _upstreamSetting.GetOrDefaultAsync(order.FactoryId);
 
         foreach (var op in pending)
@@ -1758,31 +1759,38 @@ public class ReportService : IReportService
             var hit = await EvaluateUpstreamAsync(order, op.OperationId, add);
             if (hit == null) continue;
             if (ReportUpstreamSettingService.IsHardForOp(cfg, op.OperationId))
-                hardNames.Add(hit.PrevOpName);
+                hardHits.Add(hit);
             else
-                softNames.Add(hit.PrevOpName);
+                softHits.Add(hit);
         }
 
-        if (hardNames.Count > 0)
+        if (hardHits.Count > 0)
         {
-            var names = string.Join("、", hardNames.Distinct());
-            throw ThrowHelper.Biz(where, $"前面几道【{names}】还没有复核通过足够的数量，你现在还不能报工。请等前面的工序都复核完成后再来报工。");
+            throw ThrowHelper.Biz(where,
+                $"前面几道数量不够：{FormatUpstreamHits(hardHits)}。现在还不能报工，请等前面工序复核够了再来。");
         }
-        if (softNames.Count == 0 || confirmUpstream) return;
-        {
-            var names = string.Join("、", softNames.Distinct());
-            throw ThrowHelper.BizCode(
-                $"前面几道【{names}】复核通过的数量不太够，你确定要继续报工吗？不确定的话请先跟班组长确认。",
-                UpstreamSoftConfirmCode);
-        }
+        if (softHits.Count == 0 || confirmUpstream) return;
+        throw ThrowHelper.BizCode(
+            $"前面几道数量不太够：{FormatUpstreamHits(softHits)}。确定要继续吗？",
+            UpstreamSoftConfirmCode);
     }
+
+    private static string FormatUpstreamHits(List<UpstreamHit> hits) =>
+        string.Join("；", hits
+            .GroupBy(h => h.PrevOpName)
+            .Select(g => g.First())
+            .Select(h =>
+                $"【{h.PrevOpName}】复核通过只有 {h.PrevApproved} 件，本道已报 {h.Occupied}、这次再报 {h.AddGoodQty}（合计 {h.Occupied + h.AddGoodQty}）"));
 
     private sealed class UpstreamHit
     {
         public string PrevOpName { get; set; } = "";
+        public int PrevApproved { get; set; }
+        public int Occupied { get; set; }
+        public int AddGoodQty { get; set; }
     }
 
-    /// <summary>未超限或首道/无法判定顺序 → null；超限 → 含上一道名称。</summary>
+    /// <summary>未超限或首道/无法判定顺序 → null；超限 → 含上一道名称与数量。</summary>
     private async Task<UpstreamHit?> EvaluateUpstreamAsync(ProdWorkOrder order, long operationId, int addGoodQty)
     {
         var ops = await LoadOpSequenceAsync(order);
@@ -1812,7 +1820,13 @@ public class ReportService : IReportService
             .Where(o => o.Id == prev.OperationId)
             .Select(o => o.Name)
             .FirstOrDefaultAsync();
-        return new UpstreamHit { PrevOpName = string.IsNullOrWhiteSpace(prevName) ? "上工序" : prevName };
+        return new UpstreamHit
+        {
+            PrevOpName = string.IsNullOrWhiteSpace(prevName) ? "上工序" : prevName,
+            PrevApproved = limit,
+            Occupied = occupied,
+            AddGoodQty = addGoodQty
+        };
     }
 
     /// <summary>工序顺序：优先工单任务行，否则产品工艺路线（与 ReviewService 同口径）。</summary>

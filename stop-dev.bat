@@ -12,9 +12,11 @@ for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":8080" ^| findstr "LISTENING
   taskkill /F /T /PID %%p >nul 2>&1
 )
 taskkill /F /T /IM WorkshopMes.exe >nul 2>&1
+taskkill /F /FI "WINDOWTITLE eq MES-dev*" >nul 2>&1
+taskkill /F /FI "WINDOWTITLE eq MES-开发*" >nul 2>&1
 taskkill /F /FI "WINDOWTITLE eq MES-后端*" >nul 2>&1
 taskkill /F /FI "WINDOWTITLE eq *dotnet run*" >nul 2>&1
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process -Filter \"Name='dotnet.exe'\" | Where-Object { $_.CommandLine -match 'dotnet\s+run' -and $_.CommandLine -match '8080' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\kill-dotnet-run-8080.ps1"
 
 set /a WAIT_N=0
 :wait_backend
@@ -38,6 +40,8 @@ for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":5173" ^| findstr "LISTENING
   taskkill /F /T /PID %%p >nul 2>&1
 )
 taskkill /F /FI "WINDOWTITLE eq MES-前端*" >nul 2>&1
+taskkill /F /FI "WINDOWTITLE eq MES-开发*" >nul 2>&1
+taskkill /F /FI "WINDOWTITLE eq MES-dev*" >nul 2>&1
 
 echo.
 echo 已停止。现在可以用 Visual Studio 生成/F5。

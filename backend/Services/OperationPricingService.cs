@@ -36,7 +36,7 @@ public class OperationPricingService(AppDbContext db)
     public static T Read<T>(string value)
     {
         try { return JsonSerializer.Deserialize<T>(value, Json) ?? throw ThrowHelper.BizUser("这张价目表没有任何价格行可供计算。请到「工序价目表」打开该表，补充至少一条基础价或最终价行。"); }
-        catch (JsonException ex) { throw ThrowHelper.BizUser($"这张价目表的报价资料损坏，无法正常读取。请联系技术人员检查该价目表数据是否完整，必要时重建该表。"); }
+        catch (JsonException) { throw ThrowHelper.BizUser($"这张价目表的报价资料损坏，无法正常读取。请联系技术人员检查该价目表数据是否完整，必要时重建该表。"); }
     }
     public static string Write<T>(T value) => JsonSerializer.Serialize(value, Json);
 
