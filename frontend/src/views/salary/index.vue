@@ -7,7 +7,7 @@
     </el-tabs>
 
     <template v-if="mainTab === 'statements'">
-    <div class="toolbar">
+    <div class="toolbar sticky-toolbar">
       <el-select v-model="q.periodType" style="width:100px" @change="onPeriodChange">
         <el-option :value="1" label="按月" />
         <el-option :value="2" label="按周" />
@@ -29,8 +29,8 @@
       <el-select v-model="q.userType" clearable placeholder="人员类型" style="width:140px" @change="onQuery">
         <el-option v-for="o in USER_TYPE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
       </el-select>
-      <el-button type="primary" @click="onQuery">查询</el-button>
-      <el-button type="success" @click="openGen">生成工资单</el-button>
+      <el-button @click="onQuery">查询</el-button>
+      <el-button @click="openGen">生成工资单</el-button>
       <el-button
         type="warning"
         :disabled="isNarrow || !selectedIds.length"
@@ -136,7 +136,7 @@
           end-placeholder="报工结束日期"
           style="width:260px"
         />
-        <el-button type="primary" @click="loadItems">查明细</el-button>
+        <el-button @click="loadItems">查明细</el-button>
         <el-button @click="onExportItems">导出明细 CSV</el-button>
       </div>
       <mes-table table-key="views/salary/index:2" :data="itemRows" size="small" height="calc(50vh - 120px)">
@@ -168,7 +168,7 @@
     <template v-else>
       <div class="wo-block">
         <div class="wo-title">按工单查累计工资</div>
-        <div class="toolbar">
+        <div class="toolbar sticky-toolbar">
           <el-select
             v-model="woOrderNo"
             filterable
@@ -185,7 +185,7 @@
               :value="o.orderNo"
             />
           </el-select>
-          <el-button type="primary" :loading="woLoading" @click="onQueryWorkOrder">查询</el-button>
+          <el-button :loading="woLoading" @click="onQueryWorkOrder">查询</el-button>
         </div>
         <template v-if="woSummary">
           <div class="wo-meta">

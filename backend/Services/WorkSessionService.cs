@@ -42,8 +42,8 @@ public class WorkSessionService(AppDbContext db)
         if (order.Status >= 2) throw ThrowHelper.BizUser("这张工单已经做完或者取消了，不能再开工，如有误找班组长或管理员处理。");
         if (!await db.WorkOrderOperations.AnyAsync(x => x.WorkOrderId == orderId && x.OperationId == operationId))
             throw ThrowHelper.BizUser("该工序不属于此工单");
-        if (!await ReportPermissionHelper.CanReportOperationAsync(db, userId, user.Role, operationId))
-            throw ThrowHelper.BizUser("无报工权限：您不在该工序的报工权限部门内");
+        if (!await ReportPermissionHelper.CanReportOperationAsync(db, userId, user.Role, operationId, orderId))
+            throw ThrowHelper.BizUser("你没有这道工序的报工权限，也没被派到这道活。请找班组长派工给你，或让管理员把你所在部门加到这道工序的报工权限里。");
         var old = await db.WorkSessions.FirstOrDefaultAsync(x => x.FactoryId == user.FactoryId && x.UserId == userId && x.Status == 0);
         if (old?.WorkOrderId == orderId && old.OperationId == operationId)
         {
@@ -128,8 +128,8 @@ public class WorkSessionService(AppDbContext db)
     {
         var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == userId && x.FactoryId == order.FactoryId && x.Status == 1)
             ?? throw ThrowHelper.BizUser($"你的账号信息有问题，可能被停用或不属于这个厂，请找管理员帮你确认一下。");
-        if (!await ReportPermissionHelper.CanReportOperationAsync(db, userId, user.Role, operationId))
-            throw ThrowHelper.BizUser($"你所在部门没有这道工序的报工权限，不能报这道工序，请找班组长确认你应该报哪道工序：{user.Name}。");
+        if (!await ReportPermissionHelper.CanReportOperationAsync(db, userId, user.Role, operationId, order.Id))
+            throw ThrowHelper.BizUser($"你没有这道工序的报工权限，也没被派到这道活。请找班组长派工给你，或让管理员把你所在部门加到这道工序的报工权限里。");
         var session = input.SessionId.HasValue
             ? await db.WorkSessions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == input.SessionId.Value)
             : input.StartTime.HasValue || input.EndTime.HasValue ? null : await db.WorkSessions.AsNoTracking().FirstOrDefaultAsync(x => x.FactoryId == order.FactoryId && x.UserId == userId

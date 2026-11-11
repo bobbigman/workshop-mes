@@ -67,6 +67,7 @@ $env:TEMP = $temp; $env:TMP = $temp   # 否则 adb.log Permission denied，daemo
 | `adb server version X doesn't match client Y` | `Get-Process adb \| Stop-Process -Force` 杀 HonorSuite/HiSuite 旧 server 后再连 |
 | 只有 HDB/MTP，没有 ADB Interface | 装 platform-tools，开 USB 调试（不是只开 HDB） |
 | 锁屏 / 通知栏挡住 | `KEYCODE_WAKEUP`；`cmd statusbar collapse`；人脸/密码锁请用户解锁，不猜密码 |
+| 手机打不开小工单（网站无法打开），电脑服务正常 | **先让用户关 WiFi 再开**再试；别先长排查防火墙/ADB（2026-11-11） |
 
 ## 边界
 

@@ -482,8 +482,8 @@ public class ReportService : IReportService
         }
         else if (hasParticipants)
         {
-            if (!await ReportPermissionHelper.CanReportOperationAsync(_db, currentUserId, user.Role, dto.OperationId))
-                throw ThrowHelper.Biz(where, "你所在的部门没有这道工序的报工权限，不能报工。请联系管理员把你所在部门加到这道工序的报工权限里。");
+            if (!await ReportPermissionHelper.CanReportOperationAsync(_db, currentUserId, user.Role, dto.OperationId, dto.OrderId))
+                throw ThrowHelper.Biz(where, "你没有这道工序的报工权限，也没被派到这道活。请找班组长派工给你，或让管理员把你所在部门加到这道工序的报工权限里。");
             ValidateQty(dto.GoodQty, dto.DefectQty, dto.DefectId, (dto.DurationMinutes ?? 0), where);
             lines = await BuildShareLinesAsync(dto, currentUserId);
             operatorUserId = currentUserId;
@@ -494,8 +494,8 @@ public class ReportService : IReportService
         }
         else
         {
-            if (!await ReportPermissionHelper.CanReportOperationAsync(_db, currentUserId, user.Role, dto.OperationId))
-                throw ThrowHelper.Biz(where, "无报工权限：您不在该工序的报工权限部门内");
+            if (!await ReportPermissionHelper.CanReportOperationAsync(_db, currentUserId, user.Role, dto.OperationId, dto.OrderId))
+                throw ThrowHelper.Biz(where, "你没有这道工序的报工权限，也没被派到这道活。请找班组长派工给你，或让管理员把你所在部门加到这道工序的报工权限里。");
             ValidateQty(dto.GoodQty, dto.DefectQty, dto.DefectId, (dto.DurationMinutes ?? 0), where);
             lines = new List<(long, int, int, long?, int)>
             {
@@ -798,8 +798,8 @@ public class ReportService : IReportService
                 ?? throw ThrowHelper.Biz(nameof(SubmitAsync), "参与人在系统中找不到，请检查人员列表并移除无效人员后重试。");
             if (u.Status != 1)
                 throw ThrowHelper.Biz(nameof(SubmitAsync), $"参与人 {u.Name} 已被停用，无法参与报工；请到人员管理中确认该员工状态，或更换为有效人员。");
-            if (!await ReportPermissionHelper.CanReportOperationAsync(_db, p.UserId, u.Role, dto.OperationId))
-                throw ThrowHelper.Biz(nameof(SubmitAsync), $"这个人没有这道工序的报工权限，不能帮他报工。请联系管理员给他所在部门加上报工权限：{u.Name}");
+            if (!await ReportPermissionHelper.CanReportOperationAsync(_db, p.UserId, u.Role, dto.OperationId, dto.OrderId))
+                throw ThrowHelper.Biz(nameof(SubmitAsync), $"{u.Name}没有这道工序的报工权限，也没被派到这道活。请先派工给他，或让管理员给他所在部门加上报工权限。");
             if (p.DurationMinutes < 0)
                 throw ThrowHelper.Biz(nameof(SubmitAsync), "报工时长不能为负");
             if (p.DurationMinutes > 1440)
@@ -938,8 +938,8 @@ public class ReportService : IReportService
                 throw ThrowHelper.Biz(nameof(SubmitAsync), $"被代报人 {u.Name} 不属于当前工厂，无法为其代报；请确认该人员所属工厂或切换到对应工厂操作。");
             if (u.Status != 1)
                 throw ThrowHelper.Biz(nameof(SubmitAsync), $"被代报人 {u.Name} 已被停用，无法为其代报；请到人员管理中确认该员工状态，或更换为有效人员。");
-            if (!await ReportPermissionHelper.CanReportOperationAsync(_db, a.UserId, u.Role, dto.OperationId))
-                throw ThrowHelper.Biz(nameof(SubmitAsync), $"{u.Name}没有这道工序的报工权限，不能派给他。请联系管理员给他所在部门加上这道工序的报工权限。");
+            if (!await ReportPermissionHelper.CanReportOperationAsync(_db, a.UserId, u.Role, dto.OperationId, dto.OrderId))
+                throw ThrowHelper.Biz(nameof(SubmitAsync), $"{u.Name}没有这道工序的报工权限，也没被派到这道活。请先派工给他，或让管理员给他所在部门加上报工权限。");
             if (groupUserIds != null && !groupUserIds.Contains(a.UserId))
                 throw ThrowHelper.Biz(nameof(SubmitAsync), $"你无权为其他部门的工人代报工，只能代报本部门人员；请确认 {u.Name} 是否属于你的部门。");
 
@@ -1392,8 +1392,8 @@ public class ReportService : IReportService
                     {
                         var target = await _db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == uid && x.FactoryId == order.FactoryId && x.Status == 1)
                             ?? throw ThrowHelper.BizUser("补报人员在系统中不存在、已停用或不属于当前工厂，请到人员管理中核实该员工状态和归属。");
-                        if (!await ReportPermissionHelper.CanReportOperationAsync(_db, uid, target.Role, op.OperationId))
-                            throw ThrowHelper.BizUser($"这个人没有这道工序的报工权限，不能批量帮他报工。请联系管理员给他所在部门加上报工权限：{target.Name}");
+                        if (!await ReportPermissionHelper.CanReportOperationAsync(_db, uid, target.Role, op.OperationId, order.Id))
+                            throw ThrowHelper.BizUser($"{target.Name}没有这道工序的报工权限，也没被派到这道活。请先派工给他，或让管理员给他所在部门加上报工权限。");
                     }
                     var wageCoeff = coeffMap.GetValueOrDefault(uid, 1m);
                     var locked = (await new OperationPricingService(_db).LockedAsync(order.Id,op.OperationId,order.FactoryId,time?.ReportTime ?? now)) with { AppliedWageCoeff = budget.PriceType == 3 ? 1m : wageCoeff };

@@ -65,11 +65,20 @@
         class="toolbar-value"
         @keyup.enter="onSearch"
       />
-      <el-button type="primary" @click="onSearch">查询</el-button>
+      <el-button @click="onSearch">查询</el-button>
       <el-button @click="onReset">重置</el-button>
-      <el-button type="success" @click="openCreate">+ 创建产品</el-button>
+      <el-dropdown trigger="click" @command="onCreateMenu">
+        <el-button>
+          新增<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+        </el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="create">新增</el-dropdown-item>
+            <el-dropdown-item command="copy">复制</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
       <el-button @click="onToolbarEdit">编辑</el-button>
-      <el-button v-if="isAdmin" @click="onToolbarCopy">复制</el-button>
       <el-dropdown v-if="isAdmin" trigger="click" @command="onBizMenu">
         <el-button>
           业务操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
@@ -83,7 +92,7 @@
           </el-dropdown-menu>
         </template>
       </el-dropdown>
-      <el-button type="danger" @click="onToolbarDelete">删除</el-button>
+      <el-button @click="onToolbarDelete">删除</el-button>
       <ImportDialog entity-type="product" title="导入产品" @done="load" />
     </div>
     <mes-table
@@ -309,9 +318,15 @@ function onToolbarEdit() {
   if (row) openEdit(row)
 }
 
-function onToolbarCopy() {
-  const row = requireOne('复制')
-  if (row) openCopy(row)
+function onCreateMenu(cmd) {
+  if (cmd === 'create') {
+    openCreate()
+    return
+  }
+  if (cmd === 'copy') {
+    const row = requireOne('复制')
+    if (row) openCopy(row)
+  }
 }
 
 function onToolbarDelete() {

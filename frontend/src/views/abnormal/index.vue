@@ -6,7 +6,7 @@
       <el-tab-pane label="全部" name="" />
     </el-tabs>
 
-    <div class="toolbar">
+    <div class="toolbar sticky-toolbar">
       <el-select
         v-model="filterFieldKey"
         placeholder="筛选字段"
@@ -60,9 +60,9 @@
         class="toolbar-value"
         @keyup.enter="onSearch"
       />
-      <el-button type="primary" @click="onSearch">查询</el-button>
+      <el-button @click="onSearch">查询</el-button>
       <el-button @click="onReset">重置</el-button>
-      <el-button type="primary" @click="onToolbarResolve">标记恢复</el-button>
+      <el-button @click="onToolbarResolve">标记恢复</el-button>
     </div>
 
     <mes-table

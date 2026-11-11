@@ -22,7 +22,7 @@ public class AssignController : ControllerBase
     public Task<ApiResult<List<AssignWorkerDto>>> Workers() =>
         _svc.WorkersAsync(JwtHelper.GetFactoryId(User), JwtHelper.GetUserId(User));
 
-    /// <summary>可派班组：该工序报工权限部门；班组长仅本组交集（docs/214）。</summary>
+    /// <summary>可派班组：管理员=本厂部门；班组长=本组（不再限工序报权；docs/214 / 448）。</summary>
     [HttpGet("departments/{taskId:long}")]
     public Task<ApiResult<List<AssignDepartmentDto>>> Departments(long taskId) =>
         _svc.DepartmentsAsync(taskId, JwtHelper.GetFactoryId(User), JwtHelper.GetUserId(User));

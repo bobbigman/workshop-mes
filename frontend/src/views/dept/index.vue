@@ -2,10 +2,20 @@
   <div>
     <div class="toolbar">
       <el-input v-model="keyword" placeholder="搜索部门编码或名称，例：SC01 或 生产部" clearable style="width:200px" @keyup.enter="onSearch" />
-      <el-button type="primary" @click="onSearch">查询</el-button>
-      <el-button type="success" @click="openCreate">+ 创建部门</el-button>
+      <el-button @click="onSearch">查询</el-button>
+      <el-dropdown trigger="click" @command="onCreateMenu">
+        <el-button>
+          新增<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+        </el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="create">新增</el-dropdown-item>
+            <el-dropdown-item command="copy">复制</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
       <el-button @click="onToolbarEdit">编辑</el-button>
-      <el-button type="danger" @click="onToolbarDelete">删除</el-button>
+      <el-button @click="onToolbarDelete">删除</el-button>
     </div>
     <mes-table
       ref="tableRef"
@@ -21,7 +31,8 @@
     </mes-table>
     <mes-pager v-model:page="page" v-model:page-size="pageSize" :total="total" @change="load" />
 
-    <el-dialog v-model="dlg" :title="editingId ? '编辑部门' : '创建部门'" width="480px">
+    <el-dialog v-model="dlg" :title="editingId ? '编辑部门' : (copying ? '复制部门' : '创建部门')" width="480px">
+      <el-alert v-if="copying" title="请填写新的部门编码；名称和成员已带入，可再改。" type="info" :closable="false" show-icon style="margin-bottom:12px" />
       <el-form :model="form" label-width="90px">
         <el-form-item label="部门编码"><el-input v-model="form.code" /></el-form-item>
         <el-form-item label="部门名称"><el-input v-model="form.name" /></el-form-item>
@@ -43,8 +54,9 @@
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { getDeptList, getDept, createDept, updateDept, deleteDept, getUserList } from '@/api/sys'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { ArrowDown } from '@element-plus/icons-vue'
 
-const list = ref([]), keyword = ref(''), dlg = ref(false), editingId = ref(null)
+const list = ref([]), keyword = ref(''), dlg = ref(false), editingId = ref(null), copying = ref(false)
 const page = ref(1), pageSize = ref(20), total = ref(0)
 const form = ref({ code: '', name: '', memberIds: [] })
 const userOptions = ref([])
@@ -83,16 +95,31 @@ function requireOne(actionLabel) {
 }
 function onToolbarEdit() { const row = requireOne('编辑'); if (row) openEdit(row) }
 function onToolbarDelete() { const row = requireOne('删除'); if (row) onDelete(row) }
+function onCreateMenu(cmd) {
+  if (cmd === 'create') { openCreate(); return }
+  if (cmd === 'copy') { const row = requireOne('复制'); if (row) openCopy(row) }
+}
 
 function openCreate() {
   editingId.value = null
+  copying.value = false
   form.value = { code: '', name: '', memberIds: [] }
+  dlg.value = true
+}
+
+async function openCopy(row) {
+  const res = await getDept(row.id)
+  editingId.value = null
+  copying.value = true
+  const d = res.data
+  form.value = { code: '', name: d.name, memberIds: [...(d.memberIds || [])] }
   dlg.value = true
 }
 
 async function openEdit(row) {
   const res = await getDept(row.id)
   editingId.value = row.id
+  copying.value = false
   const d = res.data
   form.value = { code: d.code, name: d.name, memberIds: d.memberIds }
   dlg.value = true

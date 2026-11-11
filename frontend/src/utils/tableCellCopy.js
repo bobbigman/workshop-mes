@@ -1,9 +1,15 @@
 // 复制显示文字，避免把状态值、操作按钮文字当作业务内容复制。
+// 编号/名称等用 el-button link 展示的，保留按钮内文字（删掉会变成空格、右键无菜单）。
 export function cellCopyText(cell, column, target) {
   if (!cell || ['selection', 'expand', 'index'].includes(column?.type)) return ''
   if (target?.closest?.('input, textarea, [contenteditable="true"]')) return ''
   const content = (cell.querySelector('.cell') || cell).cloneNode(true)
-  content.querySelectorAll('button, input, textarea, select, .el-button, .el-checkbox, .el-radio, .el-switch, .el-icon, [role="button"]').forEach(node => node.remove())
+  content.querySelectorAll('button, input, textarea, select, .el-button, .el-checkbox, .el-radio, .el-switch, .el-icon, [role="button"]').forEach(node => {
+    const keepLinkText = node.matches?.('a, .el-button.is-link, button.el-button.is-link')
+    const text = (node.innerText ?? node.textContent ?? '').trim()
+    if (keepLinkText && text) node.replaceWith(document.createTextNode(text))
+    else node.remove()
+  })
   return (content.innerText ?? content.textContent ?? '').trim()
 }
 

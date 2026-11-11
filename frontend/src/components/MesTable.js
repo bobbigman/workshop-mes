@@ -1,4 +1,4 @@
-import { cloneVNode, defineComponent, Fragment, h, onActivated, onBeforeUnmount, onDeactivated, ref } from 'vue'
+import { cloneVNode, defineComponent, Fragment, h, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref } from 'vue'
 import { ElMessage, ElTable } from 'element-plus'
 import { readColumnWidths, tableColumnLayout, tableLayoutKey } from '../utils/tableLayout.js'
 import { cellCopyText, openCellCopyMenu } from '../utils/tableCellCopy.js'
@@ -14,10 +14,39 @@ export default defineComponent({
   setup(props, { attrs, slots, expose }) {
     const table = ref(null)
     const widths = ref({})
+    /** 列表页 flex 定高后同步给 ElTable，表体内部滚，避免整表 overflow 弄坏固定列 */
+    const boundHeight = ref(undefined)
     let storageKey = '', legacyKey = ''
     let closeCopyMenu = () => {}
-    onBeforeUnmount(() => closeCopyMenu())
+    let resizeObserver = null
+    onBeforeUnmount(() => {
+      closeCopyMenu()
+      resizeObserver?.disconnect()
+      resizeObserver = null
+    })
     onDeactivated(() => closeCopyMenu())
+
+    function syncBoundHeight() {
+      if (attrs.height != null && attrs.height !== '') return
+      const el = table.value?.$el
+      if (!el || typeof el.getBoundingClientRect !== 'function') return
+      const h = Math.floor(el.getBoundingClientRect().height)
+      if (h >= 80) boundHeight.value = h
+    }
+
+    onMounted(async () => {
+      await nextTick()
+      const el = table.value?.$el
+      if (!el) return
+      syncBoundHeight()
+      resizeObserver = new ResizeObserver(() => syncBoundHeight())
+      resizeObserver.observe(el)
+      if (el.parentElement) resizeObserver.observe(el.parentElement)
+    })
+    onActivated(async () => {
+      await nextTick()
+      syncBoundHeight()
+    })
 
     function copyMenu(row, column, cell, event) {
       closeCopyMenu()
@@ -104,6 +133,7 @@ export default defineComponent({
       ref: table,
       class: [attrs.class, 'mes-table'],
       border: true,
+      height: attrs.height ?? boundHeight.value,
       showOverflowTooltip: attrs.showOverflowTooltip ?? attrs['show-overflow-tooltip'] ?? true,
       onHeaderDragend: [saveWidth, attrs.onHeaderDragend].filter(Boolean),
       onCellContextmenu: [attrs.onCellContextmenu, copyMenu].filter(Boolean)

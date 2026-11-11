@@ -16,7 +16,7 @@ public interface IWorkOrderService
     Task<ApiResult<object?>> CopyAsync(long id, long currentUserId, long factoryId);
     Task<ApiResult<object?>> DeleteAsync(long id);
     Task<ApiResult<string>> GetQrContentAsync(long id, long factoryId);
-    /// <param name="reportPermissionUserId">非空时按该用户报工权限过滤 tasks；空则不过滤（PC/AI 查进度用）。</param>
+    /// <param name="reportPermissionUserId">非空时：工人按报工权限过滤 tasks；班组长/管理员保留全工序并标 CanReport；空则不过滤（PC/AI）。</param>
     Task<ApiResult<WorkOrderDetailDto>> GetByOrderNoAsync(
         string orderNo, long factoryId, long? reportPermissionUserId = null, byte? reportPermissionRole = null);
 }
@@ -152,6 +152,8 @@ public class WorkOrderTaskDto
     /// <summary>派工班组=部门（docs/214）；与人互斥。</summary>
     public long? AssigneeDepartmentId { get; set; }
     public string AssigneeDepartmentName { get; set; } = "";
+    /// <summary>当前用户是否可报该工序（H5 by-no 下发；PC/未过滤时默认 true）。班长无报权仍看得到工序以便派工。</summary>
+    public bool CanReport { get; set; } = true;
 }
 
 public class WorkOrderAssigneeDto
@@ -618,7 +620,7 @@ public class WorkOrderService : IWorkOrderService
         var order = await _db.WorkOrders.AsNoTracking()
             .FirstOrDefaultAsync(o => o.OrderNo == orderNo.Trim() && o.FactoryId == factoryId)
             ?? throw ThrowHelper.Biz(nameof(GetByOrderNoAsync), $"未找到工单号 {orderNo} 的工单，请确认二维码是否对应本厂工单，或手动输入工单号到「工单」中搜索核实。");
-        // H5/扫码：传入当前用户以按报工权限过滤 tasks；AI/其它查进度不传则看全工序
+        // H5/扫码：工人按报权过滤；班长/管理员看全工序（CanReport 标是否可报）；AI 不传则看全工序
         return ApiResult<WorkOrderDetailDto>.Ok(
             await BuildDetailAsync(order, reportPermissionUserId, reportPermissionRole));
     }
@@ -637,9 +639,19 @@ public class WorkOrderService : IWorkOrderService
         var tasks = await LoadTasksAsync(order);
         if (filterUserId.HasValue && filterRole.HasValue)
         {
-            var allowed = await ReportPermissionHelper.FilterAllowedOperationIdsAsync(
-                _db, filterUserId.Value, filterRole.Value, tasks.Select(t => t.OperationId));
-            tasks = tasks.Where(t => allowed.Contains(t.OperationId)).ToList();
+            var taskKeys = tasks.Select(t => (t.Id, t.OperationId)).ToList();
+            var allowed = await ReportPermissionHelper.FilterAllowedTasksAsync(
+                _db, filterUserId.Value, filterRole.Value, taskKeys);
+            // 班组长/管理员：保留全工序便于手机派工；工人仍只看自己能报的工序
+            if (filterRole.Value is 1 or 3)
+            {
+                foreach (var t in tasks)
+                    t.CanReport = allowed.Contains(t.OperationId);
+            }
+            else
+            {
+                tasks = tasks.Where(t => allowed.Contains(t.OperationId)).ToList();
+            }
         }
 
         var status = order.Status;

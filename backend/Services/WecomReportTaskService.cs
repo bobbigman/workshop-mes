@@ -57,6 +57,16 @@ public class ReportTaskCandidateSource : IReportTaskCandidateSource
         var operationIds = await _db.Operations.AsNoTracking().Where(o => o.FactoryId == factoryId)
             .Select(o => o.Id).ToListAsync();
         var allowed = await ReportPermissionHelper.FilterAllowedOperationIdsAsync(_db, userId, role, operationIds);
+        // 已派路径：即使无部门报权，也要把已派任务的工序并入，否则跨组顶活候选为空。
+        if (assignedTaskIds is { Length: > 0 })
+        {
+            var assignedOpIds = await _db.WorkOrderOperations.AsNoTracking()
+                .Where(t => assignedTaskIds.Contains(t.Id))
+                .Select(t => t.OperationId)
+                .Distinct()
+                .ToListAsync();
+            foreach (var id in assignedOpIds) allowed.Add(id);
+        }
         if (allowed.Count == 0) return new List<ReportTaskCandidate>();
         return await BuildQuery(factoryId, allowed.ToArray(), keyword, assignedTaskIds)
             .OrderBy(x => x.DueDate == null).ThenBy(x => x.DueDate)

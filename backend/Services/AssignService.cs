@@ -194,6 +194,9 @@ public class AssignService : IAssignService
 
         if (me.Role == 3)
         {
+            var hasDept = await _db.DepartmentUsers.AsNoTracking().AnyAsync(x => x.UserId == currentUserId);
+            if (!hasDept)
+                return ApiResult<List<AssignWorkerDto>>.Ok(new List<AssignWorkerDto>(), "你还没挂部门，没法派工。");
             var groupIds = await GetGroupUserIdsAsync(currentUserId);
             q = q.Where(u => groupIds.Contains(u.Id));
         }
@@ -201,6 +204,8 @@ public class AssignService : IAssignService
         var list = await q.OrderBy(u => u.Name)
             .Select(u => new AssignWorkerDto { Id = u.Id, Name = u.Name, Role = u.Role })
             .ToListAsync();
+        if (me.Role == 3 && list.Count == 0)
+            return ApiResult<List<AssignWorkerDto>>.Ok(list, "你所在部门里暂时没有可派的员工，没法派工。");
         return ApiResult<List<AssignWorkerDto>>.Ok(list);
     }
 
@@ -218,25 +223,23 @@ public class AssignService : IAssignService
         if (!orderOk)
             throw ThrowHelper.Biz(nameof(DepartmentsAsync), "这张工单不存在或不属于本厂。请核对工单号是否正确，或在「工单」中切换到正确的工厂后查找。");
 
-        var allowedDeptIds = await _db.OperationDepartments.AsNoTracking()
-            .Where(x => x.OperationId == task.OperationId)
-            .Select(x => x.DepartmentId)
-            .ToListAsync();
-        if (allowedDeptIds.Count == 0)
-            return ApiResult<List<AssignDepartmentDto>>.Ok(new List<AssignDepartmentDto>());
-
+        // 可派班组不再限「工序报权部门」：跨组顶活可先派后报；班组长仍限本组。
+        List<long>? scopeDeptIds = null;
         if (me.Role == 3)
         {
-            var myDepts = await _db.DepartmentUsers.AsNoTracking()
+            scopeDeptIds = await _db.DepartmentUsers.AsNoTracking()
                 .Where(x => x.UserId == currentUserId)
                 .Select(x => x.DepartmentId)
                 .ToListAsync();
-            allowedDeptIds = allowedDeptIds.Intersect(myDepts).ToList();
+            if (scopeDeptIds.Count == 0)
+                return ApiResult<List<AssignDepartmentDto>>.Ok(new List<AssignDepartmentDto>(), "你还没挂部门，没法派工。");
         }
 
-        var list = await _db.Departments.AsNoTracking()
-            .Where(d => d.FactoryId == factoryId && allowedDeptIds.Contains(d.Id))
-            .OrderBy(d => d.Name)
+        var q = _db.Departments.AsNoTracking().Where(d => d.FactoryId == factoryId);
+        if (scopeDeptIds != null)
+            q = q.Where(d => scopeDeptIds.Contains(d.Id));
+
+        var list = await q.OrderBy(d => d.Name)
             .Select(d => new AssignDepartmentDto { Id = d.Id, Name = d.Name })
             .ToListAsync();
         return ApiResult<List<AssignDepartmentDto>>.Ok(list);
@@ -362,10 +365,7 @@ public class AssignService : IAssignService
             var dept = await _db.Departments.AsNoTracking()
                 .FirstOrDefaultAsync(d => d.Id == deptId && d.FactoryId == factoryId)
                 ?? throw ThrowHelper.Biz(nameof(AssignAsync), "这个班组不存在，或不属于本厂。请到「部门」确认班组是否存在且归属本厂；需要的话先新建班组再派工。");
-            var allowed = await _db.OperationDepartments.AsNoTracking()
-                .AnyAsync(x => x.OperationId == task.OperationId && x.DepartmentId == deptId);
-            if (!allowed)
-                throw ThrowHelper.BizUser("你只能把任务派给有这道工序报工权限的部门。请确认目标部门是否有该工序的报工权限，或联系管理员调整。");
+            // 不再要求目标班组已有工序报权；被派班组内工人可凭派工报这道活。
             if (groupDeptIds != null && !groupDeptIds.Contains(deptId.Value))
                 throw ThrowHelper.BizUser($"不能把任务派给其他部门的班组：{dept.Name}。只能派给本部门管辖范围内的班组；如需跨部门派工，请联系有权限的管理员操作。");
             targetLabel = $"班组{dept.Name}";

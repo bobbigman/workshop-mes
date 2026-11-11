@@ -6,7 +6,7 @@
     </div>
     <template v-else>
     <ValueTip :text="VALUE_TIPS.report" />
-    <div class="toolbar">
+    <div class="toolbar sticky-toolbar">
       <el-select
         v-model="filterFieldKey"
         placeholder="筛选字段"
@@ -111,11 +111,21 @@
         class="toolbar-value"
         @keyup.enter="onSearch"
       />
-      <el-button type="primary" @click="onSearch">查询</el-button>
+      <el-button @click="onSearch">查询</el-button>
       <el-button @click="onReset">重置</el-button>
-      <el-button type="success" @click="openCreate()">+ 报工</el-button>
-      <el-button v-if="canProxy" type="primary" plain @click="openProxy()">代报工</el-button>
-      <el-button v-if="isAdmin" type="warning" @click="openBatch()">一键补报未完工序</el-button>
+      <el-dropdown trigger="click" @command="onCreateMenu">
+        <el-button>
+          新增<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+        </el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="create">新增</el-dropdown-item>
+            <el-dropdown-item command="copy">复制</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+      <el-button v-if="canProxy" @click="openProxy()">代报工</el-button>
+      <el-button v-if="isAdmin" @click="openBatch()">一键补报未完工序</el-button>
       <el-button v-if="isAdmin" @click="openPending">待补报开工记录</el-button>
       <el-button @click="onToolbarEdit">修改</el-button>
       <el-button @click="onToolbarChangeLogs">修改记录</el-button>
@@ -169,7 +179,7 @@
     <el-dialog v-model="createDlg" width="560px" @closed="resetCreate">
       <template #header>
         <div class="create-dlg-header">
-          <span class="create-dlg-title">新增报工</span>
+          <span class="create-dlg-title">{{ createCopying ? '复制报工' : '新增报工' }}</span>
           <el-button
             text
             class="create-help-btn"
@@ -593,6 +603,7 @@ import { getReportList, updateReport, submitReport, batchReport, getDefectsByOp,
 import { getProductList } from '@/api/base'
 import { getUserList } from '@/api/sys'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { ArrowDown } from '@element-plus/icons-vue'
 import { getPendingWorkSessions, reportPendingWorkSession } from '@/api/workSession'
 import { isUpstreamSoftConfirm } from '@/utils/upstreamConfirm'
 import ValueTip from '@/components/ValueTip.vue'
@@ -752,6 +763,16 @@ function onToolbarChangeLogs() {
   const row = requireOne('修改记录')
   if (row) openChangeLogs(row)
 }
+function onCreateMenu(cmd) {
+  if (cmd === 'create') {
+    openCreate()
+    return
+  }
+  if (cmd === 'copy') {
+    const row = requireOne('复制')
+    if (row) openCopy(row)
+  }
+}
 const form = ref({
   id: null, operationId: null, operationName: '',
   goodQty: 0, defectQty: 0, defectId: null, hours: 0, minutes: 0
@@ -759,6 +780,7 @@ const form = ref({
 const createForm = ref({
   orderNo: '', operationId: null, goodQty: 0, defectQty: 0, defectId: null, hours: 0, minutes: 0
 })
+const createCopying = ref(false)
 const createClientRequestId = ref('')
 const myUserId = Number(localStorage.getItem('userId') || 0)
 const shareEnabled = ref(false)
@@ -1075,6 +1097,49 @@ function openCreate(orderNo) {
   if (orderNo) loadOrder()
 }
 
+/** 勾选一条报工 → 打开新建弹窗并带入工单/工序/数量/时长；确认后提交为新报工 */
+async function openCopy(row) {
+  resetCreate()
+  createCopying.value = true
+  const mins = Number(row.durationMinutes) || 0
+  createForm.value.orderNo = row.orderNo || ''
+  createForm.value.goodQty = Number(row.goodQty) || 0
+  createForm.value.defectQty = Number(row.defectQty) || 0
+  createForm.value.hours = Math.floor(mins / 60)
+  createForm.value.minutes = mins % 60
+  createDlg.value = true
+  loadOrderOptions()
+  const no = (createForm.value.orderNo || '').trim()
+  if (!no) {
+    ElMessage.error('这条报工没有工单号，没法复制。请换一条有工单号的报工再试。')
+    return
+  }
+  const res = await getOrderByNo(no)
+  const data = res.data
+  if (data.status === 2 || data.status === 3) {
+    ElMessage.error(data.status === 2
+      ? '该工单已结束，不能再报工；如需调整，请到工单管理页面查看工单状态或联系主管处理'
+      : '该工单已取消，不能再报工；如需恢复，请到工单管理页面检查工单状态或联系主管处理')
+    orderDetail.value = null
+    return
+  }
+  orderDetail.value = data
+  const tasks = data.tasks || []
+  const opId = row.operationId || null
+  const opOk = opId && tasks.some(t => t.operationId === opId)
+  createForm.value.operationId = opOk ? opId : (tasks.length === 1 ? tasks[0].operationId : null)
+  if (!createForm.value.operationId) {
+    defectOptions.value = []
+    createForm.value.defectId = null
+    return
+  }
+  const dRes = await getDefectsByOp(createForm.value.operationId)
+  defectOptions.value = dRes.data || []
+  const defectOk = row.defectId && defectOptions.value.some(d => d.id === row.defectId)
+  createForm.value.defectId = defectOk ? row.defectId : null
+  await reloadCreateCandidates()
+}
+
 function openProxy() {
   if (!canProxy) return
   resetProxy()
@@ -1095,6 +1160,7 @@ function newClientRequestId() {
 }
 
 function resetCreate() {
+  createCopying.value = false
   createTimes.value = null
   participantTimes.value = {}
   orderDetail.value = null

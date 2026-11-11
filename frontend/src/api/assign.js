@@ -12,14 +12,15 @@ export const assignSuggest = (taskId) => http.get(`/Assign/suggest/${taskId}`)
  * @param {number|null} [departmentId] 派班组；有值则忽略人
  */
 export const assign = (taskId, userIdOrIds, departmentId) => {
-  if (departmentId != null && departmentId !== '') {
+  if (departmentId != null && departmentId !== '' && Number(departmentId) > 0) {
     return http.put(`/Assign/${taskId}`, { departmentId: Number(departmentId), userIds: [] })
   }
+  // 取消派工：显式带 departmentId:null，避免只清人、班组残留
   if (Array.isArray(userIdOrIds)) {
-    return http.put(`/Assign/${taskId}`, { userIds: userIdOrIds })
+    return http.put(`/Assign/${taskId}`, { userIds: userIdOrIds, departmentId: null })
   }
   if (userIdOrIds == null || userIdOrIds === '') {
-    return http.put(`/Assign/${taskId}`, { userIds: [] })
+    return http.put(`/Assign/${taskId}`, { userIds: [], departmentId: null })
   }
-  return http.put(`/Assign/${taskId}`, { userId: userIdOrIds })
+  return http.put(`/Assign/${taskId}`, { userId: userIdOrIds, departmentId: null })
 }

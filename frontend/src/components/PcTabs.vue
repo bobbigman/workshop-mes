@@ -55,6 +55,8 @@ function onClose(path) {
   overflow-x: auto;
   flex-shrink: 0;
   scrollbar-width: thin;
+  position: relative;
+  z-index: 10;
 }
 .pc-tab {
   display: inline-flex;

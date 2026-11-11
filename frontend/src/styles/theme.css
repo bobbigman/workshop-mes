@@ -450,3 +450,48 @@ body.theme-legacy .logo-title {
   font-size: 13px;
   line-height: 1.45;
 }
+
+/*
+ * 有工具条的 PC 列表页（对标金蝶）：
+ * 工具条/页签固定不滚，只滚表格区域——避免 sticky 抢层，行内容钻到工具条/页签上面。
+ */
+.el-main.main:has(.toolbar),
+.el-main.main:has(.sticky-toolbar-block) {
+  overflow: hidden !important;
+  display: flex;
+  flex-direction: column;
+}
+.el-main.main:has(.toolbar) > div,
+.el-main.main:has(.sticky-toolbar-block) > div {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.el-main.main:has(.toolbar) .toolbar,
+.el-main.main:has(.sticky-toolbar-block) .sticky-toolbar-block {
+  flex-shrink: 0;
+  position: relative;
+  z-index: 5;
+  background: var(--app-bg);
+  box-shadow: 0 1px 0 var(--app-border);
+}
+.el-main.main:has(.sticky-toolbar-block) .sticky-toolbar-block > .toolbar {
+  box-shadow: none;
+  margin-bottom: 8px;
+}
+/* height:0 + flex 让表格吃剩余高度；具体滚动交给 ElTable 的 height（MesTable 同步） */
+.el-main.main:has(.toolbar) > div > .mes-table,
+.el-main.main:has(.toolbar) > div > .el-table,
+.el-main.main:has(.sticky-toolbar-block) > div > .mes-table,
+.el-main.main:has(.sticky-toolbar-block) > div > .el-table {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 0;
+  overflow: hidden !important;
+}
+.el-main.main:has(.toolbar) > div > .mes-pager,
+.el-main.main:has(.sticky-toolbar-block) > div > .mes-pager {
+  flex-shrink: 0;
+}

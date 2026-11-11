@@ -8,6 +8,8 @@ public class ApiResult<T>
     public T? Data { get; set; }
 
     public static ApiResult<T> Ok(T data) => new() { Code = 0, Data = data };
+    /// <summary>成功但带业务说明（如名单为空原因）；code=0，前端不当报错弹窗。</summary>
+    public static ApiResult<T> Ok(T data, string msg) => new() { Code = 0, Data = data, Msg = msg };
     public static ApiResult<T> Ok() => new() { Code = 0 };
     public static ApiResult<T> Fail(string msg, int code = 1) => new() { Code = code, Msg = msg };
 

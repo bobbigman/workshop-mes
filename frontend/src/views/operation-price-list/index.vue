@@ -4,7 +4,7 @@
     <PriceChangeHistory v-model="historyVisible" :table-id="historyId" />
     <template v-if="!editing">
       <h2>工序价目表</h2>
-      <div class="toolbar">
+      <div class="toolbar sticky-toolbar">
         <el-select v-model="filterFieldKey" placeholder="筛选字段" class="toolbar-field" @change="onFilterFieldChange">
           <el-option v-for="f in FILTER_FIELDS" :key="f.key" :label="f.label" :value="f.key" />
         </el-select>
@@ -48,15 +48,24 @@
           clearable
         />
         <el-input v-else v-model="filterValue" clearable :placeholder="filterValuePlaceholder" class="toolbar-value" @keyup.enter="search" />
-        <el-button type="primary" @click="search">查询</el-button>
+        <el-button @click="search">查询</el-button>
         <el-button @click="reset">重置</el-button>
-        <el-button type="primary" @click="create">＋ 新增价目表</el-button>
+        <el-dropdown trigger="click" @command="onCreateMenu">
+          <el-button>
+            新增<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="create">新增</el-dropdown-item>
+              <el-dropdown-item command="copy">复制</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
         <el-button @click="onToolbarBrowse">查看</el-button>
         <el-button @click="onToolbarEdit">编辑</el-button>
         <el-button @click="onToolbarAdjust">调整工价</el-button>
         <el-button @click="onToolbarHistory">调价记录</el-button>
-        <el-button @click="onToolbarCopy">复制</el-button>
-        <el-button type="danger" @click="onToolbarDelete">删除</el-button>
+        <el-button @click="onToolbarDelete">删除</el-button>
       </div>
       <mes-table
         ref="tableRef"
@@ -171,6 +180,7 @@ const adjustVisible=ref(false), adjustId=ref(null)
 async function adjusted(){await load();if(editing.value&&id.value) await open(id.value,true)}
 import { onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { ArrowDown } from '@element-plus/icons-vue'
 import { getOperationList,getUnitList,getProductList } from '@/api/base'
 import { getCustomFields } from '@/api/prod'
 import { queryPriceLists,getPriceList,savePriceList,previewAttributePrice,changePriceListStatus,deletePriceList } from '@/api/operationPriceList'
@@ -259,7 +269,10 @@ function onToolbarBrowse(){const row=requireOne('查看');if(row) open(row.id,tr
 function onToolbarEdit(){const row=requireOne('编辑');if(row) open(row.id,false)}
 function onToolbarAdjust(){const row=requireOne('调整工价');if(!row) return;if(row.status!==1){ElMessage.warning('只有启用中的价目表才能调整工价');return}adjustId.value=row.id;adjustVisible.value=true}
 function onToolbarHistory(){const row=requireOne('调价记录');if(row){historyId.value=row.id;historyVisible.value=true}}
-function onToolbarCopy(){const row=requireOne('复制');if(row) copy(row)}
+function onCreateMenu(cmd){
+  if(cmd==='create'){create();return}
+  if(cmd==='copy'){const row=requireOne('复制');if(row) copy(row)}
+}
 function onToolbarDelete(){
   const row=requireOne('删除')
   if(!row) return

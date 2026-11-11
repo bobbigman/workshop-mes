@@ -1,9 +1,19 @@
 <template>
   <div>
     <div class="toolbar">
-      <el-button type="success" @click="openCreate">+ 创建单位</el-button>
+      <el-dropdown trigger="click" @command="onCreateMenu">
+        <el-button>
+          新增<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+        </el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="create">新增</el-dropdown-item>
+            <el-dropdown-item command="copy">复制</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
       <el-button @click="onToolbarEdit">编辑</el-button>
-      <el-button type="danger" @click="onToolbarDelete">删除</el-button>
+      <el-button @click="onToolbarDelete">删除</el-button>
     </div>
     <mes-table
       ref="tableRef"
@@ -15,7 +25,7 @@
       <el-table-column type="selection" width="48" fixed />
       <el-table-column prop="name" label="单位名称" />
     </mes-table>
-    <el-dialog v-model="dlg" :title="editingId ? '编辑单位' : '创建单位'" width="400px">
+    <el-dialog v-model="dlg" :title="editingId ? '编辑单位' : (copying ? '复制单位' : '创建单位')" width="400px">
       <el-input v-model="name" placeholder="例：只、件、套、kg" />
       <template #footer>
         <el-button @click="dlg=false">取消</el-button>
@@ -28,7 +38,8 @@
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { getUnitList, createUnit, updateUnit, deleteUnit } from '@/api/base'
 import { ElMessage, ElMessageBox } from 'element-plus'
-const list = ref([]), dlg = ref(false), name = ref(''), editingId = ref(null)
+import { ArrowDown } from '@element-plus/icons-vue'
+const list = ref([]), dlg = ref(false), name = ref(''), editingId = ref(null), copying = ref(false)
 const tableRef = ref(null), selectedRows = ref([])
 const selectedOne = computed(() => selectedRows.value.length === 1 ? selectedRows.value[0] : null)
 onMounted(load)
@@ -53,8 +64,13 @@ function requireOne(actionLabel) {
 }
 function onToolbarEdit() { const row = requireOne('编辑'); if (row) openEdit(row) }
 function onToolbarDelete() { const row = requireOne('删除'); if (row) onDelete(row) }
-function openCreate() { editingId.value = null; name.value = ''; dlg.value = true }
-function openEdit(row) { editingId.value = row.id; name.value = row.name; dlg.value = true }
+function onCreateMenu(cmd) {
+  if (cmd === 'create') { openCreate(); return }
+  if (cmd === 'copy') { const row = requireOne('复制'); if (row) openCopy(row) }
+}
+function openCreate() { editingId.value = null; copying.value = false; name.value = ''; dlg.value = true }
+function openCopy(row) { editingId.value = null; copying.value = true; name.value = row.name || ''; dlg.value = true }
+function openEdit(row) { editingId.value = row.id; copying.value = false; name.value = row.name; dlg.value = true }
 async function onSave() {
   if (!name.value.trim()) { ElMessage.error('单位名称不能为空，请在上方输入框填写后保存'); return }
   if (editingId.value) await updateUnit(editingId.value, { name: name.value.trim() })

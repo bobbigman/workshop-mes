@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div class="toolbar">
+    <div class="toolbar sticky-toolbar">
       <el-select
         v-model="filterFieldKey"
         placeholder="筛选字段"
@@ -90,11 +90,11 @@
         class="toolbar-value"
         @keyup.enter="onSearch"
       />
-      <el-button type="primary" @click="onSearch">查询</el-button>
+      <el-button @click="onSearch">查询</el-button>
       <el-button @click="onReset">重置</el-button>
-      <el-button type="success" @click="onToolbarApprove">通过</el-button>
-      <el-button type="danger" @click="onToolbarReject">退回</el-button>
-      <el-button type="success" plain @click="onBatch">批量通过</el-button>
+      <el-button @click="onToolbarApprove">通过</el-button>
+      <el-button @click="onToolbarReject">退回</el-button>
+      <el-button @click="onBatch">批量通过</el-button>
     </div>
     <mes-table
       ref="tableRef"

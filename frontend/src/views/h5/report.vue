@@ -19,11 +19,12 @@
       <button type="button" class="btn btn-primary" @click="router.replace(reportBackPath)">返回</button>
     </div>
 
-    <div v-if="detail && !loadError && noReportableOps" class="no-ops-tip">
-      这张工单里没有你能报的工序了：可能前面的工序还没做完，或者你所在部门没有这道工序的报工权限。找班组长确认一下。
+    <div v-if="detail && !loadError && noOps" class="no-ops-tip">
+      <template v-if="canAssign">【待人定】这张工单还没有工序，没法派工。请到电脑端核对工单工艺。</template>
+      <template v-else>这张工单里没有你能报的工序了：可能前面的工序还没做完，或者你所在部门没有这道工序的报工权限。找班组长确认一下。</template>
     </div>
 
-    <div class="form" v-if="detail && !loadError && !noReportableOps">
+    <div class="form" v-if="detail && !loadError && !noOps">
       <label>工序</label>
       <select v-model="form.operationId" @change="onOpChange">
         <option value="">请选择工序</option>
@@ -32,6 +33,86 @@
         </option>
       </select>
 
+      <p v-if="form.operationId && !canReportCurrent" class="no-ops-tip assign-only-tip">
+        【待人定】这道工序你报不了，点下面「派工」派给工人。
+      </p>
+
+      <div v-if="canAssign && currentTask" class="assign-box">
+        <div class="assign-head">
+          <span>派工：{{ assignLabel }}</span>
+          <button type="button" class="link-btn" :disabled="assignChecking" @click="toggleAssignPanel">
+            {{ assignPanelOpen ? '收起' : '派工' }}
+          </button>
+        </div>
+        <p v-if="assignBlockedTip && !assignPanelOpen" class="share-hint err">{{ assignBlockedTip }}</p>
+        <div v-if="assignPanelOpen" class="assign-panel">
+          <p class="share-hint">可以选多个人，也可以选一个班组（二选一）。不选就是取消派工。派工不影响正常报工。</p>
+          <div class="assign-mode">
+            <label><input type="radio" value="person" v-model="assignMode" /> 个人</label>
+            <label><input type="radio" value="dept" v-model="assignMode" /> 班组</label>
+          </div>
+          <template v-if="assignMode === 'person'">
+            <div v-if="assignSuggestList.length" class="assign-suggest">
+              <div class="assign-suggest-title">推荐派给谁</div>
+              <button
+                v-for="(s, i) in assignSuggestList"
+                :key="s.userId"
+                type="button"
+                class="assign-suggest-item"
+                :class="{ top: i === 0 }"
+                @click="pickSuggest(s.userId)"
+              >
+                <span class="name">{{ s.name }}<template v-if="isSuggestPicked(s.userId)"> · 已选</template></span>
+                <span class="meta">近30天 {{ s.reportCount }} 次 · 良品 {{ s.goodQty }}</span>
+              </button>
+            </div>
+            <p v-if="assignSuggestError" class="share-hint err">
+              推荐人员列表加载失败，请刷新重试；反复失败找管理员处理。
+              <button type="button" class="link-btn" @click="loadAssignSuggest">重试</button>
+            </p>
+            <label v-for="w in assignWorkersList" :key="w.id" class="share-person">
+              <input type="checkbox" :value="w.id" v-model="assignSelectedIds" />
+              {{ w.name }}
+            </label>
+            <p v-if="assignWorkersError" class="share-hint err">
+              工人列表加载失败，请刷新重试；反复失败找管理员处理。
+              <button type="button" class="link-btn" @click="loadAssignWorkers">重试</button>
+            </p>
+          </template>
+          <template v-else>
+            <label class="share-person">
+              <input type="radio" name="assignDept" :value="0" v-model="assignSelectedDeptId" />
+              不派班组（取消）
+            </label>
+            <label v-for="d in assignDeptList" :key="d.id" class="share-person">
+              <input type="radio" name="assignDept" :value="d.id" v-model="assignSelectedDeptId" />
+              {{ d.name }}
+            </label>
+            <p v-if="!assignDeptList.length && !assignDeptError" class="share-hint err">暂时没有可派的班组，没法派工。</p>
+            <p v-if="assignDeptError" class="share-hint err">
+              班组列表加载失败，请刷新重试；反复失败找管理员处理。
+              <button type="button" class="link-btn" @click="loadAssignDepts">重试</button>
+            </p>
+          </template>
+          <button
+            type="button"
+            class="btn btn-primary assign-save"
+            :disabled="assignSaving || (assignMode === 'dept' && !assignDeptList.length)"
+            @click="saveAssign"
+          >
+            保存派工
+          </button>
+          <button
+            v-if="currentTask?.assigneeDepartmentId || (currentTask?.assignees || []).length || currentTask?.assigneeUserId"
+            type="button"
+            class="link-btn assign-clear"
+            :disabled="assignSaving"
+            @click="clearAssign"
+          >取消派工</button>
+        </div>
+      </div>
+
+      <template v-if="canReportCurrent">
       <ProcessingRequirements :price="currentTask?.processingPrice" />
       <div class="summary" aria-label="当前工序进度">
         <span>计划 <b>{{ summary.plan }}</b></span>
@@ -77,64 +158,6 @@
           <option v-for="d in defects" :key="d.id" :value="d.id">{{ d.name }}</option>
         </select>
       </template>
-
-      <div v-if="canAssign && currentTask" class="assign-box">
-        <div class="assign-head">
-          <span>派工：{{ assignLabel }}</span>
-          <button type="button" class="link-btn" @click="toggleAssignPanel">
-            {{ assignPanelOpen ? '收起' : '派工' }}
-          </button>
-        </div>
-        <div v-if="assignPanelOpen" class="assign-panel">
-          <p class="share-hint">可以选多个人，也可以选一个班组（二选一）。不选就是取消派工。派工不影响正常报工。</p>
-          <div class="assign-mode">
-            <label><input type="radio" value="person" v-model="assignMode" /> 个人</label>
-            <label><input type="radio" value="dept" v-model="assignMode" /> 班组</label>
-          </div>
-          <template v-if="assignMode === 'person'">
-            <div v-if="assignSuggestList.length" class="assign-suggest">
-              <div class="assign-suggest-title">推荐派给谁</div>
-              <button
-                v-for="(s, i) in assignSuggestList"
-                :key="s.userId"
-                type="button"
-                class="assign-suggest-item"
-                :class="{ top: i === 0 }"
-                @click="pickSuggest(s.userId)"
-              >
-                <span class="name">{{ s.name }}<template v-if="isSuggestPicked(s.userId)"> · 已选</template></span>
-                <span class="meta">近30天 {{ s.reportCount }} 次 · 良品 {{ s.goodQty }}</span>
-              </button>
-            </div>
-            <p v-if="assignSuggestError" class="share-hint err">
-              推荐人员列表加载失败，请刷新重试；反复失败找管理员处理。
-              <button type="button" class="link-btn" @click="loadAssignSuggest">重试</button>
-            </p>
-            <label v-for="w in assignWorkersList" :key="w.id" class="share-person">
-              <input type="checkbox" :value="w.id" v-model="assignSelectedIds" />
-              {{ w.name }}
-            </label>
-            <p v-if="assignWorkersError" class="share-hint err">
-              工人列表加载失败，请刷新重试；反复失败找管理员处理。，请刷新重试；反复失败找管理员处理。
-              <button type="button" class="link-btn" @click="loadAssignWorkers">重试</button>
-            </p>
-          </template>
-          <template v-else>
-            <label v-for="d in assignDeptList" :key="d.id" class="share-person">
-              <input type="radio" name="assignDept" :value="d.id" v-model="assignSelectedDeptId" />
-              {{ d.name }}
-            </label>
-            <p v-if="!assignDeptList.length && !assignDeptError" class="share-hint">暂时没有可派的班组。如果需要派工，请找管理员在后台给这道工序安排好能报工的部门。</p>
-            <p v-if="assignDeptError" class="share-hint err">
-              班组列表加载失败，请刷新重试；反复失败找管理员处理。，请刷新重试；反复失败找管理员处理。
-              <button type="button" class="link-btn" @click="loadAssignDepts">重试</button>
-            </p>
-          </template>
-          <button type="button" class="btn btn-primary assign-save" :disabled="assignSaving" @click="saveAssign">
-            保存派工
-          </button>
-        </div>
-      </div>
 
       <label class="share-toggle">
         <input v-model="shareEnabled" type="checkbox" />
@@ -231,9 +254,10 @@
       </div>
 
       <p v-if="locked" class="full-tip">这道工序的数量已经报够了，不能再报了；如果有问题，找班组长或管理员处理。</p>
+      </template>
     </div>
 
-    <div class="action-bar" v-if="detail && !loadError && !noReportableOps && !qtyKeyboardVisible">
+    <div class="action-bar" v-if="detail && !loadError && !noOps && canReportCurrent && !qtyKeyboardVisible">
       <button class="btn btn-outline" :disabled="submitting || reviewing || locked || clockBlocked" @click="onContinue">提交并继续</button>
       <button class="btn btn-primary" :disabled="submitting || reviewing || locked || clockBlocked" @click="onSubmit">提交并返回</button>
     </div>
@@ -262,7 +286,7 @@ import 'vant/es/toast/style'
 import 'vant/es/image-preview/style'
 import 'vant/es/dialog/style'
 import 'vant/es/number-keyboard/style'
-import { getOrderByNo, submitReport, getDefectsByOp, getCustomFields, getReportCandidates, getTodayPieceSummary, previewWage } from '@/api/prod'
+import { getOrder, getOrderByNo, submitReport, getDefectsByOp, getCustomFields, getReportCandidates, getTodayPieceSummary, previewWage } from '@/api/prod'
 import { startWorkSession, getCurrentWorkSession } from '@/api/workSession'
 import { isUpstreamSoftConfirm } from '@/utils/upstreamConfirm'
 import { assign, assignWorkers, assignDepartments, assignSuggest } from '@/api/assign'
@@ -379,6 +403,11 @@ const assignSuggestList = ref([])
 const assignSuggestError = ref(false)
 const assignDeptList = ref([])
 const assignDeptError = ref(false)
+const assignChecking = ref(false)
+/** 点派工后条件不够：只出提示、不展开选项 */
+const assignBlockedTip = ref('')
+const ASSIGN_NO_DEPT_TIP = '你还没挂部门，没法派工。'
+const ASSIGN_NO_WORKERS_TIP = '你所在部门里暂时没有可派的员工，没法派工。'
 const assignSelectedDeptId = ref(null)
 const assignSaving = ref(false)
 const myUserId = Number(localStorage.getItem('userId') || 0) || (() => {
@@ -411,9 +440,17 @@ const assignLabel = computed(() => {
   return t.assigneeName || '未派工'
 })
 
-const noReportableOps = computed(() =>
+/** 工单无工序行（与「有工序但当前用户报不了」区分） */
+const noOps = computed(() =>
   !!detail.value && !loadError.value && (!(detail.value.tasks || []).length)
 )
+/** 未选工序时仍展示报工区；选中后按后端 canReport（缺省 true）决定能否报 */
+const canReportCurrent = computed(() => {
+  if (!form.value.operationId) return true
+  const t = currentTask.value
+  if (!t) return false
+  return t.canReport !== false
+})
 
 const isDirty = computed(() => {
   if (!detail.value || loadError.value) return false
@@ -552,6 +589,7 @@ onMounted(async () => {
   await reloadDetail()
   await tryPreselectOp()
   await tryOpenAssignFromQuery()
+  await tryOpenAssignWhenNoReportable()
   await loadReportFields()
   if (canAssign) await loadAssignWorkers()
 })
@@ -583,10 +621,9 @@ async function tryPreselectOp() {
   }
 }
 
-/** 工单列表「派工」入口：?assign=1 时预选首道可派工序并展开派工面板 */
-async function tryOpenAssignFromQuery() {
+/** 展开派工面板（工单列表 ?assign=1，或班长扫码后本单无可报工序） */
+async function openAssignPanel() {
   if (!canAssign || !detail.value || loadError.value) return
-  if (String(route.query.assign || '') !== '1') return
   if (!form.value.operationId) {
     const tasks = (detail.value.tasks || []).filter(t => t.id)
     const prefer = tasks.find(t => !(t.assignees || []).length && !t.assigneeUserId && !t.assigneeDepartmentId) || tasks[0]
@@ -597,10 +634,34 @@ async function tryOpenAssignFromQuery() {
   }
   if (form.value.operationId) {
     syncAssignSelection()
-    assignPanelOpen.value = true
+    assignBlockedTip.value = ''
+    await loadAssignWorkers()
     await loadAssignDepts()
+    const blocked = resolveAssignBlockedTip()
+    if (blocked) {
+      assignBlockedTip.value = blocked
+      assignPanelOpen.value = false
+      return
+    }
+    assignPanelOpen.value = true
     await loadAssignSuggest()
   }
+}
+
+/** 工单列表「派工」入口：?assign=1 */
+async function tryOpenAssignFromQuery() {
+  if (String(route.query.assign || '') !== '1') return
+  await openAssignPanel()
+}
+
+/** 班长/管理员扫工单码：本单没有自己能报的工序时，自动展开派工 */
+async function tryOpenAssignWhenNoReportable() {
+  if (!canAssign || !detail.value || loadError.value) return
+  if (String(route.query.assign || '') === '1') return
+  const tasks = detail.value.tasks || []
+  if (!tasks.length) return
+  if (tasks.some(t => t.canReport !== false)) return
+  await openAssignPanel()
 }
 
 async function loadReportFields() {
@@ -638,6 +699,21 @@ async function reloadDetail() {
     const res = await getOrderByNo(orderNo.value)
     detail.value = res.data
     loadError.value = false
+    // 班长/管理员：旧 by-no 会按报权把工序滤空，再用按 Id 详情补全以便派工（新后端会带 canReport，一般走不到这里）
+    if (canAssign && detail.value?.id && !(detail.value.tasks || []).length) {
+      try {
+        const full = await getOrder(detail.value.id)
+        const tasks = full.data?.tasks || []
+        if (tasks.length) {
+          detail.value = {
+            ...full.data,
+            tasks: tasks.map(t => ({ ...t, canReport: false }))
+          }
+        }
+      } catch (e) {
+        console.error('[h5/report] 派工补全工序失败', e)
+      }
+    }
     if (detail.value && detail.value.id) {
       await reloadGuides()
     }
@@ -742,11 +818,26 @@ function syncAssignSelection() {
 }
 
 async function toggleAssignPanel() {
-  assignPanelOpen.value = !assignPanelOpen.value
   if (assignPanelOpen.value) {
+    assignPanelOpen.value = false
+    return
+  }
+  assignBlockedTip.value = ''
+  assignChecking.value = true
+  try {
     await loadAssignWorkers()
     await loadAssignDepts()
+    const blocked = resolveAssignBlockedTip()
+    if (blocked) {
+      assignBlockedTip.value = blocked
+      assignPanelOpen.value = false
+      return
+    }
+    assignPanelOpen.value = true
+    syncAssignSelection()
     await loadAssignSuggest()
+  } finally {
+    assignChecking.value = false
   }
 }
 
@@ -778,12 +869,38 @@ async function loadAssignSuggest() {
   }
 }
 
+function isAssignNoDeptMsg(msg) {
+  return String(msg || '').includes('还没挂部门')
+}
+
+function isAssignNoWorkersMsg(msg) {
+  return String(msg || '').includes('没有可派的员工')
+}
+
+/** 返回阻断派工的提示文案；空串=可展开选项 */
+function resolveAssignBlockedTip() {
+  if (assignWorkersError.value) return ''
+  if (lastAssignWorkersMsg.value && isAssignNoDeptMsg(lastAssignWorkersMsg.value)) return ASSIGN_NO_DEPT_TIP
+  if (lastAssignDeptsMsg.value && isAssignNoDeptMsg(lastAssignDeptsMsg.value)) return ASSIGN_NO_DEPT_TIP
+  if (lastAssignWorkersMsg.value && isAssignNoWorkersMsg(lastAssignWorkersMsg.value)) return ASSIGN_NO_WORKERS_TIP
+  if (role === 3 && !assignWorkersList.value.length) {
+    if (!assignDeptError.value && !assignDeptList.value.length) return ASSIGN_NO_DEPT_TIP
+    if (assignDeptList.value.length) return ASSIGN_NO_WORKERS_TIP
+  }
+  return ''
+}
+
+const lastAssignWorkersMsg = ref('')
+const lastAssignDeptsMsg = ref('')
+
 async function loadAssignWorkers() {
   if (!canAssign) return
   assignWorkersError.value = false
+  lastAssignWorkersMsg.value = ''
   try {
     const res = await assignWorkers()
     assignWorkersList.value = res.data || []
+    lastAssignWorkersMsg.value = res.msg || ''
   } catch {
     assignWorkersList.value = []
     assignWorkersError.value = true
@@ -795,12 +912,15 @@ async function loadAssignDepts() {
   const t = currentTask.value
   if (!t?.id) {
     assignDeptList.value = []
+    lastAssignDeptsMsg.value = ''
     return
   }
   assignDeptError.value = false
+  lastAssignDeptsMsg.value = ''
   try {
     const res = await assignDepartments(t.id)
     assignDeptList.value = res.data || []
+    lastAssignDeptsMsg.value = res.msg || ''
   } catch {
     assignDeptList.value = []
     assignDeptError.value = true
@@ -816,27 +936,38 @@ async function saveAssign() {
   assignSaving.value = true
   try {
     if (assignMode.value === 'dept') {
-      const deptId = assignSelectedDeptId.value ? Number(assignSelectedDeptId.value) : null
-      await assign(t.id, [], deptId || null)
+      const raw = Number(assignSelectedDeptId.value)
+      const deptId = raw > 0 ? raw : null
+      await assign(t.id, [], deptId)
       showSuccessToast(deptId ? '已派给班组' : '已取消派工')
     } else {
       const ids = [...new Set(assignSelectedIds.value.map(Number).filter(x => x > 0))]
       await assign(t.id, ids)
       showSuccessToast(ids.length ? '已派工' : '已取消派工')
     }
-    const res = await getOrderByNo(detail.value.orderNo)
-    detail.value = res.data
+    await reloadDetail()
     syncAssignSelection()
     assignPanelOpen.value = false
   } catch (e) {
-    showToast(e?.msg || e?.message || '派工失败，请检查网络后重试；还不行请联系管理员确认工序和人员安排是否正确。，请检查网络后重试；还不行请联系管理员确认工序和人员安排是否正确。')
+    showToast(e?.msg || e?.message || '派工失败，请检查网络后重试；还不行请联系管理员确认工序和人员安排是否正确。')
   } finally {
     assignSaving.value = false
   }
 }
 
+async function clearAssign() {
+  assignMode.value = 'person'
+  assignSelectedIds.value = []
+  assignSelectedDeptId.value = 0
+  await saveAssign()
+}
+
 function validate() {
   if (!form.value.operationId) { showToast('请选择工序'); return false }
+  if (!canReportCurrent.value) {
+    showToast('【待人定】这道工序你报不了，点下面「派工」派给工人。')
+    return false
+  }
   if (form.value.defectQty > 0 && !form.value.defectId) {
     showToast('填了不良品数量就得选一个不良原因，不然没法提交。')
     return false
@@ -1166,6 +1297,7 @@ async function onSubmit() {
 .assign-suggest-item .meta { display: block; margin-top: 2px; font-size: 12px; color: var(--app-text-3); }
 .assign-mode { display: flex; gap: 16px; margin-bottom: 8px; font-size: 14px; color: var(--app-text-2); }
 .assign-save { width: 100%; height: 40px; margin-top: 8px; }
+.assign-clear { display: block; width: 100%; margin-top: 8px; text-align: center; }
 .guide-block {
   background: var(--app-card); border-radius: var(--h5-card-radius); padding: var(--h5-card-padding);
   margin-bottom: 16px; box-shadow: var(--app-shadow);

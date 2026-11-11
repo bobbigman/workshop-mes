@@ -5,13 +5,23 @@
       <el-select v-model="userTypeFilter" clearable placeholder="人员类型" style="width:140px" @change="onSearch">
         <el-option v-for="o in USER_TYPE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
       </el-select>
-      <el-button type="primary" @click="onSearch">查询</el-button>
-      <el-button type="success" @click="openCreate">+ 创建用户</el-button>
+      <el-button @click="onSearch">查询</el-button>
+      <el-dropdown trigger="click" @command="onCreateMenu">
+        <el-button>
+          新增<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+        </el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="create">新增</el-dropdown-item>
+            <el-dropdown-item command="copy">复制</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
       <ImportDialog entity-type="user" title="导入用户" @done="load" />
       <el-button @click="onToolbarEdit">编辑</el-button>
       <el-button @click="onToolbarQr">二维码</el-button>
       <el-button @click="onToolbarToggle">{{ selectedOne?.status === 1 ? '停用' : (selectedOne ? '启用' : '启用/停用') }}</el-button>
-      <el-button type="danger" @click="onToolbarDelete">删除</el-button>
+      <el-button @click="onToolbarDelete">删除</el-button>
     </div>
     <mes-table
       ref="tableRef"
@@ -53,7 +63,8 @@
     </mes-table>
     <mes-pager v-model:page="page" v-model:page-size="pageSize" :total="total" @change="load" />
 
-    <el-dialog v-model="dlg" :title="editingId ? '编辑用户' : '创建用户'" width="480px">
+    <el-dialog v-model="dlg" :title="editingId ? '编辑用户' : (copying ? '复制用户' : '创建用户')" width="480px">
+      <el-alert v-if="copying" title="请填写新账号和初始密码；部门、角色、人员类型、工价倍数已带入，可再改。" type="info" :closable="false" show-icon style="margin-bottom:12px" />
       <el-form :model="form" label-width="110px">
         <el-form-item label="账号"><el-input v-model="form.account" /></el-form-item>
         <el-form-item label="手机号"><el-input v-model="form.phone" /></el-form-item>
@@ -128,9 +139,10 @@ import {
 } from '@/api/sys'
 import ImportDialog from '@/components/ImportDialog.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { ArrowDown } from '@element-plus/icons-vue'
 import { USER_TYPE_OPTIONS, userTypeLabel, userTypeTagType } from '@/constants/userType'
 
-const list = ref([]), keyword = ref(''), userTypeFilter = ref(null), dlg = ref(false), editingId = ref(null)
+const list = ref([]), keyword = ref(''), userTypeFilter = ref(null), dlg = ref(false), editingId = ref(null), copying = ref(false)
 const page = ref(1), pageSize = ref(20), total = ref(0)
 const emptyForm = () => ({ account: '', phone: '', wechatId: '', wecomUserId: '', name: '', role: 1, userType: 0, wageCoeff: 1, password: '', deptIds: [] })
 const form = ref(emptyForm())
@@ -187,6 +199,10 @@ function onToolbarEdit() { const row = requireOne('编辑'); if (row) openEdit(r
 function onToolbarQr() { const row = requireOne('二维码'); if (row) openQr(row) }
 function onToolbarToggle() { const row = requireOne(selectedOne.value?.status === 1 ? '停用' : '启用'); if (row) onToggleStatus(row) }
 function onToolbarDelete() { const row = requireOne('删除'); if (row) onDelete(row) }
+function onCreateMenu(cmd) {
+  if (cmd === 'create') { openCreate(); return }
+  if (cmd === 'copy') { const row = requireOne('复制'); if (row) openCopy(row) }
+}
 
 function formatCoeff(v) {
   const n = Number(v)
@@ -200,12 +216,32 @@ function onUserTypeChange(val) {
 
 function openCreate() {
   editingId.value = null
+  copying.value = false
   form.value = { ...emptyForm(), password: 'Admin123' }
+  dlg.value = true
+}
+
+function openCopy(row) {
+  editingId.value = null
+  copying.value = true
+  form.value = {
+    account: '',
+    phone: '',
+    wechatId: '',
+    wecomUserId: '',
+    name: row.name || '',
+    role: row.role,
+    userType: row.userType ?? 0,
+    wageCoeff: row.wageCoeff ?? 1,
+    password: 'Admin123',
+    deptIds: [...(row.deptIds || [])]
+  }
   dlg.value = true
 }
 
 function openEdit(row) {
   editingId.value = row.id
+  copying.value = false
   form.value = {
     account: row.account,
     phone: row.phone,

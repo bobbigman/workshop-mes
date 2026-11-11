@@ -1,6 +1,7 @@
 ﻿<template>
   <div>
     <ValueTip :text="VALUE_TIPS.order" />
+    <div class="sticky-toolbar-block">
     <div class="toolbar">
       <!-- 快捷过滤：字段 + 比较符 + 值（对标金蝶） -->
       <el-select
@@ -77,10 +78,10 @@
         class="toolbar-value"
         @keyup.enter="onSearch"
       />
-      <el-button type="primary" @click="onSearch">查询</el-button>
+      <el-button @click="onSearch">查询</el-button>
       <el-button @click="onReset">重置</el-button>
       <el-dropdown v-if="isAdmin" trigger="click" @command="onCreateMenu">
-        <el-button type="primary">
+        <el-button>
           新增<el-icon class="el-icon--right"><ArrowDown /></el-icon>
         </el-button>
         <template #dropdown>
@@ -119,8 +120,9 @@
           </el-dropdown-menu>
         </template>
       </el-dropdown>
-      <el-button type="success" @click="onToolbarReport">报工</el-button>
-      <el-button v-if="isAdmin" type="danger" @click="onToolbarDelete">删除</el-button>
+      <el-button @click="onToolbarReport">报工</el-button>
+      <el-button v-if="canAssign" @click="onToolbarAssign">派工</el-button>
+      <el-button v-if="isAdmin" @click="onToolbarDelete">删除</el-button>
       <el-button v-if="isAdmin && canPrint" @click="printSettingDlg = true">打印设置</el-button>
     </div>
 
@@ -135,6 +137,7 @@
         :aria-selected="statusTab === t.key"
         @click="onStatusTab(t.key)"
       >{{ t.label }} {{ t.count }}</button>
+    </div>
     </div>
 
     <!-- 桌面：表格；手机：卡片，避免窄屏挤成碎字 -->
@@ -346,6 +349,11 @@
                 @change="(v) => onAssignDeptChange(row, v)"
               >
                 <el-option
+                  v-if="row.assigneeDepartmentId"
+                  label="不派班组（取消）"
+                  :value="0"
+                />
+                <el-option
                   v-for="d in (deptOptionsMap[row.id] || (row.assigneeDepartmentId ? [{ id: row.assigneeDepartmentId, name: row.assigneeDepartmentName || '班组' }] : []))"
                   :key="d.id"
                   :label="d.name"
@@ -367,6 +375,14 @@
               >
                 <el-option v-for="u in workerOptions" :key="u.id" :label="u.name" :value="u.id" />
               </el-select>
+              <el-button
+                v-if="row.assigneeDepartmentId || (row.assignees || []).length"
+                link
+                type="primary"
+                size="small"
+                class="assign-clear-btn"
+                @click="onClearAssign(row)"
+              >取消派工</el-button>
             </div>
             <span v-else>—</span>
           </template>
@@ -718,6 +734,11 @@ function onToolbarReport() {
   else if (row) ElMessage.warning('只有「已审核」或「报工中」的工单可以报工')
 }
 
+function onToolbarAssign() {
+  const row = requireOne('派工')
+  if (row) openDetail(row)
+}
+
 function onToolbarDelete() {
   const row = requireOne('删除')
   if (row) onDelete(row)
@@ -768,8 +789,13 @@ onMounted(async () => {
 })
 
 async function loadWorkers() {
-  const res = await assignWorkers()
-  workerOptions.value = res.data || []
+  try {
+    const res = await assignWorkers()
+    workerOptions.value = res.data || []
+  } catch {
+    // 拦截器已提示（如班长未挂部门）；派工下拉留空，不挡工单详情
+    workerOptions.value = []
+  }
 }
 
 async function loadDeptOptions(row) {
@@ -1082,7 +1108,15 @@ async function onAssignChange(taskRow, v) {
   detail.value = res.data
 }
 
+async function onClearAssign(taskRow) {
+  await assign(taskRow.id, [])
+  ElMessage.success('已取消派工')
+  const res = await getOrder(detail.value.id)
+  detail.value = res.data
+}
+
 async function onAssignDeptChange(taskRow, deptId) {
+  // 0 / null / '' = 清空班组；clearable 的 X 与下拉里「不派班组」都会走到这里
   if (deptId) {
     await assign(taskRow.id, [], deptId)
     ElMessage.success('已派给班组')
@@ -1147,6 +1181,7 @@ async function onDelete(row) {
 }
 .detail-tasks { margin-top: var(--app-section-gap); }
 .assign-cell { display: flex; flex-direction: column; }
+.assign-clear-btn { align-self: flex-start; margin-top: 2px; padding: 0; height: auto; }
 .assign-suggest { margin-bottom: 6px; }
 .assign-suggest-title { font-size: 12px; color: var(--app-text-3); margin-bottom: 4px; }
 .assign-suggest-list { display: flex; flex-direction: column; gap: 4px; max-height: 132px; overflow: auto; }

@@ -39,11 +39,13 @@
       </select>
     </label>
 
-    <label class="field">
-      <span>拍照（可选）</span>
-      <input type="file" accept="image/*" capture="environment" @change="onFile" />
+    <div class="field">
+      <label class="photo-btn">
+        {{ file ? '重新拍照' : '拍照上传' }}
+        <input type="file" accept="image/*" capture="environment" @change="onFile" />
+      </label>
       <div v-if="preview" class="preview"><img :src="preview" alt="预览" /></div>
-    </label>
+    </div>
 
     <button type="button" class="submit" :disabled="submitting" @click="onSubmit">
       {{ submitting ? '提交中…' : '提交上报' }}
@@ -148,11 +150,20 @@ async function onSubmit() {
   background: color-mix(in srgb, var(--app-danger) 8%, white);
 }
 .field { display: block; margin-bottom: 14px; }
-.field span { display: block; margin-bottom: 6px; font-size: 13px; color: var(--app-text-2); }
+.field > span { display: block; margin-bottom: 6px; font-size: 13px; color: var(--app-text-2); }
 .field textarea, .field input[type="text"], .field select {
   width: 100%; box-sizing: border-box; padding: 10px 12px;
   border: 1px solid var(--app-border); border-radius: 8px; font-size: 15px;
   background: var(--app-card); color: var(--app-text-1);
+}
+.photo-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 40px; padding: 0 16px; border-radius: 8px;
+  border: 1px solid var(--app-border); background: var(--app-card);
+  color: var(--app-text-1); font-size: 15px; cursor: pointer;
+}
+.photo-btn input[type="file"] {
+  position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden;
 }
 .date-hint { margin: -6px 0 14px; color: var(--app-text-3); font-size: 13px; line-height: 1.5; }
 .preview { margin-top: 8px; }

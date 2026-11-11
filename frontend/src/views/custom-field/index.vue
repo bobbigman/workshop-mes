@@ -8,9 +8,19 @@
         <el-option value="operation" label="工序" />
         <el-option value="report" label="报工" />
       </el-select>
-      <el-button type="success" @click="openCreate">+ 添加字段</el-button>
+      <el-dropdown trigger="click" @command="onCreateMenu">
+        <el-button>
+          新增<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+        </el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="create">新增</el-dropdown-item>
+            <el-dropdown-item command="copy">复制</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
       <el-button @click="onToolbarEdit">编辑</el-button>
-      <el-button type="danger" :loading="deletingId !== null" @click="onToolbarDelete">删除</el-button>
+      <el-button :loading="deletingId !== null" @click="onToolbarDelete">删除</el-button>
     </div>
     <mes-table
       ref="tableRef"
@@ -38,7 +48,8 @@
       </el-table-column>
     </mes-table>
 
-    <el-dialog v-model="dlg" :title="editingId ? '编辑自定义字段' : '创建自定义字段'" width="480px">
+    <el-dialog v-model="dlg" :title="editingId ? '编辑自定义字段' : (copying ? '复制自定义字段' : '创建自定义字段')" width="480px">
+      <el-alert v-if="copying" title="类型和选项已带入；字段编码已清空，请按需要重填后保存。" type="info" :closable="false" show-icon style="margin-bottom:12px" />
       <el-form :model="form" label-width="120px">
         <el-form-item v-if="target==='work_order_task'" label="所属工序" required>
           <el-select v-model="form.operationId" :disabled="!!editingId" filterable>
@@ -93,9 +104,10 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { getOperationList } from '@/api/base'
 import { getCustomFields, createCustomField, updateCustomField, deleteCustomField } from '@/api/prod'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { ArrowDown } from '@element-plus/icons-vue'
 
 const operations = ref([])
-const target = ref('work_order'), list = ref([]), dlg = ref(false), editingId = ref(null)
+const target = ref('work_order'), list = ref([]), dlg = ref(false), editingId = ref(null), copying = ref(false)
 const form = ref({ fieldName: '', fieldKey: '', fieldType: 'single', options: [''], showInOrderList: false })
 const deletingId = ref(null)
 const tableRef = ref(null), selectedRows = ref([])
@@ -131,6 +143,10 @@ function requireOne(actionLabel) {
 }
 function onToolbarEdit() { const row = requireOne('编辑'); if (row) openEdit(row) }
 function onToolbarDelete() { const row = requireOne('删除'); if (row) onDelete(row) }
+function onCreateMenu(cmd) {
+  if (cmd === 'create') { openCreate(); return }
+  if (cmd === 'copy') { const row = requireOne('复制'); if (row) openCopy(row) }
+}
 
 async function onDelete(row) {
   if (deletingId.value !== null) return
@@ -154,12 +170,31 @@ async function onDelete(row) {
 
 function openCreate() {
   editingId.value = null
+  copying.value = false
   form.value = { fieldName: '', fieldKey: '', fieldType: 'single', options: [''], showInOrderList: false }
+  dlg.value = true
+}
+
+function openCopy(row) {
+  editingId.value = null
+  copying.value = true
+  form.value = {
+    operationId: row.operationId,
+    fieldName: row.fieldName,
+    unitText: row.unitText,
+    description: row.description,
+    pricingRequired: row.pricingRequired,
+    fieldKey: '',
+    fieldType: row.fieldType,
+    options: row.options && row.options.length ? [...row.options] : [''],
+    showInOrderList: !!row.showInOrderList
+  }
   dlg.value = true
 }
 
 function openEdit(row) {
   editingId.value = row.id
+  copying.value = false
   form.value = {
     operationId: row.operationId, fieldName: row.fieldName, unitText: row.unitText, description: row.description, pricingRequired: row.pricingRequired,
     fieldKey: row.fieldKey || '',
