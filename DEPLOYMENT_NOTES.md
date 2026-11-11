@@ -41,3 +41,21 @@
 - 用开发机 appsettings / start.bat 整文件盖服务器。
 - 把 `ASPNETCORE_URLS` 从 https 回退成 http（已上 HTTPS 的站点）。
 - 把更新包里的 FDD `WorkshopMes.exe` / runtimeconfig / deps 拷进自包含安装目录。
+
+## 版本号规则（2026-11-12 定稿，改打包脚本前必看）
+
+原则：**版本号在打包入口定一次，编译只消费、不再递增。**
+
+做法（ackend/pack-update.ps1 已是这个顺序，别倒回去）：
+
+1. 1/5 先跑 ump-version.ps1，把 ackend/version.txt 与 rontend/package.json 同时 +1，拿到本次包版本；
+2. 2/5 再 
+pm run build——此时前端读到的是新号，登录页版本 = 包版本；
+3. 3/5 再 dotnet publish -p:SkipVersionBump=true，编译不再自增；
+4. 4/5 收尾以入口定下的号为准，并回查 DLL FileVersion 必须等于它，不等直接 throw。
+
+反向顺序（先构建前端、后编译后端）会造成包里的前端、DLL、说明三处版本不一致，且打包后源码版本继续往前跑，开发机显示的号永远比发行包高——这是 1.1.538/539 错位的根因。
+
+WorkshopMes.csproj 的 BumpPatchVersion 只在 Configuration=Release 时递增，dotnet run / Debug 编译不改版本号，所以开发机登录页显示的就是最近一次发行包版本。
+
+验收（每次打包后核对）：前端 bundle 里的版本串、DLL FileVersion、README-update.txt 两处锚点，三处必须是同一个号。

@@ -110,6 +110,7 @@ workshop-mes/
 - 移动端扫码优先 PDA 硬件扫码头（键盘模拟），手机摄像头扫码需 HTTPS。
 - 真机验证手机画面：用 adb 截屏 + UI 树 + 读源码（**不要 OCR**），见 `.cursor/rules/phone-screen-adb.mdc` 与 `docs/开发手册和方案/41`。
 - **已上线部署更新**：只用增量包，绝不覆盖服务器 `appsettings*.json` / `start.bat`（见根目录 `DEPLOYMENT_NOTES.md`、`docs/59`）。
+- **版本号只在打包入口定一次**：先 bump（version.txt + package.json 同步）→ 再构建前端 → 再 `dotnet publish -p:SkipVersionBump=true`；Debug 编译不递增。别把顺序倒成"先构建前端、后编译后端"，否则包内前端/DLL/说明三处版本不一致。见 `DEPLOYMENT_NOTES.md` 的「版本号规则」。
 - 前端开发者只需掌握 Vue3 的「模板语法 + v-model + 调 API」，其余用现成组件库。
 - 异常不吞、必须抛且带上下文：SQL 出错带 SQL 原文；API 出错带 网址+报文+返回；其它带「位置+做什么失败」。统一用 `Common/ThrowHelper.cs`。
 - 命名空间统一 `ahu.MicrosoftMes`。
