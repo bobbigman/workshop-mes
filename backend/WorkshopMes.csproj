@@ -4,13 +4,14 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>ahu.MicrosoftMes</RootNamespace>
-    <!-- 版本唯一来源：version.txt；每次真实编译 patch +1（BumpPatchVersion） -->
+    <!-- 版本唯一来源：version.txt；只有 Release 编译（即发版/打包）patch +1（BumpPatchVersion） -->
+    <!-- 日常 dotnet run / Debug 编译只读取、不递增：开发期版本号不会跑到发行包前面 -->
     <Version>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)\version.txt').Trim())</Version>
   </PropertyGroup>
 
   <Target Name="BumpPatchVersion"
           BeforeTargets="GenerateAssemblyInfo"
-          Condition="'$(DesignTimeBuild)' != 'true' AND '$(SkipVersionBump)' != 'true'">
+          Condition="'$(DesignTimeBuild)' != 'true' AND '$(SkipVersionBump)' != 'true' AND '$(Configuration)' == 'Release'">
     <PropertyGroup>
       <_BumpVersionFile>$(IntermediateOutputPath)bumped-version.txt</_BumpVersionFile>
     </PropertyGroup>

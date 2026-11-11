@@ -10,15 +10,27 @@ $backend = $PSScriptRoot
 $root = Split-Path $backend -Parent
 $out = Join-Path $backend "publish-update"
 
-# 0/4 刷新企微客户问答库（docs/企微客户问答库.docx）：从 SupportDocs 15/19/08 生成并自动 version+1。
+# 0/5 刷新企微客户问答库（docs/企微客户问答库.docx）：从 SupportDocs 15/19/08 生成并自动 version+1。
 # 幂等：三份源文件没变化则不升版。失败即抛，不交付残缺包。详见 docs/未做指令/239。
-Write-Host "== 0/4 refresh WeCom customer QA docx =="
+Write-Host "== 0/5 refresh WeCom customer QA docx =="
 $qaScript = Join-Path $root "scripts\build-wecom-qa.ps1"
 if (-not (Test-Path $qaScript)) { throw "build-wecom-qa.ps1 not found: $qaScript" }
 & powershell -NoProfile -ExecutionPolicy Bypass -File $qaScript
 if ($LASTEXITCODE -ne 0) { throw "build-wecom-qa.ps1 failed (exit $LASTEXITCODE)" }
 
-Write-Host "== 1/4 frontend build =="
+# 1/5 先定版本号，再构建。版本号在打包入口 +1 一次，前端 package.json 与后端 version.txt 同步；
+# 后面的编译一律 -p:SkipVersionBump=true，只消费这一个号。
+# 目的：包里的前端、DLL、说明文件是同一个版本；且打包之后源码版本不再变动。
+# 反例（旧流程）：前端先按旧号构建 → publish 时 csproj 才 +1 → 说明与包里的前端、DLL 对不上。
+Write-Host "== 1/5 bump version (pack entry) =="
+$bumpedFile = Join-Path $root ".tmp\pack-version.txt"
+& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $backend "bump-version.ps1") -OutFile $bumpedFile
+if ($LASTEXITCODE -ne 0) { throw "bump-version.ps1 failed (exit $LASTEXITCODE)" }
+$packVer = ([System.IO.File]::ReadAllText($bumpedFile)).Trim()
+if ($packVer -notmatch '^\d+\.\d+\.\d+$') { throw "bump-version.ps1 输出异常: $packVer" }
+Write-Host "pack version -> $packVer"
+
+Write-Host "== 2/5 frontend build =="
 Set-Location (Join-Path $root "frontend")
 npm run build
 if ($LASTEXITCODE -ne 0) { throw "frontend build failed" }
@@ -28,10 +40,11 @@ if (Test-Path $wwwSrc) { Remove-Item $wwwSrc -Recurse -Force }
 New-Item -ItemType Directory -Path $wwwSrc | Out-Null
 Copy-Item (Join-Path $root "frontend\dist\*") $wwwSrc -Recurse -Force
 
-Write-Host "== 2/4 dotnet publish (framework-dependent, small) =="
+Write-Host "== 3/5 dotnet publish (framework-dependent, small) =="
 Set-Location $backend
 if (Test-Path $out) { Remove-Item $out -Recurse -Force }
-dotnet publish -c Release -r win-x64 --self-contained false -o $out
+# SkipVersionBump：版本已在 1/5 定好，这里只消费，避免二次递增
+dotnet publish -c Release -r win-x64 --self-contained false -p:SkipVersionBump=true -o $out
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed" }
 
 $wwwDst = Join-Path $out "wwwroot"
@@ -77,17 +90,35 @@ if ($bad) { throw ("update pack must NOT contain: " + (($bad | Sort-Object -Uniq
 if (Test-Path (Join-Path $out "publish-update")) { Remove-Item (Join-Path $out "publish-update") -Recurse -Force }
 if (Test-Path (Join-Path $out "_s10_evidence")) { Remove-Item (Join-Path $out "_s10_evidence") -Recurse -Force }
 
-Write-Host "== 3/4 write apply script + readme =="
+Write-Host "== 4/5 write apply script + readme =="
 Copy-Item (Join-Path $backend "apply-update.bat") (Join-Path $out "apply-update.bat") -Force
 
-# 包版本以实际编出的 DLL 为准：version.txt 在构建时已被 bump 到下一版，不能用它。
+# 版本以 1/5 定下的 $packVer 为准，并回查 DLL 的 FileVersion 必须一致。
+# SkipVersionBump=true 时 FileVersion 就是 version.txt 里的号，对不上说明流程被改坏了，宁可 throw 也不交付。
 $verFile = Join-Path $out "WorkshopMes.dll"
 if (-not (Test-Path $verFile)) { throw "WorkshopMes.dll missing in pack: $verFile" }
 $fv = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($verFile).FileVersion
 if ([string]::IsNullOrWhiteSpace($fv)) { throw "WorkshopMes.dll has no FileVersion" }
 $fvParts = $fv.Split('.')
 if ($fvParts.Length -lt 3) { throw "unexpected FileVersion format: $fv" }
-$packVer = "$($fvParts[0]).$($fvParts[1]).$($fvParts[2])"
+$dllVer = "$($fvParts[0]).$($fvParts[1]).$($fvParts[2])"
+if ($dllVer -ne $packVer) {
+  throw ("pack version mismatch: entry=$packVer, dll FileVersion=$dllVer (SkipVersionBump 是否漏了？)")
+}
+# 前端也必须带上同一个号：按 index.html 的入口 JS 查版本串（登录页角落的版本就是它）
+$indexHtml = Join-Path $out "wwwroot\index.html"
+if (Test-Path $indexHtml) {
+  $html = [System.IO.File]::ReadAllText($indexHtml)
+  $mJs = [regex]::Match($html, '/assets/(index-[A-Za-z0-9_-]+\.js)')
+  if ($mJs.Success) {
+    $frontEntry = Join-Path $out ("wwwroot\assets\" + $mJs.Groups[1].Value)
+    if (Test-Path $frontEntry) {
+      $frontText = [System.IO.File]::ReadAllText($frontEntry)
+      if ($frontText.Contains(('"' + $packVer + '"'))) { Write-Host "frontend bundle carries $packVer" }
+      else { Write-Host "[WARN] 前端入口 JS 未检索到 $packVer，登录页版本需现场 Ctrl+F5 核对" }
+    }
+  }
+}
 
 # 说明文件里的版本号必须等于本次包版本，否则现场核对登录页版本号会对不上。
 # 历史上说明文件长期滞后（如包 1.1.400 时仍写 1.1.395），故在此强制戳版并对不上就抛。
