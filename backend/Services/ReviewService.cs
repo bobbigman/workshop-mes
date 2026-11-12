@@ -458,6 +458,8 @@ public class ReviewService : IReviewService
         report.ReviewedBy = currentUserId;
         report.ReviewedAt = DateTime.Now;
         report.RejectReason = null;
+        report.UpdatedBy = currentUserId;
+        report.UpdatedAt = report.ReviewedAt;
         await _db.SaveChangesAsync();
         await tx.CommitAsync();
         return ApiResult<object?>.OkMsg();
@@ -484,6 +486,8 @@ public class ReviewService : IReviewService
         report.ReviewedBy = currentUserId;
         report.ReviewedAt = DateTime.Now;
         report.RejectReason = reason;
+        report.UpdatedBy = currentUserId;
+        report.UpdatedAt = report.ReviewedAt;
         await _db.SaveChangesAsync();
 
         // 退回后进度回落，重算工单状态
@@ -533,6 +537,8 @@ public class ReviewService : IReviewService
             r.ReviewedBy = currentUserId;
             r.ReviewedAt = now;
             r.RejectReason = null;
+            r.UpdatedBy = currentUserId;
+            r.UpdatedAt = now;
             n++;
         }
         await _db.SaveChangesAsync();

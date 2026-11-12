@@ -103,7 +103,28 @@ public class PriceTimelineService(AppDbContext db)
             && x.EffectiveFrom <= day && (x.EffectiveTo == null || x.EffectiveTo >= day)))
             candidates.Add((root, await new OperationAttributeService(db).FieldsAsync(factoryId, operationId), null));
         if (proposed != null) candidates.Add((proposed, proposedFields!, null));
-        var selected = OperationPriceListService.SelectTable(candidates.Select(x => x.Table), productId, operationId, productCode, operationName);
+
+        // 本产品挂在其他工序上的价目表（用于「挂错工序」分型；不含本工序）
+        var otherOpRows = await (
+            from t in db.OperationPriceLists.AsNoTracking()
+            join o in db.Operations.AsNoTracking() on t.OperationId equals o.Id
+            where t.FactoryId == factoryId && t.ProductId == productId && t.OperationId != operationId
+            orderby t.UpdatedAt descending
+            select new { o.Name, t.Code, t.Status }
+        ).Take(5).ToListAsync();
+        var otherOpTables = otherOpRows
+            .Select(x => (OperationName: x.Name, Code: x.Code, Status: x.Status))
+            .ToList();
+
+        var selected = OperationPriceListService.SelectTable(
+            candidates.Select(x => x.Table),
+            productId,
+            operationId,
+            productCode,
+            operationName,
+            roots,
+            otherOpTables,
+            day);
         var candidate = candidates.Single(x => ReferenceEquals(x.Table, selected));
         return new(candidate.Table, candidate.Fields, candidate.Revision, productCode, operationName);
     }

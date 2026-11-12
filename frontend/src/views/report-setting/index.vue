@@ -2,8 +2,8 @@
   <div class="page">
     <ValueTip :text="VALUE_TIPS.reportSetting" />
     <el-alert type="info" :closable="false" show-icon style="margin-bottom:16px">
-      <template #title>工人手机看什么、能不能串报、数量上限怎么算——三件事放在同一页改</template>
-      保存后立即生效；三个区块互不影响，可只改其中一项
+      <template #title>工人手机看什么、能不能串报、数量上限、要不要多计量——放在同一页改</template>
+      保存后立即生效；各区块互不影响，可只改其中一项
     </el-alert>
 
     <el-card>
@@ -63,6 +63,17 @@
           </el-radio-group>
         </el-form-item>
 
+        <el-divider />
+
+        <div class="section-title">计量单位</div>
+        <el-form-item label="多计量单位">
+          <el-radio-group v-model="form.enableMultiUom">
+            <el-radio :value="false">不需要（默认）</el-radio>
+            <el-radio :value="true">需要</el-radio>
+          </el-radio-group>
+          <div class="hint">不需要时：工序价目表计件只保留报工单位，折算固定为1；客户价表按「打」计价、现场按「把」报工时，再改成「需要」</div>
+        </el-form-item>
+
         <el-form-item>
           <el-button type="primary" :loading="saving" @click="onSave">保存</el-button>
         </el-form-item>
@@ -91,7 +102,8 @@ const form = ref({
   upstreamMode: 'soft',
   hardOperationIds: [],
   overrunRatio: 0,
-  countDefect: false
+  countDefect: false,
+  enableMultiUom: false
 })
 const operations = ref([])
 const saving = ref(false)
@@ -124,6 +136,7 @@ async function load() {
   const ratio = Number(qtyRes.data?.overrunRatio ?? 0)
   form.value.overrunRatio = Number.isFinite(ratio) ? Math.min(999, Math.max(0, Math.round(ratio))) : 0
   form.value.countDefect = qtyRes.data?.countDefect === true
+  form.value.enableMultiUom = qtyRes.data?.enableMultiUom === true
 }
 
 async function onSave() {
@@ -143,7 +156,8 @@ async function onSave() {
       }),
       saveReportQtySetting({
         overrunRatio: ratio,
-        countDefect: form.value.countDefect === true
+        countDefect: form.value.countDefect === true,
+        enableMultiUom: form.value.enableMultiUom === true
       })
     ])
     ElMessage.success('已保存，立即生效')

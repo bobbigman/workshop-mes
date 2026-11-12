@@ -25,13 +25,13 @@ description: >-
 
 | 页面 | 路径 | 状态（改完请更新） |
 |---|---|---|
-| 工单 | `views/order/index.vue` | 已对齐 |
+| 工单 | `views/order/index.vue` + `form.vue` | 已对齐；单据独立页签 `/order/new`、`/order/:id` |
 | 报工 | `views/report/index.vue` | 已对齐 |
 | 报工复核 | `views/review/index.vue` | 已对齐 |
 | 异常 | `views/abnormal/index.vue` | 已对齐 |
-| 工资 | `views/salary/index.vue` | 待对齐 |
+| 工资 | `views/salary/index.vue` | 顶栏命令+去操作列已对齐；快捷过滤 FilterField 仍待做 |
 | 计件/SKU 工资相关 | `views/salary-sku/index.vue` | 待核是否单据列表 |
-| 工序价目表 | `views/operation-price-list/index.vue` | 已对齐 |
+| 工序价目表 | `views/operation-price-list/index.vue` + `form.vue` | 已对齐；单据独立页签 `/operation-price-list/new`、`/:id` |
 | 排产等其它单据列表 | 视菜单 | 待核 |
 
 **默认不做：** `dept` / `unit` / `defect` / `user` / `custom-field` 等基础资料（单据技能范围外）。  
@@ -68,6 +68,17 @@ description: >-
    - 更新本技能表格「状态」列。  
    - 改表才动 `docs/02`；纯查询参数一般不必。
 
+## 开单据不卸列表页签（#22）
+
+原则：打开全屏单据**不得**卸掉或盖死列表页签。
+
+1. **拆路由**：列表一路由（如 `/order`），单据另路由（`/order/new`、`/order/:id`；价目表同理）。
+2. **PcTabs**：`meta.title` 登记页签；单据加载后 `setPcTabTitle(path, 工单号|单据号)`；`meta.billTab` 防止被默认标题盖回；`meta.menuPath` 侧栏高亮列表菜单。
+3. **小弹窗保留**：调价、行详情、删除确认、改数等继续用 `el-dialog` / `ElMessageBox`，不强制新页签。
+4. **禁止**：用 fullscreen `el-dialog` 盖在列表上当单据编辑壳。
+
+范本：`order/index.vue`↔`order/form.vue`，`operation-price-list/index.vue`↔`form.vue`。
+
 ## 明确不做
 
 - 完整 F7 / 搜索按钮弹窗选基础资料。  
@@ -80,5 +91,7 @@ description: >-
 # ❌ 基础资料产品列表也拆掉操作列上快捷过滤
 # ❌ 只改前端假过滤、后端仍只认旧 orderNo 参数
 # ❌ 一次改五个页面不编译
+# ❌ 全屏 dialog 盖死列表当单据
 # ✅ 对照 order/report → 改一页前后端 → build → 勾状态表
+# ✅ 列表签仍在；单据另签可来回切
 ```

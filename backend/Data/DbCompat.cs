@@ -492,6 +492,20 @@ BEGIN
   );
 END");
 
+        // 单据权限（清单 #24）：每工厂一条；默认关=与现网一致
+        await db.Database.ExecuteSqlRawAsync(@"
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'sys_document_permission_setting')
+BEGIN
+  CREATE TABLE sys_document_permission_setting (
+    id                            BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_sys_document_permission_setting PRIMARY KEY,
+    factory_id                    BIGINT NOT NULL,
+    only_creator_edit_work_order  BIT NOT NULL CONSTRAINT DF_sys_doc_perm_wo DEFAULT 0,
+    only_creator_edit_price_list  BIT NOT NULL CONSTRAINT DF_sys_doc_perm_pl DEFAULT 0,
+    updated_at                    DATETIME2 NOT NULL CONSTRAINT DF_sys_doc_perm_ua DEFAULT SYSDATETIME(),
+    CONSTRAINT UQ_sys_document_permission_setting_factory UNIQUE (factory_id)
+  );
+END");
+
         // 用户微信号（docs/80）：可空，仅记录；不做登录/推送
         await db.Database.ExecuteSqlRawAsync(@"
 IF COL_LENGTH('sys_user', 'wechat_id') IS NULL
@@ -666,7 +680,7 @@ BEGIN
   );
 END");
 
-        // 报工数量口径（docs/230）：每工厂一条；默认比例 0、不良不计入
+        // 报工数量口径（docs/230）：每工厂一条；默认比例 0、不良不计入；多计量单位默认关
         await db.Database.ExecuteSqlRawAsync(@"
 IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'sys_report_qty_setting')
 BEGIN
@@ -675,10 +689,14 @@ BEGIN
     factory_id     BIGINT NOT NULL,
     overrun_ratio  INT NOT NULL CONSTRAINT DF_sys_report_qty_ratio DEFAULT 0,
     count_defect   BIT NOT NULL CONSTRAINT DF_sys_report_qty_defect DEFAULT 0,
+    enable_multi_uom BIT NOT NULL CONSTRAINT DF_sys_report_qty_multi_uom DEFAULT 0,
     updated_at     DATETIME2 NOT NULL CONSTRAINT DF_sys_report_qty_ua DEFAULT SYSDATETIME(),
     CONSTRAINT UQ_sys_report_qty_setting_factory UNIQUE (factory_id)
   );
-END");
+END
+IF COL_LENGTH('sys_report_qty_setting','enable_multi_uom') IS NULL
+  ALTER TABLE sys_report_qty_setting ADD enable_multi_uom BIT NOT NULL CONSTRAINT DF_sys_report_qty_multi_uom DEFAULT 0;
+");
 
         await db.Database.ExecuteSqlRawAsync(@"IF COL_LENGTH('salary_statement_item','price_type') IS NULL
  ALTER TABLE salary_statement_item ADD price_type TINYINT NOT NULL DEFAULT 0;
@@ -701,6 +719,26 @@ BEGIN
     CONSTRAINT UQ_sys_user_favorite_user_menu UNIQUE (user_id, menu_key)
   );
 END");
+
+        // 清单 #23/#25：业务单据修改人 + 价目表启用留痕（幂等加列）
+        await db.Database.ExecuteSqlRawAsync(@"
+IF COL_LENGTH('prod_work_order','updated_by') IS NULL ALTER TABLE prod_work_order ADD updated_by BIGINT NULL;
+IF COL_LENGTH('prod_work_order','updated_at') IS NULL ALTER TABLE prod_work_order ADD updated_at DATETIME2 NULL;
+IF COL_LENGTH('prod_report','updated_by') IS NULL ALTER TABLE prod_report ADD updated_by BIGINT NULL;
+IF COL_LENGTH('prod_report','updated_at') IS NULL ALTER TABLE prod_report ADD updated_at DATETIME2 NULL;
+IF COL_LENGTH('prod_abnormal','updated_by') IS NULL ALTER TABLE prod_abnormal ADD updated_by BIGINT NULL;
+IF COL_LENGTH('prod_abnormal','updated_at') IS NULL ALTER TABLE prod_abnormal ADD updated_at DATETIME2 NULL;
+IF COL_LENGTH('salary_statement','updated_by') IS NULL ALTER TABLE salary_statement ADD updated_by BIGINT NULL;
+IF COL_LENGTH('salary_statement','updated_at') IS NULL ALTER TABLE salary_statement ADD updated_at DATETIME2 NULL;
+IF OBJECT_ID('base_operation_price_list','U') IS NOT NULL
+BEGIN
+  IF COL_LENGTH('base_operation_price_list','created_by') IS NULL ALTER TABLE base_operation_price_list ADD created_by BIGINT NULL;
+  IF COL_LENGTH('base_operation_price_list','activated_by') IS NULL ALTER TABLE base_operation_price_list ADD activated_by BIGINT NULL;
+  IF COL_LENGTH('base_operation_price_list','deactivated_by') IS NULL ALTER TABLE base_operation_price_list ADD deactivated_by BIGINT NULL;
+  IF COL_LENGTH('base_operation_price_list','deactivated_at') IS NULL ALTER TABLE base_operation_price_list ADD deactivated_at DATETIME2 NULL;
+  IF COL_LENGTH('base_operation_price_list','updated_by') IS NULL ALTER TABLE base_operation_price_list ADD updated_by BIGINT NULL;
+END
+");
 
         // 413：旧工价结构仍在则明确报错，不自动 DROP；由显式迁移 PriceRuleRemovalSchema 清理。
         var legacyConn = db.Database.GetDbConnection();

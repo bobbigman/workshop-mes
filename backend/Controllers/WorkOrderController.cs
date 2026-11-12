@@ -35,11 +35,11 @@ public class WorkOrderController : ControllerBase
 
     [HttpPut("{id:long}")]
     public Task<ApiResult<object?>> Update(long id, [FromBody] WorkOrderUpdateDto dto) =>
-        _svc.UpdateAsync(id, dto, JwtHelper.GetUserId(User), JwtHelper.GetFactoryId(User));
+        _svc.UpdateAsync(id, dto, JwtHelper.GetUserId(User), JwtHelper.GetFactoryId(User), JwtHelper.GetRole(User));
 
     [HttpPost("{id:long}/transition")]
     public Task<ApiResult<object?>> Transition(long id, [FromBody] TransitionDto dto) =>
-        _svc.TransitionAsync(id, dto.Action, JwtHelper.GetFactoryId(User));
+        _svc.TransitionAsync(id, dto.Action, JwtHelper.GetUserId(User), JwtHelper.GetFactoryId(User));
 
     [HttpPost("{id:long}/copy")]
     public Task<ApiResult<object?>> Copy(long id) =>

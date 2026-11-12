@@ -156,7 +156,10 @@
           <el-form-item label="工序顺序"><RoutingSteps v-model="form.newRouting.steps" :options="opOptions" /></el-form-item>
         </template>
         <el-form-item label="供应商"><el-input v-model="form.supplier" /></el-form-item>
-        <el-form-item label="单价"><el-input-number v-model="form.price" :min="0" :precision="2" /></el-form-item>
+        <el-form-item label="单价">
+          <el-input-number v-model="form.price" :min="0" :precision="2" />
+          <div class="field-note">参考单价，不计入计件工资；工人计件工价在「工序价目表」维护。</div>
+        </el-form-item>
         <ProductAttributes v-model="form.customValues" :fields="attributeFields" />
       </el-form>
       <div v-if="editingId" class="kf-block">
@@ -440,7 +443,12 @@ async function onSave() {
     const payload = { ...form.value, customValues: Object.fromEntries(Object.entries(form.value.customValues || {}).map(([k,v])=>[k,v==null?null:String(v)])) }
     if (editingId.value) await updateProduct(editingId.value, payload)
     else await createProduct({ ...payload, copyFromId: copyFromId.value })
-    ElMessage.success(editingId.value ? '保存成功' : '已保存为未审核；请勾选后点「业务操作 → 审核」，审核后才能建工单选用')
+    const wasCopy = !editingId.value && !!copyFromId.value
+    let tip = editingId.value
+      ? '保存成功'
+      : '已保存为未审核；请勾选后点「业务操作 → 审核」，审核后才能建工单选用'
+    if (wasCopy) tip += '。计价规则、作业指导书、图纸未随复制带来，请到新资料中补齐'
+    ElMessage.success(tip)
     dlg.value = false
     await load()
     if (form.value.newRouting) routingOptions.value = (await getRoutingList({ page: 1, pageSize: 200 })).data.list || []
@@ -477,4 +485,5 @@ async function onDelete(row) {
 .kf-block { margin-top: 4px; }
 .kf-title { font-weight: 600; margin-bottom: 8px; color: #303133; }
 .sys-meta { margin-top: 12px; padding-top: 10px; border-top: 1px solid #ebeef5; color: #909399; font-size: 12px; line-height: 1.7; }
+.field-note { margin-top: 4px; color: #909399; font-size: 12px; line-height: 1.4; }
 </style>

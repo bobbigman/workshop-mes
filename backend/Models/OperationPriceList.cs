@@ -15,6 +15,9 @@ public class OperationPriceList
     public byte PricingType { get; set; } = 1;
     public string Remark { get; set; } = "";
     public DateTime? ActivatedAt { get; set; }
+    public long? ActivatedBy { get; set; }
+    public DateTime? DeactivatedAt { get; set; }
+    public long? DeactivatedBy { get; set; }
     public byte Status { get; set; }
     public DateTime EffectiveFrom { get; set; } = DateTime.Today;
     public DateTime? EffectiveTo { get; set; }
@@ -23,6 +26,8 @@ public class OperationPriceList
     public decimal UnitsPerPriceUnit { get; set; } = 1;
     public string Version { get; set; } = "";
     public string Details { get; set; } = "{}";
+    public long? CreatedBy { get; set; }
     public DateTime CreatedAt { get; set; }
+    public long? UpdatedBy { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

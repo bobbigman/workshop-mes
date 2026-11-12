@@ -155,7 +155,7 @@
           <template v-if="row.unitPrice != null">¥{{ Number(row.unitPrice).toFixed(4) }}</template>
           <template v-else>
             <span class="wage-miss">这道工序还没定单价，找管理员设一下。</span>
-            <el-button v-if="isAdmin" link type="primary" @click="$router.push('/operation-price-list')">去设置单价</el-button>
+            <el-button v-if="isAdmin" link type="primary" @click="goSetUnitPrice(row)">去设置单价</el-button>
           </template>
         </template>
       </el-table-column>
@@ -618,6 +618,13 @@ const router = useRouter()
 const isAdmin = Number(localStorage.getItem('role') || 0) === 1
 const isLeader = Number(localStorage.getItem('role') || 0) === 3
 const canProxy = isAdmin || isLeader
+/** 缺价行跳转价目表新建并预填工序/产品（docs/452） */
+function goSetUnitPrice(row) {
+  const query = { create: '1' }
+  if (row?.operationId) query.operationId = String(row.operationId)
+  if (row?.productId) query.productId = String(row.productId)
+  router.push({ path: '/operation-price-list', query })
+}
 const managementEntry = computed(() => isReportManagementEntry(route.query))
 const managementAllowed = computed(() => canOpenReportManagement(route.query.action, localStorage.getItem('role')))
 function returnFromManagement(action) {
@@ -1300,7 +1307,7 @@ async function onCreate(keepOpen) {
     let tip = reports.length > 1
       ? `已为 ${reports.length} 人分摊，合计良品 ${goodSum}`
       : (item ? `报工成功：良品${item.goodQty} 不良${item.defectQty}` : '报工成功')
-    if (unmatched) tip += '（该工序尚未设置单价，请到工序价目表中设置）'
+    if (unmatched) tip += '。该工序暂未设置单价，本次金额暂按 0 元计；补齐单价后需重算工资单'
     if (unmatched) ElMessage.warning(tip)
     else ElMessage.success(tip)
     await load()
@@ -1728,7 +1735,7 @@ async function onBatchSubmit() {
 .duration{display:flex;gap:8px;align-items:center}
 .summary{display:flex;gap:16px;color:#606266;font-size:13px}
 .hint{margin-left:8px;color:#909399;font-size:12px}
-.wage-miss{color:#f56c6c;margin-right:4px}
+.wage-miss{color:var(--el-color-warning-dark-2);margin-right:4px}
 .alloc-wrap{width:100%}
 .alloc-list{margin-top:8px;display:flex;flex-direction:column;gap:12px}
 .alloc-op{border:1px solid #ebeef5;border-radius:4px;padding:8px}

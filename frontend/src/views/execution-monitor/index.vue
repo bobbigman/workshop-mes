@@ -211,7 +211,7 @@ function onStatusCard(status) {
 }
 
 function goOrderDetail(row) {
-  router.push({ path: '/order', query: { openId: String(row.id) } })
+  router.push({ path: `/order/${row.id}`, query: { mode: 'browse' } })
 }
 function goReport(row) {
   router.push({ path: '/report', query: { order: row.orderNo } })

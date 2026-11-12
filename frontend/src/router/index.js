@@ -11,6 +11,8 @@ const routes = [
     children: [
       { path: 'home', name: 'Home', component: () => import('@/views/home/index.vue'), meta: { title: '首页' } },
       { path: 'order', name: 'Order', component: () => import('@/views/order/index.vue'), meta: { title: '工单' } },
+      { path: 'order/new', name: 'OrderNew', component: () => import('@/views/order/form.vue'), meta: { title: '新建工单', menuPath: '/order', billTab: true } },
+      { path: 'order/:id', name: 'OrderBill', component: () => import('@/views/order/form.vue'), meta: { title: '工单', menuPath: '/order', billTab: true } },
       { path: 'order-pricing-demo', name: 'OrderPricingDemo', component: () => import('@/views/order-pricing-demo/index.vue'), meta: { title: '加工计价预览', adminOnly: true } },
       { path: 'execution-monitor', name: 'ExecutionMonitor', component: () => import('@/views/execution-monitor/index.vue'), meta: { title: '执行监控' } },
       { path: 'report', name: 'Report', component: () => import('@/views/report/index.vue'), meta: { title: '报工' } },
@@ -22,11 +24,14 @@ const routes = [
       { path: 'defect', name: 'Defect', component: () => import('@/views/defect/index.vue'), meta: { title: '不良品项', adminOnly: true } },
       { path: 'unit', name: 'Unit', component: () => import('@/views/unit/index.vue'), meta: { title: '单位', adminOnly: true } },
       { path: 'operation-price-list', name: 'OperationPriceList', component: () => import('@/views/operation-price-list/index.vue'), meta: { title: '工序价目表', adminOnly: true, feature: FEATURE.PieceWage } },
+      { path: 'operation-price-list/new', name: 'OperationPriceListNew', component: () => import('@/views/operation-price-list/form.vue'), meta: { title: '新建价目表', adminOnly: true, feature: FEATURE.PieceWage, menuPath: '/operation-price-list', billTab: true } },
+      { path: 'operation-price-list/:id', name: 'OperationPriceListBill', component: () => import('@/views/operation-price-list/form.vue'), meta: { title: '价目表', adminOnly: true, feature: FEATURE.PieceWage, menuPath: '/operation-price-list', billTab: true } },
       { path: 'user', name: 'User', component: () => import('@/views/user/index.vue'), meta: { title: '用户', adminOnly: true } },
       { path: 'dept', name: 'Dept', component: () => import('@/views/dept/index.vue'), meta: { title: '部门', adminOnly: true } },
       { path: 'custom-field', name: 'CustomField', component: () => import('@/views/custom-field/index.vue'), meta: { title: '自定义字段', adminOnly: true } },
       { path: 'wechat-alert', name: 'WechatAlert', component: () => import('@/views/wechat-alert/index.vue'), meta: { title: '微信预警', adminOnly: true, feature: FEATURE.WechatDueAlert } },
       { path: 'report-setting', name: 'ReportSetting', component: () => import('@/views/report-setting/index.vue'), meta: { title: '报工设置', adminOnly: true } },
+      { path: 'document-permission', name: 'DocumentPermission', component: () => import('@/views/document-permission/index.vue'), meta: { title: '单据权限', adminOnly: true } },
       { path: 'worker-view', redirect: '/report-setting' },
       { path: 'report-upstream', redirect: '/report-setting' },
       { path: 'report-qty', redirect: '/report-setting' },
@@ -96,7 +101,7 @@ router.beforeEach((to, from, next) => {
   }
   // 生产人员：电脑端仅工单、报工、生产报表、看板 + H5
   const h5Only = to.path.startsWith('/h5')
-  const workerQuery = to.path === '/home' || to.path === '/order' || to.path === '/execution-monitor' || to.path === '/report' || to.path === '/stat' || to.path === '/defect-stat' || to.path === '/sku-stat' || to.path === '/board' || to.path === '/board/screen' || to.path === '/about' || to.path === '/faq' || to.path === '/help' || to.path === '/advantages' || to.path === '/onboarding'
+  const workerQuery = to.path === '/home' || to.path === '/order' || to.path.startsWith('/order/') || to.path === '/execution-monitor' || to.path === '/report' || to.path === '/stat' || to.path === '/defect-stat' || to.path === '/sku-stat' || to.path === '/board' || to.path === '/board/screen' || to.path === '/about' || to.path === '/faq' || to.path === '/help' || to.path === '/advantages' || to.path === '/onboarding'
   if (role === 2 && !h5Only && !workerQuery) {
     return next('/order')
   }

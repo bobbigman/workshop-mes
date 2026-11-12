@@ -195,6 +195,7 @@ try
     builder.Services.AddScoped<WechatMessageSender>();
     builder.Services.AddScoped<WechatEventService>();
     builder.Services.AddScoped<IWorkerViewService, WorkerViewService>();
+    builder.Services.AddScoped<IDocumentPermissionService, DocumentPermissionService>();
     builder.Services.AddScoped<IReportUpstreamSettingService, ReportUpstreamSettingService>();
     builder.Services.AddScoped<IReportQtySettingService, ReportQtySettingService>();
     builder.Services.AddScoped<IKingdeeAuthService, FakeKingdeeAuthService>();

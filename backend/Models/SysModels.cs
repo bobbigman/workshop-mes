@@ -104,7 +104,19 @@ public class SysWorkerViewSetting
     public DateTime UpdatedAt { get; set; }
 }
 
-/// <summary>报工数量口径（每工厂一条；默认不超报、不良不计入下道，docs/230）</summary>
+/// <summary>单据权限（每工厂一条；默认关=与现网一致；开则非管理员仅创建人可改）</summary>
+public class SysDocumentPermissionSetting
+{
+    public long Id { get; set; }
+    public long FactoryId { get; set; }
+    /// <summary>true=仅创建人可改工单（管理员仍可改全部）</summary>
+    public bool OnlyCreatorEditWorkOrder { get; set; }
+    /// <summary>true=仅创建人可改价目表（管理员仍可改全部）</summary>
+    public bool OnlyCreatorEditPriceList { get; set; }
+    public DateTime UpdatedAt { get; set; }
+}
+
+/// <summary>报工数量口径（每工厂一条；默认不超报、不良不计入下道，docs/230；多计量单位开关同表）</summary>
 public class SysReportQtySetting
 {
     public long Id { get; set; }
@@ -113,6 +125,8 @@ public class SysReportQtySetting
     public int OverrunRatio { get; set; }
     /// <summary>true=上道已复核不良计入下道可报</summary>
     public bool CountDefect { get; set; }
+    /// <summary>true=计件价目表允许计价单位≠报工单位并填折算；默认 false</summary>
+    public bool EnableMultiUom { get; set; }
     public DateTime UpdatedAt { get; set; }
 }
 

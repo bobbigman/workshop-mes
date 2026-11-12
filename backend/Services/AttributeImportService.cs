@@ -20,10 +20,9 @@ public class AttributeImportService(AppDbContext db)
         else
         {
             Sheet(wb, "表头", new[] { "编号", "名称", "工序编号", "生效日期", "失效日期", "计价单位", "报工单位", "换算数量" });
-            Sheet(wb, "价格明细", new[] { "表编号", "行编号", "性质(base/extra/final)", "产品编号(空不限)", "金额", "不良扣价", "收费组编码", "包含行编号(逗号分隔)", "已确认(是/否)", "来源", "备注" });
+            Sheet(wb, "价格明细", new[] { "表编号", "行编号", "性质(base/extra/final)", "产品编号(空不限)", "金额", "不良扣价", "包含行编号(逗号分隔)", "已确认(是/否)", "来源", "备注" });
             Sheet(wb, "属性条件", new[] { "表编号", "行编号", "字段编码", "运算(eq/range)", "等于值", "下界", "上界", "含下界(是/否)", "含上界(是/否)" });
-            Sheet(wb, "收费组", new[] { "表编号", "组编码", "名称", "必须命中(是/否)" });
-            wb.Worksheet("属性条件").Cell(1,2).GetComment().AddText("收费组适用条件在行编号填写 @组编码；空条件表示不限。");
+            wb.Worksheet("属性条件").Cell(1,2).GetComment().AddText("行编号填价格行编号；空条件表示不限。收费组已废止，勿再使用 @组编码。");
         }
         using var ms = new MemoryStream(); wb.SaveAs(ms); return ms.ToArray();
     }
@@ -38,12 +37,12 @@ public class AttributeImportService(AppDbContext db)
     private static DateTime Date(string text) => DateTime.TryParse(text, out var date) ? date.Date : throw ThrowHelper.BizUser($"导入文件里有日期格式不对：{text}。请统一用标准日期格式（如 2026-01-15）填写所有日期列后重新上传。");
     private static bool Yes(string text) => text switch { "是" => true, "否" => false, _ => throw ThrowHelper.BizUser($"导入文件里有是/否字段填得不规范：{text}。请把该列明确填成「是」或「否」，不要留空或用其他写法后重新上传。") };
 
-    public async Task<ApiResult<ImportResultDto>> ImportAsync(string type, byte[] bytes, long factoryId, bool preview)
+    public async Task<ApiResult<ImportResultDto>> ImportAsync(string type, byte[] bytes, long factoryId, bool preview, long userId = 0)
     {
         if (type != "product") throw ThrowHelper.BizUser("价目表导入格式已升级，旧的行级导入方式已停用。请按新模板格式（指令408）重新准备导入文件。");
         using var ms = new MemoryStream(bytes);
         using var wb = new XLWorkbook(ms);
-        return type == "product" ? await ProductsAsync(wb, factoryId, preview) : await PricesAsync(wb, factoryId, preview);
+        return type == "product" ? await ProductsAsync(wb, factoryId, preview) : await PricesAsync(wb, factoryId, preview, userId);
     }
 
     private async Task<ApiResult<ImportResultDto>> ProductsAsync(XLWorkbook wb, long fid, bool preview)
@@ -100,14 +99,22 @@ public class AttributeImportService(AppDbContext db)
         return ApiResult<ImportResultDto>.Ok(result);
     }
 
-    private async Task<ApiResult<ImportResultDto>> PricesAsync(XLWorkbook wb,long fid,bool preview)
+    private async Task<ApiResult<ImportResultDto>> PricesAsync(XLWorkbook wb,long fid,bool preview,long userId)
     {
-        foreach(var name in new[]{"表头","价格明细","属性条件","收费组"}) OperationPriceListService.Require(wb.Worksheets.Any(s=>s.Name==name),$"导入的 Excel 缺少必需的工作表：{name}。请按模板要求补全对应名称的工作表后重新上传。");
-        var headers=wb.Worksheet("表头");var lines=wb.Worksheet("价格明细");var conditions=wb.Worksheet("属性条件");var groups=wb.Worksheet("收费组");
+        foreach(var name in new[]{"表头","价格明细","属性条件"}) OperationPriceListService.Require(wb.Worksheets.Any(s=>s.Name==name),$"导入的 Excel 缺少必需的工作表：{name}。请按模板要求补全对应名称的工作表后重新上传。");
+        var headers=wb.Worksheet("表头");var lines=wb.Worksheet("价格明细");var conditions=wb.Worksheet("属性条件");
         var fields=await db.CustomFields.Where(f=>f.FactoryId==fid&&f.Target=="product").ToDictionaryAsync(f=>f.Id);
         var operations=await db.Operations.Where(o=>o.FactoryId==fid).ToListAsync();var units=await db.Units.Where(u=>u.FactoryId==fid).ToListAsync();var products=await db.Products.Where(p=>p.FactoryId==fid).ToListAsync();
         var plans=new Dictionary<string,PriceListInput>();
         var result=new ImportResultDto();
+        var legacyGroupIgnored=wb.Worksheets.Any(s=>s.Name=="收费组");
+        // 兼容旧模板：价格明细第7列曾为「收费组编码」，新模板从第7列起是包含行编号。
+        var lineHeaders=Enumerable.Range(1, Math.Max(11, lines.LastColumnUsed()?.ColumnNumber() ?? 1)).Select(c => Cell(lines, 1, c)).ToList();
+        var hasLegacyGroupCol=lineHeaders.Any(h => h.Contains("收费组", StringComparison.Ordinal));
+        var includedCol=hasLegacyGroupCol ? 8 : 7;
+        var confirmedCol=hasLegacyGroupCol ? 9 : 8;
+        var sourceCol=hasLegacyGroupCol ? 10 : 9;
+        var noteCol=hasLegacyGroupCol ? 11 : 10;
         try
         {
             for(var row=2;row<=(headers.LastRowUsed()?.RowNumber()??1);row++)
@@ -118,18 +125,12 @@ public class AttributeImportService(AppDbContext db)
                 var unit=units.SingleOrDefault(u=>u.Name==Cell(headers,row,7))??throw ThrowHelper.BizUser("导入前请确认报工单位存在且唯一。");
                 plans[code]=new PriceListInput{Code=code,Name=Cell(headers,row,2),OperationId=op.Id,Status=0,EffectiveFrom=Date(Cell(headers,row,4)),EffectiveTo=Cell(headers,row,5).Length==0?null:Date(Cell(headers,row,5)),PriceUnit=Cell(headers,row,6),ReportUnitId=unit.Id,UnitsPerPriceUnit=Decimal(Cell(headers,row,8))};
             }
-            for(var row=2;row<=(groups.LastRowUsed()?.RowNumber()??1);row++)
-            {
-                var code=Cell(groups,row,1);if(code.Length==0)continue;
-                OperationPriceListService.Require(plans.ContainsKey(code),"收费组关联的价目表编号无效。请检查导入文件中收费组对应的表编号是否正确、是否已存在。");
-                plans[code].Details.Groups.Add(new PriceChargeGroup{Key=Cell(groups,row,2),Name=Cell(groups,row,3),Required=Yes(Cell(groups,row,4))});
-            }
             for(var row=2;row<=(lines.LastRowUsed()?.RowNumber()??1);row++)
             {
                 var code=Cell(lines,row,1);if(code.Length==0)continue;
                 OperationPriceListService.Require(plans.ContainsKey(code),"明细行关联的价目表编号无效。请检查导入文件中明细行的表编号是否正确、是否已存在。");
                 var product=Cell(lines,row,4);OperationPriceListService.Require(product.Length==0||products.Any(p=>p.Code==product),"明细行引用的产品编号在系统中不存在。请到「产品定义」核对产品编号，或在导入文件中修正后重新上传。");
-                plans[code].Details.Rows.Add(new AttributePriceRow{RowId=Cell(lines,row,2),Kind=Cell(lines,row,3),ProductId=product.Length==0?null:products.Single(p=>p.Code==product).Id,Amount=Cell(lines,row,5).Length==0?null:Decimal(Cell(lines,row,5)),DeductPrice=Cell(lines,row,6).Length==0?0:Decimal(Cell(lines,row,6)),GroupKey=Cell(lines,row,7),IncludedRowIds=Cell(lines,row,8).Split(',',StringSplitOptions.RemoveEmptyEntries|StringSplitOptions.TrimEntries).ToList(),Confirmed=Yes(Cell(lines,row,9)),Source=Cell(lines,row,10),Note=Cell(lines,row,11)});
+                plans[code].Details.Rows.Add(new AttributePriceRow{RowId=Cell(lines,row,2),Kind=Cell(lines,row,3),ProductId=product.Length==0?null:products.Single(p=>p.Code==product).Id,Amount=Cell(lines,row,5).Length==0?null:Decimal(Cell(lines,row,5)),DeductPrice=Cell(lines,row,6).Length==0?0:Decimal(Cell(lines,row,6)),GroupKey=null,IncludedRowIds=Cell(lines,row,includedCol).Split(',',StringSplitOptions.RemoveEmptyEntries|StringSplitOptions.TrimEntries).ToList(),Confirmed=Yes(Cell(lines,row,confirmedCol)),Source=Cell(lines,row,sourceCol),Note=Cell(lines,row,noteCol)});
             }
             for(var row=2;row<=(conditions.LastRowUsed()?.RowNumber()??1);row++)
             {
@@ -138,18 +139,21 @@ public class AttributeImportService(AppDbContext db)
                 var key=Cell(conditions,row,3);var field=fields.Values.SingleOrDefault(f=>f.FieldKey==key)??throw ThrowHelper.BizUser($"取价条件里引用的字段代号在系统中不存在：{key}。请到「自定义字段」核对字段代号，或在导入文件中修正。");
                 var c=new AttributeCondition{FieldId=field.Id,Operator=Cell(conditions,row,4),Value=Cell(conditions,row,5),Min=Cell(conditions,row,6).Length==0?null:Decimal(Cell(conditions,row,6)),Max=Cell(conditions,row,7).Length==0?null:Decimal(Cell(conditions,row,7)),IncludeMin=Yes(Cell(conditions,row,8)),IncludeMax=Yes(Cell(conditions,row,9))};
                 var target=Cell(conditions,row,2);
-                if(target.StartsWith('@')) (plans[code].Details.Groups.SingleOrDefault(g=>g.Key==target[1..])??throw ThrowHelper.BizUser("取价条件引用的收费组不存在。请检查导入文件中条件行的收费组代号是否正确、是否已在价目表中定义。")).Conditions.Add(c);
-                else (plans[code].Details.Rows.SingleOrDefault(r=>r.RowId==target)??throw ThrowHelper.BizUser("取价条件引用的价格行不存在。请检查导入文件中条件行的价格行编号是否正确、是否已在价目表中定义。")).Conditions.Add(c);
+                if(target.StartsWith('@')) throw ThrowHelper.BizUser("收费组已取消，属性条件不能再写 @组编码。请把条件挂到对应价格行编号上，并用行上取价条件表达互斥。");
+                (plans[code].Details.Rows.SingleOrDefault(r=>r.RowId==target)??throw ThrowHelper.BizUser("取价条件引用的价格行不存在。请检查导入文件中条件行的价格行编号是否正确、是否已在价目表中定义。")).Conditions.Add(c);
             }
             foreach(var plan in plans.Values)
             {
                 OperationPriceListService.Require(plan.Name.Length>0&&plan.Code.Length<=64&&plan.Name.Length<=128&&plan.PriceUnit.Length is >0 and <=32&&plan.UnitsPerPriceUnit is >0 and <=1000000&&(!plan.EffectiveTo.HasValue||plan.EffectiveTo>=plan.EffectiveFrom),$"表{plan.Code}的表头信息不完整。请检查该价目表所有必填列是否都已填写，补全后重新上传。");
+                OperationPriceListService.NormalizeDetails(plan.Details);
                 OperationPriceListService.Validate(plan.Details,fields,false);
             }
             OperationPriceListService.Require(plans.Count>0,"导入文件里没有可识别的价目表数据。请确认文件格式和内容符合导入模板要求后重新上传。");
         }
         catch(BusinessException ex){result.FailCount=1;result.Errors.Add($"价目表预检：{ex.Message}");return ApiResult<ImportResultDto>.Ok(result);}
-        if(!preview)foreach(var plan in plans.Values)await new OperationPriceListService(db).SaveAsync(null,plan,fid);
+        if(legacyGroupIgnored) result.Errors.Add("提示：已忽略工作表「收费组」（收费组已取消，附加价按行条件命中叠加）。");
+        if(hasLegacyGroupCol) result.Errors.Add("提示：已忽略价格明细中的「收费组编码」列。");
+        if(!preview)foreach(var plan in plans.Values)await new OperationPriceListService(db).SaveAsync(null,plan,fid,userId);
         result.SuccessCount=plans.Count;
         return ApiResult<ImportResultDto>.Ok(result);
     }

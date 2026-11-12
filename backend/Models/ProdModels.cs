@@ -21,6 +21,10 @@ public class ProdWorkOrder
     public long? AuditedBy { get; set; }
     /// <summary>docs/436：首次审核时间；未审核为空。</summary>
     public DateTime? AuditedAt { get; set; }
+    /// <summary>最近修改人；新建时=创建人。</summary>
+    public long? UpdatedBy { get; set; }
+    /// <summary>最近修改时间；新建时=创建时间。</summary>
+    public DateTime? UpdatedAt { get; set; }
 }
 
 /// <summary>工单工序任务（工序级计划数，对标黑湖「生产任务」tab）</summary>
@@ -75,6 +79,10 @@ public class ProdReport
     public byte Source { get; set; }
     /// <summary>企微对话确认落库时间（docs/241）；仅 Source=3 有值。</summary>
     public DateTime? ConfirmedAt { get; set; }
+    /// <summary>最近修改人；新建时=提交人。</summary>
+    public long? UpdatedBy { get; set; }
+    /// <summary>最近修改时间；新建时=报工时间。</summary>
+    public DateTime? UpdatedAt { get; set; }
 }
 
 /// <summary>报工修改日志（docs/205）</summary>
@@ -114,4 +122,8 @@ public class ProdAbnormal
     public long? HandledBy { get; set; }
     public DateTime? RecoveredAt { get; set; }
     public string? HandleNote { get; set; }
+    /// <summary>最近修改人；新建时=上报人。</summary>
+    public long? UpdatedBy { get; set; }
+    /// <summary>最近修改时间；新建时=上报时间。</summary>
+    public DateTime? UpdatedAt { get; set; }
 }

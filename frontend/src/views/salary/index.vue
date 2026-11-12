@@ -1,51 +1,96 @@
 <template>
   <div>
     <ValueTip :text="VALUE_TIPS.salary" />
-    <el-tabs v-model="mainTab" @tab-change="onMainTabChange">
-      <el-tab-pane label="工资单" name="statements" />
-      <el-tab-pane label="按工单" name="workOrder" />
-    </el-tabs>
+    <div class="sticky-toolbar-block sticky-toolbar">
+      <div class="toolbar filter-tab-row">
+        <div class="main-tabs" role="tablist" aria-label="工资查看方式">
+          <button
+            type="button"
+            class="main-tab"
+            role="tab"
+            :class="{ active: mainTab === 'statements' }"
+            :aria-selected="mainTab === 'statements'"
+            @click="switchMainTab('statements')"
+          >工资单</button>
+          <button
+            type="button"
+            class="main-tab"
+            role="tab"
+            :class="{ active: mainTab === 'workOrder' }"
+            :aria-selected="mainTab === 'workOrder'"
+            @click="switchMainTab('workOrder')"
+          >按工单</button>
+        </div>
+        <template v-if="mainTab === 'statements'">
+          <el-select v-model="q.periodType" style="width:100px" @change="onPeriodChange">
+            <el-option :value="1" label="按月" />
+            <el-option :value="2" label="按周" />
+          </el-select>
+          <el-input
+            v-model="q.periodValue"
+            :placeholder="q.periodType === 1 ? 'yyyy-MM' : 'yyyy-Www'"
+            style="width:130px"
+            @change="onPeriodChange"
+          />
+          <el-select v-model="q.status" clearable placeholder="状态" style="width:110px">
+            <el-option :value="0" label="草稿" />
+            <el-option :value="1" label="已确认" />
+          </el-select>
+          <el-select v-model="q.userType" clearable placeholder="人员类型" style="width:140px">
+            <el-option v-for="o in USER_TYPE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
+          </el-select>
+          <el-input
+            v-model="keyword"
+            clearable
+            :prefix-icon="Search"
+            placeholder="姓名或账号"
+            style="width:160px"
+            @input="onKeywordInput"
+            @clear="onKeywordClear"
+            @keyup.enter="onQuery"
+          />
+          <el-button @click="onQuery">查询</el-button>
+        </template>
+        <template v-else>
+          <el-select
+            v-model="woOrderNo"
+            filterable
+            clearable
+            placeholder="输入工单号或产品名筛选，例：WO2026001"
+            style="width:360px"
+            :loading="woOptionsLoading"
+            @change="onWoOrderChange"
+          >
+            <el-option
+              v-for="o in woOptions"
+              :key="o.id"
+              :label="woOptionLabel(o)"
+              :value="o.orderNo"
+            />
+          </el-select>
+          <el-button :loading="woLoading" @click="onQueryWorkOrder">查询</el-button>
+        </template>
+      </div>
+      <div v-if="mainTab === 'statements'" class="toolbar">
+        <el-button @click="onToolbarDetail">明细</el-button>
+        <el-button @click="onToolbarRecalc">重算</el-button>
+        <el-button @click="onToolbarConfirm">确认</el-button>
+        <el-button @click="onToolbarDelete">删除</el-button>
+        <el-button @click="onToolbarRevoke">撤回重算</el-button>
+        <el-button @click="openGen">生成工资单</el-button>
+        <el-button
+          :loading="batching"
+          :title="isNarrow ? '此功能需在电脑上操作' : ''"
+          @click="onBatchRecalc"
+        >批量重算</el-button>
+        <el-button @click="onExport">导出 CSV</el-button>
+        <el-button v-if="!isNarrow" @click="toggleItemsSection">
+          {{ itemsExpanded ? '收起工资明细' : '展开工资明细（按工序拆分）' }}
+        </el-button>
+      </div>
+    </div>
 
     <template v-if="mainTab === 'statements'">
-    <div class="toolbar sticky-toolbar">
-      <el-select v-model="q.periodType" style="width:100px" @change="onPeriodChange">
-        <el-option :value="1" label="按月" />
-        <el-option :value="2" label="按周" />
-      </el-select>
-      <el-input v-model="q.periodValue" :placeholder="q.periodType === 1 ? 'yyyy-MM' : 'yyyy-Www'" style="width:130px" @change="onPeriodChange" />
-      <el-select v-model="q.status" clearable placeholder="状态" style="width:110px">
-        <el-option :value="0" label="草稿" />
-        <el-option :value="1" label="已确认" />
-      </el-select>
-      <el-input
-        v-model="keyword"
-        clearable
-        :prefix-icon="Search"
-        placeholder="例：张三 或 zhangsan（输入姓名或账号筛选）"
-        style="width:180px"
-        @input="onKeywordInput"
-        @clear="onKeywordClear"
-      />
-      <el-select v-model="q.userType" clearable placeholder="人员类型" style="width:140px" @change="onQuery">
-        <el-option v-for="o in USER_TYPE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
-      </el-select>
-      <el-button @click="onQuery">查询</el-button>
-      <el-button @click="openGen">生成工资单</el-button>
-      <el-button
-        type="warning"
-        :disabled="isNarrow || !selectedIds.length"
-        :loading="batching"
-        :title="isNarrow ? '此功能需在电脑上操作' : ''"
-        @click="onBatchRecalc"
-      >批量重算工资工资</el-button>
-      <el-button @click="onExport">导出 CSV</el-button>
-      <el-button
-        v-if="!isNarrow"
-        :type="itemsExpanded ? 'default' : 'primary'"
-        plain
-        @click="toggleItemsSection"
-      >{{ itemsExpanded ? '收起工资明细' : '展开工资明细（按工序拆分）' }}</el-button>
-    </div>
 
     <!-- 窄屏：汇总卡片（docs/141） -->
     <div v-if="isNarrow" class="salary-cards">
@@ -73,10 +118,13 @@
     </div>
 
     <template v-else>
-      <mes-table table-key="views/salary/index:1"
+      <mes-table
+        ref="tableRef"
+        table-key="views/salary/index:1"
         :data="list"
         :height="tableHeight"
         @selection-change="onSelectionChange"
+        @row-click="onRowClick"
         @row-dblclick="openDetail"
       >
         <el-table-column type="selection" width="48" fixed />
@@ -95,15 +143,6 @@
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="生成时间" width="160" />
-        <el-table-column label="操作" width="320" fixed="right">
-          <template #default="{ row }">
-            <el-button link type="primary" @click="openDetail(row)">明细</el-button>
-            <el-button v-if="row.status === 0" link type="warning" @click="onRecalc(row)">重算</el-button>
-            <el-button v-if="row.status === 0" link type="success" @click="onConfirm(row)">确认</el-button>
-            <el-button v-if="row.status === 0" link type="danger" @click="onDelete(row)">删除</el-button>
-            <el-button v-if="row.status === 1" link type="danger" @click="onRevoke(row)">撤回重算</el-button>
-          </template>
-        </el-table-column>
       </mes-table>
       <div class="pager">
         <el-pagination
@@ -167,26 +206,6 @@
     <!-- docs/420：按工单查累计 + 已完工应付台账 -->
     <template v-else>
       <div class="wo-block">
-        <div class="wo-title">按工单查累计工资</div>
-        <div class="toolbar sticky-toolbar">
-          <el-select
-            v-model="woOrderNo"
-            filterable
-            clearable
-            placeholder="输入工单号或产品名筛选，例：WO2026001"
-            style="width:360px"
-            :loading="woOptionsLoading"
-            @change="onWoOrderChange"
-          >
-            <el-option
-              v-for="o in woOptions"
-              :key="o.id"
-              :label="woOptionLabel(o)"
-              :value="o.orderNo"
-            />
-          </el-select>
-          <el-button :loading="woLoading" @click="onQueryWorkOrder">查询</el-button>
-        </div>
         <template v-if="woSummary">
           <div class="wo-meta">
             <span>工单 {{ woSummary.orderNo }}</span>
@@ -343,6 +362,11 @@
           </template>
         </el-table-column>
       </mes-table>
+      <div v-if="detail" class="salary-sys-meta">
+        创建时间：{{ fmtMetaTime(detail.createdAt) }}
+        · 修改人：{{ detail.updatedByName || '—' }}
+        · 修改时间：{{ fmtMetaTime(detail.updatedAt) }}
+      </div>
     </el-drawer>
   </div>
 </template>
@@ -376,7 +400,10 @@ const list = ref([])
 const total = ref(0)
 const users = ref([])
 const operations = ref([])
-const selectedIds = ref([])
+const tableRef = ref(null)
+const selectedRows = ref([])
+const selectedIds = computed(() => selectedRows.value.map(r => r.id))
+const selectedOne = computed(() => (selectedRows.value.length === 1 ? selectedRows.value[0] : null))
 const batching = ref(false)
 const genDlg = ref(false)
 const gen = ref({ periodType: 1, periodValue: defaultPeriod, userId: null })
@@ -428,6 +455,10 @@ function fmtMoney(v) {
   if (Number.isNaN(n)) return '0.00'
   return n.toFixed(2)
 }
+function fmtMetaTime(v) {
+  if (!v) return '—'
+  return String(v).replace('T', ' ').slice(0, 19)
+}
 
 function formatQueryTime(v) {
   if (!v) return ''
@@ -437,7 +468,9 @@ function formatQueryTime(v) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
 }
 
-async function onMainTabChange(name) {
+async function switchMainTab(name) {
+  if (mainTab.value === name) return
+  mainTab.value = name
   if (name !== 'workOrder') return
   await Promise.all([
     woOptionsLoaded ? Promise.resolve() : loadWoOptions(),
@@ -550,7 +583,7 @@ async function loadList() {
   const res = await getSalaryList(buildListParams())
   list.value = res.data?.list || []
   total.value = res.data?.total ?? list.value.length
-  selectedIds.value = []
+  selectedRows.value = []
 }
 
 async function load() {
@@ -606,7 +639,72 @@ async function loadItems() {
 }
 
 function onSelectionChange(rows) {
-  selectedIds.value = (rows || []).map(r => r.id)
+  selectedRows.value = rows || []
+}
+
+function onRowClick(row, column, event) {
+  if (event?.target?.closest?.('button, a, .el-checkbox, input, label')) return
+  const table = tableRef.value
+  if (!table?.toggleRowSelection) return
+  table.clearSelection?.()
+  table.toggleRowSelection(row, true)
+}
+
+function requireOne(actionLabel) {
+  if (selectedRows.value.length > 1) {
+    ElMessage.warning(`「${actionLabel}」一次只能选一条工资单，请先只勾选一条`)
+    return null
+  }
+  if (!selectedOne.value) {
+    ElMessage.warning(`请先勾选一条工资单再${actionLabel}`)
+    return null
+  }
+  return selectedOne.value
+}
+
+function onToolbarDetail() {
+  const row = requireOne('看明细')
+  if (row) openDetail(row)
+}
+
+function onToolbarRecalc() {
+  const row = requireOne('重算')
+  if (!row) return
+  if (row.status !== 0) {
+    ElMessage.warning('只有草稿工资单能重算；已确认的请先点「撤回重算」')
+    return
+  }
+  onRecalc(row)
+}
+
+function onToolbarConfirm() {
+  const row = requireOne('确认')
+  if (!row) return
+  if (row.status !== 0) {
+    ElMessage.warning('这张工资单已经确认过了，不用再点确认')
+    return
+  }
+  onConfirm(row)
+}
+
+function onToolbarDelete() {
+  const row = requireOne('删除')
+  if (!row) return
+  if (row.status !== 0) {
+    ElMessage.warning('已确认的工资单不能直接删；要改请先点「撤回重算」回到草稿')
+    return
+  }
+  onDelete(row)
+}
+
+function onToolbarRevoke() {
+  const row = requireOne('撤回重算')
+  if (!row) return
+  if (row.status !== 1) {
+    ElMessage.warning('只有已确认的工资单才能撤回重算；草稿直接点「重算」即可')
+    return
+  }
+  onRevoke(row)
 }
 
 function openGen() {
@@ -680,6 +778,10 @@ async function onRevoke(row) {
 }
 
 async function onBatchRecalc() {
+  if (isNarrow.value) {
+    ElMessage.warning('批量重算请在电脑上操作')
+    return
+  }
   if (!selectedIds.value.length) {
     ElMessage.warning('请先在列表中勾选需要操作的工资单，再点「批量重算」')
     return
@@ -743,9 +845,38 @@ async function onExportItems() {
 </script>
 
 <style scoped>
+.sticky-toolbar-block { margin-bottom: 12px; }
+.sticky-toolbar-block .toolbar { margin-bottom: 8px; }
+.sticky-toolbar-block .toolbar:last-child { margin-bottom: 0; }
 .toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+.filter-tab-row { gap: 10px; }
+.main-tabs { display: flex; gap: 6px; flex: none; }
+.main-tab {
+  flex: none; padding: 7px 14px; border-radius: 16px; background: var(--app-card, #fff);
+  font-size: 14px; line-height: 1.2; color: var(--app-text-2, var(--el-text-color-regular));
+  border: 1px solid var(--app-border, var(--el-border-color)); white-space: nowrap; cursor: pointer;
+}
+.main-tab:hover:not(.active) {
+  border-color: var(--app-primary-border, var(--el-color-primary-light-5));
+  color: var(--app-primary, var(--el-color-primary));
+  background: var(--app-primary-light, var(--el-color-primary-light-9));
+}
+.main-tab.active {
+  background: var(--app-primary, var(--el-color-primary));
+  color: var(--app-card, #fff);
+  border-color: var(--app-primary, var(--el-color-primary));
+  font-weight: 600;
+}
 .pager { margin-top: 12px; display: flex; justify-content: flex-end; flex-wrap: wrap; }
 .detail-head { display: flex; gap: 16px; margin-bottom: 12px; font-weight: 600; }
+.salary-sys-meta {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--el-border-color-lighter, #ebeef5);
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.6;
+}
 .summary-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

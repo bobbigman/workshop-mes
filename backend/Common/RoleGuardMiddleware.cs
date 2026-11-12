@@ -151,6 +151,10 @@ public class RoleGuardMiddleware
         if (path.Equals("/api/WorkerView", StringComparison.OrdinalIgnoreCase) && method == "GET")
             return true;
 
+        // 单据权限只读（清单 #24）；PUT 仍仅管理员
+        if (path.Equals("/api/DocumentPermission", StringComparison.OrdinalIgnoreCase) && method == "GET")
+            return true;
+
         // PC 常见问题（docs/113）：任意登录用户只读
         if (path.Equals("/api/SupportDocs/faq", StringComparison.OrdinalIgnoreCase) && method == "GET")
             return true;

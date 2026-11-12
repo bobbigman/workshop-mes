@@ -12,7 +12,7 @@ public interface ISalaryService
 {
     Task<ApiResult<List<MyStatementDto>>> MyStatementsAsync(byte? periodType, string? periodValue, long factoryId, long userId);
     Task<ApiResult<List<SalaryItemDto>>> MyStatementItemsAsync(long id, long factoryId, long userId);
-    Task<ApiResult<object?>> GenerateAsync(SalaryGenerateDto dto, long factoryId);
+    Task<ApiResult<object?>> GenerateAsync(SalaryGenerateDto dto, long factoryId, long operatorUserId);
     Task<ApiResult<PageResult<SalaryListDto>>> QueryAsync(SalaryQueryDto query, long factoryId);
     /// <summary>本期工资汇总（docs/222）：已确认/草稿计件额 + 返工扣款，按明细汇总，不受分页截断。</summary>
     Task<ApiResult<SalaryPeriodSummaryDto>> SummarizePeriodAsync(SalaryQueryDto query, long factoryId);
@@ -21,7 +21,7 @@ public interface ISalaryService
     Task<ApiResult<SalaryDetailDto>> GetAsync(long id, long factoryId);
     /// <summary>docs/136：手工列已移除；旧端仍传字段则忽略不报错。</summary>
     Task<ApiResult<object?>> UpdateComponentsAsync(long id, SalaryComponentsDto dto, long factoryId, long operatorUserId);
-    Task<ApiResult<object?>> ConfirmAsync(long id, long factoryId);
+    Task<ApiResult<object?>> ConfirmAsync(long id, long factoryId, long operatorUserId);
     /// <summary>草稿按报工工价快照原地重算计件明细（docs/133/136）。</summary>
     Task<ApiResult<object?>> RecalcDraftAsync(long id, long factoryId, long operatorUserId);
     /// <summary>软撤回已确认工资单：回草稿、回滚 settled_flag，保留单与明细（docs/136；docs/67 删单语义废弃）。</summary>
@@ -129,6 +129,9 @@ public class SalaryDetailDto
     public decimal TotalAmount { get; set; }
     public decimal PieceworkAmount { get; set; }
     public byte Status { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public string UpdatedByName { get; set; } = "";
+    public DateTime? UpdatedAt { get; set; }
     public List<SalaryItemDto> Items { get; set; } = new();
 }
 
@@ -301,7 +304,7 @@ public partial class SalaryService : ISalaryService
         _logger = logger;
     }
 
-    public async Task<ApiResult<object?>> GenerateAsync(SalaryGenerateDto dto, long factoryId)
+    public async Task<ApiResult<object?>> GenerateAsync(SalaryGenerateDto dto, long factoryId, long operatorUserId)
     {
         if (dto.PeriodType is not (1 or 2))
             throw ThrowHelper.Biz(nameof(GenerateAsync), "工资结算周期类型只支持「月」和「双周」两种。请选择其中一种。");
@@ -352,7 +355,9 @@ public partial class SalaryService : ISalaryService
                     PeriodValue = periodValue,
                     TotalAmount = 0,
                     Status = 0,
-                    CreatedAt = now
+                    CreatedAt = now,
+                    UpdatedBy = operatorUserId,
+                    UpdatedAt = now
                 };
                 _db.SalaryStatements.Add(statement);
                 await _db.SaveChangesAsync(); // 取 Id
@@ -661,6 +666,9 @@ public partial class SalaryService : ISalaryService
         }).ToList();
 
         var piecework = Math.Round(items.Sum(i => i.NetAmount), 2, MidpointRounding.AwayFromZero);
+        var updatedByName = "";
+        if (s.UpdatedBy is long ub)
+            updatedByName = await _db.Users.AsNoTracking().Where(u => u.Id == ub).Select(u => u.Name).FirstOrDefaultAsync() ?? "";
         return ApiResult<SalaryDetailDto>.Ok(new SalaryDetailDto
         {
             Id = s.Id,
@@ -671,6 +679,9 @@ public partial class SalaryService : ISalaryService
             TotalAmount = s.TotalAmount,
             PieceworkAmount = piecework,
             Status = s.Status,
+            CreatedAt = s.CreatedAt,
+            UpdatedByName = updatedByName,
+            UpdatedAt = s.UpdatedAt ?? s.CreatedAt,
             Items = items
         });
     }
@@ -695,6 +706,8 @@ public partial class SalaryService : ISalaryService
 
         var piecework = await SumPieceworkAsync(id);
         statement.TotalAmount = piecework;
+        statement.UpdatedBy = operatorUserId;
+        statement.UpdatedAt = DateTime.Now;
         await _db.SaveChangesAsync();
         await tx.CommitAsync();
 
@@ -763,6 +776,8 @@ public partial class SalaryService : ISalaryService
         var piecework = Round2(pieceworkSum);
         var beforeTotal = statement.TotalAmount;
         statement.TotalAmount = CalcTotalAmount(piecework);
+        statement.UpdatedBy = operatorUserId;
+        statement.UpdatedAt = DateTime.Now;
 
         await _db.SaveChangesAsync();
         await tx.CommitAsync();
@@ -779,7 +794,7 @@ public partial class SalaryService : ISalaryService
         });
     }
 
-    public async Task<ApiResult<object?>> ConfirmAsync(long id, long factoryId)
+    public async Task<ApiResult<object?>> ConfirmAsync(long id, long factoryId, long operatorUserId)
     {
         await using var tx = await _db.Database.BeginTransactionAsync();
         await OperationPriceListService.LockFactoryAsync(_db,factoryId);
@@ -807,11 +822,18 @@ public partial class SalaryService : ISalaryService
             }
 
             var reports = await _db.Reports.Where(r => reportIds.Contains(r.Id)).ToListAsync();
+            var stampAt = DateTime.Now;
             foreach (var r in reports)
+            {
                 r.SettledFlag = true;
+                r.UpdatedBy = operatorUserId;
+                r.UpdatedAt = stampAt;
+            }
 
             statement.Status = 1;
-            statement.ConfirmedAt = DateTime.Now;
+            statement.ConfirmedAt = stampAt;
+            statement.UpdatedBy = operatorUserId;
+            statement.UpdatedAt = stampAt;
             await _db.SaveChangesAsync();
             await tx.CommitAsync();
             return ApiResult<object?>.OkMsg();
@@ -858,11 +880,18 @@ public partial class SalaryService : ISalaryService
             }
 
             var reports = await _db.Reports.Where(r => reportIds.Contains(r.Id)).ToListAsync();
+            var stampAt = DateTime.Now;
             foreach (var r in reports)
+            {
                 r.SettledFlag = false;
+                r.UpdatedBy = operatorUserId;
+                r.UpdatedAt = stampAt;
+            }
 
             statement.Status = 0;
             statement.ConfirmedAt = null;
+            statement.UpdatedBy = operatorUserId;
+            statement.UpdatedAt = stampAt;
             await _db.SaveChangesAsync();
             await tx.CommitAsync();
         }

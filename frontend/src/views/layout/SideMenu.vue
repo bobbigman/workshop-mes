@@ -1,5 +1,6 @@
 <template>
   <el-menu
+    :key="active"
     :default-active="active"
     :default-openeds="openedGroups"
     @select="onSelect"
@@ -61,6 +62,7 @@
       <template #title>系统配置</template>
       <el-menu-item v-if="canWechat" index="/wechat-alert"><div class="menu-row"><span class="menu-label">微信预警</span><MenuStar menu-key="/wechat-alert" /></div></el-menu-item>
       <el-menu-item index="/report-setting"><div class="menu-row"><span class="menu-label">报工设置</span><MenuStar menu-key="/report-setting" /></div></el-menu-item>
+      <el-menu-item index="/document-permission"><div class="menu-row"><span class="menu-label">单据权限</span><MenuStar menu-key="/document-permission" /></div></el-menu-item>
       <el-menu-item index="/login-setting"><div class="menu-row"><span class="menu-label">登录页图片</span><MenuStar menu-key="/login-setting" /></div></el-menu-item>
       <el-menu-item index="/mcp-key"><div class="menu-row"><span class="menu-label">MCP 钥匙</span><MenuStar menu-key="/mcp-key" /></div></el-menu-item>
     </el-sub-menu>

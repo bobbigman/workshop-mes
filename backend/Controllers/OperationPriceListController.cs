@@ -17,24 +17,24 @@ public class OperationPriceListController(AppDbContext db, PriceChangeDraftStore
     public async Task<ApiResult<object>> Query([FromQuery] OperationPriceListQueryDto query) =>
         ApiResult<object>.Ok(await new OperationPriceListService(db).QueryAsync(query, JwtHelper.GetFactoryId(User)));
     [HttpGet("{id:long}")]
-    public async Task<ApiResult<object>> Get(long id) => ApiResult<object>.Ok(OperationPriceListService.View(await new OperationPriceListService(db).GetAsync(id, JwtHelper.GetFactoryId(User))));
+    public async Task<ApiResult<object>> Get(long id) => ApiResult<object>.Ok(await new OperationPriceListService(db).GetViewAsync(id, JwtHelper.GetFactoryId(User)));
     [HttpGet("product/{productId:long}")]
     public async Task<ApiResult<List<object>>> Product(long productId) => ApiResult<List<object>>.Ok(await new OperationPricingService(db).ProductAsync(productId, JwtHelper.GetFactoryId(User)));
     [HttpPost]
-    public async Task<ApiResult<long>> Create(PriceListInput input) => ApiResult<long>.Ok(await new OperationPriceListService(db).SaveAsync(null, input, JwtHelper.GetFactoryId(User)));
+    public async Task<ApiResult<long>> Create(PriceListInput input) => ApiResult<long>.Ok(await new OperationPriceListService(db).SaveAsync(null, input, JwtHelper.GetFactoryId(User), JwtHelper.GetUserId(User), role: JwtHelper.GetRole(User)));
     [HttpPut("{id:long}")]
-    public async Task<ApiResult<long>> Update(long id, PriceListInput input) => ApiResult<long>.Ok(await new OperationPriceListService(db).SaveAsync(id, input, JwtHelper.GetFactoryId(User)));
+    public async Task<ApiResult<long>> Update(long id, PriceListInput input) => ApiResult<long>.Ok(await new OperationPriceListService(db).SaveAsync(id, input, JwtHelper.GetFactoryId(User), JwtHelper.GetUserId(User), role: JwtHelper.GetRole(User)));
     public record StatusInput(byte Status, string ExpectedVersion);
     [HttpPost("{id:long}/status")]
     public async Task<ApiResult<object?>> Status(long id, StatusInput input)
     {
-        await new OperationPriceListService(db).SetStatusAsync(id, input.Status, input.ExpectedVersion, JwtHelper.GetFactoryId(User));
+        await new OperationPriceListService(db).SetStatusAsync(id, input.Status, input.ExpectedVersion, JwtHelper.GetFactoryId(User), JwtHelper.GetUserId(User), JwtHelper.GetRole(User));
         return ApiResult<object?>.OkMsg();
     }
     [HttpDelete("{id:long}")]
     public async Task<ApiResult<object?>> Delete(long id, string expectedVersion)
     {
-        await new OperationPriceListService(db).DeleteAsync(id, expectedVersion, JwtHelper.GetFactoryId(User));
+        await new OperationPriceListService(db).DeleteAsync(id, expectedVersion, JwtHelper.GetFactoryId(User), JwtHelper.GetUserId(User), JwtHelper.GetRole(User));
         return ApiResult<object?>.OkMsg();
     }
     public record PreviewInput(long ProductId, long OperationId, DateTime? Date, Dictionary<long, string?>? OperationAttributes = null, long? WorkOrderId = null, string? ExpectedVersion = null);

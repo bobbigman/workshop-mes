@@ -124,6 +124,8 @@ public class ReportListDto
     public long Id { get; set; }
     public long OperationId { get; set; }
     public string OrderNo { get; set; } = "";
+    /// <summary>工单产品 Id（只读，供缺价时跳转价目表预填；docs/452）</summary>
+    public long ProductId { get; set; }
     public string ProductName { get; set; } = "";
     public string OperationName { get; set; } = "";
     public string UserName { get; set; } = "";
@@ -369,7 +371,9 @@ public class ReportService : IReportService
                     ShareBatchNo = prepared.ShareBatchNo,
                     OperatorUserId = prepared.OperatorUserId,
                     Source = reportSource,
-                    ConfirmedAt = confirmedAt
+                    ConfirmedAt = confirmedAt,
+                    UpdatedBy = currentUserId,
+                    UpdatedAt = times[line.UserId].ReportTime
                 };
                 _db.Reports.Add(report);
                 created.Add(report);
@@ -553,6 +557,7 @@ public class ReportService : IReportService
                 Id = x.r.Id,
                 OperationId = x.r.OperationId,
                 OrderNo = x.o.OrderNo,
+                ProductId = x.o.ProductId,
                 ProductName = x.p.Name,
                 OperationName = x.op.Name,
                 UserName = "",
@@ -974,6 +979,8 @@ public class ReportService : IReportService
         report.RejectReason = "本人撤回";
         report.ReviewedBy = currentUserId;
         report.ReviewedAt = DateTime.Now;
+        report.UpdatedBy = currentUserId;
+        report.UpdatedAt = report.ReviewedAt;
         await _db.WorkSessions.Where(x => x.ReportId == id).ExecuteUpdateAsync(s => s.SetProperty(x => x.Status, (byte)3));
         await _db.SaveChangesAsync();
         await RecalcStatusAsync(order);
@@ -1068,6 +1075,8 @@ public class ReportService : IReportService
             Source = source,
             ChangedAt = DateTime.Now
         });
+        report.UpdatedBy = currentUserId;
+        report.UpdatedAt = DateTime.Now;
 
         await _db.SaveChangesAsync();
         await SaveReportExtAsync(report.Id, dto.Ext);
@@ -1248,6 +1257,7 @@ public class ReportService : IReportService
                 Id = x.Report.Id,
                 OperationId = x.Report.OperationId,
                 OrderNo = x.Order.OrderNo,
+                ProductId = x.Order.ProductId,
                 ProductName = x.ProductName,
                 OperationName = x.OperationName,
                 UserName = x.User.Name,
@@ -1415,7 +1425,9 @@ public class ReportService : IReportService
                         ReviewStatus = 1, // docs/22：管理员批量补报直接已通过
                         ReviewedBy = currentUserId,
                         ReviewedAt = now,
-                        ReportTime = time?.ReportTime ?? now
+                        ReportTime = time?.ReportTime ?? now,
+                        UpdatedBy = currentUserId,
+                        UpdatedAt = time?.ReportTime ?? now
                     };
                     var calc = ReportPriceSnapshot.Calculate(report, wageCoeff);
                     report.UnitPrice = calc.UnitPrice;

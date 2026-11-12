@@ -147,7 +147,9 @@ public class AbnormalService : IAbnormalService
             ReportedBy = userId,
             AssignHandlerUserId = assignHandlerId,
             ReportedAt = DateTime.Now,
-            Status = 0
+            Status = 0,
+            UpdatedBy = userId,
+            UpdatedAt = DateTime.Now
         };
         await using var tx = await _db.Database.BeginTransactionAsync();
         _db.Abnormals.Add(row);
@@ -326,6 +328,8 @@ public class AbnormalService : IAbnormalService
         row.HandledBy = userId;
         row.RecoveredAt = DateTime.Now;
         row.HandleNote = note;
+        row.UpdatedBy = userId;
+        row.UpdatedAt = row.RecoveredAt;
         await _db.SaveChangesAsync();
         return ApiResult<object?>.OkMsg();
     }

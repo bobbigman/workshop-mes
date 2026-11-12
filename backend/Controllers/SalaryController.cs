@@ -33,7 +33,7 @@ public class SalaryController : ControllerBase
 
     [HttpPost("generate")]
     public Task<ApiResult<object?>> Generate([FromBody] SalaryGenerateDto dto) =>
-        _svc.GenerateAsync(dto, JwtHelper.GetFactoryId(User));
+        _svc.GenerateAsync(dto, JwtHelper.GetFactoryId(User), JwtHelper.GetUserId(User));
 
     /// <summary>工人本人工资预估（docs/103）；RoleGuard 放行 role=2/3。</summary>
     [HttpGet("mine")]
@@ -90,7 +90,7 @@ public class SalaryController : ControllerBase
 
     [HttpPost("{id:long}/confirm")]
     public Task<ApiResult<object?>> Confirm(long id) =>
-        _svc.ConfirmAsync(id, JwtHelper.GetFactoryId(User));
+        _svc.ConfirmAsync(id, JwtHelper.GetFactoryId(User), JwtHelper.GetUserId(User));
 
     /// <summary>草稿按当前工价原地重算计件（docs/133/136）。</summary>
     [HttpPost("{id:long}/recalc")]

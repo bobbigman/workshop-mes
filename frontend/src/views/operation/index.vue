@@ -230,7 +230,12 @@ async function onSave() {
   try {
     if (editingId.value) await updateOperation(editingId.value, form.value)
     else await createOperation({ ...form.value, copyFromId: copyFromId.value })
-    ElMessage.success(editingId.value ? '保存成功' : '已保存为未审核；请勾选后点「业务操作 → 审核」')
+    const wasCopy = !editingId.value && !!copyFromId.value
+    let tip = editingId.value
+      ? '保存成功'
+      : '已保存为未审核；请勾选后点「业务操作 → 审核」'
+    if (wasCopy) tip += '。计价规则、作业指导书、图纸未随复制带来，请到新资料中补齐'
+    ElMessage.success(tip)
     dlg.value = false; await load()
   } finally { saving.value = false }
 }

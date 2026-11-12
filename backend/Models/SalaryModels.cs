@@ -15,6 +15,10 @@ public class SalaryStatement
     public byte Status { get; set; }                // 0草稿 1已确认（2已发放预留）
     public DateTime? ConfirmedAt { get; set; }
     public DateTime CreatedAt { get; set; }
+    /// <summary>最近修改人；新建时=生成操作人。</summary>
+    public long? UpdatedBy { get; set; }
+    /// <summary>最近修改时间；新建时=创建时间。</summary>
+    public DateTime? UpdatedAt { get; set; }
 }
 
 /// <summary>工资明细（逐条对应报工）</summary>

@@ -35,7 +35,7 @@ public class ImportController : ControllerBase
         await file.CopyToAsync(ms);
         var fid = JwtHelper.GetFactoryId(User);
         if (entityType is "operationPriceList" or "priceRule") await _license.EnsureFeatureAsync(fid, LicenseFeature.PieceWage);
-        if (entityType is "product" or "operationPriceList") return await new AttributeImportService(_db).ImportAsync(entityType, ms.ToArray(), fid, preview);
+        if (entityType is "product" or "operationPriceList") return await new AttributeImportService(_db).ImportAsync(entityType, ms.ToArray(), fid, preview, JwtHelper.GetUserId(User));
         if (preview) throw ThrowHelper.BizUser("当前这种导入类型不支持先检查后导入。请直接执行导入，系统会在导入时自动核对数据。");
         return await _svc.ImportAsync(entityType, ms.ToArray(), fid);
     }

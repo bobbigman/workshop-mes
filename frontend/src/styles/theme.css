@@ -282,6 +282,19 @@ body {
 .el-dialog .el-form-item {
   margin-bottom: 16px;
 }
+/* 小确认弹窗：命令底栏居中（对标 453；页面/全屏主命令仍在左上） */
+.el-dialog__footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+/* 报工等复杂底栏自管左右分布，不要被居中挤扁 */
+.proxy-dialog .el-dialog__footer,
+.report-management-dialog .el-dialog__footer {
+  display: block;
+}
 
 .el-overlay {
   background-color: rgba(29, 33, 41, 0.4);

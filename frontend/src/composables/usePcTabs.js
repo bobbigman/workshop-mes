@@ -17,7 +17,23 @@ export function addPcTab(route) {
   const path = route.path
   const hit = visited.value.find((t) => t.path === path)
   if (hit) {
-    if (hit.title !== title) hit.title = title
+    // 单据页可能已 setPcTabTitle 成工单号/单据号，勿被 meta 默认标题盖回
+    if (!route.meta?.billTab) hit.title = title
+    return
+  }
+  visited.value.push({ path, title })
+}
+
+/**
+ * 单据打开后把页签标题改成工单号/单据号（path 不变）。
+ * @param {string} path
+ * @param {string} title
+ */
+export function setPcTabTitle(path, title) {
+  if (!path || !title) return
+  const hit = visited.value.find((t) => t.path === path)
+  if (hit) {
+    hit.title = title
     return
   }
   visited.value.push({ path, title })
@@ -30,11 +46,13 @@ export function addPcTab(route) {
  */
 export function closePcTab(path, activePath) {
   const list = visited.value
-  if (list.length <= 1) return null
   const idx = list.findIndex((t) => t.path === path)
   if (idx < 0) return null
+  // 只剩首页时不可关，避免主区空白
+  if (list.length === 1 && list[0].path === '/home') return null
   list.splice(idx, 1)
   epochs[path] = (epochs[path] || 0) + 1
+  if (list.length === 0) return '/home'
   if (activePath !== path) return null
   const next = list[idx] || list[idx - 1]
   return next?.path ?? null
@@ -50,5 +68,5 @@ export function pcTabCacheKey(path) {
 }
 
 export function usePcTabs() {
-  return { visited, epochs, addPcTab, closePcTab, clearPcTabs, pcTabCacheKey }
+  return { visited, epochs, addPcTab, setPcTabTitle, closePcTab, clearPcTabs, pcTabCacheKey }
 }

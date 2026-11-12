@@ -6,7 +6,7 @@
         <div class="logo-title">{{ factoryName || instanceName }}</div>
         <div v-if="factoryName" class="logo-sub">{{ PRODUCT_TITLE }}</div>
       </div>
-      <SideMenu :role="role" :tier="tier" :active="$route.path" />
+          <SideMenu :role="role" :tier="tier" :active="menuActive" />
     </el-aside>
 
     <el-drawer v-model="drawerOpen" direction="ltr" size="78%" :with-header="false" class="nav-drawer">
@@ -14,7 +14,7 @@
         <div class="logo-title">{{ factoryName || instanceName }}</div>
         <div v-if="factoryName" class="logo-sub">{{ PRODUCT_TITLE }}</div>
       </div>
-      <SideMenu :role="role" :tier="tier" :active="$route.path" @navigate="drawerOpen = false" />
+      <SideMenu :role="role" :tier="tier" :active="menuActive" @navigate="drawerOpen = false" />
     </el-drawer>
 
     <el-container class="main-wrap">
@@ -29,7 +29,8 @@
           >
             <span /><span /><span />
           </button>
-          <span class="page-title">{{ isMobile && $route.path === '/ai-assistant' ? '车间小助手' : ($route.meta.title || '首页') }}</span>
+          <!-- PC 有多页签时标题已在页签上，顶栏再写一遍浪费空间（对标金蝶）；手机无页签仍显示 -->
+          <span v-if="isMobile" class="page-title">{{ $route.path === '/ai-assistant' ? '车间小助手' : ($route.meta.title || '首页') }}</span>
         </div>
         <div class="header-right">
           <el-dropdown v-if="isMobile && $route.path === '/ai-assistant'" trigger="click">
@@ -99,6 +100,8 @@ const aiNewChat = ref(null)
 provide('aiNewChat', aiNewChat)
 const router = useRouter()
 const route = useRoute()
+/** 单据子路由高亮对应列表菜单（如 /order/12 → /order） */
+const menuActive = computed(() => (typeof route.meta?.menuPath === 'string' && route.meta.menuPath) || route.path)
 // 说明页沿用公开/H5入口，只有登录后的后台入口需要系统外壳。
 const standaloneGuide = computed(() => ['/help', '/onboarding', '/advantages'].includes(route.path)
   && (!localStorage.getItem('token') || route.query.from === 'h5'))

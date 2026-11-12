@@ -247,7 +247,8 @@ public class PriceChangeService(AppDbContext db, PriceChangeDraftStore drafts)
         var table = await db.OperationPriceLists.SingleAsync(x => x.Id == id && x.FactoryId == factoryId);
         var timeline = new PriceTimelineService(db);
         await timeline.EnsureBaselineAsync(table);
-        table.Details = plan.After.Details; table.EffectiveFrom = plan.After.EffectiveFrom; table.Version = plan.After.Version; table.UpdatedAt = DateTime.Now;
+        table.Details = plan.After.Details; table.EffectiveFrom = plan.After.EffectiveFrom; table.Version = plan.After.Version;
+        table.UpdatedBy = actor; table.UpdatedAt = DateTime.Now;
         await timeline.RecordAsync(table,table.EffectiveFrom,actor,plan.Fields);
         var revision = await db.OperationPriceRevisions.Where(x => x.FactoryId == factoryId && x.PriceListId == id && !x.Superseded).OrderByDescending(x => x.Id).FirstAsync();
         foreach (var change in plan.Changes)
@@ -258,6 +259,7 @@ public class PriceChangeService(AppDbContext db, PriceChangeDraftStore drafts)
             change.NewReport.PriceSnapshot = Json(after);
             var report = await db.Reports.SingleAsync(x => x.Id == change.OldReport.Id && x.FactoryId == factoryId);
             report.PriceSnapshot = change.NewReport.PriceSnapshot; report.UnitPrice = change.NewReport.UnitPrice; report.WageAmount = change.NewReport.WageAmount;
+            report.UpdatedBy = actor; report.UpdatedAt = DateTime.Now;
             if (change.NewItem != null)
             {
                 var item = await db.SalaryStatementItems.SingleAsync(x => x.Id == change.NewItem.Id);
@@ -274,6 +276,7 @@ public class PriceChangeService(AppDbContext db, PriceChangeDraftStore drafts)
                 foreach (var r in await db.Reports.Where(x => x.FactoryId == factoryId && allReportIds.Contains(x.Id)).ToListAsync()) r.SettledFlag = false;
             }
             statement.Status = 0; statement.ConfirmedAt = null; statement.TotalAmount = after.TotalAmount;
+            statement.UpdatedBy = actor; statement.UpdatedAt = DateTime.Now;
         }
         foreach (var change in plan.Changes)
             change.NewReport.SettledFlag = (await db.Reports.FindAsync(change.NewReport.Id))!.SettledFlag;

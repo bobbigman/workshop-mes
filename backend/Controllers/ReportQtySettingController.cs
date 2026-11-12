@@ -5,7 +5,7 @@ using ahu.MicrosoftMes.Services;
 
 namespace ahu.MicrosoftMes.Controllers;
 
-/// <summary>报工数量口径：超报比例、上道不良计不计入（docs/230）</summary>
+/// <summary>报工数量口径：超报比例、上道不良计不计入、多计量单位开关（docs/230）</summary>
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]

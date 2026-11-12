@@ -18,6 +18,8 @@ public class ReportQtySettingDto
     public int OverrunRatio { get; set; }
     /// <summary>true=上道已复核不良计入下道可报。</summary>
     public bool CountDefect { get; set; }
+    /// <summary>true=计件价目表允许多计量（计价单位可≠报工单位）；默认 false。</summary>
+    public bool EnableMultiUom { get; set; }
 }
 
 public class ReportQtySettingService : IReportQtySettingService
@@ -62,6 +64,7 @@ public class ReportQtySettingService : IReportQtySettingService
 
         row.OverrunRatio = dto.OverrunRatio;
         row.CountDefect = dto.CountDefect;
+        row.EnableMultiUom = dto.EnableMultiUom;
         row.UpdatedAt = DateTime.Now;
         await _db.SaveChangesAsync();
         return ApiResult<object?>.OkMsg();
@@ -70,6 +73,7 @@ public class ReportQtySettingService : IReportQtySettingService
     private static ReportQtySettingDto ToDto(SysReportQtySetting row) => new()
     {
         OverrunRatio = row.OverrunRatio,
-        CountDefect = row.CountDefect
+        CountDefect = row.CountDefect,
+        EnableMultiUom = row.EnableMultiUom
     };
 }

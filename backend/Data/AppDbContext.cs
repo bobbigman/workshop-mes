@@ -44,6 +44,7 @@ public class AppDbContext : DbContext
     public DbSet<SysPrintSetting> PrintSettings => Set<SysPrintSetting>();
     public DbSet<LoginSetting> LoginSettings => Set<LoginSetting>();
     public DbSet<SysWorkerViewSetting> WorkerViewSettings => Set<SysWorkerViewSetting>();
+    public DbSet<SysDocumentPermissionSetting> DocumentPermissionSettings => Set<SysDocumentPermissionSetting>();
     public DbSet<SysReportUpstreamSetting> ReportUpstreamSettings => Set<SysReportUpstreamSetting>();
     public DbSet<SysReportQtySetting> ReportQtySettings => Set<SysReportQtySetting>();
     public DbSet<SysWechatAlertSetting> WechatAlertSettings => Set<SysWechatAlertSetting>();
@@ -269,6 +270,8 @@ public class AppDbContext : DbContext
             e.Property(x => x.CreatedAt).HasColumnName("created_at");
             e.Property(x => x.AuditedBy).HasColumnName("audited_by");
             e.Property(x => x.AuditedAt).HasColumnName("audited_at");
+            e.Property(x => x.UpdatedBy).HasColumnName("updated_by");
+            e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
         });
 
         modelBuilder.Entity<ProdWorkOrderOperation>(e =>
@@ -323,6 +326,8 @@ public class AppDbContext : DbContext
             e.Property(x => x.OperatorUserId).HasColumnName("operator_user_id");
             e.Property(x => x.Source).HasColumnName("source");
             e.Property(x => x.ConfirmedAt).HasColumnName("confirmed_at");
+            e.Property(x => x.UpdatedBy).HasColumnName("updated_by");
+            e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
             e.HasIndex(x => new { x.FactoryId, x.ReviewStatus, x.ReportTime });
             e.HasIndex(x => new { x.FactoryId, x.ClientRequestId, x.UserId })
                 .IsUnique()
@@ -367,6 +372,8 @@ public class AppDbContext : DbContext
             e.Property(x => x.HandledBy).HasColumnName("handled_by");
             e.Property(x => x.RecoveredAt).HasColumnName("recovered_at");
             e.Property(x => x.HandleNote).HasColumnName("handle_note").HasMaxLength(256);
+            e.Property(x => x.UpdatedBy).HasColumnName("updated_by");
+            e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
         });
 
         modelBuilder.Entity<OperationPriceList>(e =>
@@ -374,6 +381,9 @@ public class AppDbContext : DbContext
             e.Property(x => x.ProductId).HasColumnName("product_id");
             e.Property(x => x.Remark).HasColumnName("remark").HasMaxLength(1000);
             e.Property(x => x.ActivatedAt).HasColumnName("activated_at");
+            e.Property(x => x.ActivatedBy).HasColumnName("activated_by");
+            e.Property(x => x.DeactivatedAt).HasColumnName("deactivated_at");
+            e.Property(x => x.DeactivatedBy).HasColumnName("deactivated_by");
             e.HasIndex(x => new { x.FactoryId, x.OperationId, x.ProductId, x.Status, x.EffectiveFrom, x.EffectiveTo }).HasDatabaseName("ix_operation_price_list_scope");
             e.Property(x => x.Id).HasColumnName("id");
             e.Property(x => x.FactoryId).HasColumnName("factory_id");
@@ -389,7 +399,9 @@ public class AppDbContext : DbContext
             e.Property(x => x.UnitsPerPriceUnit).HasColumnName("units_per_price_unit").HasPrecision(12,4);
             e.Property(x => x.Version).HasColumnName("version").HasMaxLength(32).IsConcurrencyToken();
             e.Property(x => x.Details).HasColumnName("details");
+            e.Property(x => x.CreatedBy).HasColumnName("created_by");
             e.Property(x => x.CreatedAt).HasColumnName("created_at");
+            e.Property(x => x.UpdatedBy).HasColumnName("updated_by");
             e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
             e.HasIndex(x => new { x.FactoryId, x.Code }).IsUnique();
         });
@@ -421,6 +433,8 @@ public class AppDbContext : DbContext
             e.Property(x => x.Status).HasColumnName("status");
             e.Property(x => x.ConfirmedAt).HasColumnName("confirmed_at");
             e.Property(x => x.CreatedAt).HasColumnName("created_at");
+            e.Property(x => x.UpdatedBy).HasColumnName("updated_by");
+            e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
         });
 
         modelBuilder.Entity<ProdWorkSession>(e =>
@@ -529,6 +543,16 @@ public class AppDbContext : DbContext
             e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
         });
 
+        modelBuilder.Entity<SysDocumentPermissionSetting>(e =>
+        {
+            e.ToTable("sys_document_permission_setting");
+            e.HasIndex(x => x.FactoryId).IsUnique();
+            e.Property(x => x.FactoryId).HasColumnName("factory_id");
+            e.Property(x => x.OnlyCreatorEditWorkOrder).HasColumnName("only_creator_edit_work_order");
+            e.Property(x => x.OnlyCreatorEditPriceList).HasColumnName("only_creator_edit_price_list");
+            e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+        });
+
         modelBuilder.Entity<SysReportQtySetting>(e =>
         {
             e.ToTable("sys_report_qty_setting");
@@ -536,6 +560,7 @@ public class AppDbContext : DbContext
             e.Property(x => x.FactoryId).HasColumnName("factory_id");
             e.Property(x => x.OverrunRatio).HasColumnName("overrun_ratio");
             e.Property(x => x.CountDefect).HasColumnName("count_defect");
+            e.Property(x => x.EnableMultiUom).HasColumnName("enable_multi_uom");
             e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
         });
 

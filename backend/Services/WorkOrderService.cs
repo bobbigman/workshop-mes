@@ -11,8 +11,8 @@ public interface IWorkOrderService
     Task<ApiResult<WorkOrderStatusCountsDto>> GetStatusCountsAsync(long factoryId);
     Task<ApiResult<WorkOrderDetailDto>> GetAsync(long id, long factoryId);
     Task<ApiResult<object?>> CreateAsync(WorkOrderCreateDto dto, long currentUserId, long factoryId);
-    Task<ApiResult<object?>> UpdateAsync(long id, WorkOrderUpdateDto dto, long currentUserId, long factoryId);
-    Task<ApiResult<object?>> TransitionAsync(long id, string action, long factoryId);
+    Task<ApiResult<object?>> UpdateAsync(long id, WorkOrderUpdateDto dto, long currentUserId, long factoryId, byte role);
+    Task<ApiResult<object?>> TransitionAsync(long id, string action, long currentUserId, long factoryId);
     Task<ApiResult<object?>> CopyAsync(long id, long currentUserId, long factoryId);
     Task<ApiResult<object?>> DeleteAsync(long id);
     Task<ApiResult<string>> GetQrContentAsync(long id, long factoryId);
@@ -127,6 +127,8 @@ public class WorkOrderListDto
     public bool Reopened { get; set; }
     public DateTime? DueDate { get; set; }
     public string DueState { get; set; } = "";       // normal/warning/overdue
+    /// <summary>创建人用户 Id；清单 #24 前端藏编辑用</summary>
+    public long? CreatedBy { get; set; }
     public DateTime CreatedAt { get; set; }
     public List<WorkOrderListOpDto> Ops { get; set; } = new();
     /// <summary>仅含本厂已开启「在工单列表显示」的工单字段；键为字段 ID。</summary>
@@ -175,12 +177,17 @@ public class WorkOrderDetailDto
     public bool Reopened { get; set; }
     public DateTime? DueDate { get; set; }
     public string DueState { get; set; } = "";       // normal/warning/overdue
+    /// <summary>创建人用户 Id；清单 #24 前端藏编辑用</summary>
+    public long? CreatedBy { get; set; }
     /// <summary>docs/436：创建人姓名；空则前端显示 —</summary>
     public string CreatedByName { get; set; } = "";
     public DateTime CreatedAt { get; set; }
     /// <summary>docs/436：审核人姓名；未审为空</summary>
     public string AuditedByName { get; set; } = "";
     public DateTime? AuditedAt { get; set; }
+    /// <summary>最近修改人姓名；未改过时与创建人相同</summary>
+    public string UpdatedByName { get; set; } = "";
+    public DateTime? UpdatedAt { get; set; }
     public Dictionary<long, string> Ext { get; set; } = new();
     public List<WorkOrderTaskDto> Tasks { get; set; } = new();
 }
@@ -189,7 +196,13 @@ public class WorkOrderService : IWorkOrderService
 {
     private readonly AppDbContext _db;
     private readonly WechatEventService? _events;
-    public WorkOrderService(AppDbContext db, WechatEventService? events = null) { _db = db; _events = events; }
+    private readonly IDocumentPermissionService _docPerm;
+    public WorkOrderService(AppDbContext db, WechatEventService? events = null, IDocumentPermissionService? docPerm = null)
+    {
+        _db = db;
+        _events = events;
+        _docPerm = docPerm ?? new DocumentPermissionService(db);
+    }
 
     /// <summary>docs/435：4 草稿、5 待审核 —— 未审核不可报工/不进现场列表。</summary>
     public static bool IsPreAuditStatus(byte status) => status is 4 or 5;
@@ -208,6 +221,13 @@ public class WorkOrderService : IWorkOrderService
         if (order.AuditedAt.HasValue) return;
         order.AuditedBy = userId;
         order.AuditedAt = DateTime.Now;
+    }
+
+    /// <summary>清单 #25：每次保存/改状态刷新修改人时。</summary>
+    public static void StampUpdated(ProdWorkOrder order, long userId, DateTime? at = null)
+    {
+        order.UpdatedBy = userId;
+        order.UpdatedAt = at ?? DateTime.Now;
     }
 
     public async Task<ApiResult<PageResult<WorkOrderListDto>>> QueryAsync(WorkOrderQueryDto query, long factoryId)
@@ -270,6 +290,7 @@ public class WorkOrderService : IWorkOrderService
                 Status = x.Order.Status,
                 Reopened = x.Order.Reopened,
                 DueDate = x.Order.DueDate,
+                CreatedBy = x.Order.CreatedBy,
                 CreatedAt = x.Order.CreatedAt
             }).ToListAsync();
 
@@ -671,6 +692,7 @@ public class WorkOrderService : IWorkOrderService
         var userIds = new List<long>();
         if (order.CreatedBy is long cb) userIds.Add(cb);
         if (order.AuditedBy is long ab) userIds.Add(ab);
+        if (order.UpdatedBy is long ub) userIds.Add(ub);
         var nameMap = userIds.Count == 0
             ? new Dictionary<long, string>()
             : await _db.Users.AsNoTracking()
@@ -689,10 +711,13 @@ public class WorkOrderService : IWorkOrderService
             Reopened = reopened,
             DueDate = order.DueDate,
             DueState = DueStateHelper.Calc(status, order.DueDate, DateTime.Now),
+            CreatedBy = order.CreatedBy,
             CreatedByName = order.CreatedBy is long c && nameMap.TryGetValue(c, out var cn) ? cn : "",
             CreatedAt = order.CreatedAt,
             AuditedByName = order.AuditedBy is long a && nameMap.TryGetValue(a, out var an) ? an : "",
             AuditedAt = order.AuditedAt,
+            UpdatedByName = order.UpdatedBy is long u && nameMap.TryGetValue(u, out var un) ? un : "",
+            UpdatedAt = order.UpdatedAt ?? order.CreatedAt,
             Ext = ext,
             Tasks = tasks
         };
@@ -858,6 +883,7 @@ public class WorkOrderService : IWorkOrderService
             CreatedBy = currentUserId,
             CreatedAt = DateTime.Now
         };
+        StampUpdated(order, currentUserId, order.CreatedAt);
         _db.WorkOrders.Add(order);
         await _db.SaveChangesAsync();
 
@@ -882,12 +908,14 @@ public class WorkOrderService : IWorkOrderService
         return ApiResult<object?>.OkMsg();
     }
 
-    public async Task<ApiResult<object?>> UpdateAsync(long id, WorkOrderUpdateDto dto, long currentUserId, long factoryId)
+    public async Task<ApiResult<object?>> UpdateAsync(long id, WorkOrderUpdateDto dto, long currentUserId, long factoryId, byte role)
     {
         await using var tx = await _db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
         await OperationPriceListService.LockFactoryAsync(_db,factoryId);
         var order = await _db.WorkOrders.FirstOrDefaultAsync(o => o.Id == id && o.FactoryId == factoryId)
             ?? throw ThrowHelper.Biz(nameof(UpdateAsync), "工单不存在");
+
+        await _docPerm.EnsureCanEditWorkOrderAsync(factoryId, role, currentUserId, order.CreatedBy);
 
         await WechatEventService.LockOrderAsync(_db, order);
         if (order.Status == 3)
@@ -896,10 +924,10 @@ public class WorkOrderService : IWorkOrderService
             throw ThrowHelper.Biz(nameof(UpdateAsync), "该工单已挂起，不能再编辑。如需调整，请先在「工单」中点「恢复生产」后再改。");
         if (order.Status == 2)
             throw ThrowHelper.Biz(nameof(UpdateAsync), "这张工单已经结束了，不能修改。如果需要改，请先在电脑端把工单撤回再修改。");
+        // 清单 #21：仅草稿(4)/已保存(5)可改；已审核/报工中改内容→反审核或复制新单
+        if (!IsPreAuditStatus(order.Status))
+            throw ThrowHelper.Biz(nameof(UpdateAsync), "已审核工单不能直接改。无报工请先「反审核」退回已保存再改；有报工请「复制」成新单。");
         var action = ResolveSaveAction(dto.AsDraft, dto.SaveAction);
-        // docs/435：已生效(0/1)不能退回草稿/待审；仅草稿/待审可用 draft|pending
-        if (!IsPreAuditStatus(order.Status) && action is "draft" or "pending")
-            throw ThrowHelper.Biz(nameof(UpdateAsync), "工单已经审核并锁价，不能改回草稿或已保存。如需改工艺单价，请复制新单重新审核；本单请直接保存数量、交期等修改。");
 
         // 工单号
         if (!string.IsNullOrWhiteSpace(dto.OrderNo))
@@ -994,12 +1022,13 @@ public class WorkOrderService : IWorkOrderService
         }
         if (!IsPreAuditStatus(order.Status))
             await RecalcStatusAsync(order);
+        StampUpdated(order, currentUserId);
         await _db.SaveChangesAsync();
         await tx.CommitAsync();
         return ApiResult<object?>.OkMsg();
     }
 
-    public async Task<ApiResult<object?>> TransitionAsync(long id, string action, long factoryId)
+    public async Task<ApiResult<object?>> TransitionAsync(long id, string action, long currentUserId, long factoryId)
     {
         await using var tx = await _db.Database.BeginTransactionAsync();
         await OperationPriceListService.LockFactoryAsync(_db,factoryId);
@@ -1077,6 +1106,7 @@ public class WorkOrderService : IWorkOrderService
                 throw ThrowHelper.Biz(nameof(TransitionAsync), $"系统无法识别该操作指令，可能是页面版本不一致导致。请刷新页面后重试；若仍出现请联系技术支持并提供追踪号。");
         }
 
+        StampUpdated(order, currentUserId);
         await _db.SaveChangesAsync();
         if (_events != null) await _events.EnqueueAsync(order, beforeStatus);
         await tx.CommitAsync();

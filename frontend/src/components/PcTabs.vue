@@ -12,7 +12,7 @@
     >
       <span class="pc-tab-title">{{ tab.title }}</span>
       <button
-        v-if="visited.length > 1"
+        v-if="canClose(tab)"
         type="button"
         class="pc-tab-close"
         :aria-label="`关闭${tab.title}`"
@@ -32,6 +32,11 @@ const route = useRoute()
 const { visited, closePcTab } = usePcTabs()
 
 const activePath = computed(() => route.path)
+
+/** 只剩首页时不显示 ×；其它情况（含只剩一个业务页）可关 */
+function canClose(tab) {
+  return !(visited.value.length === 1 && tab.path === '/home')
+}
 
 function go(path) {
   if (path === route.path) return
