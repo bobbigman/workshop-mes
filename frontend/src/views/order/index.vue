@@ -1,6 +1,5 @@
 ﻿<template>
   <div>
-    <ValueTip :text="VALUE_TIPS.order" />
     <div class="sticky-toolbar-block">
     <div class="toolbar">
       <!-- 快捷过滤：字段 + 比较符 + 值（对标金蝶） -->
@@ -241,8 +240,6 @@ import { getProductList } from '@/api/base'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PrintSettingDialog from './PrintSettingDialog.vue'
 import PrintLabelDialog from './PrintLabelDialog.vue'
-import ValueTip from '@/components/ValueTip.vue'
-import { VALUE_TIPS } from '@/constants/valueTips'
 import { canUse, FEATURE, currentTier } from '@/utils/licenseTier'
 import { canEditByCreator } from '@/utils/documentPermission'
 
@@ -728,7 +725,7 @@ async function onDelete(row) {
 </script>
 
 <style scoped>
-.toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: var(--app-section-gap); flex-wrap: wrap; }
+.toolbar { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
 .toolbar-field { width: 150px; }
 .toolbar-match { width: 100px; }
 .toolbar-value { width: 200px; }

@@ -297,6 +297,6 @@ onActivated(() => {
 })
 </script>
 <style scoped>
-.toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:16px 0}.toolbar-field{width:150px}.toolbar-match{width:100px}.toolbar-value{width:200px}
+.toolbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 8px}.toolbar-field{width:140px}.toolbar-match{width:90px}.toolbar-value{width:180px}
 .el-pagination{margin-top:16px}
 </style>

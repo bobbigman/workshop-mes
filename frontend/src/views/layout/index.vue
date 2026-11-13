@@ -57,7 +57,8 @@
             @click="pageHelpRef?.toggle()"
           >？</el-button>
           <span v-if="!isMobile" class="user">{{ userName }}</span>
-          <el-button :size="isMobile ? 'small' : 'default'" @click="onLogout">退出</el-button>
+          <el-button v-if="!isMobile" text @click="onLogout">退出</el-button>
+          <el-button v-else size="small" @click="onLogout">退出</el-button>
           </template>
         </div>
       </el-header>
@@ -245,6 +246,7 @@ onUnmounted(() => {
   flex-direction: column;
   justify-content: center;
   box-sizing: border-box;
+  height: var(--app-logo-min-height);
   min-height: var(--app-logo-min-height);
   padding: var(--app-logo-padding);
   background: var(--app-logo-bg);
@@ -254,8 +256,10 @@ onUnmounted(() => {
 .logo-title {
   font-weight: 700;
   font-size: var(--app-logo-title-size);
-  line-height: 1.55;
-  overflow-wrap: anywhere;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .main-wrap { min-width: 0; flex: 1; display: flex; flex-direction: column; }
 .main-wrap > .el-main.main { flex: 1; min-height: 0; overflow: auto; }
@@ -279,8 +283,20 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.header-right { display: flex; align-items: center; flex-shrink: 0; gap: 8px; }
-.user { margin: 0 10px; padding-left: 18px; border-left: 1px solid var(--app-border); color: var(--app-text-2); font-size: 14px; }
+.header-right { display: flex; align-items: center; flex-shrink: 0; gap: 2px; }
+.header-right :deep(.el-button.is-text) {
+  height: 28px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+.user {
+  margin: 0 4px 0 8px;
+  padding-left: 12px;
+  border-left: 1px solid var(--app-border);
+  color: var(--app-text-2);
+  font-size: 13px;
+  line-height: 28px;
+}
 .main { background: var(--app-bg); min-width: 0; }
 
 /* 监控工作台只改顶栏和内容区。左侧菜单跟当前主题走，不在本页单独改色。 */
@@ -331,6 +347,7 @@ onUnmounted(() => {
   flex-direction: column;
   justify-content: center;
   box-sizing: border-box;
+  height: var(--app-logo-min-height);
   min-height: var(--app-logo-min-height);
   padding: var(--app-logo-padding);
   background: var(--app-logo-bg);
@@ -343,10 +360,11 @@ onUnmounted(() => {
   line-height: 1.3;
 }
 .logo-sub {
+  display: var(--app-logo-sub-display, none);
   font-size: 12px;
   font-weight: 400;
   line-height: 1.3;
-  margin-top: 8px;
+  margin-top: 2px;
   color: var(--app-logo-sub-color);
   letter-spacing: 0.16em;
 }

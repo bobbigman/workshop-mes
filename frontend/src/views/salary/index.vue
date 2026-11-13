@@ -1,6 +1,5 @@
 <template>
   <div>
-    <ValueTip :text="VALUE_TIPS.salary" />
     <div class="sticky-toolbar-block sticky-toolbar">
       <div class="toolbar filter-tab-row">
         <div class="main-tabs" role="tablist" aria-label="工资查看方式">
@@ -387,8 +386,6 @@ import { getUserList } from '@/api/sys'
 import { getOperationList } from '@/api/base'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
-import ValueTip from '@/components/ValueTip.vue'
-import { VALUE_TIPS } from '@/constants/valueTips'
 import { USER_TYPE_OPTIONS, userTypeLabel, userTypeTagType } from '@/constants/userType'
 
 const now = new Date()
@@ -845,10 +842,10 @@ async function onExportItems() {
 </script>
 
 <style scoped>
-.sticky-toolbar-block { margin-bottom: 12px; }
-.sticky-toolbar-block .toolbar { margin-bottom: 8px; }
+.sticky-toolbar-block { margin-bottom: 8px; }
+.sticky-toolbar-block .toolbar { margin-bottom: 6px; }
 .sticky-toolbar-block .toolbar:last-child { margin-bottom: 0; }
-.toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+.toolbar { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; align-items: center; }
 .filter-tab-row { gap: 10px; }
 .main-tabs { display: flex; gap: 6px; flex: none; }
 .main-tab {

@@ -58,6 +58,36 @@ export function closePcTab(path, activePath) {
   return next?.path ?? null
 }
 
+/**
+ * 关掉页签并跳转：先跳走，再删签+bump epoch。
+ * 若仍停在该 path 时先 bump，keep-alive key 会变，单据表单会重挂载；
+ * 异步 onMounted 跑完时路由往往已是列表，会误报「链接无效」并误关列表签。
+ * @param {import('vue-router').Router} router
+ * @param {string} path 要关的页签 path
+ * @param {string} activePath 当前路由 path
+ * @param {string} [fallback='/home'] 关的是当前页且无相邻签时的去向
+ */
+export async function closePcTabAndNavigate(router, path, activePath, fallback = '/home') {
+  const list = visited.value
+  const idx = list.findIndex((t) => t.path === path)
+  if (idx < 0) {
+    if (activePath === path) await router.push(fallback)
+    return
+  }
+  if (list.length === 1 && list[0].path === '/home') return
+
+  const leavingCurrent = activePath === path
+  const next = leavingCurrent
+    ? ((list[idx + 1] || list[idx - 1])?.path ?? fallback)
+    : null
+
+  if (leavingCurrent && next) {
+    await router.push(next)
+  }
+  // 已离开该 path 后再 splice+bump，避免当前视图 key 变化触发重挂载抢跑
+  closePcTab(path, null)
+}
+
 export function clearPcTabs() {
   visited.value = []
   for (const k of Object.keys(epochs)) delete epochs[k]
@@ -68,5 +98,5 @@ export function pcTabCacheKey(path) {
 }
 
 export function usePcTabs() {
-  return { visited, epochs, addPcTab, setPcTabTitle, closePcTab, clearPcTabs, pcTabCacheKey }
+  return { visited, epochs, addPcTab, setPcTabTitle, closePcTab, closePcTabAndNavigate, clearPcTabs, pcTabCacheKey }
 }

@@ -512,7 +512,7 @@ async function confirmBatchOkOnly() {
 </script>
 
 <style scoped>
-.toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+.toolbar { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; align-items: center; }
 .toolbar-field { width: 150px; }
 .toolbar-match { width: 100px; }
 .toolbar-value { width: 200px; }

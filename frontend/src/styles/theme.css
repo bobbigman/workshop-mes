@@ -34,12 +34,12 @@
   --app-shadow: 0 1px 2px rgba(29, 33, 41, 0.04);
   --app-shadow-lg: 0 8px 24px rgba(29, 33, 41, 0.08);
 
-  /* ---- PC 空间尺度（纯尺寸，不涉及业务） ---- */
-  --app-page-padding-x: 32px;
-  --app-page-padding-y: 28px;
-  --app-section-gap: 16px;
+  /* ---- PC 空间尺度（纯尺寸，不涉及业务；对标金蝶收紧顶栏区） ---- */
+  --app-page-padding-x: 16px;
+  --app-page-padding-y: 12px;
+  --app-section-gap: 8px;
   --app-card-padding: 20px;
-  --app-control-height: 36px;
+  --app-control-height: 32px;
 
   /* ---- H5 空间尺度（手机报工端专用；不改上面的 PC 变量） ---- */
   --h5-page-padding: 12px;
@@ -57,7 +57,8 @@
 
   /* ---- 布局尺度（简约；经典版在 theme-legacy 回退） ---- */
   --app-aside-width: 256px;
-  --app-header-height: 72px;
+  /* 对标金蝶顶栏约 48px；72 偏厚，用户名/退出占一截空白 */
+  --app-header-height: 48px;
   --app-header-shadow: none;
   --app-menu-item-height: 46px;
   --app-menu-group-letter-spacing: 0.12em;
@@ -75,10 +76,11 @@
   --app-logo-bg: var(--app-aside-bg);
   --app-logo-color: var(--app-text-1);
   --app-logo-sub-color: var(--app-text-3);
-  --app-logo-sub-display: block;
-  --app-logo-min-height: 112px;
-  --app-logo-padding: 22px 28px;
-  --app-logo-title-size: 18px;
+  /* 与顶栏同高 48：副标题藏掉，只留厂名一行 */
+  --app-logo-sub-display: none;
+  --app-logo-min-height: 48px;
+  --app-logo-padding: 0 16px;
+  --app-logo-title-size: 15px;
   --app-logo-border: var(--app-border);
   --app-header-bg: #ffffff;
   --app-login-bg: linear-gradient(180deg, #ffffff 0%, #eef3ff 100%);
@@ -367,7 +369,7 @@ body.theme-legacy {
   --app-primary-border: #b1d8ff;
 
   /* 尺度 / 圆角 / 阴影回退到改版前。侧栏宽度和字距在下面的经典侧栏里单独定。 */
-  --app-header-height: 72px;
+  --app-header-height: 48px;
   --app-header-shadow: none;
   --app-radius: 10px;
   --app-radius-sm: 6px;
@@ -392,10 +394,10 @@ body.theme-legacy {
   --app-logo-bg: transparent;
   --app-logo-color: #ffffff;
   --app-logo-sub-color: #9bb0cc;
-  --app-logo-sub-display: block;
-  --app-logo-min-height: 112px;
-  --app-logo-padding: 22px 28px;
-  --app-logo-title-size: 18px;
+  --app-logo-sub-display: none;
+  --app-logo-min-height: 48px;
+  --app-logo-padding: 0 16px;
+  --app-logo-title-size: 15px;
   --app-logo-border: rgba(255, 255, 255, 0.08);
   --app-header-bg: #ffffff;
   --app-login-bg: linear-gradient(135deg, #409eff, #66b1ff);
@@ -426,29 +428,54 @@ body.theme-legacy .logo-title {
   letter-spacing: 0.04em;
 }
 
-/* PC 管理工作区：清晰的白色表面与适度留白，限定在布局内。 */
+/* PC 管理工作区：列表工具条对标金蝶菜单条（矮、少留白）；单据命令条另见下方。 */
 @media (min-width: 769px) {
   .layout:not(.monitor-shell) .main .toolbar {
-    padding: 18px 20px;
+    padding: 6px 10px;
+    margin-bottom: 8px;
+    gap: 6px;
+    min-height: 40px;
     background: var(--app-card);
     border: 1px solid var(--app-border);
-    border-radius: var(--app-radius);
+    border-radius: var(--app-radius-sm);
+  }
+  .layout:not(.monitor-shell) .main .toolbar .el-button {
+    height: 28px;
+    padding: 4px 10px;
+  }
+  .layout:not(.monitor-shell) .main .toolbar .el-input,
+  .layout:not(.monitor-shell) .main .toolbar .el-select,
+  .layout:not(.monitor-shell) .main .toolbar .el-date-editor {
+    --el-component-size: 28px;
+  }
+  /* 单据编辑页：命令条不要列表那种白卡片 */
+  .layout:not(.monitor-shell) .main .pc-bill-page .toolbar,
+  .layout:not(.monitor-shell) .main .pc-bill-page .sticky-toolbar,
+  .layout:not(.monitor-shell) .main .pc-bill-page .order-edit-header,
+  .layout:not(.monitor-shell) .main .pc-bill-page .product-edit-header {
+    padding: 2px 0 !important;
+    margin: 0 0 4px !important;
+    min-height: 32px;
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
   }
   .layout:not(.monitor-shell) .main .el-table {
     border: 1px solid var(--app-border);
-    border-radius: var(--app-radius);
+    border-radius: var(--app-radius-sm);
     --el-table-header-bg-color: #f8fafc;
     --el-table-row-hover-bg-color: #f0f5fc;
   }
   .layout:not(.monitor-shell) .main .el-table th.el-table__cell {
-    padding: 15px 0;
+    padding: 8px 0;
     background: var(--el-table-header-bg-color);
   }
   .layout:not(.monitor-shell) .main .el-table td.el-table__cell {
-    padding: 15px 0;
+    padding: 6px 0;
   }
   .layout:not(.monitor-shell) .main .el-table__empty-block {
-    min-height: 160px;
+    min-height: 120px;
   }
 }
 
@@ -467,44 +494,67 @@ body.theme-legacy .logo-title {
 /*
  * 有工具条的 PC 列表页（对标金蝶）：
  * 工具条/页签固定不滚，只滚表格区域——避免 sticky 抢层，行内容钻到工具条/页签上面。
+ * 单据页（.pc-bill-page）也有 toolbar，但表不在根下直挂，套用本规则会把明细挤成两三行；单据另排。
  */
-.el-main.main:has(.toolbar),
-.el-main.main:has(.sticky-toolbar-block) {
+.el-main.main:has(.toolbar):not(:has(.pc-bill-page)),
+.el-main.main:has(.sticky-toolbar-block):not(:has(.pc-bill-page)) {
   overflow: hidden !important;
   display: flex;
   flex-direction: column;
 }
-.el-main.main:has(.toolbar) > div,
-.el-main.main:has(.sticky-toolbar-block) > div {
+.el-main.main:has(.toolbar):not(:has(.pc-bill-page)) > div,
+.el-main.main:has(.sticky-toolbar-block):not(:has(.pc-bill-page)) > div {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
-.el-main.main:has(.toolbar) .toolbar,
-.el-main.main:has(.sticky-toolbar-block) .sticky-toolbar-block {
+.el-main.main:has(.toolbar):not(:has(.pc-bill-page)) .toolbar,
+.el-main.main:has(.sticky-toolbar-block):not(:has(.pc-bill-page)) .sticky-toolbar-block {
   flex-shrink: 0;
   position: relative;
   z-index: 5;
   background: var(--app-bg);
   box-shadow: 0 1px 0 var(--app-border);
 }
-.el-main.main:has(.sticky-toolbar-block) .sticky-toolbar-block > .toolbar {
+.el-main.main:has(.sticky-toolbar-block):not(:has(.pc-bill-page)) .sticky-toolbar-block > .toolbar {
   box-shadow: none;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
+}
+.el-main.main:has(.toolbar):not(:has(.pc-bill-page)) .value-tip,
+.el-main.main:has(.sticky-toolbar-block):not(:has(.pc-bill-page)) .value-tip {
+  flex-shrink: 0;
 }
 /* height:0 + flex 让表格吃剩余高度；具体滚动交给 ElTable 的 height（MesTable 同步） */
-.el-main.main:has(.toolbar) > div > .mes-table,
-.el-main.main:has(.toolbar) > div > .el-table,
-.el-main.main:has(.sticky-toolbar-block) > div > .mes-table,
-.el-main.main:has(.sticky-toolbar-block) > div > .el-table {
+.el-main.main:has(.toolbar):not(:has(.pc-bill-page)) > div > .mes-table,
+.el-main.main:has(.toolbar):not(:has(.pc-bill-page)) > div > .el-table,
+.el-main.main:has(.sticky-toolbar-block):not(:has(.pc-bill-page)) > div > .mes-table,
+.el-main.main:has(.sticky-toolbar-block):not(:has(.pc-bill-page)) > div > .el-table {
   flex: 1 1 auto;
   min-height: 0;
   height: 0;
   overflow: hidden !important;
 }
-.el-main.main:has(.toolbar) > div > .mes-pager,
-.el-main.main:has(.sticky-toolbar-block) > div > .mes-pager {
+.el-main.main:has(.toolbar):not(:has(.pc-bill-page)) > div > .mes-pager,
+.el-main.main:has(.sticky-toolbar-block):not(:has(.pc-bill-page)) > div > .mes-pager {
   flex-shrink: 0;
+}
+
+/*
+ * 单据页（对标金蝶开单）：顶栏+表头不滚，明细表吃满剩余高度（约 8 行可视），表内滚动。
+ * 主区 padding 收紧，避免工具条上下空一大截。
+ */
+.el-main.main:has(.pc-bill-page) {
+  overflow: hidden !important;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 16px !important;
+}
+.el-main.main:has(.pc-bill-page) > div.pc-bill-page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }

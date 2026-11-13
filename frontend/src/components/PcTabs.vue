@@ -1,24 +1,31 @@
 <template>
-  <div class="pc-tabs" role="tablist" aria-label="已打开页面">
-    <div
-      v-for="tab in visited"
-      :key="tab.path"
-      class="pc-tab"
-      role="tab"
-      :aria-selected="tab.path === activePath"
-      :class="{ active: tab.path === activePath }"
-      @click="go(tab.path)"
-      @mousedown.middle.prevent="onClose(tab.path)"
-    >
-      <span class="pc-tab-title">{{ tab.title }}</span>
-      <button
-        v-if="canClose(tab)"
-        type="button"
-        class="pc-tab-close"
-        :aria-label="`关闭${tab.title}`"
-        @click.stop="onClose(tab.path)"
-      >×</button>
+  <div class="pc-tabs-bar">
+    <div class="pc-tabs" role="tablist" aria-label="已打开页面">
+      <div
+        v-for="tab in visited"
+        :key="tab.path"
+        class="pc-tab"
+        role="tab"
+        :aria-selected="tab.path === activePath"
+        :class="{ active: tab.path === activePath }"
+        @click="go(tab.path)"
+        @mousedown.middle.prevent="onClose(tab.path)"
+      >
+        <span class="pc-tab-title">{{ tab.title }}</span>
+        <button
+          v-if="canClose(tab)"
+          type="button"
+          class="pc-tab-close"
+          :aria-label="`关闭${tab.title}`"
+          @click.stop="onClose(tab.path)"
+        >×</button>
+      </div>
     </div>
+    <div
+      v-if="listTip"
+      class="pc-tabs-tip"
+      :title="listTip"
+    >{{ listTip }}</div>
   </div>
 </template>
 
@@ -26,12 +33,14 @@
 import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { usePcTabs } from '@/composables/usePcTabs'
+import { billListValueTip } from '@/constants/valueTips'
 
 const router = useRouter()
 const route = useRoute()
-const { visited, closePcTab } = usePcTabs()
+const { visited, closePcTabAndNavigate } = usePcTabs()
 
 const activePath = computed(() => route.path)
+const listTip = computed(() => billListValueTip(route))
 
 /** 只剩首页时不显示 ×；其它情况（含只剩一个业务页）可关 */
 function canClose(tab) {
@@ -44,38 +53,45 @@ function go(path) {
 }
 
 function onClose(path) {
-  const next = closePcTab(path, route.path)
-  if (next) router.push(next)
+  closePcTabAndNavigate(router, path, route.path, '/home')
 }
 </script>
 
 <style scoped>
+.pc-tabs-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 2px 12px 0;
+  background: var(--app-bg);
+  border-bottom: 1px solid var(--app-border);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+  min-height: 30px;
+}
 .pc-tabs {
   display: flex;
   align-items: stretch;
-  gap: 4px;
-  padding: 6px 12px 0;
-  background: var(--app-bg);
-  border-bottom: 1px solid var(--app-border);
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
   overflow-x: auto;
-  flex-shrink: 0;
   scrollbar-width: thin;
-  position: relative;
-  z-index: 10;
 }
 .pc-tab {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   max-width: 160px;
-  height: 32px;
-  padding: 0 10px;
+  height: 28px;
+  padding: 0 8px;
   border: 1px solid var(--app-border);
   border-bottom: none;
-  border-radius: 6px 6px 0 0;
+  border-radius: 4px 4px 0 0;
   background: var(--app-card);
   color: var(--app-text-2);
-  font-size: 13px;
+  font-size: 12px;
   cursor: pointer;
   user-select: none;
   flex-shrink: 0;
@@ -107,4 +123,19 @@ function onClose(path) {
   flex-shrink: 0;
 }
 .pc-tab-close:hover { color: var(--app-danger); background: var(--app-border-light); }
+.pc-tabs-tip {
+  flex: 0 1 42%;
+  max-width: 520px;
+  min-width: 120px;
+  margin-bottom: 4px;
+  padding: 0 2px;
+  color: #1b6584;
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+  user-select: text;
+}
 </style>

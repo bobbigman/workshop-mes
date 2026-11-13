@@ -18,18 +18,18 @@ defineProps({
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  margin-bottom: 12px;
-  padding: 8px 12px;
-  border-radius: 6px;
+  margin-bottom: 6px;
+  padding: 4px 10px;
+  border-radius: 4px;
   border: 1px solid #cfe3ec;
   background: #f0f7fa;
   color: #1b6584;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.4;
 }
 .value-tip.compact {
-  margin-bottom: 10px;
-  padding: 6px 10px;
+  margin-bottom: 4px;
+  padding: 2px 8px;
   font-size: 12px;
 }
 .value-tip-text {

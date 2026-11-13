@@ -1,73 +1,76 @@
 <template>
-  <div v-loading="booting" class="order-bill">
-    <div class="order-edit-header sticky-toolbar">
-      <div class="order-edit-toolbar" role="toolbar" :aria-label="pageTitle">
-        <template v-if="browseOnly">
-          <el-button
-            v-if="isAdmin && canEdit({ status: editingStatus }) && canEditCreator"
-            type="primary"
-            @click="switchToEdit"
-          >编辑</el-button>
-        </template>
-        <template v-else-if="!editingId || editingStatus === 4 || editingStatus === 5">
-          <el-button :loading="saving" :disabled="requoting" @click="onSave('draft')">暂存</el-button>
-          <el-button type="primary" :loading="saving" :disabled="requoting" @click="onSave('pending')">保存</el-button>
-          <el-button v-if="editingId" :loading="saving" :disabled="requoting" @click="onSave('approve')">审核</el-button>
-          <el-button
-            :loading="requoting"
-            :disabled="saving || !form.productId"
-            @click="onRequote"
-          >重新取价</el-button>
-        </template>
-        <el-button :disabled="saving || requoting" @click="closeEdit">退出</el-button>
-      </div>
-      <span class="order-edit-title">{{ pageTitle }}</span>
-    </div>
-    <el-alert
-      v-if="browseOnly"
-      class="browse-notice"
-      :title="browseNoticeTitle"
-      type="info"
-      show-icon
-      :closable="false"
-      style="margin-bottom:12px"
-    />
-    <el-alert v-if="copyFromId" title="请核对数量并填写本次交期。工序计划会按当前产品工艺重新生成，之前的报工记录和派工信息不会带过来。" type="info" :closable="false" style="margin-bottom:12px" />
-    <el-form class="order-edit-form" :disabled="saving || browseOnly" :model="form" label-width="90px">
-      <div class="order-form-grid">
-        <el-form-item label="工单号">
-          <el-input v-model="form.orderNo" placeholder="留空则系统自动生成工单号" />
-        </el-form-item>
-        <el-form-item v-if="editingId" label="状态">
-          <span>{{ statusLabel(editingStatus) }}</span>
-          <el-tag v-if="detail.reopened && editingStatus === 1" size="small" type="info" style="margin-left:6px">已重新打开</el-tag>
-        </el-form-item>
-        <el-form-item label="产品" required>
-          <el-select v-model="form.productId" filterable style="width:100%" @change="onProductChange">
-            <el-option v-for="p in productOptions" :key="p.id" :label="p.code + ' ' + p.name" :value="p.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="数量" required>
-          <el-input-number v-model="form.qty" :min="1" />
-        </el-form-item>
-        <el-form-item label="计划交期">
-          <el-date-picker v-model="form.dueDate" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="选择交期，可留空" style="width:100%" />
-        </el-form-item>
-        <el-form-item v-for="f in customFields" :key="f.id" :label="f.fieldName">
-          <el-select v-if="f.fieldType === 'single'" v-model="form.ext[f.id]" clearable style="width:100%">
-            <el-option v-for="o in f.options" :key="o" :label="o" :value="o" />
-          </el-select>
-          <el-input v-else v-model="form.ext[f.id]" />
-        </el-form-item>
-      </div>
-      <el-form-item v-if="form.tasks.length" label="工序计划" class="order-form-full">
-        <div v-for="t in form.tasks" :key="t.operationId" class="plan-row">
-          <span class="plan-name">{{ t.operationName }}</span>
-          <el-input-number v-model="t.planQty" :min="t.doneQty" size="small" />
+  <div v-loading="booting" class="pc-bill-page order-bill">
+    <div class="bill-top">
+      <div class="order-edit-header sticky-toolbar">
+        <div class="order-edit-toolbar" role="toolbar" :aria-label="pageTitle">
+          <template v-if="browseOnly">
+            <el-button
+              v-if="isAdmin && canEdit({ status: editingStatus }) && canEditCreator"
+              type="primary"
+              @click="switchToEdit"
+            >编辑</el-button>
+          </template>
+          <template v-else-if="!editingId || editingStatus === 4 || editingStatus === 5">
+            <el-button :loading="saving" :disabled="requoting" @click="onSave('draft')">暂存</el-button>
+            <el-button type="primary" :loading="saving" :disabled="requoting" @click="onSave('pending')">保存</el-button>
+            <el-button v-if="editingId" :loading="saving" :disabled="requoting" @click="onSave('approve')">审核</el-button>
+            <el-button
+              :loading="requoting"
+              :disabled="saving || !form.productId"
+              @click="onRequote"
+            >重新取价</el-button>
+          </template>
+          <el-button :disabled="saving || requoting" @click="closeEdit">退出</el-button>
         </div>
-        <div class="plan-hint">计划数量不能小于该工序已经报工的良品数；如需调低计划数，先到「报工」核实已报数量</div>
-      </el-form-item>
-      <el-collapse v-model="openSections" class="order-section-collapse">
+        <span class="order-edit-title">{{ pageTitle }}</span>
+      </div>
+      <el-alert
+        v-if="browseOnly"
+        class="browse-notice"
+        :title="browseNoticeTitle"
+        type="info"
+        show-icon
+        :closable="false"
+      />
+      <el-alert v-if="copyFromId" class="browse-notice" title="请核对数量并填写本次交期。工序计划会按当前产品工艺重新生成，之前的报工记录和派工信息不会带过来。" type="info" :closable="false" />
+      <el-form class="order-edit-form" :disabled="saving || browseOnly" :model="form" label-width="90px">
+        <div class="order-form-grid">
+          <el-form-item label="工单号">
+            <el-input v-model="form.orderNo" placeholder="留空则系统自动生成工单号" />
+          </el-form-item>
+          <el-form-item v-if="editingId" label="状态">
+            <span>{{ statusLabel(editingStatus) }}</span>
+            <el-tag v-if="detail.reopened && editingStatus === 1" size="small" type="info" style="margin-left:6px">已重新打开</el-tag>
+          </el-form-item>
+          <el-form-item label="产品" required>
+            <el-select v-model="form.productId" filterable style="width:100%" @change="onProductChange">
+              <el-option v-for="p in productOptions" :key="p.id" :label="p.code + ' ' + p.name" :value="p.id" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="数量" required>
+            <el-input-number v-model="form.qty" :min="1" />
+          </el-form-item>
+          <el-form-item label="计划交期">
+            <el-date-picker v-model="form.dueDate" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="选择交期，可留空" style="width:100%" />
+          </el-form-item>
+          <el-form-item v-for="f in customFields" :key="f.id" :label="f.fieldName">
+            <el-select v-if="f.fieldType === 'single'" v-model="form.ext[f.id]" clearable style="width:100%">
+              <el-option v-for="o in f.options" :key="o" :label="o" :value="o" />
+            </el-select>
+            <el-input v-else v-model="form.ext[f.id]" />
+          </el-form-item>
+        </div>
+        <el-form-item v-if="form.tasks.length" label="工序计划" class="order-form-full">
+          <div v-for="t in form.tasks" :key="t.operationId" class="plan-row">
+            <span class="plan-name">{{ t.operationName }}</span>
+            <el-input-number v-model="t.planQty" :min="t.doneQty" size="small" />
+          </div>
+          <div class="plan-hint">计划数量不能小于该工序已经报工的良品数；如需调低计划数，先到「报工」核实已报数量</div>
+        </el-form-item>
+      </el-form>
+    </div>
+    <div class="bill-detail">
+      <el-collapse v-model="openSections" class="order-section-collapse" @change="onSectionCollapse">
         <el-collapse-item title="本单工序工价" name="pricing">
           <WorkOrderProcessing
             v-if="ready"
@@ -81,11 +84,10 @@
           />
         </el-collapse-item>
       </el-collapse>
-    </el-form>
-    <template v-if="editingId && detail?.tasks">
-      <el-collapse v-model="openSections" class="order-section-collapse order-assign-anchor">
-        <el-collapse-item :title="canAssign ? '工序进度与派工' : '工序进度'" name="assign">
-          <mes-table table-key="views/order/form:1" :data="detail.tasks" class="detail-tasks">
+      <template v-if="editingId && detail?.tasks">
+        <el-collapse v-model="openSections" class="order-section-collapse order-assign-anchor" @change="onSectionCollapse">
+          <el-collapse-item :title="canAssign ? '工序进度与派工' : '工序进度'" name="assign">
+            <mes-table table-key="views/order/form:1" :data="detail.tasks" :height="detailTableHeight" class="detail-tasks">
             <el-table-column prop="seq" label="序" width="50" />
             <el-table-column prop="operationName" label="工序" />
             <el-table-column prop="planQty" label="计划" width="80" />
@@ -163,28 +165,31 @@
                 <el-progress :percentage="row.planQty ? Math.min(100, Math.round(row.doneQty / row.planQty * 100)) : 0" />
               </template>
             </el-table-column>
+            </mes-table>
+          </el-collapse-item>
+        </el-collapse>
+        <div class="kf-block">
+          <div class="kf-title">图纸 / 作业指导书</div>
+          <mes-table table-key="views/order/form:2" v-if="guides.length" :data="guides" size="small">
+            <el-table-column prop="fileName" label="文件名" min-width="160" show-overflow-tooltip />
+            <el-table-column prop="fileType" label="类型" width="70" />
+            <el-table-column prop="version" label="版本" width="80">
+              <template #default="{ row }">{{ row.version || '—' }}</template>
+            </el-table-column>
+            <el-table-column label="来源" width="100">
+              <template #default="{ row }">{{ row.refType === 'operation' ? (row.refName || '工序') : '产品' }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="80">
+              <template #default="{ row }">
+                <el-button link type="primary" @click="openGuide(row)">预览</el-button>
+              </template>
+            </el-table-column>
           </mes-table>
-        </el-collapse-item>
-      </el-collapse>
-      <div class="kf-block">
-        <div class="kf-title">图纸 / 作业指导书</div>
-        <mes-table table-key="views/order/form:2" v-if="guides.length" :data="guides" size="small">
-          <el-table-column prop="fileName" label="文件名" min-width="160" show-overflow-tooltip />
-          <el-table-column prop="fileType" label="类型" width="70" />
-          <el-table-column prop="version" label="版本" width="80">
-            <template #default="{ row }">{{ row.version || '—' }}</template>
-          </el-table-column>
-          <el-table-column label="来源" width="100">
-            <template #default="{ row }">{{ row.refType === 'operation' ? (row.refName || '工序') : '产品' }}</template>
-          </el-table-column>
-          <el-table-column label="操作" width="80">
-            <template #default="{ row }">
-              <el-button link type="primary" @click="openGuide(row)">预览</el-button>
-            </template>
-          </el-table-column>
-        </mes-table>
-        <div v-else class="kf-empty">暂无</div>
-      </div>
+          <div v-else class="kf-empty">暂无</div>
+        </div>
+      </template>
+    </div>
+    <div v-if="editingId" class="bill-foot">
       <div class="order-sys-meta">
         创建人：{{ detail.createdByName || '—' }}
         · 创建时间：{{ formatDue(detail.createdAt) }}
@@ -193,7 +198,7 @@
         · 修改人：{{ detail.updatedByName || '—' }}
         · 修改时间：{{ detail.updatedAt ? formatDue(detail.updatedAt) : '—' }}
       </div>
-    </template>
+    </div>
     <el-image-viewer
       v-if="imgPreviewVisible"
       :url-list="imgPreviewUrls"
@@ -210,7 +215,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import WorkOrderProcessing from '@/components/WorkOrderProcessing.vue'
 import { getOrder, createOrder, updateOrder, getCustomFields, getDocumentPermission } from '@/api/prod'
@@ -220,7 +225,7 @@ import { getKnowledgeFileByOrder, getKnowledgeFileRaw } from '@/api/knowledge'
 import { ElMessage } from 'element-plus'
 import DocPreview from '@/components/DocPreview.vue'
 import { getKnowledgeFileType } from '@/utils/knowledgeFile'
-import { setPcTabTitle, closePcTab } from '@/composables/usePcTabs'
+import { setPcTabTitle, closePcTabAndNavigate } from '@/composables/usePcTabs'
 import { canEditByCreator } from '@/utils/documentPermission'
 
 const router = useRouter()
@@ -232,7 +237,9 @@ const canAssign = role === 1 || role === 3
 const onlyCreatorEditWorkOrder = ref(false)
 const editingStatus = ref(null)
 const editingId = ref(null)
+/** 编辑/新建默认展开工价；浏览默认折叠重块，给进度表明细留高 */
 const openSections = ref(['pricing'])
+const detailTableHeight = ref(400)
 const browseOnly = ref(false)
 const copyFromId = ref(null), saving = ref(false), requoting = ref(false)
 const ready = ref(false)
@@ -251,7 +258,22 @@ const canEditCreator = computed(() =>
 )
 function setOpenSections(mode) {
   if (mode === 'assign') openSections.value = ['assign']
+  else if (mode === 'browse') openSections.value = []
   else openSections.value = ['pricing']
+}
+
+function syncDetailHeight() {
+  const main = document.querySelector('.el-main.main')
+  const top = document.querySelector('.order-bill .bill-top')
+  const foot = document.querySelector('.order-bill .bill-foot')
+  const mainH = main?.clientHeight || (window.innerHeight - 112)
+  const topH = top?.getBoundingClientRect().height || 220
+  const footH = foot?.getBoundingClientRect().height || 36
+  detailTableHeight.value = Math.max(360, Math.min(560, Math.floor(mainH - topH - footH - 48)))
+}
+
+function onSectionCollapse() {
+  nextTick(() => syncDetailHeight())
 }
 
 const pageTitle = computed(() => {
@@ -288,8 +310,8 @@ function refreshTabTitle() {
 
 function leaveToList() {
   skipLeaveGuard.value = true
-  const next = closePcTab(route.path, route.path)
-  router.push(next || '/order')
+  const path = route.path
+  closePcTabAndNavigate(router, path, path, '/order')
 }
 
 function closeEdit() {
@@ -346,6 +368,8 @@ async function loadSuggests(tasks) {
 }
 
 async function loadBill() {
+  // 退出抢跑重挂载时路由可能已离开单据页——直接放弃，勿报「链接无效」误关列表
+  if (route.name !== 'OrderBill' && route.name !== 'OrderNew') return
   booting.value = true
   ready.value = false
   try {
@@ -427,6 +451,8 @@ async function loadBill() {
     }
   } finally {
     booting.value = false
+    await nextTick()
+    syncDetailHeight()
   }
 }
 
@@ -595,44 +621,61 @@ onMounted(async () => {
   productOptions.value = products.data.list || []
   if (canAssign) await loadWorkers()
   await loadBill()
+  await nextTick()
+  syncDetailHeight()
+  window.addEventListener('resize', syncDetailHeight)
 })
+onBeforeUnmount(() => window.removeEventListener('resize', syncDetailHeight))
 </script>
 
 <style scoped>
-.order-bill { min-height: 200px; }
+/* 对标价目表/金蝶：薄顶栏 + 表头固定，明细区吃满剩余高度 */
+.order-bill { min-height: 0; }
+.bill-top { flex-shrink: 0; }
+.bill-detail { flex: 1 1 auto; min-height: 0; overflow: auto; margin-top: 4px; }
+.bill-foot { flex-shrink: 0; margin-top: 4px; }
 .order-edit-header {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-start;
-  gap: 8px 16px;
+  gap: 6px 12px;
   width: 100%;
-  margin-bottom: 12px;
-  padding-bottom: 10px;
+  margin: 0 0 4px;
+  padding: 2px 0 !important;
+  min-height: 32px;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
   border-bottom: 1px solid var(--el-border-color-lighter);
 }
 .order-edit-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+}
+.order-edit-toolbar :deep(.el-button) {
+  height: 28px;
+  padding: 4px 12px;
 }
 .order-edit-title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--el-text-color-secondary);
-  line-height: 32px;
+  line-height: 28px;
   margin-left: auto;
 }
-.browse-notice { margin-bottom: 12px; }
+.browse-notice { margin: 4px 0; }
+.order-edit-form :deep(.el-form-item) { margin-bottom: 6px; }
 .order-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 16px;
+  column-gap: 12px;
 }
-.order-form-grid :deep(.el-form-item) { margin-bottom: 12px; }
-.order-form-full { margin-top: 4px; }
-.plan-row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+.order-form-full { margin-top: 2px; }
+.plan-row { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
 .plan-name { width: 120px; }
 .plan-hint { color: var(--app-text-3); font-size: 12px; }
 @media (min-width: 1000px) {
@@ -641,8 +684,13 @@ onMounted(async () => {
 @media (max-width: 640px) {
   .order-form-grid { grid-template-columns: 1fr; }
 }
-.order-section-collapse { margin-top: var(--app-section-gap); }
-.order-section-collapse :deep(.el-collapse-item__header) { font-weight: 600; font-size: 15px; }
+.order-section-collapse { margin-top: 4px; border: none; }
+.order-section-collapse :deep(.el-collapse-item__header) {
+  height: 36px;
+  line-height: 36px;
+  font-weight: 600;
+  font-size: 13px;
+}
 .detail-tasks { margin-top: 0; }
 .order-assign-anchor { scroll-margin-top: 12px; }
 .assign-cell { display: flex; flex-direction: column; }
@@ -658,15 +706,15 @@ onMounted(async () => {
 .assign-suggest-item .name { display: block; font-weight: 600; font-size: 13px; }
 .assign-suggest-item.top .name { color: var(--app-primary); }
 .assign-suggest-item .meta { display: block; font-size: 12px; color: var(--app-text-3); }
-.kf-block { margin-top: var(--app-section-gap); }
-.kf-title { font-weight: 600; margin-bottom: 8px; color: #303133; }
+.kf-block { margin-top: 8px; }
+.kf-title { font-weight: 600; margin-bottom: 6px; color: #303133; font-size: 13px; }
 .kf-empty { color: var(--app-text-3, #909399); font-size: 13px; padding: 4px 0; }
 .order-sys-meta {
-  margin-top: 14px;
-  padding-top: 10px;
+  margin: 2px 0 0;
+  padding-top: 6px;
   border-top: 1px solid var(--el-border-color-lighter, #ebeef5);
   font-size: 12px;
   color: var(--app-text-3, #909399);
-  line-height: 1.6;
+  line-height: 1.5;
 }
 </style>

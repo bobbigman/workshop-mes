@@ -5,7 +5,6 @@
       <p v-if="!managementAllowed" role="alert">您没有此功能的使用资格，如需使用请联系管理员开通，也可返回工作台首页</p>
     </div>
     <template v-else>
-    <ValueTip :text="VALUE_TIPS.report" />
     <div class="toolbar sticky-toolbar">
       <el-select
         v-model="filterFieldKey"
@@ -606,8 +605,6 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown } from '@element-plus/icons-vue'
 import { getPendingWorkSessions, reportPendingWorkSession } from '@/api/workSession'
 import { isUpstreamSoftConfirm } from '@/utils/upstreamConfirm'
-import ValueTip from '@/components/ValueTip.vue'
-import { VALUE_TIPS } from '@/constants/valueTips'
 import ManagementTimeRange from '@/components/ManagementTimeRange.vue'
 import { canOpenReportManagement, isReportManagementEntry, managementTimeError } from '@/utils/reportManagement'
 import { USER_TYPE_OPTIONS, userTypeLabel, userTypeTagType } from '@/constants/userType'
@@ -1718,7 +1715,7 @@ async function onBatchSubmit() {
 }
 </script>
 <style scoped>
-.toolbar{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.toolbar{display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap}
 .toolbar-field{width:150px}
 .toolbar-match{width:100px}
 .toolbar-value{width:200px}
