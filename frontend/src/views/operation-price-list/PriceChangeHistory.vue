@@ -18,7 +18,20 @@
           <el-table-column prop="oldAmount" label="原报工金额" /><el-table-column prop="wageAmount" label="新报工金额" />
           <el-table-column prop="goodQty" label="良品数" /><el-table-column prop="durationMinutes" label="分钟" />
         </mes-table>
-        <el-collapse><el-collapse-item title="调价前的完整数据（价格、报工、工资与倍数）"><pre class="audit-json">{{JSON.stringify(before,null,2)}}</pre></el-collapse-item><el-collapse-item title="调价后的完整结果"><pre class="audit-json">{{JSON.stringify(after,null,2)}}</pre></el-collapse-item></el-collapse>
+        <el-collapse v-model="auditPanels" class="collapse-link-panel">
+          <el-collapse-item name="before">
+            <template #title>
+              <CollapseLinkTitle label="调价前的完整数据（价格、报工、工资与倍数）" :paused="auditPanels.includes('before')" />
+            </template>
+            <pre class="audit-json">{{JSON.stringify(before,null,2)}}</pre>
+          </el-collapse-item>
+          <el-collapse-item name="after">
+            <template #title>
+              <CollapseLinkTitle label="调价后的完整结果" :paused="auditPanels.includes('after')" />
+            </template>
+            <pre class="audit-json">{{JSON.stringify(after,null,2)}}</pre>
+          </el-collapse-item>
+        </el-collapse>
       </template>
     </div>
   </el-dialog>
@@ -26,9 +39,10 @@
 <script setup>
 import {ref,computed,watch} from 'vue'
 import {listPriceChanges,getPriceChange} from '@/api/operationPriceList'
+import CollapseLinkTitle from '@/components/CollapseLinkTitle.vue'
 const props=defineProps({modelValue:Boolean,tableId:[Number,String]})
 const emit=defineEmits(['update:modelValue'])
-const rows=ref([]),page=ref(1),total=ref(0),busy=ref(false),selected=ref(null),before=ref({}),after=ref({})
+const rows=ref([]),page=ref(1),total=ref(0),busy=ref(false),selected=ref(null),before=ref({}),after=ref({}),auditPanels=ref([])
 const reportRows=computed(()=>(after.value.reports||[]).map(r=>({...r,oldAmount:before.value.reports?.find(x=>x.id===r.id)?.wageAmount})))
 const beforeAmount=computed(()=>Number(after.value.oldAmount??0).toFixed(2))
 const afterAmount=computed(()=>Number(after.value.newAmount??0).toFixed(2))
@@ -36,4 +50,9 @@ watch(()=>props.modelValue,visible=>{if(visible){page.value=1;selected.value=nul
 async function load(){busy.value=true;try{const {data}=await listPriceChanges(props.tableId,page.value);rows.value=data.list;total.value=data.total}finally{busy.value=false}}
 async function detail(id){busy.value=true;try{const {data}=await getPriceChange(id);selected.value=data;before.value=JSON.parse(data.beforeJson);after.value=JSON.parse(data.afterJson)}finally{busy.value=false}}
 </script>
-<style scoped>.audit-json{max-height:320px;overflow:auto;white-space:pre-wrap;word-break:break-all;font-size:12px}</style>
+<style scoped>
+.audit-json{max-height:320px;overflow:auto;white-space:pre-wrap;word-break:break-all;font-size:12px}
+.collapse-link-panel{border:none}
+.collapse-link-panel :deep(.el-collapse-item__header){height:36px;line-height:36px;border:none;background:transparent;font-weight:400}
+.collapse-link-panel :deep(.el-collapse-item__wrap){border:none}
+</style>

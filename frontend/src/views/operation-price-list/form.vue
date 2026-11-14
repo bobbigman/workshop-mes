@@ -52,9 +52,9 @@
       <mes-table table-key="views/operation-price-list/form:1" :data="form.details.rows" :height="detailTableHeight" border stripe row-key="rowId" highlight-current-row @current-change="r=>selected=r" class="price-table">
         <el-table-column column-key="rowNo" label="行号" width="72" min-width="72" :show-overflow-tooltip="false"><template #default="{row,$index}"><span v-if="readonly" class="copyable">{{$index+1}}</span><el-button v-else link type="primary" @click="editRow(row)">{{$index+1}}</el-button></template></el-table-column>
         <el-table-column label="品名规格" min-width="140"><template #default="{row}"><span v-if="readonly" class="copyable">{{row.label||'暂无规格'}}</span><el-button v-else link type="primary" @click="editRow(row)">{{row.label||'暂无规格，点击补充'}}</el-button></template></el-table-column>
-        <el-table-column label="性质" width="72"><template #default="{row}">{{kinds[row.kind]}}</template></el-table-column>
-        <el-table-column label="取价条件" min-width="200"><template #default="{row}"><span v-if="readonly" class="copyable">{{summary(row.conditions)}}</span><el-button v-else link type="primary" @click="editConditions(row)">{{summary(row.conditions)}}</el-button></template></el-table-column>
-        <el-table-column label="属性区间" min-width="140"><template #default="{row}">{{summary(row.conditions.filter(c=>c.operator==='range'))==='不限'?'—':summary(row.conditions.filter(c=>c.operator==='range'))}}</template></el-table-column>
+        <el-table-column label="性质" width="88" :show-overflow-tooltip="false"><template #default="{row}">{{kinds[row.kind]}}</template></el-table-column>
+        <el-table-column label="取价条件" min-width="220"><template #default="{row}"><span v-if="readonly" class="copyable">{{summary(row.conditions)}}</span><span v-else class="cond-link" @click="editConditions(row)"><el-button link type="primary">{{summary(row.conditions)}}</el-button><TapHint compact hint="点这里改取价条件" /></span></template></el-table-column>
+        <el-table-column label="属性区间" min-width="160"><template #default="{row}"><span v-if="readonly" class="copyable">{{rangeSummary(row)}}</span><span v-else class="cond-link" @click="editConditions(row)"><el-button link type="primary">{{rangeSummary(row)}}</el-button><TapHint v-if="rangeSummary(row)!=='—'" compact hint="点这里改取价条件" /></span></template></el-table-column>
         <el-table-column label="单价" width="130"><template #default="{row}"><span v-if="readonly" class="copyable">{{row.amount??'未定价'}}</span><el-input-number v-else v-model="row.amount" :disabled="priceFrozen(row.rowId)" :controls="false" :precision="4" :min="0" :max="1000000" style="width:110px" /></template></el-table-column>
         <el-table-column label="单位" width="72"><template #default>{{form.priceUnit||'未设'}}</template></el-table-column>
       </mes-table>
@@ -71,7 +71,10 @@
         · 修改时间：{{ fmtTime(form.updatedAt) }}
       </div>
       <el-collapse v-model="footPanels" class="foot-collapse" @change="onFootCollapse">
-        <el-collapse-item title="取价试算（点开再用）" name="preview">
+        <el-collapse-item name="preview">
+          <template #title>
+            <CollapseLinkTitle label="取价试算" :paused="footPanels.includes('preview')" />
+          </template>
           <p class="hint">试算基于已保存的有效价目表，当前未保存的修改不参与试算</p>
           <div class="preview-tools"><el-select v-model="previewProduct" filterable placeholder="选择一个产品进行试算" style="width:300px"><el-option v-for="p in products" :key="p.id" :value="p.id" :label="`${p.code} ${p.name}`" /></el-select><el-button :disabled="!id||dirty()" :loading="previewing" @click="preview">试算</el-button></div>
           <el-form label-width="130px"><el-form-item v-for="f in craftFields" :key="f.id" :label="f.fieldName"><el-select v-if="f.fieldType==='single'" v-model="previewAttributes[f.id]" clearable><el-option v-for="v in f.options" :key="v" :value="v" :label="v" /></el-select><el-input v-else v-model="previewAttributes[f.id]" placeholder="填入实际值，不清楚的字段留空即可" /></el-form-item></el-form>
@@ -103,6 +106,8 @@ import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PriceChangeDialog from './PriceChangeDialog.vue'
+import CollapseLinkTitle from '@/components/CollapseLinkTitle.vue'
+import TapHint from '@/components/TapHint.vue'
 import { getOperationList, getUnitList, getProductList } from '@/api/base'
 import { getCustomFields, getReportQtySetting, getDocumentPermission } from '@/api/prod'
 import { getPriceList, savePriceList, previewAttributePrice, changePriceListStatus } from '@/api/operationPriceList'
@@ -400,6 +405,10 @@ function commitConditions() {
 function summary(cs) {
   return cs.map(c => `${fields.value.find(f => f.id === c.fieldId)?.fieldName || '未知字段'} ${c.operator === 'eq' ? '=' + c.value : `${c.includeMin ? '[' : '('}${c.min ?? '不限'},${c.max ?? '不限'}${c.includeMax ? ']' : ')'}`}`).join(' · ') || '不限'
 }
+function rangeSummary(row) {
+  const text = summary((row.conditions || []).filter(c => c.operator === 'range'))
+  return text === '不限' ? '—' : text
+}
 async function preview() {
   quote.value = null
   previewError.value = ''
@@ -446,8 +455,11 @@ onBeforeUnmount(() => window.removeEventListener('resize', syncDetailHeight))
 .bill-top{flex-shrink:0}
 .bill-detail{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;margin-top:6px}
 .bill-foot{flex-shrink:0;margin-top:6px;padding-top:4px;border-top:1px solid var(--el-border-color-lighter,#ebeef5)}
+.cond-link{display:inline-flex;align-items:center;gap:2px;cursor:pointer;max-width:100%}
+.cond-link :deep(.el-button){max-width:100%;white-space:normal;height:auto;padding:0;text-align:left}
 .foot-collapse{border:none}
-.foot-collapse :deep(.el-collapse-item__header){height:36px;line-height:36px;font-size:13px;color:#606266}
+.foot-collapse :deep(.el-collapse-item__header){height:36px;line-height:36px;border:none;background:transparent}
+.foot-collapse :deep(.el-collapse-item__wrap){border:none}
 .browse-notice{margin:4px 0}.copyable,.browse-content{user-select:text;cursor:text;overflow-wrap:anywhere;white-space:pre-wrap}
 .price-table :deep(.cell){user-select:text}
 /* 压过 theme 里 .main .el-table td 的 15px，行高才接近金蝶 */

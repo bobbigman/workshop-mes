@@ -71,7 +71,10 @@
     </div>
     <div class="bill-detail">
       <el-collapse v-model="openSections" class="order-section-collapse" @change="onSectionCollapse">
-        <el-collapse-item title="本单工序工价" name="pricing">
+        <el-collapse-item name="pricing">
+          <template #title>
+            <CollapseLinkTitle label="本单工序工价" :paused="openSections.includes('pricing')" />
+          </template>
           <WorkOrderProcessing
             v-if="ready"
             ref="processingEditor"
@@ -86,7 +89,13 @@
       </el-collapse>
       <template v-if="editingId && detail?.tasks">
         <el-collapse v-model="openSections" class="order-section-collapse order-assign-anchor" @change="onSectionCollapse">
-          <el-collapse-item :title="canAssign ? '工序进度与派工' : '工序进度'" name="assign">
+          <el-collapse-item name="assign">
+            <template #title>
+              <CollapseLinkTitle
+                :label="canAssign ? '工序进度与派工' : '工序进度'"
+                :paused="openSections.includes('assign')"
+              />
+            </template>
             <mes-table table-key="views/order/form:1" :data="detail.tasks" :height="detailTableHeight" class="detail-tasks">
             <el-table-column prop="seq" label="序" width="50" />
             <el-table-column prop="operationName" label="工序" />
@@ -218,6 +227,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import WorkOrderProcessing from '@/components/WorkOrderProcessing.vue'
+import CollapseLinkTitle from '@/components/CollapseLinkTitle.vue'
 import { getOrder, createOrder, updateOrder, getCustomFields, getDocumentPermission } from '@/api/prod'
 import { getProductList } from '@/api/base'
 import { assign, assignWorkers, assignDepartments, assignSuggest } from '@/api/assign'
@@ -688,9 +698,12 @@ onBeforeUnmount(() => window.removeEventListener('resize', syncDetailHeight))
 .order-section-collapse :deep(.el-collapse-item__header) {
   height: 36px;
   line-height: 36px;
-  font-weight: 600;
+  border: none;
+  background: transparent;
+  font-weight: 400;
   font-size: 13px;
 }
+.order-section-collapse :deep(.el-collapse-item__wrap) { border: none; }
 .detail-tasks { margin-top: 0; }
 .order-assign-anchor { scroll-margin-top: 12px; }
 .assign-cell { display: flex; flex-direction: column; }

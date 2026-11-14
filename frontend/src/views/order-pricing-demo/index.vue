@@ -72,8 +72,11 @@
         </div>
       </el-tab-pane>
     </el-tabs>
-    <el-collapse class="questions">
-      <el-collapse-item title="客户确认时，请重点核对这些规则" name="rules">
+    <el-collapse v-model="rulePanels" class="questions collapse-link-panel">
+      <el-collapse-item name="rules">
+        <template #title>
+          <CollapseLinkTitle label="客户确认时，请重点核对这些规则" :paused="rulePanels.includes('rules')" />
+        </template>
         <ul>
           <li>2—4片丝印与剪线头、对线、折叠标，是一套加工要求还是独立收费项目？</li>
           <li>已含丝印的成套价格适用哪些档位？其他“已含”项目如何确定？</li>
@@ -88,7 +91,9 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
+import CollapseLinkTitle from '@/components/CollapseLinkTitle.vue'
 
+const rulePanels = ref([])
 const initialOptions = () => [
   { id: 'none', label: '不丝印', price: 0 },
   { id: 'one', label: '1片丝印', price: 0.25 },
@@ -159,5 +164,8 @@ h2 { margin: 0 0 8px; font-size: 24px; } h3 { margin: 0 0 20px; font-size: 18px;
 .price-summary .el-button { width: 100%; margin-top: 8px; }.pending { color: #9b6513; font-size: 13px; }.confirmation { margin-top: 16px; }
 .extra-setting { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin: 24px 0; }.next-button { margin-top: 20px; }
 .questions { margin-top: 24px; }.questions li { margin-bottom: 8px; line-height: 1.7; }.source { margin: 16px 0; }
+.collapse-link-panel{border:none}
+.collapse-link-panel :deep(.el-collapse-item__header){height:36px;line-height:36px;border:none;background:transparent;font-weight:400}
+.collapse-link-panel :deep(.el-collapse-item__wrap){border:none}
 @media (max-width: 900px) { .demo-grid { grid-template-columns: 1fr; }.demo-heading { align-items: flex-start; flex-direction: column; }.silk-options :deep(.el-radio__label) { flex-direction: column; gap: 4px; } }
 </style>
