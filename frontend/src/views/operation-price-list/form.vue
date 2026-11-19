@@ -12,7 +12,7 @@
         <span class="mode-hint">{{readonly?'浏览':id?'编辑':'新增'}}</span>
       </div>
       <el-alert v-if="readonly && canEdit && !canEditCreator" class="browse-notice" title="这张价目表不是你创建的，不能改。请联系创建人或管理员处理。" type="info" show-icon :closable="false" />
-      <el-alert v-if="!readonly && form.status === 0" class="browse-notice" :title="draftNotice" type="warning" show-icon :closable="false" />
+      <el-alert v-if="!readonly && form.status === 0" class="browse-notice" title="这是旧草稿。补齐单价后点保存即可启用；缺的点「待补项」。" type="warning" show-icon :closable="false" />
       <el-alert v-if="!readonly" class="browse-notice" title="优先用产品专属表；没有再用通用表；专属缺的规格不会从通用表补" type="info" :closable="false" />
       <el-form v-if="readonly" label-width="100px" class="header-form browse-content">
         <el-form-item v-for="item in browseHeaderCompact" :key="item.label" :label="item.label"><span class="copyable">{{item.value??'—'}}</span></el-form-item>
@@ -127,7 +127,6 @@ const enableMultiUom = ref(false)
 const onlyCreatorEditPriceList = ref(false)
 const showPriceUnitFields = computed(() => form.value.pricingType !== 1 || enableMultiUom.value)
 const readonly = ref(false), loading = ref(false), saving = ref(false), id = ref(null)
-const savedDraftNotice = ref('')
 const form = ref({ details: { rows: [] } })
 const baseline = ref(''), previewProduct = ref(null), previewAttributes = ref({}), previewing = ref(false), previewError = ref(''), quote = ref(null)
 const adjustVisible = ref(false), adjustId = ref(null)
@@ -211,7 +210,6 @@ function emptyForm() {
   }
 }
 function start(read) {
-  savedDraftNotice.value = ''
   readonly.value = read
   selected.value = null
   quote.value = null
@@ -335,29 +333,35 @@ function pricingTypeChanged() {
 function rowIssues(row) {
   return row.amount == null ? ['未填单价'] : []
 }
-const draftNotice = computed(() => savedDraftNotice.value || '价格行填好单价后点保存即可启用；缺单价点「待补项」填写。')
 function goToRowIssue(row) {
   editRow(row)
+}
+function incompleteSaveMsg() {
+  const rows = form.value.details?.rows || []
+  if (!rows.length) return '价目表至少要有一行并填好单价，才能保存启用。'
+  const pending = rows.map((row, index) => ({ index: index + 1, issues: rowIssues(row) })).filter(x => x.issues.length)
+  if (!pending.length) return ''
+  const first = pending[0]
+  return pending.length > 1
+    ? `第${first.index}行等${pending.length}行没填单价，不能保存。请填好单价后再保存启用。`
+    : `第${first.index}行没填单价，不能保存。请填好单价后再保存启用。`
 }
 async function save() {
   saving.value = true
   try {
     syncSingleUom()
     stripLegacyGroups(form.value.details)
+    // 停用表可改后仍停用；新建/旧草稿未齐则直接拦，不再存成草稿
+    if (form.value.status !== 2) {
+      const tip = incompleteSaveMsg()
+      if (tip) { ElMessage.error(tip); return }
+    }
     const payload = clone(form.value)
     payload.productId = payload.productId || null
     const r = await savePriceList(id.value, payload)
     const saved = (await getPriceList(r.data)).data
-    if (saved.status === 0) {
-      const pending = saved.details.rows.map((row, index) => ({ index: index + 1, issues: rowIssues(row) })).filter(x => x.issues.length)
-      const missing = pending.map(x => `第${x.index}行${x.issues.join('、')}`).join('；') || '没有价格行'
-      savedDraftNotice.value = `已保存为草稿：${missing}。点下方“待补项”填写，再点保存即可启用。`
-      ElMessage.warning('已保存为草稿；请按本页提示补齐待补项，再点保存启用')
-      await loadBill()
-    } else {
-      ElMessage.success(saved.status === 1 ? '已保存并启用' : '已保存，仍为停用状态')
-      leaveToList()
-    }
+    ElMessage.success(saved.status === 1 ? '已保存并启用' : '已保存，仍为停用状态')
+    leaveToList()
   } finally {
     saving.value = false
   }

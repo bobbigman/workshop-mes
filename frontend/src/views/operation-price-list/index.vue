@@ -228,7 +228,7 @@ async function onToolbarActivate() {
   const row = requireOne('启用')
   if (!row) return
   if (denyIfNotCreator(row)) return
-  if (row.status !== 2) { ElMessage.warning('只有已停用的价目表才能重新启用；草稿请打开后保存完整内容自动启用'); return }
+  if (row.status !== 2) { ElMessage.warning('只有已停用的价目表才能重新启用；旧草稿请打开补齐单价后点保存启用'); return }
   await changePriceListStatus(row.id, 1, row.version)
   ElMessage.success('已启用')
   await load()

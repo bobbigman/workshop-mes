@@ -621,8 +621,19 @@ public class OperationPriceListService(AppDbContext db)
                 .ToDictionaryAsync(u => u.Id, u => u.Name);
         return View(t, names);
     }
-    /// <summary>清单#26：仅缺价格行或未填单价算未齐；来源/行确认不再卡启用。</summary>
+    /// <summary>清单#26/#27：仅缺价格行或未填单价算未齐；来源/行确认不再卡启用。未齐时普通保存直接失败，不再落草稿。</summary>
     public static bool Incomplete(AttributePriceDetails d) => d.Rows.Count == 0 || d.Rows.Any(r => r.Amount == null);
+
+    public static string IncompleteSaveMsg(AttributePriceDetails d)
+    {
+        if (d.Rows.Count == 0)
+            return "价目表至少要有一行并填好单价，才能保存启用。";
+        var first = d.Rows.FindIndex(r => r.Amount == null) + 1;
+        var n = d.Rows.Count(r => r.Amount == null);
+        return n > 1
+            ? $"第{first}行等{n}行没填单价，不能保存。请填好单价后再保存启用。"
+            : $"第{first}行没填单价，不能保存。请填好单价后再保存启用。";
+    }
 
     // 管理端写操作低频，按厂串行锁避免不同编号插入的范围锁升级死锁。
     internal static async Task LockFactoryAsync(AppDbContext context, long factoryId)
@@ -671,10 +682,20 @@ public class OperationPriceListService(AppDbContext db)
         var fields = await new OperationAttributeService(db).FieldsAsync(factoryId, input.OperationId);
         NormalizeDetails(input.Details);
         Validate(input.Details, fields, false, input.PricingType);
-        var status = targetStatus ?? (table.Status == 2 ? (byte)2 : table.Status == 1 ? (byte)1 : Incomplete(input.Details) ? (byte)0 : (byte)1);
+        // 清单#27：普通保存不再落草稿；未齐直接失败。停用表保存仍保持停用。
+        byte status;
+        if (targetStatus != null)
+            status = targetStatus.Value;
+        else if (table.Status == 2)
+            status = 2;
+        else
+        {
+            Require(!Incomplete(input.Details), IncompleteSaveMsg(input.Details));
+            status = 1;
+        }
         Require(targetStatus == null || targetStatus is 1 or 2, "状态变更操作只接受「启用」或「停用」。请确认要执行的是启用还是停用，不要选其他状态。");
         Require(targetStatus != 2 || table.Status == 1, "只有当前处于启用状态的价目表才能执行停用操作。请确认该表当前确实是启用状态。");
-        Require(targetStatus != 1 || table.Status == 2, "只有已停用的价目表才能重新启用；草稿状态的表请先保存再启用。请按当前状态选择正确操作。");
+        Require(targetStatus != 1 || table.Status == 2, "只有已停用的价目表才能重新启用；旧草稿请补齐单价后点保存启用。");
         Validate(input.Details, fields, status == 1, input.PricingType);
         var options = await db.CustomFieldOptions.AsNoTracking().Where(o => fields.Keys.Contains(o.FieldId)).ToListAsync();
         foreach (var c in input.Details.Rows.SelectMany(r => r.Conditions))
