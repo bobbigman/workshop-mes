@@ -96,8 +96,7 @@
         <el-form-item label="价格性质"><el-select v-model="rowDraft.kind"><el-option v-for="(v,k) in kinds" :key="k" :value="k" :label="v" /></el-select></el-form-item>
         <el-form-item v-if="rowDraft.kind!=='extra'" label="不良扣价"><el-input-number v-model="rowDraft.deductPrice" :disabled="priceFrozen(rowDraft.rowId)" :min="0" :precision="4" :max="1000000" /></el-form-item>
         <el-form-item v-if="rowDraft.kind!=='extra'" label="已包含附加项"><el-select v-model="rowDraft.includedRowIds" multiple><el-option v-for="r in form.details.rows.filter(r=>r.kind==='extra'&&r.rowId!==rowDraft.rowId)" :key="r.rowId" :value="r.rowId" :label="r.label||r.rowId" /></el-select></el-form-item>
-        <el-form-item label="已确认"><el-checkbox v-model="rowDraft.confirmed">我已确认该行的价格和收费口径无误</el-checkbox></el-form-item>
-        <el-form-item label="来源" required><el-input v-model="rowDraft.source" placeholder="例：Excel报价表Sheet1第3行，或手工录入依据" /></el-form-item><el-form-item label="原始备注"><el-input v-model="rowDraft.note" type="textarea" /></el-form-item>
+        <el-form-item label="来源"><el-input v-model="rowDraft.source" placeholder="选填：例 Excel 报价表 Sheet1 第3行" /></el-form-item><el-form-item label="原始备注"><el-input v-model="rowDraft.note" type="textarea" /></el-form-item>
       </el-form>
       <template #footer><el-button @click="rowDialog=false">取消</el-button><el-button v-if="!readonly" type="primary" @click="commitRow">保存行详情</el-button></template>
     </el-dialog>
@@ -334,17 +333,11 @@ function pricingTypeChanged() {
   ElMessage.info('工价计算方式已切换；计时和单笔固定只允许一个主价行，不支持附加行，请检查并调整价格行')
 }
 function rowIssues(row) {
-  const issues = []
-  if (row.amount == null) issues.push('未填单价')
-  if (!String(row.source || '').trim()) issues.push('未填来源')
-  if (!row.confirmed) issues.push('未确认')
-  if (String(row.note || '').includes('待确认')) issues.push('备注含“待确认”')
-  return issues
+  return row.amount == null ? ['未填单价'] : []
 }
-const draftNotice = computed(() => savedDraftNotice.value || '有“待补项”的价格行补齐后，再点保存即可启用；点“待补项”直接填写。')
+const draftNotice = computed(() => savedDraftNotice.value || '价格行填好单价后点保存即可启用；缺单价点「待补项」填写。')
 function goToRowIssue(row) {
-  if (readonly.value || row.amount == null || !String(row.source || '').trim() || !row.confirmed) editRow(row)
-  else editConditions(row)
+  editRow(row)
 }
 async function save() {
   saving.value = true

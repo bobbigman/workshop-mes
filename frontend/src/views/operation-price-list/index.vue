@@ -199,10 +199,10 @@ function openBill(key, browse) {
 function draftIssues(row) {
   const rows = row.details?.rows || []
   if (!rows.length) return '未加价格行'
-  const pending = rows.filter(r => r.amount == null || !String(r.source || '').trim() || !r.confirmed || String(r.note || '').includes('待确认'))
+  const pending = rows.filter(r => r.amount == null)
   if (!pending.length) return '再保存即可启用'
   const first = rows.indexOf(pending[0]) + 1
-  return `第${first}行待补${pending.length > 1 ? `等${pending.length}行` : ''}`
+  return `第${first}行缺单价${pending.length > 1 ? `等${pending.length}行` : ''}`
 }
 function canEdit(row) { return row && row.status !== 1 }
 function canEditCreator(row) {
