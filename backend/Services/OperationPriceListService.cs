@@ -292,7 +292,7 @@ public class OperationPriceListService(AppDbContext db)
             Require(!enabling || !row.Note.Contains("待确认", StringComparison.Ordinal), $"行{row.RowId}的备注还是待确认状态，不能启用。请先编辑该行把备注确认完毕，再启用整张价目表。");
             Require(row.Kind is "base" or "extra" or "final", "价格性质填的值不在系统允许范围内。请检查该行价格性质的下拉选项，选择一个有效值。");
             Require(row.Conditions != null && row.IncludedRowIds != null, "取价条件列表和包含项列表不能同时为空。请至少填写一个匹配条件或一个包含项，否则无法确定这张表适用于哪些工序。");
-            Require(!enabling || (row.Confirmed && row.Amount.HasValue && !string.IsNullOrWhiteSpace(row.Source)), $"行{row.RowId}处于待定状态，或缺少金额、来源信息，无法启用。请补全该行的金额和来源，取消待定标记后再启用。");
+            Require(!enabling || (row.Confirmed && row.Amount.HasValue && !string.IsNullOrWhiteSpace(row.Source)), "有价格行没填单价、来源或未确认，不能启用。请点价目表的「待补项」，填好单价和来源，勾选「已确认」，再保存启用。");
             Require((!row.Amount.HasValue || Money(row.Amount.Value)) && Money(row.DeductPrice), "金额必须不小于0，且最多保留4位小数。请检查所有价格行的金额，修正超出精度或负数的值。");
             Require(row.Kind != "extra" || (row.DeductPrice == 0 && row.IncludedRowIds.Count == 0), "附加行本身不能设置扣价或包含项。请移除其上的扣价/包含项设置。");
             Require(row.IncludedRowIds.Distinct().Count() == row.IncludedRowIds.Count && row.IncludedRowIds.All(id => details.Rows.Any(r => r.RowId == id && r.Kind == "extra")), "包含项只能引用同一张价目表内的附加行，且不能重复引用同一附加行。请检查包含项列表，确保引用的都是本表附加行且无重复。");
@@ -622,7 +622,7 @@ public class OperationPriceListService(AppDbContext db)
                 .ToDictionaryAsync(u => u.Id, u => u.Name);
         return View(t, names);
     }
-    public static bool Incomplete(AttributePriceDetails d) => d.Rows.Count == 0 || d.Rows.Any(r => !r.Confirmed || r.Amount == null || r.Note.Contains("待确认", StringComparison.Ordinal));
+    public static bool Incomplete(AttributePriceDetails d) => d.Rows.Count == 0 || d.Rows.Any(r => !r.Confirmed || r.Amount == null || string.IsNullOrWhiteSpace(r.Source) || r.Note.Contains("待确认", StringComparison.Ordinal));
 
     // 管理端写操作低频，按厂串行锁避免不同编号插入的范围锁升级死锁。
     internal static async Task LockFactoryAsync(AppDbContext context, long factoryId)

@@ -12,6 +12,7 @@
         <span class="mode-hint">{{readonly?'浏览':id?'编辑':'新增'}}</span>
       </div>
       <el-alert v-if="readonly && canEdit && !canEditCreator" class="browse-notice" title="这张价目表不是你创建的，不能改。请联系创建人或管理员处理。" type="info" show-icon :closable="false" />
+      <el-alert v-if="!readonly && form.status === 0" class="browse-notice" :title="draftNotice" type="warning" show-icon :closable="false" />
       <el-alert v-if="!readonly" class="browse-notice" title="优先用产品专属表；没有再用通用表；专属缺的规格不会从通用表补" type="info" :closable="false" />
       <el-form v-if="readonly" label-width="100px" class="header-form browse-content">
         <el-form-item v-for="item in browseHeaderCompact" :key="item.label" :label="item.label"><span class="copyable">{{item.value??'—'}}</span></el-form-item>
@@ -57,6 +58,7 @@
         <el-table-column label="属性区间" min-width="160"><template #default="{row}"><span v-if="readonly" class="copyable">{{rangeSummary(row)}}</span><span v-else class="cond-link" @click="editConditions(row)"><el-button link type="primary">{{rangeSummary(row)}}</el-button><TapHint v-if="rangeSummary(row)!=='—'" compact hint="点这里改取价条件" /></span></template></el-table-column>
         <el-table-column label="单价" width="130"><template #default="{row}"><span v-if="readonly" class="copyable">{{row.amount??'未定价'}}</span><el-input-number v-else v-model="row.amount" :disabled="priceFrozen(row.rowId)" :controls="false" :precision="4" :min="0" :max="1000000" style="width:110px" /></template></el-table-column>
         <el-table-column label="单位" width="72"><template #default>{{form.priceUnit||'未设'}}</template></el-table-column>
+        <el-table-column v-if="form.status === 0" label="待补项" min-width="180" fixed="right"><template #default="{row,$index}"><span v-if="!rowIssues(row).length" class="copyable">已齐</span><el-button v-else link type="warning" @click="goToRowIssue(row)">第{{$index + 1}}行：{{rowIssues(row).join('、')}}，点这里补</el-button></template></el-table-column>
       </mes-table>
     </div>
     <div class="bill-foot">
@@ -126,6 +128,7 @@ const enableMultiUom = ref(false)
 const onlyCreatorEditPriceList = ref(false)
 const showPriceUnitFields = computed(() => form.value.pricingType !== 1 || enableMultiUom.value)
 const readonly = ref(false), loading = ref(false), saving = ref(false), id = ref(null)
+const savedDraftNotice = ref('')
 const form = ref({ details: { rows: [] } })
 const baseline = ref(''), previewProduct = ref(null), previewAttributes = ref({}), previewing = ref(false), previewError = ref(''), quote = ref(null)
 const adjustVisible = ref(false), adjustId = ref(null)
@@ -209,6 +212,7 @@ function emptyForm() {
   }
 }
 function start(read) {
+  savedDraftNotice.value = ''
   readonly.value = read
   selected.value = null
   quote.value = null
@@ -329,6 +333,19 @@ function pricingTypeChanged() {
   }
   ElMessage.info('工价计算方式已切换；计时和单笔固定只允许一个主价行，不支持附加行，请检查并调整价格行')
 }
+function rowIssues(row) {
+  const issues = []
+  if (row.amount == null) issues.push('未填单价')
+  if (!String(row.source || '').trim()) issues.push('未填来源')
+  if (!row.confirmed) issues.push('未确认')
+  if (String(row.note || '').includes('待确认')) issues.push('备注含“待确认”')
+  return issues
+}
+const draftNotice = computed(() => savedDraftNotice.value || '有“待补项”的价格行补齐后，再点保存即可启用；点“待补项”直接填写。')
+function goToRowIssue(row) {
+  if (readonly.value || row.amount == null || !String(row.source || '').trim() || !row.confirmed) editRow(row)
+  else editConditions(row)
+}
 async function save() {
   saving.value = true
   try {
@@ -338,8 +355,16 @@ async function save() {
     payload.productId = payload.productId || null
     const r = await savePriceList(id.value, payload)
     const saved = (await getPriceList(r.data)).data
-    ElMessage.success(`已保存，当前状态：${statuses[saved.status]}`)
-    leaveToList()
+    if (saved.status === 0) {
+      const pending = saved.details.rows.map((row, index) => ({ index: index + 1, issues: rowIssues(row) })).filter(x => x.issues.length)
+      const missing = pending.map(x => `第${x.index}行${x.issues.join('、')}`).join('；') || '没有价格行'
+      savedDraftNotice.value = `已保存为草稿：${missing}。点下方“待补项”填写，再点保存即可启用。`
+      ElMessage.warning('已保存为草稿；请按本页提示补齐待补项，再点保存启用')
+      await loadBill()
+    } else {
+      ElMessage.success(saved.status === 1 ? '已保存并启用' : '已保存，仍为停用状态')
+      leaveToList()
+    }
   } finally {
     saving.value = false
   }
