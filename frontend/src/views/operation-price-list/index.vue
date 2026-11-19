@@ -84,6 +84,7 @@
       <el-table-column label="产品范围" min-width="180"><template #default="{row}">{{productName(row.productId)}}</template></el-table-column>
       <el-table-column label="明细行数" width="95"><template #default="{row}">{{row.details.rows.length}}</template></el-table-column>
       <el-table-column label="状态" width="95"><template #default="{row}"><el-tag :type="row.status===1?'success':row.status===2?'info':'warning'">{{statuses[row.status]}}</el-tag></template></el-table-column>
+      <el-table-column label="待补项" min-width="190"><template #default="{row}"><span v-if="row.status!==0">—</span><el-button v-else link type="warning" @click="openBill(row.id,false)">{{draftIssues(row)}}，去补</el-button></template></el-table-column>
       <el-table-column label="生效 ~ 失效" min-width="205"><template #default="{row}">{{day(row.effectiveFrom)}} ~ {{row.effectiveTo?day(row.effectiveTo):'长期'}}</template></el-table-column>
       <el-table-column label="更新时间" min-width="160"><template #default="{row}">{{row.updatedAt?.replace('T',' ').slice(0,19)}}</template></el-table-column>
     </mes-table>
@@ -194,6 +195,14 @@ function requireOne(actionLabel) {
 }
 function openBill(key, browse) {
   router.push({ path: `/operation-price-list/${key}`, query: browse ? { mode: 'browse' } : {} })
+}
+function draftIssues(row) {
+  const rows = row.details?.rows || []
+  if (!rows.length) return '未加价格行'
+  const pending = rows.filter(r => r.amount == null || !String(r.source || '').trim() || !r.confirmed || String(r.note || '').includes('待确认'))
+  if (!pending.length) return '再保存即可启用'
+  const first = rows.indexOf(pending[0]) + 1
+  return `第${first}行待补${pending.length > 1 ? `等${pending.length}行` : ''}`
 }
 function canEdit(row) { return row && row.status !== 1 }
 function canEditCreator(row) {
