@@ -84,7 +84,6 @@
       <el-table-column label="产品范围" min-width="180"><template #default="{row}">{{productName(row.productId)}}</template></el-table-column>
       <el-table-column label="明细行数" width="95"><template #default="{row}">{{row.details.rows.length}}</template></el-table-column>
       <el-table-column label="状态" width="95"><template #default="{row}"><el-tag :type="row.status===1?'success':row.status===2?'info':'warning'">{{statuses[row.status]}}</el-tag></template></el-table-column>
-      <el-table-column label="待补项" min-width="190"><template #default="{row}"><span v-if="row.status!==0">—</span><el-button v-else link type="warning" @click="openBill(row.id,false)">{{draftIssues(row)}}，去补</el-button></template></el-table-column>
       <el-table-column label="生效 ~ 失效" min-width="205"><template #default="{row}">{{day(row.effectiveFrom)}} ~ {{row.effectiveTo?day(row.effectiveTo):'长期'}}</template></el-table-column>
       <el-table-column label="更新时间" min-width="160"><template #default="{row}">{{row.updatedAt?.replace('T',' ').slice(0,19)}}</template></el-table-column>
     </mes-table>
@@ -106,7 +105,7 @@ import { canEditByCreator } from '@/utils/documentPermission'
 const route = useRoute()
 const router = useRouter()
 const role = Number(localStorage.getItem('role') || 0)
-const statuses = { 0: '草稿', 1: '启用', 2: '停用' }
+const statuses = { 0: '已保存', 1: '启用', 2: '停用' }
 const pricingTypes = { 1: '计件', 2: '计时', 3: '单笔固定' }
 const list = ref([]), total = ref(0), page = ref(1), pageSize = ref(20)
 const operations = ref([]), products = ref([])
@@ -196,14 +195,6 @@ function requireOne(actionLabel) {
 function openBill(key, browse) {
   router.push({ path: `/operation-price-list/${key}`, query: browse ? { mode: 'browse' } : {} })
 }
-function draftIssues(row) {
-  const rows = row.details?.rows || []
-  if (!rows.length) return '未加价格行'
-  const pending = rows.filter(r => r.amount == null)
-  if (!pending.length) return '再保存即可启用'
-  const first = rows.indexOf(pending[0]) + 1
-  return `第${first}行缺单价${pending.length > 1 ? `等${pending.length}行` : ''}`
-}
 function canEdit(row) { return row && row.status !== 1 }
 function canEditCreator(row) {
   return canEditByCreator(onlyCreatorEditPriceList.value, row?.createdBy, role)
@@ -228,7 +219,10 @@ async function onToolbarActivate() {
   const row = requireOne('启用')
   if (!row) return
   if (denyIfNotCreator(row)) return
-  if (row.status !== 2) { ElMessage.warning('只有已停用的价目表才能重新启用；旧草稿请打开补齐单价后点保存启用'); return }
+  if (row.status !== 0 && row.status !== 2) {
+    ElMessage.warning('只有「已保存」或「停用」的价目表才能启用；启用中的不用再点')
+    return
+  }
   await changePriceListStatus(row.id, 1, row.version)
   ElMessage.success('已启用')
   await load()
@@ -268,9 +262,9 @@ async function onToolbarDelete() {
   const row = requireOne('删除')
   if (!row) return
   if (denyIfNotCreator(row)) return
-  if (row.status !== 0 || row.activatedAt) { ElMessage.warning('只能删除从未启用过的草稿价目表'); return }
+  if (row.status !== 0 || row.activatedAt) { ElMessage.warning('只能删除从未启用过的已保存价目表'); return }
   try {
-    await ElMessageBox.confirm(`确定删除草稿价目表 ${row.code} 吗？删除后无法恢复`, '删除价目表')
+    await ElMessageBox.confirm(`确定删除价目表 ${row.code} 吗？删除后无法恢复`, '删除价目表')
   } catch (a) {
     if (a === 'cancel' || a === 'close') return
     throw a

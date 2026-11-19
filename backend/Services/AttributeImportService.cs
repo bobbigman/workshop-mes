@@ -5,7 +5,7 @@ using ahu.MicrosoftMes.Data;
 
 namespace ahu.MicrosoftMes.Services;
 
-/// <summary>产品属性与工序价目表的预检及导入；价格文件始终先落草稿。</summary>
+/// <summary>产品属性与工序价目表的预检及导入；价格文件先落「已保存」，启用须再点「启用」。</summary>
 public class AttributeImportService(AppDbContext db)
 {
     public async Task<byte[]> TemplateAsync(string type, long factoryId)

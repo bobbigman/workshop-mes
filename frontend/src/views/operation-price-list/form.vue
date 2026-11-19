@@ -7,12 +7,12 @@
         <el-button v-if="!readonly" type="primary" :loading="saving" @click="save">保存</el-button>
         <el-button v-if="id&&form.status===1&&canEditCreator" type="warning" :disabled="saving||dirty()" @click="adjustId=id;adjustVisible=true">调整工价</el-button>
         <el-button v-if="id&&form.status===1&&canEditCreator" type="danger" plain :disabled="saving||dirty()" @click="setStatus(2)">停用</el-button>
-        <el-button v-if="id&&form.status===2&&canEditCreator" type="success" :disabled="saving||dirty()" @click="setStatus(1)">启用</el-button>
+        <el-button v-if="id&&(form.status===0||form.status===2)&&canEditCreator" type="success" :disabled="saving||dirty()" @click="setStatus(1)">启用</el-button>
         <el-button :disabled="saving" @click="back">退出</el-button>
         <span class="mode-hint">{{readonly?'浏览':id?'编辑':'新增'}}</span>
       </div>
       <el-alert v-if="readonly && canEdit && !canEditCreator" class="browse-notice" title="这张价目表不是你创建的，不能改。请联系创建人或管理员处理。" type="info" show-icon :closable="false" />
-      <el-alert v-if="!readonly && form.status === 0" class="browse-notice" title="这是旧草稿。补齐单价后点保存即可启用；缺的点「待补项」。" type="warning" show-icon :closable="false" />
+      <el-alert v-if="!readonly && form.status === 0" class="browse-notice" title="已保存未启用。单价齐了点「启用」才参与取价；缺单价先补齐再保存。" type="warning" show-icon :closable="false" />
       <el-alert v-if="!readonly" class="browse-notice" title="优先用产品专属表；没有再用通用表；专属缺的规格不会从通用表补" type="info" :closable="false" />
       <el-form v-if="readonly" label-width="100px" class="header-form browse-content">
         <el-form-item v-for="item in browseHeaderCompact" :key="item.label" :label="item.label"><span class="copyable">{{item.value??'—'}}</span></el-form-item>
@@ -119,7 +119,7 @@ import { canEditByCreator } from '@/utils/documentPermission'
 const route = useRoute()
 const router = useRouter()
 const role = Number(localStorage.getItem('role') || 0)
-const statuses = { 0: '草稿', 1: '启用', 2: '停用' }
+const statuses = { 0: '已保存', 1: '启用', 2: '停用' }
 const kinds = { base: '基础价', extra: '附加价', final: '最终价' }
 const pricingTypes = { 1: '计件', 2: '计时', 3: '单笔固定' }
 const operations = ref([]), units = ref([]), products = ref([]), allFields = ref([])
@@ -147,7 +147,7 @@ function syncDetailHeight() {
 function onFootCollapse() {
   nextTick(() => syncDetailHeight())
 }
-/** 清单 #23：启用中禁止普通编辑；草稿/停用可改 */
+/** 清单 #23：启用中禁止普通编辑；已保存/停用可改 */
 const canEdit = computed(() => form.value.status !== 1)
 /** 清单 #24：开关开时非管理员仅创建人可改 */
 const canEditCreator = computed(() =>
@@ -269,7 +269,7 @@ async function loadBill() {
     id.value = key
     form.value = { ...r.data, effectiveFrom: day(r.data.effectiveFrom), effectiveTo: day(r.data.effectiveTo), expectedVersion: r.data.version }
     stripLegacyGroups(form.value.details)
-    // 启用中强制浏览；停用/草稿可进编辑（除非显式 browse）；清单 #24 非创建人强制浏览
+    // 启用中强制浏览；停用/已保存可进编辑（除非显式 browse）；清单 #24 非创建人强制浏览
     const creatorOk = canEditByCreator(onlyCreatorEditPriceList.value, form.value.createdBy, role)
     start(wantReadonly || form.value.status === 1 || !creatorOk)
   } finally {
@@ -338,20 +338,20 @@ function goToRowIssue(row) {
 }
 function incompleteSaveMsg() {
   const rows = form.value.details?.rows || []
-  if (!rows.length) return '价目表至少要有一行并填好单价，才能保存启用。'
+  if (!rows.length) return '价目表至少要有一行并填好单价，才能保存。'
   const pending = rows.map((row, index) => ({ index: index + 1, issues: rowIssues(row) })).filter(x => x.issues.length)
   if (!pending.length) return ''
   const first = pending[0]
   return pending.length > 1
-    ? `第${first.index}行等${pending.length}行没填单价，不能保存。请填好单价后再保存启用。`
-    : `第${first.index}行没填单价，不能保存。请填好单价后再保存启用。`
+    ? `第${first.index}行等${pending.length}行没填单价，不能保存。请填好单价后再保存。`
+    : `第${first.index}行没填单价，不能保存。请填好单价后再保存。`
 }
 async function save() {
   saving.value = true
   try {
     syncSingleUom()
     stripLegacyGroups(form.value.details)
-    // 停用表可改后仍停用；新建/旧草稿未齐则直接拦，不再存成草稿
+    // 停用表可改后仍停用；未齐直接拦；齐了保存为「已保存」，启用须另点「启用」
     if (form.value.status !== 2) {
       const tip = incompleteSaveMsg()
       if (tip) { ElMessage.error(tip); return }
@@ -360,7 +360,7 @@ async function save() {
     payload.productId = payload.productId || null
     const r = await savePriceList(id.value, payload)
     const saved = (await getPriceList(r.data)).data
-    ElMessage.success(saved.status === 1 ? '已保存并启用' : '已保存，仍为停用状态')
+    ElMessage.success(saved.status === 2 ? '已保存，仍为停用状态' : saved.status === 1 ? '已保存并启用' : '已保存，请点「启用」后才参与取价')
     leaveToList()
   } finally {
     saving.value = false

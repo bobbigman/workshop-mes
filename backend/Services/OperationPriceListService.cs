@@ -291,7 +291,7 @@ public class OperationPriceListService(AppDbContext db)
             Require(row.Label != null && row.Label.Length <= 256 && row.Note != null && row.Source != null, "某一行的规格、备注或来源填得无效，或规格文字超过256字上限。请逐行检查规格、备注、来源，缩短超长内容或修正无效值。");
             Require(row.Kind is "base" or "extra" or "final", "价格性质填的值不在系统允许范围内。请检查该行价格性质的下拉选项，选择一个有效值。");
             Require(row.Conditions != null && row.IncludedRowIds != null, "取价条件列表和包含项列表不能同时为空。请至少填写一个匹配条件或一个包含项，否则无法确定这张表适用于哪些工序。");
-            Require(!enabling || row.Amount.HasValue, "有价格行没填单价，不能启用。请在价目表填好单价后再保存启用。");
+            Require(!enabling || row.Amount.HasValue, "有价格行没填单价，不能启用。请在价目表填好单价后再点「启用」。");
             Require((!row.Amount.HasValue || Money(row.Amount.Value)) && Money(row.DeductPrice), "金额必须不小于0，且最多保留4位小数。请检查所有价格行的金额，修正超出精度或负数的值。");
             Require(row.Kind != "extra" || (row.DeductPrice == 0 && row.IncludedRowIds.Count == 0), "附加行本身不能设置扣价或包含项。请移除其上的扣价/包含项设置。");
             Require(row.IncludedRowIds.Distinct().Count() == row.IncludedRowIds.Count && row.IncludedRowIds.All(id => details.Rows.Any(r => r.RowId == id && r.Kind == "extra")), "包含项只能引用同一张价目表内的附加行，且不能重复引用同一附加行。请检查包含项列表，确保引用的都是本表附加行且无重复。");
@@ -529,7 +529,7 @@ public class OperationPriceListService(AppDbContext db)
         if (drafts.Count > 0)
         {
             var t = drafts[0];
-            return $"产品「{productCode}」工序「{operationName}」已有价目表「{t.Code}」，还是草稿未启用，不能算工价。\n建议：到「工序价目表」打开「{t.Code}」改旧表，补全后点启用（一般不必新建）。{after}";
+            return $"产品「{productCode}」工序「{operationName}」已有价目表「{t.Code}」，已保存还没启用，不能算工价。\n建议：到「工序价目表」勾选「{t.Code}」点「启用」（缺单价先打开补齐再保存）。{after}";
         }
 
         var stopped = roots.Where(t => t.Status == 2).OrderByDescending(t => t.UpdatedAt).ToList();
@@ -621,18 +621,18 @@ public class OperationPriceListService(AppDbContext db)
                 .ToDictionaryAsync(u => u.Id, u => u.Name);
         return View(t, names);
     }
-    /// <summary>清单#26/#27：仅缺价格行或未填单价算未齐；来源/行确认不再卡启用。未齐时普通保存直接失败，不再落草稿。</summary>
+    /// <summary>清单#26/#27：仅缺价格行或未填单价算未齐。未齐保存失败；齐了保存为已保存(0)，启用须点「启用」。</summary>
     public static bool Incomplete(AttributePriceDetails d) => d.Rows.Count == 0 || d.Rows.Any(r => r.Amount == null);
 
     public static string IncompleteSaveMsg(AttributePriceDetails d)
     {
         if (d.Rows.Count == 0)
-            return "价目表至少要有一行并填好单价，才能保存启用。";
+            return "价目表至少要有一行并填好单价，才能保存。";
         var first = d.Rows.FindIndex(r => r.Amount == null) + 1;
         var n = d.Rows.Count(r => r.Amount == null);
         return n > 1
-            ? $"第{first}行等{n}行没填单价，不能保存。请填好单价后再保存启用。"
-            : $"第{first}行没填单价，不能保存。请填好单价后再保存启用。";
+            ? $"第{first}行等{n}行没填单价，不能保存。请填好单价后再保存。"
+            : $"第{first}行没填单价，不能保存。请填好单价后再保存。";
     }
 
     // 管理端写操作低频，按厂串行锁避免不同编号插入的范围锁升级死锁。
@@ -682,7 +682,7 @@ public class OperationPriceListService(AppDbContext db)
         var fields = await new OperationAttributeService(db).FieldsAsync(factoryId, input.OperationId);
         NormalizeDetails(input.Details);
         Validate(input.Details, fields, false, input.PricingType);
-        // 清单#27：普通保存不再落草稿；未齐直接失败。停用表保存仍保持停用。
+        // 清单#27 起：未齐直接失败。齐了普通保存→已保存(0)；停用表保存仍停用；启用须 targetStatus=1（客户点「启用」）。
         byte status;
         if (targetStatus != null)
             status = targetStatus.Value;
@@ -691,11 +691,11 @@ public class OperationPriceListService(AppDbContext db)
         else
         {
             Require(!Incomplete(input.Details), IncompleteSaveMsg(input.Details));
-            status = 1;
+            status = 0;
         }
         Require(targetStatus == null || targetStatus is 1 or 2, "状态变更操作只接受「启用」或「停用」。请确认要执行的是启用还是停用，不要选其他状态。");
         Require(targetStatus != 2 || table.Status == 1, "只有当前处于启用状态的价目表才能执行停用操作。请确认该表当前确实是启用状态。");
-        Require(targetStatus != 1 || table.Status == 2, "只有已停用的价目表才能重新启用；旧草稿请补齐单价后点保存启用。");
+        Require(targetStatus != 1 || table.Status is 0 or 2, "只有「已保存」或「停用」的价目表才能启用。缺单价请先打开补齐并保存，再点「启用」。");
         Validate(input.Details, fields, status == 1, input.PricingType);
         var options = await db.CustomFieldOptions.AsNoTracking().Where(o => fields.Keys.Contains(o.FieldId)).ToListAsync();
         foreach (var c in input.Details.Rows.SelectMany(r => r.Conditions))
@@ -760,8 +760,8 @@ public class OperationPriceListService(AppDbContext db)
         var t = await db.OperationPriceLists.SingleOrDefaultAsync(t => t.Id == id && t.FactoryId == factoryId) ?? throw ThrowHelper.BizUser("指定的价目表不存在或不属于本厂。请到「工序价目表」列表确认该表是否存在及归属。");
         await new DocumentPermissionService(db).EnsureCanEditPriceListAsync(factoryId, role, userId, t.CreatedBy);
         Require(t.Version == expectedVersion, "你要编辑的价目表不存在，或已被他人修改、删除，当前内容已过时。请关闭后重新打开该价目表，按最新版本编辑。");
-        Require(t.Status == 0 && t.ActivatedAt == null && Details(t).SchemaVersion == 2, "只有从未启用过的新版草稿价目表才能删除；已启用过的表请用「停用」处理，不要删除。");
-        // 快照JSON为自包含依据；保守检查全部当前任务引用，不能因草稿状态误删。
+        Require(t.Status == 0 && t.ActivatedAt == null && Details(t).SchemaVersion == 2, "只有从未启用过的已保存价目表才能删除；已启用过的表请用「停用」处理，不要删除。");
+        // 快照JSON为自包含依据；保守检查全部当前任务引用，不能因已保存状态误删。
         var snapshots = await db.WorkOrderOperations.Where(x => x.ProcessingPrice != null && db.WorkOrders.Any(o => o.Id == x.WorkOrderId && o.FactoryId == factoryId)).Select(x => x.ProcessingPrice!).ToListAsync();
         Require(!snapshots.Any(x => OperationPricingService.Read<ProcessingQuote>(x).AttributeEvidence?.PriceListId == id), "这张价目表已被工单引用，不能删除。如确实不需要，请先停用该表；若要彻底移除，须先解除所有关联工单的引用。");
         db.OperationPriceRevisions.RemoveRange(await db.OperationPriceRevisions.Where(x => x.FactoryId == factoryId && x.PriceListId == id).ToListAsync());
